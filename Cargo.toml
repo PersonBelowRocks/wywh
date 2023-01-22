@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "test-app",
+    "voxel-engine",
+]
+resolver = "2" # required for wgpu to compile
