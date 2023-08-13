@@ -4,4 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.9.1"
+bevy = "0.11"
+downcast-rs = "1.2.0"
+hashbrown = "0.13.2"
+rand = "0.8.5"
+serde = { version = "1.0.152", features = ["serde_derive"] }
+thiserror = "1.0.38"
