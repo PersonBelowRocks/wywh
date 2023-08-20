@@ -20,8 +20,8 @@ pub struct VoxelPlugin;
 
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(MaterialPlugin::<VoxelChunkMaterial>::default());
-        app.add_startup_system(setup);
+        app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
+        app.add_systems(Startup, setup);
     }
 }
 
