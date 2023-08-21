@@ -1,7 +1,7 @@
 extern crate hashbrown as hb;
 extern crate thiserror as te;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, render::view::NoFrustumCulling};
 use chunk::{Chunk, ChunkVoxelData};
 use render::{mesh::ChunkMesh};
 use tile::VoxelId;
@@ -37,6 +37,7 @@ fn setup(
     chunk.set_voxel([5, 7, 5].into(), 1.into());
 
     chunk.set_voxel([0, 0, 0].into(), 1.into());
+    chunk.set_voxel([0, 1, 0].into(), 1.into());
 
     let chunk_mesh = ChunkMesh::build(&chunk).unwrap();
 
@@ -47,6 +48,8 @@ fn setup(
         mesh,
         material,
         .. default()
-    });
+    })
+    // TODO: culling system
+    .insert(NoFrustumCulling);
 
 }

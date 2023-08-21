@@ -1,12 +1,15 @@
 extern crate voxel_engine as ve;
 
-use bevy::prelude::{*, shape::Cube};
+mod camera;
+
+use bevy::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(ve::VoxelPlugin)
-        .add_startup_system(setup)
+        .add_plugins(ve::VoxelPlugin)
+        .add_systems(Startup, setup)
+        .add_systems(Update, (camera::kb_controls, camera::mouse_controls))
         .run();
 }
 
@@ -26,13 +29,16 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials
     });
     
     // light
-    commands.spawn(PointLightBundle {
-        point_light: PointLight {
-            intensity: 1500.0,
-            shadows_enabled: false,
-            ..default()
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            color: Color::WHITE,
+            illuminance: 100000.0,
+            shadows_enabled: true,
+
+            shadow_depth_bias: 0.02,
+            shadow_normal_bias: 0.6
         },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        transform: Transform::from_rotation(Quat::from_rotation_x(90.0)),
         ..default()
     });
     
@@ -40,5 +46,5 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
-    });
+    }).insert(camera::PlayerCamera);
 }

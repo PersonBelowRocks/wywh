@@ -228,6 +228,8 @@ impl Material for VoxelChunkMaterial {
         if let Some(fragment) = descriptor.fragment.as_mut() {
             let shader_defs = &mut fragment.shader_defs;
 
+            dbg!(&shader_defs);
+
             shader_defs.extend_from_slice(&vertex_shader_defs);
 
             if key.bind_group_data.normal_map {
@@ -247,16 +249,27 @@ impl Material for VoxelChunkMaterial {
         Ok(())
     }
 
+    // TODO: custom prepass shaders, will hopefully fix some issues
+    // caused by the pbr function only being declared if the shader is
+    // not in prepass 
+    // (https://github.com/bevyengine/bevy/blob/main/crates/bevy_pbr/src/render/pbr_functions.wgsl#L179C8-L179C8)
+    // 
+    // See here for examples https://github.com/bevyengine/bevy/tree/main/crates/bevy_pbr/src/prepass
+    fn prepass_vertex_shader() -> ShaderRef {
+        "shaders/voxel_chunk_vertex.wgsl".into()    
+    }
+
     fn prepass_fragment_shader() -> ShaderRef {
-        PBR_PREPASS_SHADER_HANDLE.typed().into()
+        // PBR_PREPASS_SHADER_HANDLE.typed().into()
+        "shaders/voxel_chunk_frag.wgsl".into()
     }
 
     fn vertex_shader() -> ShaderRef {
-        "shaders/voxel_chunk_mat.wgsl".into()
+        "shaders/voxel_chunk_vertex.wgsl".into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/voxel_chunk_mat.wgsl".into()
+        "shaders/voxel_chunk_frag.wgsl".into()
     }
 
     #[inline]
