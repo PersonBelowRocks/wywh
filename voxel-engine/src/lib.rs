@@ -39,6 +39,8 @@ fn setup(
     chunk.set_voxel([0, 0, 0].into(), 1.into());
     chunk.set_voxel([0, 1, 0].into(), 1.into());
 
+    chunk.set_voxel([0, 1, 2].into(), 1.into());
+
     let chunk_mesh = ChunkMesh::build(&chunk).unwrap();
 
     let mesh = meshes.add(chunk_mesh.into());

@@ -78,7 +78,7 @@ use bevy::{
         render_asset::RenderAssets,
         render_resource::{
             AsBindGroup, AsBindGroupShaderType, Face, RenderPipelineDescriptor, ShaderRef,
-            ShaderType, SpecializedMeshPipelineError, TextureFormat, ShaderDefVal,
+            ShaderType, SpecializedMeshPipelineError, ShaderDefVal,
         },
     },
 };
@@ -174,7 +174,7 @@ impl From<&VoxelChunkMaterial> for VoxelChunkMaterialKey {
     fn from(_material: &VoxelChunkMaterial) -> Self {
         VoxelChunkMaterialKey {
             normal_map: false,
-            cull_mode: None,
+            cull_mode: Some(Face::Back),
             depth_bias: 0,
             relief_mapping: false
         }
@@ -221,16 +221,24 @@ impl Material for VoxelChunkMaterial {
         let vertex_layout = layout.get_layout(&[
             ChunkMesh::VOXEL_DATA_ATTR.at_shader_location(0),
         ])?;
+        
+        println!("{:?}: {:?}\n", descriptor.label, descriptor.vertex.shader_defs);
 
         descriptor.vertex.buffers = vec![vertex_layout];
         descriptor.vertex.shader_defs.extend_from_slice(&vertex_shader_defs);
+        descriptor.vertex.shader_defs.push("VERTEX_NORMALS".into());
+        // descriptor.vertex.shader_defs.push("VERTEX_UVS".into());
+        // descriptor.vertex.shader_defs.push("BASE_INSTANCE_WORKAROUND".into());
 
         if let Some(fragment) = descriptor.fragment.as_mut() {
             let shader_defs = &mut fragment.shader_defs;
+            // shader_defs.push("VERTEX_UVS".into());
+            shader_defs.push("VERTEX_NORMALS".into());
+            // shader_defs.push("LOAD_PREPASS_NORMALS".into());
 
-            dbg!(&shader_defs);
+            // dbg!(&shader_defs);
 
-            shader_defs.extend_from_slice(&vertex_shader_defs);
+            // shader_defs.extend_from_slice(&vertex_shader_defs);
 
             if key.bind_group_data.normal_map {
                 shader_defs.push("VoxelChunkMaterial_NORMAL_MAP".into());
@@ -238,7 +246,10 @@ impl Material for VoxelChunkMaterial {
             if key.bind_group_data.relief_mapping {
                 shader_defs.push("RELIEF_MAPPING".into());
             }
+
+            println!("{:?}: {:?}\n", descriptor.label, shader_defs);
         }
+
         descriptor.primitive.cull_mode = key.bind_group_data.cull_mode;
         if let Some(label) = &mut descriptor.label {
             *label = format!("vxlpbr_{}", *label).into();
@@ -256,12 +267,12 @@ impl Material for VoxelChunkMaterial {
     // 
     // See here for examples https://github.com/bevyengine/bevy/tree/main/crates/bevy_pbr/src/prepass
     fn prepass_vertex_shader() -> ShaderRef {
-        "shaders/voxel_chunk_vertex.wgsl".into()    
+        "shaders/voxel_chunk_prepass.wgsl".into()    
     }
 
     fn prepass_fragment_shader() -> ShaderRef {
-        // PBR_PREPASS_SHADER_HANDLE.typed().into()
-        "shaders/voxel_chunk_frag.wgsl".into()
+        PBR_PREPASS_SHADER_HANDLE.typed().into()
+        // "shaders/voxel_chunk_frag.wgsl".into()
     }
 
     fn vertex_shader() -> ShaderRef {

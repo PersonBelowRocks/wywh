@@ -37,7 +37,7 @@ pub mod consts {
     pub const CORNER_RSHIFT: u32 = 0;
 
 }
-    
+
 #[derive(te::Error, Debug)]
 pub enum VfvdError {
     #[error("Voxel X out of bounds")]

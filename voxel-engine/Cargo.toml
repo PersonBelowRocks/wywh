@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.11"
+bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "546f7fc194e9435eb177035fe67a030db4091f1b"}
 downcast-rs = "1.2.0"
 hashbrown = "0.13.2"
 rand = "0.8.5"

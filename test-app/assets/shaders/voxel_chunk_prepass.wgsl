@@ -1,8 +1,7 @@
-#import bevy_pbr::mesh_functions
-#import bevy_pbr::skinning
-#import bevy_pbr::morph
+#import bevy_pbr::mesh_bindings
 #import bevy_pbr::mesh_bindings mesh
-#import bevy_render::instance_index get_instance_index
+#import bevy_pbr::mesh_view_bindings
+#import bevy_pbr::mesh_functions
 #import bevy_pbr::mesh_vertex_output MeshVertexOutput
 
 const FACE_BITMASK: u32 = #{FACE_BITMASK}u;
@@ -129,10 +128,10 @@ fn normal_from_face(face: u32) -> vec3<f32> {
     switch face {
         case 0u: {return vec3(0.0,  1.0,  0.0);} // top
         case 1u: {return vec3(0.0, -1.0,  0.0);} // bottom
-        case 2u: {return vec3(-1.0, 0.0,  0.0);} // north
-        case 3u: {return vec3(0.0,  0.0, -1.0);} // east
-        case 4u: {return vec3(1.0,  0.0,  0.0);} // south
-        case 5u: {return vec3(0.0,  0.0,  1.0);} // west
+        case 2u: {return vec3(1.0,  0.0,  0.0);} // north
+        case 3u: {return vec3(0.0,  0.0,  1.0);} // east
+        case 4u: {return vec3(-1.0, 0.0,  0.0);} // south
+        case 5u: {return vec3(0.0,  0.0, -1.0);} // west
         default: {return vec3(0.0);}
     }
 }
@@ -168,7 +167,7 @@ fn unpack_data(raw: u32) -> VoxelCorner {
 
     voxel_corner.position = final_corner;
     voxel_corner.normal = normal_from_face(face);
-    voxel_corner.uv = vec2(1.0, 1.0); // TODO: texture coordinate system + texture atlas
+    voxel_corner.uv = vec2(0.0, 0.0); // TODO: texture coordinate system + texture atlas
     
     return voxel_corner;
 }
@@ -179,39 +178,53 @@ struct Vertex {
 };
 
 struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) normal: vec3<f32>,
+    @builtin(position) clip_position: vec4<f32>,
+
+#ifdef VERTEX_UVS
+    @location(0) uv: vec2<f32>,
+#endif
+
+#ifdef NORMAL_PREPASS
+    @location(1) world_normal: vec3<f32>,
+#ifdef VERTEX_TANGENTS
+    @location(2) world_tangent: vec4<f32>,
+#endif
+#endif
+
+#ifdef DEPTH_CLAMP_ORTHO
+    @location(5) clip_position_unclamped: vec4<f32>,
+#endif
 };
 
 @vertex
-fn vertex(vertex: Vertex) -> MeshVertexOutput {
+fn vertex(vertex: Vertex) -> VertexOutput {
     let corner = unpack_data(vertex.voxel_corner);
+
     var model = bevy_pbr::mesh_functions::get_model_matrix(vertex.instance_index);
+    // let clip_position = bevy_pbr::mesh_functions::mesh_position_local_to_clip(
+    //     model,
+    //     vec4(corner.position, 1.0)
+    // );
 
-    var out: MeshVertexOutput;
-#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
-    out.instance_index = get_instance_index(vertex.instance_index);
+    var out: VertexOutput;
+    out.clip_position = bevy_pbr::mesh_functions::mesh_position_local_to_clip(
+        model,
+        vec4(corner.position, 1.0)
+    );;
+
+#ifdef DEPTH_CLAMP_ORTHO
+    out.clip_position_unclamped = out.clip_position;
+    // out.clip_position_unclamped.z = min(out.clip_position.z, 1.0);
+    out.clip_position.z = min(out.clip_position.z, 0.0);
 #endif
-    
-#ifdef VERTEX_NORMALS
-    out.world_normal = bevy_pbr::mesh_functions::mesh_normal_local_to_world(
-        corner.normal,
 
-        get_instance_index(vertex.instance_index)
-    );
+#ifdef NORMAL_PREPASS
+    out.world_normal = corner.normal;
 #endif
 
 #ifdef VERTEX_UVS
     out.uv = corner.uv;
 #endif
-    // out.world_position = vec4(corner.position.xyz, 1.0);
-    // out.position = bevy_pbr::mesh_functions::mesh_position_local_to_clip(
-    //     model, 
-    //     vec4(corner.position, 1.0)
-    // );
-
-    out.world_position = bevy_pbr::mesh_functions::mesh_position_local_to_world(model, vec4<f32>(corner.position, 1.0));
-    out.position = bevy_pbr::mesh_functions::mesh_position_world_to_clip(out.world_position);
 
     return out;
 }
