@@ -78,7 +78,7 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials
             illuminance: 100000.0,
             shadows_enabled: true,
 
-            shadow_depth_bias: 0.02,
+            shadow_depth_bias: 0.075,
             shadow_normal_bias: 0.6
         },
         transform: Transform::from_rotation(Quat::from_euler(

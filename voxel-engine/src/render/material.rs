@@ -232,8 +232,9 @@ impl Material for VoxelChunkMaterial {
 
         if let Some(fragment) = descriptor.fragment.as_mut() {
             let shader_defs = &mut fragment.shader_defs;
-            // shader_defs.push("VERTEX_UVS".into());
+            // shader_defs.push("NO_ARRAY_TEXTURES_SUPPORT".into());
             shader_defs.push("VERTEX_NORMALS".into());
+            // shader_defs.push("DIRECTIONAL_LIGHT_SHADOW_MAP_DEBUG_CASCADES".into());
             // shader_defs.push("LOAD_PREPASS_NORMALS".into());
 
             // dbg!(&shader_defs);
@@ -271,8 +272,8 @@ impl Material for VoxelChunkMaterial {
     }
 
     fn prepass_fragment_shader() -> ShaderRef {
-        PBR_PREPASS_SHADER_HANDLE.typed().into()
-        // "shaders/voxel_chunk_frag.wgsl".into()
+        // PBR_PREPASS_SHADER_HANDLE.typed().into()
+        "shaders/voxel_chunk_frag_prepass.wgsl".into()
     }
 
     fn vertex_shader() -> ShaderRef {

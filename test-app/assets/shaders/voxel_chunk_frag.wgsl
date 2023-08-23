@@ -32,6 +32,78 @@
 #endif
 
 
+// fn sample_cascade(light_id: u32, cascade_index: u32, frag_position: vec4<f32>, surface_normal: vec3<f32>) -> f32 {
+//     let light = &view_bindings::lights.directional_lights[light_id];
+//     let cascade = &(*light).cascades[cascade_index];
+
+//     // The normal bias is scaled to the texel size.
+//     let normal_offset = (*light).shadow_normal_bias * (*cascade).texel_size * surface_normal.xyz;
+//     let depth_offset = (*light).shadow_depth_bias * (*light).direction_to_light.xyz;
+//     let offset_position = vec4<f32>(frag_position.xyz + normal_offset + depth_offset, frag_position.w);
+
+//     let offset_position_clip = (*cascade).view_projection * offset_position;
+//     if (offset_position_clip.w <= 0.0) {
+//         return 1.0;
+//     }
+//     let offset_position_ndc = offset_position_clip.xyz / offset_position_clip.w;
+//     // No shadow outside the orthographic projection volume
+//     if (any(offset_position_ndc.xy < vec2<f32>(-1.0)) || offset_position_ndc.z < 0.0
+//             || any(offset_position_ndc > vec3<f32>(1.0))) {
+//         return 1.0;
+//     }
+
+//     // compute texture coordinates for shadow lookup, compensating for the Y-flip difference
+//     // between the NDC and texture coordinates
+//     let flip_correction = vec2<f32>(0.5, -0.5);
+//     let light_local = offset_position_ndc.xy * flip_correction + vec2<f32>(0.5, 0.5);
+
+//     let depth = offset_position_ndc.z;
+//     // do the lookup, using HW PCF and comparison
+//     // NOTE: Due to non-uniform control flow above, we must use the level variant of the texture
+//     // sampler to avoid use of implicit derivatives causing possible undefined behavior.
+// #ifdef NO_ARRAY_TEXTURES_SUPPORT
+//     return textureSampleCompareLevel(
+//         view_bindings::directional_shadow_textures,
+//         view_bindings::directional_shadow_textures_sampler,
+//         light_local,
+//         depth
+//     );
+// #else
+//     return textureSampleCompareLevel(
+//         view_bindings::directional_shadow_textures,
+//         view_bindings::directional_shadow_textures_sampler,
+//         light_local,
+//         i32((*light).depth_texture_base_index + cascade_index),
+//         depth
+//     );
+// #endif
+// }
+
+
+// fn fetch_directional_shadow(light_id: u32, frag_position: vec4<f32>, surface_normal: vec3<f32>, view_z: f32) -> f32 {
+//     let light = &view_bindings::lights.directional_lights[light_id];
+//     let cascade_index = shadows::get_cascade_index(light_id, view_z);
+
+//     if (cascade_index >= (*light).num_cascades) {
+//         return 1.0;
+//     }
+
+//     var shadow = sample_cascade(light_id, cascade_index, frag_position, surface_normal);
+
+//     // Blend with the next cascade, if there is one.
+//     let next_cascade_index = cascade_index + 1u;
+//     if (next_cascade_index < (*light).num_cascades) {
+//         let this_far_bound = (*light).cascades[cascade_index].far_bound;
+//         let next_near_bound = (1.0 - (*light).cascades_overlap_proportion) * this_far_bound;
+//         if (-view_z >= next_near_bound) {
+//             let next_shadow = shadows::sample_cascade(light_id, next_cascade_index, frag_position, surface_normal);
+//             shadow = mix(shadow, next_shadow, (-view_z - next_near_bound) / (this_far_bound - next_near_bound));
+//         }
+//     }
+//     return shadow;
+// }
+
+
 fn pbr(
     in: pbr_functions::PbrInput,
 ) -> vec4<f32> {
