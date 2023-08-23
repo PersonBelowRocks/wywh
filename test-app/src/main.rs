@@ -77,8 +77,11 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials
             color: Color::WHITE,
             illuminance: 100000.0,
             shadows_enabled: true,
-
+            
+            // TODO: this should be done in the shader for voxel chunks!
+            // we need to increase the shadow depth bias in order to avoid shadow acne on voxels.
             shadow_depth_bias: 0.075,
+
             shadow_normal_bias: 0.6
         },
         transform: Transform::from_rotation(Quat::from_euler(
