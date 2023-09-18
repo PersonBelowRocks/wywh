@@ -1,72 +1,3 @@
-// use bevy::{
-//     pbr::{MaterialPipeline, MaterialPipelineKey},
-//     prelude::*,
-//     reflect::{TypeUuid, TypePath},
-//     render::{
-//         mesh::MeshVertexBufferLayout,
-//         render_resource::{
-//             AsBindGroup, RenderPipelineDescriptor, ShaderRef, SpecializedMeshPipelineError, ShaderDefVal,
-//         },
-//     },
-// };
-
-// use super::mesh::ChunkMesh;
-
-// #[derive(AsBindGroup, Clone, TypeUuid, TypePath)]
-// #[uuid = "88243925-82d2-494c-9c72-c58a0a6378f1"]
-// pub struct VoxelChunkMaterial {}
-
-// impl Material for VoxelChunkMaterial {
-//     fn vertex_shader() -> ShaderRef {
-//         "shaders/voxel_chunk_mat.wgsl".into()
-//     }
-
-//     fn fragment_shader() -> ShaderRef {
-//         "shaders/voxel_chunk_mat.wgsl".into()
-//     }
-
-//     fn specialize(
-//         _pipeline: &MaterialPipeline<Self>,
-//         descriptor: &mut RenderPipelineDescriptor,
-//         layout: &MeshVertexBufferLayout,
-//         _key: MaterialPipelineKey<Self>,
-//     ) -> Result<(), SpecializedMeshPipelineError> {
-//         use super::vertex::consts::*;
-
-//         let shader_defs = vec![
-//             ShaderDefVal::UInt("UINT_BITS".to_string(), u32::BITS),
-
-//             uint_shader_def!(FACE_BITMASK),
-//             uint_shader_def!(FACE_RSHIFT),
-
-//             uint_shader_def!(VXL_X_BITMASK),
-//             uint_shader_def!(VXL_X_RSHIFT),
-//             uint_shader_def!(VXL_Y_BITMASK),
-//             uint_shader_def!(VXL_Y_RSHIFT),
-//             uint_shader_def!(VXL_Z_BITMASK),
-//             uint_shader_def!(VXL_Z_RSHIFT),
-
-//             uint_shader_def!(TEX_ATLAS_X_BITMASK),
-//             uint_shader_def!(TEX_ATLAS_X_RSHIFT),
-//             uint_shader_def!(TEX_ATLAS_Y_BITMASK),
-//             uint_shader_def!(TEX_ATLAS_Y_RSHIFT),
-
-//             uint_shader_def!(CORNER_BITMASK),
-//             uint_shader_def!(CORNER_RSHIFT),
-//         ];
-
-//         let vertex_layout = layout.get_layout(&[
-//             ChunkMesh::VOXEL_DATA_ATTR.at_shader_location(0),
-//         ])?;
-
-//         descriptor.vertex.buffers = vec![vertex_layout];
-//         descriptor.vertex.shader_defs.extend_from_slice(&shader_defs);
-//         descriptor.fragment.as_mut().unwrap().shader_defs.extend_from_slice(&shader_defs);
-
-//         Ok(())
-//     }
-// }
-
 use bevy::{
     pbr::{
         MaterialPipeline, MaterialPipelineKey, StandardMaterialFlags, PBR_PREPASS_SHADER_HANDLE,
@@ -77,8 +8,8 @@ use bevy::{
         mesh::MeshVertexBufferLayout,
         render_asset::RenderAssets,
         render_resource::{
-            AsBindGroup, AsBindGroupShaderType, Face, RenderPipelineDescriptor, ShaderRef,
-            ShaderType, SpecializedMeshPipelineError, ShaderDefVal,
+            AsBindGroup, AsBindGroupShaderType, Face, RenderPipelineDescriptor, ShaderDefVal,
+            ShaderRef, ShaderType, SpecializedMeshPipelineError,
         },
     },
 };
@@ -90,7 +21,7 @@ use crate::render::mesh::ChunkMesh;
 /// <https://google.github.io/filament/Material%20Properties.pdf>.
 ///
 /// May be created directly from a [`Color`] or an [`Image`].
-#[derive(AsBindGroup, Reflect, Debug, Clone, TypeUuid, Default)]
+#[derive(AsBindGroup, Asset, Reflect, Debug, Clone, TypeUuid, Default)]
 #[uuid = "e65799f2-923e-4548-8879-be574f9db988"]
 #[bind_group_data(VoxelChunkMaterialKey)]
 #[uniform(0, VoxelChunkMaterialUniform)]
@@ -132,7 +63,10 @@ pub struct VoxelChunkMaterialUniform {
 }
 
 impl AsBindGroupShaderType<VoxelChunkMaterialUniform> for VoxelChunkMaterial {
-    fn as_bind_group_shader_type(&self, _images: &RenderAssets<Image>) -> VoxelChunkMaterialUniform {
+    fn as_bind_group_shader_type(
+        &self,
+        _images: &RenderAssets<Image>,
+    ) -> VoxelChunkMaterialUniform {
         let mut flags = StandardMaterialFlags::NONE;
         flags |= StandardMaterialFlags::FOG_ENABLED;
         flags |= StandardMaterialFlags::ALPHA_MODE_OPAQUE;
@@ -176,7 +110,7 @@ impl From<&VoxelChunkMaterial> for VoxelChunkMaterialKey {
             normal_map: false,
             cull_mode: Some(Face::Back),
             depth_bias: 0,
-            relief_mapping: false
+            relief_mapping: false,
         }
     }
 }
@@ -198,34 +132,35 @@ impl Material for VoxelChunkMaterial {
 
         let vertex_shader_defs = vec![
             ShaderDefVal::UInt("UINT_BITS".to_string(), u32::BITS),
-
             uint_shader_def!(FACE_BITMASK),
             uint_shader_def!(FACE_RSHIFT),
-
             uint_shader_def!(VXL_X_BITMASK),
             uint_shader_def!(VXL_X_RSHIFT),
             uint_shader_def!(VXL_Y_BITMASK),
             uint_shader_def!(VXL_Y_RSHIFT),
             uint_shader_def!(VXL_Z_BITMASK),
             uint_shader_def!(VXL_Z_RSHIFT),
-
             uint_shader_def!(TEX_ATLAS_X_BITMASK),
             uint_shader_def!(TEX_ATLAS_X_RSHIFT),
             uint_shader_def!(TEX_ATLAS_Y_BITMASK),
             uint_shader_def!(TEX_ATLAS_Y_RSHIFT),
-
             uint_shader_def!(CORNER_BITMASK),
             uint_shader_def!(CORNER_RSHIFT),
         ];
-        
-        let vertex_layout = layout.get_layout(&[
-            ChunkMesh::VOXEL_DATA_ATTR.at_shader_location(0),
-        ])?;
-        
-        println!("{:?}: {:?}\n", descriptor.label, descriptor.vertex.shader_defs);
+
+        let vertex_layout =
+            layout.get_layout(&[ChunkMesh::VOXEL_DATA_ATTR.at_shader_location(0)])?;
+
+        println!(
+            "{:?}: {:?}\n",
+            descriptor.label, descriptor.vertex.shader_defs
+        );
 
         descriptor.vertex.buffers = vec![vertex_layout];
-        descriptor.vertex.shader_defs.extend_from_slice(&vertex_shader_defs);
+        descriptor
+            .vertex
+            .shader_defs
+            .extend_from_slice(&vertex_shader_defs);
         descriptor.vertex.shader_defs.push("VERTEX_NORMALS".into());
         // descriptor.vertex.shader_defs.push("VERTEX_UVS".into());
         // descriptor.vertex.shader_defs.push("BASE_INSTANCE_WORKAROUND".into());
@@ -263,17 +198,17 @@ impl Material for VoxelChunkMaterial {
 
     // TODO: custom prepass shaders, will hopefully fix some issues
     // caused by the pbr function only being declared if the shader is
-    // not in prepass 
+    // not in prepass
     // (https://github.com/bevyengine/bevy/blob/main/crates/bevy_pbr/src/render/pbr_functions.wgsl#L179C8-L179C8)
-    // 
+    //
     // See here for examples https://github.com/bevyengine/bevy/tree/main/crates/bevy_pbr/src/prepass
     fn prepass_vertex_shader() -> ShaderRef {
-        "shaders/voxel_chunk_prepass.wgsl".into()    
+        "shaders/voxel_chunk_prepass.wgsl".into()
     }
 
     fn prepass_fragment_shader() -> ShaderRef {
-        // PBR_PREPASS_SHADER_HANDLE.typed().into()
-        "shaders/voxel_chunk_frag_prepass.wgsl".into()
+        PBR_PREPASS_SHADER_HANDLE.into()
+        // "shaders/voxel_chunk_frag_prepass.wgsl".into()
     }
 
     fn vertex_shader() -> ShaderRef {

@@ -4,9 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "546f7fc194e9435eb177035fe67a030db4091f1b"}
+bevy = {workspace = true}
+bracket-noise = "0.8.7"
+derive_more = "0.99.17"
 downcast-rs = "1.2.0"
 hashbrown = "0.13.2"
+noise = "0.8.2"
+num = "0.4.1"
+num-derive = "0.4.0"
+num-traits = "0.2.16"
 rand = "0.8.5"
+rayon = "1.7.0"
 serde = { version = "1.0.152", features = ["serde_derive"] }
 thiserror = "1.0.38"

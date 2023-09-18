@@ -4,3 +4,6 @@ members = [
     "voxel-engine",
 ]
 resolver = "2" # required for wgpu to compile
+
+[workspace.dependencies]
+bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "9d23f828f6a6d6285317eac7306e8a537ff7fec4"}

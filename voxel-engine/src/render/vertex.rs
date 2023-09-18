@@ -1,6 +1,6 @@
 use bevy::prelude::{IVec3, UVec2};
 
-use crate::tile::Face;
+use crate::data::tile::Face;
 
 #[allow(clippy::inconsistent_digit_grouping, unused)]
 pub mod consts {
@@ -35,7 +35,6 @@ pub mod consts {
     // 6) Corner
     pub const CORNER_BITMASK: u32 = 0b0000_0000_0000_0000_0000_0000_0000_0011;
     pub const CORNER_RSHIFT: u32 = 0;
-
 }
 
 #[derive(te::Error, Debug)]
@@ -54,7 +53,6 @@ pub enum VfvdError {
     InvalidCornerId,
 }
 
-
 #[derive(Copy, Clone, Debug)]
 pub struct VoxelFaceVertexData {
     pub face: Face,
@@ -64,60 +62,62 @@ pub struct VoxelFaceVertexData {
 }
 
 impl VoxelFaceVertexData {
-
     const FACE_BITS: u32 = 3;
     const VXL_POS_COMPONENT_BITS: u32 = 4;
     const TEX_ATLAS_POS_COMPONENT_BITS: u32 = 6;
     const CORNER_BITS: u32 = 2;
-    
+
     pub fn voxel_pos(&self) -> Result<[u32; 3], VfvdError> {
-        
         let x: u32 = self.vxl_pos.x.try_into().map_err(|_| VfvdError::VxlXOob)?;
         let y: u32 = self.vxl_pos.y.try_into().map_err(|_| VfvdError::VxlYOob)?;
         let z: u32 = self.vxl_pos.z.try_into().map_err(|_| VfvdError::VxlZOob)?;
-        
+
         let max = 2u32.pow(Self::VXL_POS_COMPONENT_BITS);
         if x > max {
-            return Err(VfvdError::VxlXOob)
+            return Err(VfvdError::VxlXOob);
         }
-        
+
         if y > max {
-            return Err(VfvdError::VxlYOob)
+            return Err(VfvdError::VxlYOob);
         }
-        
+
         if z > max {
-            return Err(VfvdError::VxlZOob)
+            return Err(VfvdError::VxlZOob);
         }
-        
+
         Ok([x, y, z])
     }
-    
+
     pub fn texture_pos(&self) -> Result<[u32; 2], VfvdError> {
         let max = 2u32.pow(Self::TEX_ATLAS_POS_COMPONENT_BITS);
         let [x, y] = self.texture_pos.to_array();
-        
+
         if x > max {
-            return Err(VfvdError::TexAtlasXOob)
+            return Err(VfvdError::TexAtlasXOob);
         }
-        
+
         if y > max {
-            return Err(VfvdError::TexAtlasYOob)
+            return Err(VfvdError::TexAtlasYOob);
         }
-        
+
         Ok([x, y])
     }
 
     pub fn corner(&self) -> Result<u32, VfvdError> {
-        if self.corner > 2u32.pow(Self::CORNER_BITS) { return Err(VfvdError::InvalidCornerId) }
+        if self.corner > 2u32.pow(Self::CORNER_BITS) {
+            return Err(VfvdError::InvalidCornerId);
+        }
 
         Ok(self.corner)
     }
-    
+
     #[inline]
     pub fn pack(self) -> Result<u32, VfvdError> {
+        use num_traits::ToPrimitive;
+
         let mut out: u32 = 0;
 
-        out |= (self.face as u32) << consts::FACE_RSHIFT;
+        out |= (self.face.to_u32().unwrap()) << consts::FACE_RSHIFT;
 
         let [x, y, z] = self.voxel_pos()?;
         out |= x << consts::VXL_X_RSHIFT;
@@ -130,19 +130,19 @@ impl VoxelFaceVertexData {
 
         let corner = self.corner()?;
         out |= corner << consts::CORNER_RSHIFT;
-        
+
         Ok(out)
-        /* 
+        /*
         out |= (self.face? as u32) << (u32::BITS - Self::FACE_BITS);
         shifted += Self::FACE_BITS;
-        
+
         out |= (self.vxl_x? as u32) << (u32::BITS - (Self::VXL_POS_COMPONENT_BITS + shifted));
         shifted += Self::VXL_POS_COMPONENT_BITS;
         out |= (self.vxl_y? as u32) << (u32::BITS - (Self::VXL_POS_COMPONENT_BITS + shifted));
         shifted += Self::VXL_POS_COMPONENT_BITS;
         out |= (self.vxl_z? as u32) << (u32::BITS - (Self::VXL_POS_COMPONENT_BITS + shifted));
         shifted += Self::VXL_POS_COMPONENT_BITS;
-        
+
         out |= (self.atlas_x? as u32) << (u32::BITS - (Self::TEX_ATLAS_POS_COMPONENT_BITS + shifted));
         shifted += Self::TEX_ATLAS_POS_COMPONENT_BITS;
         out |= (self.atlas_y? as u32) << (u32::BITS - (Self::TEX_ATLAS_POS_COMPONENT_BITS + shifted));
@@ -157,19 +157,19 @@ impl VoxelFaceVertexData {
 
 /*
 fn main() {
-    
+
     let b = VoxelFaceVertexDataBuilder::new()
         .face(Face::Bottom)
         .voxel_pos([3, 4, 8])
         .unwrap()
         .texture_pos([9, 13])
         .unwrap();
-        
+
     dbg!(b);
-    
+
     dbg!(b.pack());
-    
-    
+
+
     dbg!(2i32.pow(6));
     dbg!(64*64);
 }

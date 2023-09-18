@@ -97,22 +97,22 @@ fn face_to_transform(face: u32) -> mat3x3<f32> {
             vec3(0.0, -1.0,  0.0),
             vec3(0.0,  0.0, -1.0)
         );}
-        case 2u: {return mat3x3(
+        case 3u: {return mat3x3(
             vec3(1.0,  0.0,  0.0),
             vec3(0.0,  0.0,  1.0),
             vec3(0.0, -1.0,  0.0)
         );}
-        case 3u: {return mat3x3(
+        case 2u: {return mat3x3(
             vec3(0.0,  0.0, -1.0),
             vec3(1.0,  0.0,  0.0),
             vec3(0.0, -1.0,  0.0)
         );}
-        case 4u: {return mat3x3(
+        case 5u: {return mat3x3(
             vec3(-1.0, 0.0,  0.0),
             vec3(0.0,  0.0, -1.0),
             vec3(0.0, -1.0,  0.0)
         );}
-        case 5u: {return mat3x3(
+        case 4u: {return mat3x3(
             vec3(0.0,  0.0,  1.0),
             vec3(-1.0, 0.0,  0.0),
             vec3(0.0, -1.0,  0.0)
@@ -129,10 +129,10 @@ fn normal_from_face(face: u32) -> vec3<f32> {
     switch face {
         case 0u: {return vec3(0.0,  1.0,  0.0);} // top
         case 1u: {return vec3(0.0, -1.0,  0.0);} // bottom
-        case 2u: {return vec3(-1.0, 0.0,  0.0);} // north
-        case 3u: {return vec3(0.0,  0.0, -1.0);} // east
-        case 4u: {return vec3(1.0,  0.0,  0.0);} // south
-        case 5u: {return vec3(0.0,  0.0,  1.0);} // west
+        case 2u: {return -vec3(-1.0, 0.0,  0.0);} // north
+        case 3u: {return -vec3(0.0,  0.0, -1.0);} // east
+        case 4u: {return -vec3(1.0,  0.0,  0.0);} // south
+        case 5u: {return -vec3(0.0,  0.0,  1.0);} // west
         default: {return vec3(0.0);}
     }
 }
