@@ -127,13 +127,26 @@ fn face_to_transform(face: u32) -> mat3x3<f32> {
 
 fn normal_from_face(face: u32) -> vec3<f32> {
     switch face {
-        case 0u: {return vec3(0.0,  1.0,  0.0);} // top
-        case 1u: {return vec3(0.0, -1.0,  0.0);} // bottom
-        case 2u: {return -vec3(-1.0, 0.0,  0.0);} // north
-        case 3u: {return -vec3(0.0,  0.0, -1.0);} // east
-        case 4u: {return -vec3(1.0,  0.0,  0.0);} // south
-        case 5u: {return -vec3(0.0,  0.0,  1.0);} // west
+        case 0u: {return vec3(0.0, 1.0, 0.0);} // top
+        case 1u: {return vec3(0.0, -1.0, 0.0);} // bottom
+        case 2u: {return vec3(1.0, 0.0, 0.0);} // north
+        case 3u: {return vec3(0.0, 0.0, 1.0);} // east
+        case 4u: {return vec3(-1.0, 0.0, 0.0);} // south
+        case 5u: {return vec3(0.0, 0.0, -1.0);} // west
         default: {return vec3(0.0);}
+    }
+}
+
+fn swizzle_transform_corner(tfc: vec2<f32>, face_id: u32) -> vec3<f32> {
+    // tfc = top face corner
+    switch face_id {
+        case 0u: {return vec3(tfc.x, 0.5, tfc.y);}
+        case 1u: {return vec3(tfc.x, -0.5, tfc.y);}
+        case 2u: {return vec3(0.5, tfc.x, tfc.y);}
+        case 3u: {return vec3(tfc.x, tfc.y, 0.5);}
+        case 4u: {return vec3(-0.5, tfc.x, tfc.y);}
+        case 5u: {return vec3(tfc.x, tfc.y, -0.5);}
+        default: {return vec3(tfc.x, 0.5, tfc.y);}
     }
 }
 
@@ -154,15 +167,16 @@ fn unpack_data(raw: u32) -> VoxelCorner {
     // We initially just get the corner of a 2D square
     let corner = extract_corner(raw);
 
+    let corner_3d = swizzle_transform_corner(corner, face);
     // Think about this as "moving" the 2D square up by 0.5, giving us the coordinates
     // of the "top" face of the voxel
-    let corner_3d = vec3(corner.x, 0.5, corner.y);
+    // let corner_3d = vec3(corner.x, 0.5, corner.y);
     // Rotate the corner to be positioned on the correct face. This does nothing if
     // we're on the top face.
-    let rotated_corner = face_to_transform(face) * corner_3d;
+    // let rotated_corner = face_to_transform(face) * corner_3d;
     // Now we calculate where in the chunk this corner would be by using our voxel
     // position from earlier.
-    let final_corner = centered_pos + rotated_corner;
+    let final_corner = centered_pos + corner_3d;
     
     var voxel_corner: VoxelCorner;
 

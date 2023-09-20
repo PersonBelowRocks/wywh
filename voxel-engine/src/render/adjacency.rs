@@ -58,12 +58,12 @@ fn adjacent_chunk_vxl_index(face: Face, k: i32, j: i32) -> IVec3 {
 
 #[inline(always)]
 pub(crate) fn mask_pos_with_face(face: Face, pos: IVec3) -> IVec2 {
-    let offset = face.offset();
+    // let offset = face.offset();
 
     let (k, j) = match face {
-        Face::North | Face::South => (offset.y, offset.z),
-        Face::Top | Face::Bottom => (offset.x, offset.z),
-        Face::West | Face::East => (offset.x, offset.y),
+        Face::North | Face::South => (pos.y, pos.z),
+        Face::Top | Face::Bottom => (pos.x, pos.z),
+        Face::West | Face::East => (pos.x, pos.y),
         _ => panic!("Unexpected vector component"),
     };
 

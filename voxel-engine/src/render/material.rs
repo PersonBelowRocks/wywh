@@ -108,7 +108,7 @@ impl From<&VoxelChunkMaterial> for VoxelChunkMaterialKey {
     fn from(_material: &VoxelChunkMaterial) -> Self {
         VoxelChunkMaterialKey {
             normal_map: false,
-            cull_mode: Some(Face::Back),
+            cull_mode: None, // Some(Face::Back),
             depth_bias: 0,
             relief_mapping: false,
         }

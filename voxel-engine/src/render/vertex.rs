@@ -132,45 +132,40 @@ impl VoxelFaceVertexData {
         out |= corner << consts::CORNER_RSHIFT;
 
         Ok(out)
-        /*
-        out |= (self.face? as u32) << (u32::BITS - Self::FACE_BITS);
-        shifted += Self::FACE_BITS;
-
-        out |= (self.vxl_x? as u32) << (u32::BITS - (Self::VXL_POS_COMPONENT_BITS + shifted));
-        shifted += Self::VXL_POS_COMPONENT_BITS;
-        out |= (self.vxl_y? as u32) << (u32::BITS - (Self::VXL_POS_COMPONENT_BITS + shifted));
-        shifted += Self::VXL_POS_COMPONENT_BITS;
-        out |= (self.vxl_z? as u32) << (u32::BITS - (Self::VXL_POS_COMPONENT_BITS + shifted));
-        shifted += Self::VXL_POS_COMPONENT_BITS;
-
-        out |= (self.atlas_x? as u32) << (u32::BITS - (Self::TEX_ATLAS_POS_COMPONENT_BITS + shifted));
-        shifted += Self::TEX_ATLAS_POS_COMPONENT_BITS;
-        out |= (self.atlas_y? as u32) << (u32::BITS - (Self::TEX_ATLAS_POS_COMPONENT_BITS + shifted));
-        shifted += Self::TEX_ATLAS_POS_COMPONENT_BITS;
-
-        out |= (self.corner? as u32) << (u32::BITS - (Self::CORNER_BITS + shifted));
-
-        assert!((out & 0x18) >> (u32::BITS - (27+2)) == self.corner.unwrap() as u32);
-        */
     }
 }
 
-/*
-fn main() {
+#[cfg(test)]
+mod tests {
+    use bevy::prelude::{Mat3, Vec3, Vec3Swizzles};
 
-    let b = VoxelFaceVertexDataBuilder::new()
-        .face(Face::Bottom)
-        .voxel_pos([3, 4, 8])
-        .unwrap()
-        .texture_pos([9, 13])
-        .unwrap();
+    use super::*;
 
-    dbg!(b);
+    #[test]
+    fn swizzle_transforms() {
+        let top_face_vertices: [Vec3; 4] = [
+            [-0.5, 0.5, 0.5].into(),
+            [0.5, 0.5, 0.5].into(),
+            [-0.5, 0.5, -0.5].into(),
+            [0.5, 0.5, -0.5].into(),
+        ];
 
-    dbg!(b.pack());
+        let north_face_vertices = top_face_vertices.map(|v| v.yxz());
+        let south_face_vertices = top_face_vertices.map(|v| Vec3::new(-v.y, v.x, v.z));
 
+        assert_eq!(
+            north_face_vertices,
+            [
+                [0.5, -0.5, 0.5].into(),
+                [0.5, 0.5, 0.5].into(),
+                [0.5, -0.5, -0.5].into(),
+                [0.5, 0.5, -0.5].into(),
+            ]
+        );
 
-    dbg!(2i32.pow(6));
-    dbg!(64*64);
+        assert_eq!(
+            south_face_vertices,
+            north_face_vertices.map(|v| Vec3::new(-v.x, v.y, v.z))
+        );
+    }
 }
- */
