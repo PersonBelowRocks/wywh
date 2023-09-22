@@ -100,11 +100,7 @@ fn build_meshes(
             let tx = finished_tx.clone();
             let adjacency = AdjacentTransparency::new(chunk.pos, &realm_ref.chunk_manager);
             scope.spawn(move |_| {
-                println!("Building chunk mesh for {0}", chunk.pos);
-
                 let chunk_mesh = ChunkMesh::build(&chunk, &adjacency);
-
-                println!("Finished building chunk mesh for {0}", chunk.pos);
                 tx.send(chunk_mesh).unwrap();
             })
         }
@@ -113,7 +109,6 @@ fn build_meshes(
     for chunk_mesh in finished_rx.into_iter() {
         let pos = (*chunk_mesh.pos() * Chunk::SIZE).as_vec3();
 
-        println!("Spawning MaterialMesh entity for chunk with chunk position {0}, and world position {1}", chunk_mesh.pos(), pos);
         cmds.spawn(MaterialMeshBundle {
             mesh: meshes.add(chunk_mesh.into()),
             material: chunk_material.clone(),
@@ -121,7 +116,7 @@ fn build_meshes(
 
             ..default()
         })
-        .insert(NoFrustumCulling)
+        .insert(Chunk::BOUNDING_BOX.to_aabb())
         .insert(ChunkEntity);
     }
 }

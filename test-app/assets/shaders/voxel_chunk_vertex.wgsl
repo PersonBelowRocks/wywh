@@ -226,6 +226,10 @@ fn vertex(vertex: Vertex) -> MeshVertexOutput {
 
     out.world_position = bevy_pbr::mesh_functions::mesh_position_local_to_world(model, vec4<f32>(corner.position, 1.0));
     out.position = bevy_pbr::mesh_functions::mesh_position_world_to_clip(out.world_position);
+    
+#ifdef VERTEX_COLORS
+    out.color = vec4(0.1, 0.1, 0.15, 1.0);
+#endif
 
     return out;
 }

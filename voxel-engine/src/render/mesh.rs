@@ -10,6 +10,7 @@ use crate::{
     data::tile::Transparency,
     render::{
         adjacency::{mask_pos_with_face, voxel_id_to_transparency_debug},
+        face_mesh::FaceMesh,
         vertex::VoxelFaceVertexData,
     },
     topo::{
@@ -85,11 +86,7 @@ impl ChunkMesh {
                             Ok(voxel_id) => voxel_id_to_transparency_debug(voxel_id),
                             Err(ChunkVoxelAccessError::OutOfBounds) => {
                                 let pos_in_adjacent_chunk = mask_pos_with_face(face, adjacent);
-                                let transparency = adjacency.sample(face, pos_in_adjacent_chunk).expect("We're only iterating through 0..16 so the position should be valid");
-                                if transparency.is_transparent() {
-                                    println!("Found transparent")
-                                }
-                                transparency
+                                adjacency.sample(face, pos_in_adjacent_chunk).expect("We're only iterating through 0..16 so the position should be valid")
                             }
                             Err(error) => {
                                 panic!("Access returned error {0} while building mesh", error)
@@ -97,26 +94,37 @@ impl ChunkMesh {
                         };
 
                         if adjacent_transparency.is_transparent() {
-                            // TODO: extract the face vertex logic into an own struct or something
-                            for c in 0..4 {
-                                let data = VoxelFaceVertexData {
-                                    face,
-                                    corner: c,
-                                    vxl_pos: pos,
-                                    texture_pos: [0, 0].into(),
-                                };
-
-                                voxel_data.push(data.pack().unwrap())
+                            FaceMesh {
+                                face,
+                                vxl_pos: pos,
+                                tex: [0, 0].into(),
                             }
+                            .add_to_mesh(
+                                &mut voxel_data,
+                                &mut indices,
+                                &mut current_idx,
+                            );
 
-                            let indices_pattern = [0u32, 1, 2, 3, 2, 1]
-                                .into_iter()
-                                .map(|idx| idx + current_idx)
-                                .collect::<Vec<_>>();
+                            // // TODO: extract the face vertex logic into an own struct or something
+                            // for c in 0..4 {
+                            //     let data = VoxelFaceVertexData {
+                            //         face,
+                            //         corner: c,
+                            //         vxl_pos: pos,
+                            //         texture_pos: [0, 0].into(),
+                            //     };
 
-                            indices.extend_from_slice(&indices_pattern);
+                            //     voxel_data.push(data.pack().unwrap())
+                            // }
 
-                            current_idx += 4;
+                            // let indices_pattern = [0u32, 1, 2, 3, 2, 1]
+                            //     .into_iter()
+                            //     .map(|idx| idx + current_idx)
+                            //     .collect::<Vec<_>>();
+
+                            // indices.extend_from_slice(&indices_pattern);
+
+                            // current_idx += 4;
                         }
                     }
                 }

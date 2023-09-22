@@ -6,4 +6,4 @@ members = [
 resolver = "2" # required for wgpu to compile
 
 [workspace.dependencies]
-bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "9d23f828f6a6d6285317eac7306e8a537ff7fec4"}
+bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "1116207f7dbcc04fbcfd10eecc09e3988a4c726a"}

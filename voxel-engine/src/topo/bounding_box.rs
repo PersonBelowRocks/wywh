@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::render::primitives::Aabb;
 
 use super::chunk::Chunk;
 
@@ -19,6 +20,10 @@ impl BoundingBox {
 
     pub fn contains_inclusive(self, pos: IVec3) -> bool {
         pos.cmpge(self.min).all() && pos.cmple(self.max).all()
+    }
+
+    pub fn to_aabb(self) -> Aabb {
+        Aabb::from_min_max(self.min.as_vec3(), self.max.as_vec3())
     }
 }
 

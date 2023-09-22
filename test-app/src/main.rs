@@ -5,7 +5,7 @@ mod debug_info;
 
 use std::f32::consts::PI;
 
-use bevy::pbr::CascadeShadowConfigBuilder;
+use bevy::pbr::{CascadeShadowConfigBuilder, ScreenSpaceAmbientOcclusionBundle};
 use bevy::prelude::*;
 use debug_info::{DirectionText, PositionText};
 use ve::data::tile::VoxelId;
@@ -43,9 +43,9 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for x in 0..4 {
-        for y in 0..4 {
-            for z in 0..4 {
+    for x in -12..12 {
+        for y in -12..12 {
+            for z in -12..12 {
                 writer.send(GenerateChunk {
                     pos: IVec3::new(x, y, z).into(),
                     generator: GeneratorChoice::Default,
@@ -146,6 +146,8 @@ fn setup(
     });
     */
 
+    commands.insert_resource(Msaa::Off);
+
     // camera
     commands
         .spawn(Camera3dBundle {
@@ -154,12 +156,13 @@ fn setup(
         })
         .insert(camera::PlayerCamController::default())
         .insert(VisibilityBundle::default())
+        // .insert(ScreenSpaceAmbientOcclusionBundle::default())
         .with_children(|builder| {
             builder.spawn((
                 SpotLightBundle {
                     spot_light: SpotLight {
                         color: Color::WHITE,
-                        intensity: 3000.0,
+                        intensity: 300000.0,
                         shadows_enabled: true,
                         inner_angle: PI / 8.0 * 0.85,
                         outer_angle: PI / 8.0,
