@@ -1,6 +1,7 @@
 use bevy::{
     pbr::{
-        MaterialPipeline, MaterialPipelineKey, StandardMaterialFlags, PBR_PREPASS_SHADER_HANDLE,
+        MaterialPipeline, MaterialPipelineKey, MeshPipelineKey, StandardMaterialFlags,
+        PBR_PREPASS_SHADER_HANDLE, PBR_SHADER_HANDLE,
     },
     prelude::*,
     reflect::{Reflect, TypeUuid},
@@ -148,28 +149,38 @@ impl Material for VoxelChunkMaterial {
             uint_shader_def!(CORNER_RSHIFT),
         ];
 
-        let vertex_layout =
-            layout.get_layout(&[ChunkMesh::VOXEL_DATA_ATTR.at_shader_location(0)])?;
-
         println!(
-            "{:?}: {:?}\n",
-            descriptor.label, descriptor.vertex.shader_defs
+            "VERTEX BUFFERS {:?}: {:?}",
+            descriptor.label, descriptor.vertex.buffers
         );
 
-        descriptor.vertex.buffers = vec![vertex_layout];
+        let buffer_layout = if descriptor
+            .vertex
+            .shader_defs
+            .contains(&"NORMAL_PREPASS".into())
+        {
+            println!("SPECIALIZING PREPASS PIPELINE");
+            layout.get_layout(&[
+                ChunkMesh::VOXEL_DATA_ATTR.at_shader_location(0),
+                Mesh::ATTRIBUTE_NORMAL.at_shader_location(2),
+            ])?
+        } else {
+            layout.get_layout(&[
+                ChunkMesh::VOXEL_DATA_ATTR.at_shader_location(0),
+                // Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
+            ])?
+        };
+
+        descriptor.vertex.buffers = vec![buffer_layout];
         descriptor
             .vertex
             .shader_defs
             .extend_from_slice(&vertex_shader_defs);
-        descriptor.vertex.shader_defs.push("VERTEX_NORMALS".into());
         descriptor.vertex.shader_defs.push("VERTEX_COLORS".into());
-        descriptor.vertex.shader_defs.push("NORMAL_PREPASS".into());
 
         if let Some(fragment) = descriptor.fragment.as_mut() {
             let shader_defs = &mut fragment.shader_defs;
-            shader_defs.push("VERTEX_NORMALS".into());
             shader_defs.push("VERTEX_COLORS".into());
-            shader_defs.push("NORMAL_PREPASS".into());
 
             if key.bind_group_data.normal_map {
                 shader_defs.push("VoxelChunkMaterial_NORMAL_MAP".into());
@@ -178,7 +189,7 @@ impl Material for VoxelChunkMaterial {
                 shader_defs.push("RELIEF_MAPPING".into());
             }
 
-            println!("{:?}: {:?}\n", descriptor.label, shader_defs);
+            // println!("{:?}: {:?}\n", descriptor.label, shader_defs);
         }
 
         descriptor.primitive.cull_mode = key.bind_group_data.cull_mode;
@@ -188,6 +199,16 @@ impl Material for VoxelChunkMaterial {
         if let Some(depth_stencil) = descriptor.depth_stencil.as_mut() {
             depth_stencil.bias.constant = key.bind_group_data.depth_bias;
         }
+
+        println!(
+            "VERTEX {:?}: {:?}\n",
+            descriptor.label, descriptor.vertex.shader_defs
+        );
+
+        if let Some(frag) = descriptor.fragment.as_ref() {
+            println!("FRAGMENT {:?}: {:?}\n", descriptor.label, frag.shader_defs);
+        }
+
         Ok(())
     }
 
@@ -202,8 +223,8 @@ impl Material for VoxelChunkMaterial {
     }
 
     fn prepass_fragment_shader() -> ShaderRef {
-        // PBR_PREPASS_SHADER_HANDLE.into()
-        "shaders/voxel_chunk_frag_prepass.wgsl".into()
+        PBR_PREPASS_SHADER_HANDLE.into()
+        // "shaders/voxel_chunk_frag_prepass.wgsl".into()
     }
 
     fn vertex_shader() -> ShaderRef {
@@ -211,7 +232,8 @@ impl Material for VoxelChunkMaterial {
     }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/voxel_chunk_frag.wgsl".into()
+        // "shaders/voxel_chunk_frag.wgsl".into()
+        PBR_SHADER_HANDLE.into()
     }
 
     #[inline]

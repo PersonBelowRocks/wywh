@@ -64,7 +64,6 @@ pub(crate) fn mask_pos_with_face(face: Face, pos: IVec3) -> IVec2 {
         Face::North | Face::South => (pos.y, pos.z),
         Face::Top | Face::Bottom => (pos.x, pos.z),
         Face::West | Face::East => (pos.x, pos.y),
-        _ => panic!("Unexpected vector component"),
     };
 
     IVec2::new(k, j)

@@ -1,3 +1,4 @@
+extern crate crossbeam as cb;
 extern crate derive_more as dm;
 extern crate hashbrown as hb;
 extern crate thiserror as te;
@@ -5,7 +6,7 @@ extern crate thiserror as te;
 #[macro_use]
 extern crate num_derive;
 
-use std::sync::mpsc;
+use std::{borrow::BorrowMut, sync::mpsc};
 
 use bevy::{
     ecs::schedule::{ScheduleBuildSettings, ScheduleLabel},
@@ -13,7 +14,12 @@ use bevy::{
     render::view::NoFrustumCulling,
 };
 use data::tile::VoxelId;
-use render::{adjacency::AdjacentTransparency, mesh::ChunkMesh};
+use render::{
+    adjacency::AdjacentTransparency,
+    mesh::ChunkMesh,
+    mesh_builder::{Mesher, ParallelMeshBuilder},
+    meshing_algos::SimplePbrMesher,
+};
 use topo::{
     access::WriteAccess,
     chunk::Chunk,
@@ -38,7 +44,10 @@ pub struct VoxelSystemSet;
 pub struct EngineThreadPool(rayon::ThreadPool);
 
 #[derive(Resource, Deref)]
-pub struct DefaultVoxelChunkMaterial(Handle<VoxelChunkMaterial>);
+pub struct HqMaterial<M: Material>(Handle<M>);
+
+#[derive(Resource, Deref)]
+pub struct LqMaterial<M: Material>(Handle<M>);
 
 #[derive(Resource, Deref)]
 pub struct DefaultGenerator(Generator);
@@ -59,12 +68,16 @@ impl EngineThreadPool {
 
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
+        type Hqm = SimplePbrMesher;
+        type Lqm = SimplePbrMesher;
+
         app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
         app.add_event::<GenerateChunk<VoxelId>>();
         app.add_systems(Startup, setup);
+        app.add_systems(PreUpdate, insert_meshes::<Hqm, Lqm>);
         app.add_systems(
             PostUpdate,
-            (generate_chunks_from_events, build_meshes).chain(),
+            (generate_chunks_from_events, build_meshes::<Hqm, Lqm>).chain(),
         );
     }
 }
@@ -85,33 +98,31 @@ fn generate_chunks_from_events(
     }
 }
 
-fn build_meshes(
-    pool: Res<EngineThreadPool>,
+fn build_meshes<HQM: Mesher, LQM: Mesher>(
     realm: Res<VoxelRealm>,
-    mut cmds: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    chunk_material: Res<DefaultVoxelChunkMaterial>,
+    mut mesh_builder: NonSendMut<ParallelMeshBuilder<HQM, LQM>>,
 ) {
-    let (finished_tx, finished_rx) = mpsc::channel::<ChunkMesh>();
+    for chunk in realm.chunk_manager.changed_chunks() {
+        // TODO: adjacency system feels a little half baked... maybe do some caching of some sort?
+        let adjacency = AdjacentTransparency::new(chunk.pos(), &realm.chunk_manager);
+        let id = mesh_builder.queue_chunk(chunk, adjacency);
 
-    pool.scope(move |scope| {
-        let realm_ref = realm.as_ref();
-        for chunk in realm.chunk_manager.changed_chunks() {
-            let tx = finished_tx.clone();
-            let adjacency = AdjacentTransparency::new(chunk.pos, &realm_ref.chunk_manager);
-            scope.spawn(move |_| {
-                let chunk_mesh = ChunkMesh::build(&chunk, &adjacency);
-                tx.send(chunk_mesh).unwrap();
-            })
-        }
-    });
+        println!("Chunk meshing task with ID {:?} started", id);
+    }
+}
 
-    for chunk_mesh in finished_rx.into_iter() {
-        let pos = (*chunk_mesh.pos() * Chunk::SIZE).as_vec3();
+fn insert_meshes<HQM: Mesher, LQM: Mesher>(
+    mut cmds: Commands,
+    mut mesh_builder: NonSendMut<ParallelMeshBuilder<HQM, LQM>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    hq_material: Res<HqMaterial<HQM::Material>>,
+) {
+    for finished_mesh in mesh_builder.finished_meshes().into_iter() {
+        let pos = (*finished_mesh.pos() * Chunk::SIZE).as_vec3();
 
         cmds.spawn(MaterialMeshBundle {
-            mesh: meshes.add(chunk_mesh.into()),
-            material: chunk_material.clone(),
+            mesh: meshes.add(finished_mesh.into()),
+            material: hq_material.clone(),
             transform: Transform::from_translation(pos),
 
             ..default()
@@ -124,9 +135,6 @@ fn build_meshes(
 fn setup(mut cmds: Commands, mut materials: ResMut<Assets<VoxelChunkMaterial>>) {
     let available_parallelism = std::thread::available_parallelism().unwrap();
 
-    let handle = materials.add(VoxelChunkMaterial {});
-
-    cmds.insert_resource(DefaultVoxelChunkMaterial(handle));
     cmds.insert_resource(VoxelRealm::new());
     cmds.insert_resource(EngineThreadPool::new(available_parallelism.into()));
     cmds.insert_resource(DefaultGenerator(Generator::new(1337)));

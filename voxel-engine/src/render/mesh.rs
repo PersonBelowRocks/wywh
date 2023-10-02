@@ -28,8 +28,8 @@ use crate::topo::chunk::Chunk;
 use super::adjacency::AdjacentTransparency;
 
 pub struct ChunkMesh {
-    pos: ChunkPos,
-    mesh: Mesh,
+    pub(crate) pos: ChunkPos,
+    pub(crate) mesh: Mesh,
 }
 
 impl From<ChunkMesh> for Mesh {
@@ -63,6 +63,8 @@ impl ChunkMesh {
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
 
         let mut voxel_data: Vec<u32> = vec![];
+        // Needed until bevy makes SSAO not require normals in the mesh
+        let mut normals: Vec<[f32; 3]> = vec![];
         let mut indices: Vec<u32> = vec![];
         let mut current_idx: u32 = 0;
 
@@ -105,6 +107,10 @@ impl ChunkMesh {
                                 &mut current_idx,
                             );
 
+                            for _ in 0..4 {
+                                normals.push(face.normal().as_vec3().into());
+                            }
+
                             // // TODO: extract the face vertex logic into an own struct or something
                             // for c in 0..4 {
                             //     let data = VoxelFaceVertexData {
@@ -131,26 +137,26 @@ impl ChunkMesh {
             }
         }
 
-        let vertices = voxel_data.len();
-
         mesh.set_indices(Some(Indices::U32(indices)));
         mesh.insert_attribute(
             Self::VOXEL_DATA_ATTR,
             VertexAttributeValues::Uint32(voxel_data),
         );
 
-        mesh.insert_attribute(
-            Mesh::ATTRIBUTE_POSITION,
-            (0..vertices)
-                .map(|_| {
-                    [
-                        rand::random::<f32>(),
-                        rand::random::<f32>(),
-                        rand::random::<f32>(),
-                    ]
-                })
-                .collect::<Vec<_>>(),
-        );
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+
+        // mesh.insert_attribute(
+        //     Mesh::ATTRIBUTE_POSITION,
+        //     (0..vertices)
+        //         .map(|_| {
+        //             [
+        //                 rand::random::<f32>(),
+        //                 rand::random::<f32>(),
+        //                 rand::random::<f32>(),
+        //             ]
+        //         })
+        //         .collect::<Vec<_>>(),
+        // );
 
         mesh
     }

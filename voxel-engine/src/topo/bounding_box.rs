@@ -1,3 +1,5 @@
+use std::any::type_name;
+
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
 
@@ -10,6 +12,26 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
+    // Panics if any component in `min` is greater than that component in `max`
+    pub fn from_min_max(min: IVec3, max: IVec3) -> Self {
+        if min.cmpgt(max).any() {
+            panic!(
+                "Tried to create {} invalid min/max vectors",
+                type_name::<Self>()
+            )
+        }
+
+        Self { min, max }
+    }
+
+    pub fn min(self) -> IVec3 {
+        self.min
+    }
+
+    pub fn max(self) -> IVec3 {
+        self.max
+    }
+
     pub fn is_chunk(self) -> bool {
         self == Chunk::BOUNDING_BOX
     }
@@ -24,6 +46,18 @@ impl BoundingBox {
 
     pub fn to_aabb(self) -> Aabb {
         Aabb::from_min_max(self.min.as_vec3(), self.max.as_vec3())
+    }
+
+    pub fn span(self) -> Self {
+        Self {
+            min: IVec3::splat(0),
+            max: (self.max - self.min).abs(),
+        }
+    }
+
+    pub fn volume(self) -> u32 {
+        let [x, y, z] = self.span().max.to_array();
+        (x * y * z).unsigned_abs()
     }
 }
 

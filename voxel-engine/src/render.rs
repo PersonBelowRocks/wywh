@@ -1,5 +1,9 @@
 pub mod adjacency;
+pub mod error;
 pub mod face_mesh;
 pub mod material;
 pub mod mesh;
+pub mod mesh_builder;
+pub mod meshing_algos;
+pub mod quad;
 pub mod vertex;

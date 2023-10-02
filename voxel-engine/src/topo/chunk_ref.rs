@@ -8,7 +8,7 @@ use bevy::prelude::IVec3;
 use crate::data::tile::VoxelId;
 
 use super::{
-    access::{HasBounds, ReadAccess, WriteAccess},
+    access::{ChunkBounds, HasBounds, ReadAccess, WriteAccess},
     bounding_box::BoundingBox,
     chunk::{Chunk, ChunkPos},
     containers::{SyncChunkVoxelContainerAccess, SyncChunkVoxelContainerReadAccess},
@@ -86,11 +86,7 @@ impl<'a> ReadAccess for ChunkRefVxlAccess<'a> {
     }
 }
 
-impl<'a> HasBounds for ChunkRefVxlAccess<'a> {
-    fn bounds(&self) -> BoundingBox {
-        Chunk::BOUNDING_BOX
-    }
-}
+impl<'a> ChunkBounds for ChunkRefVxlAccess<'a> {}
 
 impl<'a> ReadAccess for ChunkRefVxlReadAccess<'a> {
     type ReadErr = ChunkVoxelAccessError;
@@ -101,8 +97,4 @@ impl<'a> ReadAccess for ChunkRefVxlReadAccess<'a> {
     }
 }
 
-impl<'a> HasBounds for ChunkRefVxlReadAccess<'a> {
-    fn bounds(&self) -> BoundingBox {
-        Chunk::BOUNDING_BOX
-    }
-}
+impl<'a> ChunkBounds for ChunkRefVxlReadAccess<'a> {}

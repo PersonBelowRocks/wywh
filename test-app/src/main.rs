@@ -5,8 +5,10 @@ mod debug_info;
 
 use std::f32::consts::PI;
 
+use bevy::core_pipeline::prepass::{DepthPrepass, NormalPrepass};
 use bevy::pbr::{CascadeShadowConfigBuilder, ScreenSpaceAmbientOcclusionBundle};
 use bevy::prelude::*;
+use bevy::render::render_resource::SpecializedMeshPipeline;
 use debug_info::{DirectionText, PositionText};
 use ve::data::tile::VoxelId;
 use ve::topo::chunk::{Chunk, ChunkPos};
@@ -43,9 +45,9 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for x in -12..12 {
-        for y in -12..12 {
-            for z in -12..12 {
+    for x in -3..3 {
+        for y in -3..3 {
+            for z in -3..3 {
                 writer.send(GenerateChunk {
                     pos: IVec3::new(x, y, z).into(),
                     generator: GeneratorChoice::Default,
@@ -124,7 +126,6 @@ fn setup(
         ..default()
     });
 
-    /*
     // light
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
@@ -132,9 +133,7 @@ fn setup(
             illuminance: 100000.0,
             shadows_enabled: true,
 
-            // TODO: this should be done in the shader for voxel chunks!
-            // we need to increase the shadow depth bias in order to avoid shadow acne on voxels.
-            .. default()
+            ..default()
         },
         transform: Transform::from_rotation(Quat::from_euler(
             EulerRot::ZYX,
@@ -144,7 +143,6 @@ fn setup(
         )),
         ..default()
     });
-    */
 
     commands.insert_resource(Msaa::Off);
 
@@ -156,24 +154,26 @@ fn setup(
         })
         .insert(camera::PlayerCamController::default())
         .insert(VisibilityBundle::default())
-        // .insert(ScreenSpaceAmbientOcclusionBundle::default())
+        .insert(ScreenSpaceAmbientOcclusionBundle::default())
+        // .insert(DepthPrepass)
+        // .insert(NormalPrepass)
         .with_children(|builder| {
-            builder.spawn((
-                SpotLightBundle {
-                    spot_light: SpotLight {
-                        color: Color::WHITE,
-                        intensity: 300000.0,
-                        shadows_enabled: true,
-                        inner_angle: PI / 8.0 * 0.85,
-                        outer_angle: PI / 8.0,
-                        range: 10000.0,
+            // builder.spawn((
+            //     SpotLightBundle {
+            //         spot_light: SpotLight {
+            //             color: Color::WHITE,
+            //             intensity: 300000.0,
+            //             shadows_enabled: true,
+            //             inner_angle: PI / 8.0 * 0.85,
+            //             outer_angle: PI / 8.0,
+            //             range: 10000.0,
 
-                        ..default()
-                    },
+            //             ..default()
+            //         },
 
-                    ..default()
-                },
-                camera::PlayerHeadlight,
-            ));
+            //         ..default()
+            //     },
+            //     camera::PlayerHeadlight,
+            // ));
         });
 }

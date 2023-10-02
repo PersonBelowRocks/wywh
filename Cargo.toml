@@ -1,9 +1,9 @@
 [workspace]
+edition = "2021"
 members = [
     "test-app",
     "voxel-engine",
 ]
-resolver = "2" # required for wgpu to compile
 
 [workspace.dependencies]
-bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "1116207f7dbcc04fbcfd10eecc09e3988a4c726a"}
+bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "483f2464a82a437248c92eb3169bfa5c6485cd8e"}

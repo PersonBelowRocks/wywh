@@ -168,14 +168,7 @@ fn unpack_data(raw: u32) -> VoxelCorner {
     let corner = extract_corner(raw);
 
     let corner_3d = swizzle_transform_corner(corner, face);
-    // Think about this as "moving" the 2D square up by 0.5, giving us the coordinates
-    // of the "top" face of the voxel
-    // let corner_3d = vec3(corner.x, 0.5, corner.y);
-    // Rotate the corner to be positioned on the correct face. This does nothing if
-    // we're on the top face.
-    // let rotated_corner = face_to_transform(face) * corner_3d;
-    // Now we calculate where in the chunk this corner would be by using our voxel
-    // position from earlier.
+
     let final_corner = centered_pos + corner_3d;
     
     var voxel_corner: VoxelCorner;
@@ -190,6 +183,7 @@ fn unpack_data(raw: u32) -> VoxelCorner {
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
     @location(0) voxel_corner: u32,
+    // @location(1) normal: vec3<f32>,
 };
 
 struct VertexOutput {

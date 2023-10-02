@@ -50,8 +50,8 @@ impl Face {
     /// 1 step east of `V`. We can use this function to do just that through
     /// `Face::East.get_position_offset(position of V)`.
     #[inline]
-    pub fn offset_position(&self, pos: IVec3) -> IVec3 {
-        pos + self.offset()
+    pub fn offset_position(self, pos: IVec3) -> IVec3 {
+        pos + self.normal()
     }
 
     #[inline]
@@ -67,7 +67,7 @@ impl Face {
     }
 
     #[inline]
-    pub fn offset(self) -> IVec3 {
+    pub fn normal(self) -> IVec3 {
         match self {
             Face::Top => [0, 1, 0],
             Face::Bottom => [0, -1, 0],
@@ -86,6 +86,19 @@ impl Face {
             Face::Bottom | Face::South | Face::West => -1,
         }
     }
+
+    #[inline]
+    pub fn pos_on_face(self, pos: IVec3) -> IVec2 {
+        match self {
+            Face::Top => [pos.x, pos.z],
+            Face::Bottom => [pos.x, pos.z],
+            Face::North => [pos.y, pos.z],
+            Face::East => [pos.x, pos.y],
+            Face::South => [pos.y, pos.z],
+            Face::West => [pos.x, pos.y],
+        }
+        .into()
+    }
 }
 
 #[derive(dm::Into, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, Clone)]
@@ -94,6 +107,13 @@ pub struct VoxelId(u32);
 impl VoxelId {
     pub const fn new(id: u32) -> Self {
         Self(id)
+    }
+
+    pub const fn debug_transparency(self) -> Transparency {
+        match self.0 {
+            0 => Transparency::Transparent,
+            _ => Transparency::Opaque,
+        }
     }
 }
 
