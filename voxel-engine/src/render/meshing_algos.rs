@@ -33,7 +33,6 @@ impl SimplePbrMesher {
         Self {
             material: StandardMaterial {
                 base_color: Color::GRAY,
-                cull_mode: None,
                 ..default()
             },
         }
@@ -86,11 +85,20 @@ impl Mesher for SimplePbrMesher {
                                 (pos_on_face + IVec2::splat(1)).as_vec2(),
                             );
 
-                            positions
-                                .extend(quad.positions(face, pos.as_vec3()).map(|v| v.to_array()));
+                            let vertex_positions =
+                                quad.positions(face, pos.as_vec3()).map(|v| v.to_array());
+
+                            positions.extend(vertex_positions.into_iter());
                             normals.extend([face.normal().as_vec3().to_array(); 4]);
+                            // TODO: texture system
                             uvs.extend([[0.0, 0.0]; 4]);
-                            indices.extend([0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx));
+
+                            let face_indices = [0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx);
+                            if matches!(face, Face::Bottom | Face::East | Face::North) {
+                                indices.extend(face_indices.into_iter().rev())
+                            } else {
+                                indices.extend(face_indices.into_iter())
+                            }
                             current_idx += 4;
                         }
                     }
@@ -106,7 +114,6 @@ impl Mesher for SimplePbrMesher {
         // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.set_indices(Some(Indices::U32(indices)));
 
-        // Ok(MesherOutput { mesh })
         Ok(MesherOutput { mesh })
     }
 
