@@ -71,9 +71,22 @@ impl Plugin for VoxelPlugin {
         type Hqm = SimplePbrMesher;
         type Lqm = SimplePbrMesher;
 
+        app.insert_non_send_resource(ParallelMeshBuilder::new(
+            SimplePbrMesher::new(),
+            SimplePbrMesher::new(),
+        ));
         app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
         app.add_event::<GenerateChunk<VoxelId>>();
-        app.add_systems(Startup, setup);
+
+        app.add_systems(
+            Startup,
+            (
+                setup::<Hqm, Lqm>,
+                insert_hq_material::<Hqm, Lqm>,
+                insert_lq_material::<Hqm, Lqm>,
+            ),
+        );
+
         app.add_systems(PreUpdate, insert_meshes::<Hqm, Lqm>);
         app.add_systems(
             PostUpdate,
@@ -118,7 +131,8 @@ fn insert_meshes<HQM: Mesher, LQM: Mesher>(
     hq_material: Res<HqMaterial<HQM::Material>>,
 ) {
     for finished_mesh in mesh_builder.finished_meshes().into_iter() {
-        let pos = (*finished_mesh.pos() * Chunk::SIZE).as_vec3();
+        println!("Inserting mesh at {:?}", finished_mesh.pos());
+        let pos = (*finished_mesh.pos() * Chunk::SIZE).as_vec3() + Vec3::splat(0.5);
 
         cmds.spawn(MaterialMeshBundle {
             mesh: meshes.add(finished_mesh.into()),
@@ -127,12 +141,30 @@ fn insert_meshes<HQM: Mesher, LQM: Mesher>(
 
             ..default()
         })
-        .insert(Chunk::BOUNDING_BOX.to_aabb())
+        // .insert(Chunk::BOUNDING_BOX.to_aabb())
         .insert(ChunkEntity);
     }
 }
 
-fn setup(mut cmds: Commands, mut materials: ResMut<Assets<VoxelChunkMaterial>>) {
+fn insert_hq_material<HQM: Mesher, LQM: Mesher>(
+    mut cmds: Commands,
+    mut materials: ResMut<Assets<HQM::Material>>,
+    mesh_builder: NonSend<ParallelMeshBuilder<HQM, LQM>>,
+) {
+    let hq = materials.add(mesh_builder.hq_material());
+    cmds.insert_resource(HqMaterial(hq))
+}
+
+fn insert_lq_material<HQM: Mesher, LQM: Mesher>(
+    mut cmds: Commands,
+    mut materials: ResMut<Assets<LQM::Material>>,
+    mesh_builder: NonSend<ParallelMeshBuilder<HQM, LQM>>,
+) {
+    let lq = materials.add(mesh_builder.lq_material());
+    cmds.insert_resource(LqMaterial(lq))
+}
+
+fn setup<HQM: Mesher, LQM: Mesher>(mut cmds: Commands) {
     let available_parallelism = std::thread::available_parallelism().unwrap();
 
     cmds.insert_resource(VoxelRealm::new());

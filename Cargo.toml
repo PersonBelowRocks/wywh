@@ -1,9 +1,15 @@
 [workspace]
 edition = "2021"
+resolver = "2"
 members = [
     "test-app",
     "voxel-engine",
 ]
 
 [workspace.dependencies]
-bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "483f2464a82a437248c92eb3169bfa5c6485cd8e"}
+bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "dd46fd3aee696c9de0de74d7339a2188a1b307b0"}
+
+[profile.release]
+opt-level = 3
+overflow-checks = false
+# lto = "thin"

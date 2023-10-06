@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Formatter};
+
 use bevy::{
     prelude::*,
     render::{
@@ -27,6 +29,7 @@ use crate::topo::chunk::Chunk;
 
 use super::adjacency::AdjacentTransparency;
 
+#[derive(Debug)]
 pub struct ChunkMesh {
     pub(crate) pos: ChunkPos,
     pub(crate) mesh: Mesh,
@@ -37,6 +40,12 @@ impl From<ChunkMesh> for Mesh {
         value.mesh
     }
 }
+
+// impl Debug for ChunkMesh {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("ChunkMesh").field("pos", &self.pos).field("mesh", &self.mesh).finish()
+//     }
+// }
 
 #[allow(clippy::inconsistent_digit_grouping)]
 #[allow(dead_code)]

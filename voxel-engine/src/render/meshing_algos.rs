@@ -1,7 +1,11 @@
+use bevy::prelude::default;
+use bevy::prelude::shape::Cube;
+use bevy::prelude::Color;
 use bevy::prelude::IVec2;
 use bevy::prelude::IVec3;
 use bevy::prelude::Mesh;
 use bevy::prelude::StandardMaterial;
+use bevy::prelude::Vec3;
 use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
 
@@ -20,7 +24,21 @@ use super::mesh_builder::Mesher;
 use super::mesh_builder::MesherOutput;
 
 #[derive(Clone)]
-pub struct SimplePbrMesher;
+pub struct SimplePbrMesher {
+    material: StandardMaterial,
+}
+
+impl SimplePbrMesher {
+    pub fn new() -> Self {
+        Self {
+            material: StandardMaterial {
+                base_color: Color::GRAY,
+                cull_mode: None,
+                ..default()
+            },
+        }
+    }
+}
 
 impl Mesher for SimplePbrMesher {
     type Material = StandardMaterial;
@@ -40,17 +58,18 @@ impl Mesher for SimplePbrMesher {
         let mut indices = Vec::<u32>::new();
         let mut current_idx: u32 = 0;
 
-        for face in Face::FACES {
-            for x in 0..Chunk::SIZE {
-                for y in 0..Chunk::SIZE {
-                    for z in 0..Chunk::SIZE {
-                        let pos = IVec3::new(x, y, z);
-                        let voxel_id = access.get(pos)?;
+        // for face in Face::FACES {
+        for x in 0..Chunk::SIZE {
+            for y in 0..Chunk::SIZE {
+                for z in 0..Chunk::SIZE {
+                    let pos = IVec3::new(x, y, z);
+                    let voxel_id = access.get(pos)?;
 
-                        if voxel_id.debug_transparency().is_transparent() {
-                            continue;
-                        }
+                    if voxel_id.debug_transparency().is_transparent() {
+                        continue;
+                    }
 
+                    for face in Face::FACES {
                         let adjacent_pos = face.offset_position(pos);
                         let adjacent_transparency = match access.get(adjacent_pos) {
                             Ok(adjacent_voxel_id) => adjacent_voxel_id.debug_transparency(),
@@ -67,25 +86,32 @@ impl Mesher for SimplePbrMesher {
                                 (pos_on_face + IVec2::splat(1)).as_vec2(),
                             );
 
-                            // TODO: finish this mesher
+                            positions
+                                .extend(quad.positions(face, pos.as_vec3()).map(|v| v.to_array()));
+                            normals.extend([face.normal().as_vec3().to_array(); 4]);
+                            uvs.extend([[0.0, 0.0]; 4]);
+                            indices.extend([0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx));
+                            current_idx += 4;
                         }
                     }
                 }
             }
         }
+        // }
 
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
 
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.set_indices(Some(Indices::U32(indices)));
 
-        todo!()
+        // Ok(MesherOutput { mesh })
+        Ok(MesherOutput { mesh })
     }
 
     fn material(&self) -> Self::Material {
-        todo!()
+        self.material.clone()
     }
 }
 

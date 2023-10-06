@@ -37,7 +37,7 @@ impl Quad {
         [self.x + self.width, self.y + self.height].into()
     }
 
-    pub fn positions(self, face: Face) -> [Vec3; 4] {
+    pub fn positions(self, face: Face, pos: Vec3) -> [Vec3; 4] {
         let non_rotated: [Vec2; 4] = {
             let min = self.min();
             let max = self.max();
@@ -55,12 +55,12 @@ impl Quad {
             let v = non_rotated[i];
 
             match face {
-                Face::Top => [v.x, 1.0, v.y],
-                Face::Bottom => [v.x, 0.0, v.y],
-                Face::North => [1.0, v.x, v.y],
-                Face::East => [v.x, v.y, 1.0],
-                Face::South => [0.0, v.x, v.y],
-                Face::West => [v.x, v.y, 0.0],
+                Face::Top => [v.x, pos.y + 1.0, v.y],
+                Face::Bottom => [v.x, pos.y, v.y],
+                Face::North => [pos.x + 1.0, v.x, v.y],
+                Face::East => [v.x, v.y, pos.z + 1.0],
+                Face::South => [pos.x, v.x, v.y],
+                Face::West => [v.x, v.y, pos.z],
             }
             .into()
         })

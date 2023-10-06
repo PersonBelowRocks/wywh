@@ -2,6 +2,7 @@ use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::thread::JoinHandle;
 
+use bevy::prelude::Asset;
 use bevy::prelude::Material;
 use bevy::prelude::Mesh;
 use bevy::prelude::Resource;
@@ -24,7 +25,7 @@ pub struct MesherOutput {
 }
 
 pub trait Mesher: Clone + Send + 'static {
-    type Material: Material;
+    type Material: Material + Asset;
 
     fn build<Acc>(
         &self,

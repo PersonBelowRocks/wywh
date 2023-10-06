@@ -45,9 +45,9 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for x in -3..3 {
-        for y in -3..3 {
-            for z in -3..3 {
+    for x in -0..1 {
+        for y in -0..1 {
+            for z in -0..1 {
                 writer.send(GenerateChunk {
                     pos: IVec3::new(x, y, z).into(),
                     generator: GeneratorChoice::Default,
@@ -127,24 +127,28 @@ fn setup(
     });
 
     // light
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            color: Color::WHITE,
-            illuminance: 100000.0,
-            shadows_enabled: true,
+    // commands.spawn(DirectionalLightBundle {
+    //     directional_light: DirectionalLight {
+    //         color: Color::WHITE,
+    //         illuminance: 100000.0,
+    //         shadows_enabled: true,
 
-            ..default()
-        },
-        transform: Transform::from_rotation(Quat::from_euler(
-            EulerRot::ZYX,
-            0.0,
-            PI * -0.15,
-            PI * -0.15,
-        )),
-        ..default()
-    });
+    //         ..default()
+    //     },
+    //     transform: Transform::from_rotation(Quat::from_euler(
+    //         EulerRot::ZYX,
+    //         0.0,
+    //         PI * -0.15,
+    //         PI * -0.15,
+    //     )),
+    //     ..default()
+    // });
 
     commands.insert_resource(Msaa::Off);
+    commands.insert_resource(AmbientLight {
+        color: Color::WHITE,
+        brightness: 0.3,
+    });
 
     // camera
     commands
