@@ -5,6 +5,7 @@ use bevy::prelude::IVec2;
 use bevy::prelude::IVec3;
 use bevy::prelude::Mesh;
 use bevy::prelude::StandardMaterial;
+use bevy::prelude::Vec2;
 use bevy::prelude::Vec3;
 use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
@@ -12,8 +13,10 @@ use bevy::render::render_resource::PrimitiveTopology;
 use crate::data::tile::Face;
 use crate::data::tile::VoxelId;
 use crate::render::adjacency::mask_pos_with_face;
+use crate::render::greedy_mesh::VoxelChunkSlice;
 use crate::render::quad::Quad;
 use crate::topo::access::ChunkBounds;
+use crate::topo::access::HasBounds;
 use crate::topo::access::ReadAccess;
 use crate::topo::chunk::Chunk;
 use crate::topo::error::ChunkVoxelAccessError;
@@ -123,7 +126,57 @@ impl Mesher for SimplePbrMesher {
 }
 
 #[derive(Clone)]
-pub struct GreedyMesher;
+pub struct GreedyMesher {
+    material: StandardMaterial,
+}
+
+impl GreedyMesher {
+    pub fn new() -> Self {
+        Self {
+            material: StandardMaterial {
+                base_color: Color::INDIGO,
+                ..default()
+            },
+        }
+    }
+}
+
+struct SquarePlane<T: Copy, const SIZE: usize>([[T; SIZE]; SIZE]);
+
+impl<T: Copy, const SIZE: usize> SquarePlane<T, SIZE> {
+    pub fn new(initial: T) -> Self {
+        Self([[initial; SIZE]; SIZE])
+    }
+
+    pub fn get(&self, k: i32, j: i32) -> T {
+        assert!((k as usize) < SIZE);
+        assert!((k as usize) < SIZE);
+
+        self.0[k as usize][j as usize]
+    }
+
+    pub fn set(&mut self, k: i32, j: i32, data: T) {
+        assert!((k as usize) < SIZE);
+        assert!((j as usize) < SIZE);
+
+        self.0[k as usize][j as usize] = data;
+    }
+}
+
+struct AccessPlaneX<'a, A: ReadAccess + HasBounds> {
+    x: i32,
+    access: &'a A,
+}
+
+impl<'a, A: ReadAccess + HasBounds> AccessPlaneX<'a, A> {
+    pub fn new(x: i32, access: &'a A) -> Self {
+        Self { x, access }
+    }
+
+    pub fn get(&self, z: i32, y: i32) -> Result<A::ReadType, A::ReadErr> {
+        self.access.get(IVec3::new(self.x, y, z))
+    }
+}
 
 impl Mesher for GreedyMesher {
     // TODO: greedy meshing mat
@@ -137,10 +190,99 @@ impl Mesher for GreedyMesher {
     where
         Acc: ReadAccess<ReadType = VoxelId> + ChunkBounds,
     {
-        todo!()
+        // due to greedy meshing (and meshing in general) being a somewhat complicated
+        // process, this function is deliberately written very verbosely,
+        // using only common operations and language features to keep it as
+        // language agnostic as possible and avoid logic errors.
+
+        // we separate the meshing process into 3 sweeps across each of the 3D axes.
+        // this lets us convert the 3D problem into a 2D one, by building planes
+        // of geometry at a time instead of the whole cubic volume at once.
+
+        #[derive(Debug)]
+        struct PositionedQuad {
+            pos: IVec3,
+            face: Face,
+            quad: Quad,
+        }
+
+        let mut quads = Vec::<PositionedQuad>::new();
+
+        // X sweep
+        for face in [Face::North, Face::South] {
+            for x in 0..Chunk::SIZE {
+                let mut slice = VoxelChunkSlice::new(face, access, adjacency, x);
+                for y in 0..Chunk::SIZE {
+                    for z in 0..Chunk::SIZE {
+                        let pos = IVec2::new(y, z);
+                        if !slice.is_meshable(pos).unwrap() {
+                            continue;
+                        }
+
+                        let quad = Quad::from_points(
+                            IVec2::new(y, z).as_vec2(),
+                            IVec2::new(y, z).as_vec2(), //  + Vec2::splat(1.0),
+                        );
+
+                        let mut quad_end = pos;
+
+                        let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
+                            if !slice.is_meshable([pos.x + n as i32, pos.y].into()).unwrap() {
+                                quad_end.x = pos.x + n as i32;
+                                true
+                            } else {
+                                false
+                            }
+                        });
+
+                        // let heightened = widened.heighten_until(1.0, (Chunk::SIZE - y) as _, |n| {
+                        //     todo!()
+                        // });
+
+                        slice.mask(pos, quad_end);
+
+                        quads.push(PositionedQuad {
+                            pos: [x, y, z].into(),
+                            face,
+                            quad: widened.heighten(1.0),
+                        })
+                    }
+                }
+            }
+        }
+
+        let mut positions = Vec::<[f32; 3]>::new();
+        let mut normals = Vec::<[f32; 3]>::new();
+        // let mut uvs = Vec::<[f32; 2]>::new();
+
+        let mut indices = Vec::<u32>::new();
+        let mut current_idx: u32 = 0;
+
+        for PositionedQuad { pos, face, quad } in quads.into_iter() {
+            let vertex_positions = quad.positions(face, pos.as_vec3()).map(|v| v.to_array());
+            positions.extend(vertex_positions.into_iter());
+            normals.extend([face.normal().as_vec3().to_array(); 4]);
+            // uvs.extend([[0.0, 0.0]; 4]);
+
+            let face_indices = [0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx);
+            if matches!(face, Face::Bottom | Face::East | Face::North) {
+                indices.extend(face_indices.into_iter().rev())
+            } else {
+                indices.extend(face_indices.into_iter())
+            }
+            current_idx += 4;
+        }
+
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh.set_indices(Some(Indices::U32(indices)));
+
+        Ok(MesherOutput { mesh })
     }
 
     fn material(&self) -> Self::Material {
-        todo!()
+        self.material.clone()
     }
 }

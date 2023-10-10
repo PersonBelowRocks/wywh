@@ -77,4 +77,48 @@ impl Quad {
             [span.x, 0.0]
         ].map(Into::into)
     }
+
+    pub fn width(self) -> f32 {
+        self.width
+    }
+
+    pub fn height(self) -> f32 {
+        self.height
+    }
+
+    pub fn heighten(mut self, amount: f32) -> Self {
+        self.height += amount;
+        assert!(self.height >= 0.0);
+        self
+    }
+
+    pub fn widen(mut self, amount: f32) -> Self {
+        self.width += amount;
+        assert!(self.width >= 0.0);
+        self
+    }
+
+    pub fn heighten_until<F>(self, step: f32, ceil: u32, mut f: F) -> Self
+    where
+        F: FnMut(u32) -> bool,
+    {
+        let mut n = 0;
+        while !f(n) && n < ceil {
+            n += 1;
+        }
+
+        self.heighten((n as f32) * step)
+    }
+
+    pub fn widen_until<F>(self, step: f32, ceil: u32, mut f: F) -> Self
+    where
+        F: FnMut(u32) -> bool,
+    {
+        let mut n: u32 = 0;
+        while !f(n) && n < ceil {
+            n += 1;
+        }
+
+        self.widen((n as f32) * step)
+    }
 }

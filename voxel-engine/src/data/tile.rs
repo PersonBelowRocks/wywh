@@ -99,12 +99,55 @@ impl Face {
         }
         .into()
     }
+
+    #[inline]
+    pub fn axis(self) -> Axis {
+        match self {
+            Face::North | Face::South => Axis::X,
+            Face::Top | Face::Bottom => Axis::Y,
+            Face::East | Face::West => Axis::Z,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Axis {
+    X,
+    Y,
+    Z,
+}
+
+impl Axis {
+    pub fn pos_in_3d(self, pos: IVec2, magnitude: i32) -> IVec3 {
+        match self {
+            Self::X => [magnitude, pos.x, pos.y],
+            Self::Y => [pos.x, magnitude, pos.y],
+            Self::Z => [pos.x, pos.y, magnitude],
+        }
+        .into()
+    }
 }
 
 #[derive(dm::Into, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 pub struct VoxelId(u32);
 
 impl VoxelId {
+    // TODO: better name for this, air implies this voxel is made of "air" which might communicate the wrong idea, maybe void?
+    // this special VoxelId is used to represent a position which is ready to be occupied, but currently
+    // isn't
+    pub const AIR: Self = VoxelId::new(0);
+
+    // TODO: is the name here okay? and is u32::MAX a good internal value?
+    // this special VoxelId communicates that the value in this position *does not matter*.
+    // this is quite different from VoxelId::AIR because that represents that a space is empty and can be occupied whereas
+    // VoxelId::IGNORE doesn't have to be empty, we should just ignore it.
+    // such an ID is *extremely* useful in for example buffered access operations, you can initialize
+    // an internal voxel buffer filled with VoxelId::IGNORE and when a voxel is inserted, to overwrite that ID with
+    // whatever got inserted. then, upon flushing the buffer into whatever underlying access you wanted to edit, you
+    // just copy over everything that *isn't* a VoxelId::IGNORE  so that for these positions the underlying access retains
+    // the previous data that was there. basically, every position with VoxelId::IGNORE in it was unedited.
+    pub const IGNORE: Self = VoxelId::new(u32::MAX);
+
     pub const fn new(id: u32) -> Self {
         Self(id)
     }

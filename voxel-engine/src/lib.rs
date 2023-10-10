@@ -10,6 +10,7 @@ use std::{borrow::BorrowMut, sync::mpsc};
 
 use bevy::{
     ecs::schedule::{ScheduleBuildSettings, ScheduleLabel},
+    pbr::wireframe::Wireframe,
     prelude::*,
     render::view::NoFrustumCulling,
 };
@@ -34,6 +35,8 @@ pub mod topo;
 pub mod util;
 
 pub use render::material::VoxelChunkMaterial;
+
+use crate::render::meshing_algos::GreedyMesher;
 
 pub struct VoxelPlugin;
 
@@ -68,11 +71,11 @@ impl EngineThreadPool {
 
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
-        type Hqm = SimplePbrMesher;
+        type Hqm = GreedyMesher;
         type Lqm = SimplePbrMesher;
 
         app.insert_non_send_resource(ParallelMeshBuilder::new(
-            SimplePbrMesher::new(),
+            GreedyMesher::new(),
             SimplePbrMesher::new(),
         ));
         app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
@@ -142,7 +145,7 @@ fn insert_meshes<HQM: Mesher, LQM: Mesher>(
             ..default()
         })
         // .insert(Chunk::BOUNDING_BOX.to_aabb())
-        .insert(ChunkEntity);
+        .insert((ChunkEntity, Wireframe));
     }
 }
 
@@ -169,7 +172,7 @@ fn setup<HQM: Mesher, LQM: Mesher>(mut cmds: Commands) {
 
     cmds.insert_resource(VoxelRealm::new());
     cmds.insert_resource(EngineThreadPool::new(available_parallelism.into()));
-    cmds.insert_resource(DefaultGenerator(Generator::new(1337)));
+    cmds.insert_resource(DefaultGenerator(Generator::new(110)));
 }
 
 /*

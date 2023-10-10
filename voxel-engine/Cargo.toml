@@ -8,6 +8,7 @@ anyhow = "1.0.75"
 bevy = {workspace = true}
 bracket-noise = "0.8.7"
 crossbeam = "0.8.2"
+dashmap = "5.5.3"
 derive_more = "0.99.17"
 downcast-rs = "1.2.0"
 hashbrown = "0.13.2"

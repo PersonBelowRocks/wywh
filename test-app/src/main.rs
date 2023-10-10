@@ -6,9 +6,12 @@ mod debug_info;
 use std::f32::consts::PI;
 
 use bevy::core_pipeline::prepass::{DepthPrepass, NormalPrepass};
+use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::pbr::{CascadeShadowConfigBuilder, ScreenSpaceAmbientOcclusionBundle};
 use bevy::prelude::*;
 use bevy::render::render_resource::SpecializedMeshPipeline;
+use bevy::render::settings::{WgpuFeatures, WgpuSettings};
+use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, PositionText};
 use ve::data::tile::VoxelId;
 use ve::topo::chunk::{Chunk, ChunkPos};
@@ -17,8 +20,17 @@ use ve::ChunkEntity;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(ve::VoxelPlugin)
+        .add_plugins((
+            DefaultPlugins.set(RenderPlugin {
+                render_creation: WgpuSettings {
+                    features: WgpuFeatures::POLYGON_MODE_LINE,
+                    ..default()
+                }
+                .into(),
+            }),
+            WireframePlugin,
+            ve::VoxelPlugin,
+        ))
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -41,6 +53,7 @@ fn main() {
 
 fn setup(
     mut writer: EventWriter<GenerateChunk<VoxelId>>,
+    mut wireframe_config: ResMut<WireframeConfig>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -56,6 +69,8 @@ fn setup(
             }
         }
     }
+
+    // wireframe_config.global = true;
 
     commands.spawn((
         TextBundle::from_sections([
