@@ -7,7 +7,10 @@ use std::f32::consts::PI;
 
 use bevy::core_pipeline::prepass::{DepthPrepass, NormalPrepass};
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
-use bevy::pbr::{CascadeShadowConfigBuilder, ScreenSpaceAmbientOcclusionBundle};
+use bevy::pbr::{
+    CascadeShadowConfigBuilder, ScreenSpaceAmbientOcclusionBundle,
+    ScreenSpaceAmbientOcclusionQualityLevel, ScreenSpaceAmbientOcclusionSettings,
+};
 use bevy::prelude::*;
 use bevy::render::render_resource::SpecializedMeshPipeline;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
@@ -58,9 +61,9 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for x in -0..1 {
-        for y in -0..1 {
-            for z in -0..1 {
+    for x in -1..=1 {
+        for y in -1..=1 {
+            for z in -1..=1 {
                 writer.send(GenerateChunk {
                     pos: IVec3::new(x, y, z).into(),
                     generator: GeneratorChoice::Default,
