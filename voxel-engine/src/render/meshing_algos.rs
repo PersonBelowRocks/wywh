@@ -88,8 +88,9 @@ impl Mesher for SimplePbrMesher {
                                 (pos_on_face + IVec2::splat(1)).as_vec2(),
                             );
 
-                            let vertex_positions =
-                                quad.positions(face, pos.as_vec3()).map(|v| v.to_array());
+                            let vertex_positions = quad
+                                .positions(face, face.axis().choose(pos.as_vec3()))
+                                .map(|v| v.to_array());
 
                             positions.extend(vertex_positions.into_iter());
                             normals.extend([face.normal().as_vec3().to_array(); 4]);
@@ -141,43 +142,6 @@ impl GreedyMesher {
     }
 }
 
-struct SquarePlane<T: Copy, const SIZE: usize>([[T; SIZE]; SIZE]);
-
-impl<T: Copy, const SIZE: usize> SquarePlane<T, SIZE> {
-    pub fn new(initial: T) -> Self {
-        Self([[initial; SIZE]; SIZE])
-    }
-
-    pub fn get(&self, k: i32, j: i32) -> T {
-        assert!((k as usize) < SIZE);
-        assert!((k as usize) < SIZE);
-
-        self.0[k as usize][j as usize]
-    }
-
-    pub fn set(&mut self, k: i32, j: i32, data: T) {
-        assert!((k as usize) < SIZE);
-        assert!((j as usize) < SIZE);
-
-        self.0[k as usize][j as usize] = data;
-    }
-}
-
-struct AccessPlaneX<'a, A: ReadAccess + HasBounds> {
-    x: i32,
-    access: &'a A,
-}
-
-impl<'a, A: ReadAccess + HasBounds> AccessPlaneX<'a, A> {
-    pub fn new(x: i32, access: &'a A) -> Self {
-        Self { x, access }
-    }
-
-    pub fn get(&self, z: i32, y: i32) -> Result<A::ReadType, A::ReadErr> {
-        self.access.get(IVec3::new(self.x, y, z))
-    }
-}
-
 impl Mesher for GreedyMesher {
     // TODO: greedy meshing mat
     type Material = StandardMaterial;
@@ -201,7 +165,7 @@ impl Mesher for GreedyMesher {
 
         #[derive(Debug)]
         struct PositionedQuad {
-            pos: IVec3,
+            magnitude: f32,
             face: Face,
             quad: Quad,
         }
@@ -257,7 +221,7 @@ impl Mesher for GreedyMesher {
                         slice.mask(pos, quad_end);
 
                         quads.push(PositionedQuad {
-                            pos: [x, y, z].into(),
+                            magnitude: x as _,
                             face,
                             quad: heightened, // widened.heighten(1.0),
                         })
@@ -315,7 +279,7 @@ impl Mesher for GreedyMesher {
                         slice.mask(pos, quad_end);
 
                         quads.push(PositionedQuad {
-                            pos: [x, y, z].into(),
+                            magnitude: y as _,
                             face,
                             quad: heightened, // widened.heighten(1.0),
                         })
@@ -373,7 +337,7 @@ impl Mesher for GreedyMesher {
                         slice.mask(pos, quad_end);
 
                         quads.push(PositionedQuad {
-                            pos: [x, y, z].into(),
+                            magnitude: z as _,
                             face,
                             quad: heightened, // widened.heighten(1.0),
                         })
@@ -389,8 +353,13 @@ impl Mesher for GreedyMesher {
         let mut indices = Vec::<u32>::new();
         let mut current_idx: u32 = 0;
 
-        for PositionedQuad { pos, face, quad } in quads.into_iter() {
-            let vertex_positions = quad.positions(face, pos.as_vec3()).map(|v| v.to_array());
+        for PositionedQuad {
+            magnitude,
+            face,
+            quad,
+        } in quads.into_iter()
+        {
+            let vertex_positions = quad.positions(face, magnitude).map(|v| v.to_array());
             positions.extend(vertex_positions.into_iter());
             normals.extend([face.normal().as_vec3().to_array(); 4]);
             // uvs.extend([[0.0, 0.0]; 4]);

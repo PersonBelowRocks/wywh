@@ -101,30 +101,12 @@ impl Face {
     }
 
     #[inline]
-    pub fn axis(self) -> Axis {
+    pub fn axis(self) -> Axis3D {
         match self {
-            Face::North | Face::South => Axis::X,
-            Face::Top | Face::Bottom => Axis::Y,
-            Face::East | Face::West => Axis::Z,
+            Face::North | Face::South => Axis3D::X,
+            Face::Top | Face::Bottom => Axis3D::Y,
+            Face::East | Face::West => Axis3D::Z,
         }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Axis {
-    X,
-    Y,
-    Z,
-}
-
-impl Axis {
-    pub fn pos_in_3d(self, pos: IVec2, magnitude: i32) -> IVec3 {
-        match self {
-            Self::X => [magnitude, pos.x, pos.y],
-            Self::Y => [pos.x, magnitude, pos.y],
-            Self::Z => [pos.x, pos.y, magnitude],
-        }
-        .into()
     }
 }
 

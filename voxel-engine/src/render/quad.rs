@@ -37,7 +37,8 @@ impl Quad {
         [self.x + self.width, self.y + self.height].into()
     }
 
-    pub fn positions(self, face: Face, pos: Vec3) -> [Vec3; 4] {
+    // TODO: use AxisMagnitude instead of a Vec3 here
+    pub fn positions(self, face: Face, mag: f32) -> [Vec3; 4] {
         let non_rotated: [Vec2; 4] = {
             let min = self.min();
             let max = self.max();
@@ -55,12 +56,12 @@ impl Quad {
             let v = non_rotated[i];
 
             match face {
-                Face::Top => [v.x, pos.y + 1.0, v.y],
-                Face::Bottom => [v.x, pos.y, v.y],
-                Face::North => [pos.x + 1.0, v.x, v.y],
-                Face::East => [v.x, v.y, pos.z + 1.0],
-                Face::South => [pos.x, v.x, v.y],
-                Face::West => [v.x, v.y, pos.z],
+                Face::Top => [v.x, mag + 1.0, v.y],
+                Face::Bottom => [v.x, mag, v.y],
+                Face::North => [mag + 1.0, v.x, v.y],
+                Face::East => [v.x, v.y, mag + 1.0],
+                Face::South => [mag, v.x, v.y],
+                Face::West => [v.x, v.y, mag],
             }
             .into()
         })

@@ -3,7 +3,8 @@ use std::sync::{
     Arc, RwLock, RwLockReadGuard, Weak,
 };
 
-use bevy::prelude::Resource;
+use bevy::{prelude::Resource, utils::AHasher};
+use dashmap::DashMap;
 
 use super::{
     chunk::{Chunk, ChunkPos},
@@ -11,7 +12,7 @@ use super::{
     error::ChunkManagerGetChunkError,
 };
 
-type SyncHashMap<K, V> = RwLock<hb::HashMap<K, V>>;
+type SyncHashMap<K, V> = DashMap<K, V, ahash::RandomState>;
 
 #[derive(Default)]
 pub struct LoadedChunkContainer(pub(crate) SyncHashMap<ChunkPos, Arc<Chunk>>);
@@ -20,19 +21,19 @@ pub struct LoadedChunkIterator<'a>(pub(crate) hb::hash_map::Iter<'a, ChunkPos, A
 
 impl LoadedChunkContainer {
     pub fn get(&self, pos: ChunkPos) -> Option<Weak<Chunk>> {
-        self.0.read().unwrap().get(&pos).map(Arc::downgrade)
+        self.0.get(&pos).as_deref().map(Arc::downgrade)
     }
 
     pub fn set(&self, pos: ChunkPos, chunk: Arc<Chunk>) {
-        self.0.write().unwrap().insert(pos, chunk);
+        self.0.insert(pos, chunk);
     }
 
     pub fn remove(&self, pos: ChunkPos) -> bool {
-        self.0.write().unwrap().remove(&pos).is_some()
+        self.0.remove(&pos).is_some()
     }
 
-    pub(crate) fn internal_map(&self) -> RwLockReadGuard<'_, hb::HashMap<ChunkPos, Arc<Chunk>>> {
-        self.0.read().unwrap()
+    pub(crate) fn internal_map(&self) -> &'_ SyncHashMap<ChunkPos, Arc<Chunk>> {
+        &self.0
     }
 }
 
@@ -41,7 +42,7 @@ pub struct PendingChunkChanges(pub(crate) SyncHashMap<ChunkPos, Arc<AtomicBool>>
 
 impl PendingChunkChanges {
     pub fn get(&self, pos: ChunkPos) -> Option<Weak<AtomicBool>> {
-        self.0.read().unwrap().get(&pos).map(Arc::downgrade)
+        self.0.get(&pos).as_deref().map(Arc::downgrade)
     }
 
     pub fn get_or_create(&self, pos: ChunkPos, initial_status: bool) -> Weak<AtomicBool> {
@@ -63,39 +64,35 @@ impl PendingChunkChanges {
         let atomic_bool = Arc::new(AtomicBool::new(initial_status));
         let weak = Arc::downgrade(&atomic_bool);
 
-        self.0.write().unwrap().insert(pos, atomic_bool);
+        self.0.insert(pos, atomic_bool);
 
         weak
     }
 
     pub fn remove(&self, pos: ChunkPos) -> bool {
-        self.0.write().unwrap().remove(&pos).is_some()
+        self.0.remove(&pos).is_some()
     }
 
-    pub(crate) fn internal_map(
-        &self,
-    ) -> RwLockReadGuard<'_, hb::HashMap<ChunkPos, Arc<AtomicBool>>> {
-        self.0.read().unwrap()
+    pub(crate) fn internal_map(&self) -> &'_ SyncHashMap<ChunkPos, Arc<AtomicBool>> {
+        &self.0
     }
 
     pub(crate) fn pending_changes(&self) -> Vec<ChunkPos> {
         self.0
-            .read()
-            .unwrap()
             .iter()
-            .filter(|(_, changed)| changed.swap(false, Ordering::SeqCst))
-            .map(|(&pos, _)| pos)
+            .filter(|m| m.value().swap(false, Ordering::SeqCst))
+            .map(|m| *m.key())
             .collect::<Vec<_>>()
     }
 }
 
-pub(crate) struct ChangedChunks<'a> {
+pub(crate) struct ChangedChunks<'a, 'b> {
     changed_positions: Vec<ChunkPos>,
-    changes: RwLockReadGuard<'a, hb::HashMap<ChunkPos, Arc<AtomicBool>>>,
-    chunks: RwLockReadGuard<'a, hb::HashMap<ChunkPos, Arc<Chunk>>>,
+    changes: &'a SyncHashMap<ChunkPos, Arc<AtomicBool>>,
+    chunks: &'b SyncHashMap<ChunkPos, Arc<Chunk>>,
 }
 
-impl<'a> Iterator for ChangedChunks<'a> {
+impl<'a, 'b> Iterator for ChangedChunks<'a, 'b> {
     type Item = ChunkRef;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -105,8 +102,8 @@ impl<'a> Iterator for ChangedChunks<'a> {
 
         Some(ChunkRef {
             pos,
-            chunk: Arc::downgrade(self.chunks.get(&pos).expect(ERROR_MSG)),
-            changed: Arc::downgrade(self.changes.get(&pos).expect(ERROR_MSG)),
+            chunk: Arc::downgrade(self.chunks.get(&pos).as_deref().expect(ERROR_MSG)),
+            changed: Arc::downgrade(self.changes.get(&pos).as_deref().expect(ERROR_MSG)),
         })
     }
 }
@@ -147,7 +144,7 @@ impl ChunkManager {
         self.pending_changes.update_or_create(pos, true);
     }
 
-    pub(crate) fn changed_chunks(&self) -> ChangedChunks<'_> {
+    pub(crate) fn changed_chunks(&self) -> ChangedChunks<'_, '_> {
         ChangedChunks {
             changed_positions: self.pending_changes.pending_changes(),
             changes: self.pending_changes.internal_map(),
