@@ -172,7 +172,7 @@ fn setup<HQM: Mesher, LQM: Mesher>(mut cmds: Commands) {
 
     cmds.insert_resource(VoxelRealm::new());
     cmds.insert_resource(EngineThreadPool::new(available_parallelism.into()));
-    cmds.insert_resource(DefaultGenerator(Generator::new(112)));
+    cmds.insert_resource(DefaultGenerator(Generator::new(112456754)));
 }
 
 /*

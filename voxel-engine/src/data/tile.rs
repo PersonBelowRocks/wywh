@@ -108,6 +108,11 @@ impl Face {
             Face::East | Face::West => Axis3D::Z,
         }
     }
+
+    #[inline]
+    pub fn rotation_between(self, target: Self) -> Quat {
+        Quat::from_rotation_arc(self.normal().as_vec3(), target.normal().as_vec3())
+    }
 }
 
 #[derive(dm::Into, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, Clone)]
