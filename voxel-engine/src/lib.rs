@@ -10,7 +10,7 @@ use std::{borrow::BorrowMut, sync::mpsc};
 
 use bevy::{
     ecs::schedule::{ScheduleBuildSettings, ScheduleLabel},
-    pbr::wireframe::Wireframe,
+    pbr::{wireframe::Wireframe, ExtendedMaterial},
     prelude::*,
     render::view::NoFrustumCulling,
 };
@@ -36,7 +36,7 @@ pub mod util;
 
 pub use render::material::VoxelChunkMaterial;
 
-use crate::render::meshing_algos::GreedyMesher;
+use crate::render::{greedy_mesh_material::GreedyMeshMaterial, meshing_algos::GreedyMesher};
 
 pub struct VoxelPlugin;
 
@@ -79,6 +79,9 @@ impl Plugin for VoxelPlugin {
             SimplePbrMesher::new(),
         ));
         app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
+        app.add_plugins(MaterialPlugin::<
+            ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>,
+        >::default());
         app.add_event::<GenerateChunk<VoxelId>>();
 
         app.add_systems(

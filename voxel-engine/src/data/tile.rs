@@ -110,6 +110,19 @@ impl Face {
     }
 
     #[inline]
+    pub fn from_normal(normal: IVec3) -> Option<Self> {
+        match normal.to_array() {
+            [0, 1, 0] => Some(Self::Top),
+            [0, -1, 0] => Some(Self::Bottom),
+            [1, 0, 0] => Some(Self::North),
+            [0, 0, 1] => Some(Self::East),
+            [-1, 0, 0] => Some(Self::South),
+            [0, 0, -1] => Some(Self::West),
+            _ => None,
+        }
+    }
+
+    #[inline]
     pub fn rotation_between(self, target: Self) -> Quat {
         Quat::from_rotation_arc(self.normal().as_vec3(), target.normal().as_vec3())
     }
@@ -153,8 +166,18 @@ impl From<u32> for VoxelId {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct TextureId(pub(crate) u32);
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, dm::From, dm::Into)]
+pub struct TextureId(u32);
+
+impl TextureId {
+    pub fn new(d: u32) -> Self {
+        Self(d)
+    }
+
+    pub fn inner(self) -> u32 {
+        self.0
+    }
+}
 
 #[derive(PartialEq, Eq)]
 pub struct TileData {

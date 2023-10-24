@@ -20,7 +20,7 @@ pub fn try_ivec3_to_usize_arr(ivec: IVec3) -> Result<[usize; 3], ConversionError
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Axis2D {
     X,
-    Y
+    Y,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -68,7 +68,7 @@ impl AxisMagnitude {
     }
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct FaceMap<T>([Option<T>; 6]);
 
 impl<T> FaceMap<T> {
@@ -88,4 +88,3 @@ impl<T> FaceMap<T> {
         self.0[face.to_usize().unwrap()] = Some(data)
     }
 }
-
