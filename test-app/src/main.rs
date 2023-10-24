@@ -47,7 +47,7 @@ fn main() {
             Update,
             (
                 debug_info::update_position_text,
-                debug_info::chunk_borders,
+                // debug_info::chunk_borders,
                 debug_info::update_direction_text,
             ),
         )

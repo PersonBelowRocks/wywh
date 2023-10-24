@@ -78,7 +78,8 @@ impl Plugin for VoxelPlugin {
             GreedyMesher::new(),
             SimplePbrMesher::new(),
         ));
-        app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
+        // app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
+        // app.add_plugins(MaterialPlugin::<GreedyMeshMaterial>::default());
         app.add_plugins(MaterialPlugin::<
             ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>,
         >::default());

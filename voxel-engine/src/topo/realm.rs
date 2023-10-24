@@ -6,13 +6,13 @@ use std::sync::{
 use bevy::{prelude::Resource, utils::AHasher};
 use dashmap::DashMap;
 
+use crate::util::SyncHashMap;
+
 use super::{
     chunk::{Chunk, ChunkPos},
     chunk_ref::ChunkRef,
     error::ChunkManagerGetChunkError,
 };
-
-type SyncHashMap<K, V> = DashMap<K, V, ahash::RandomState>;
 
 #[derive(Default)]
 pub struct LoadedChunkContainer(pub(crate) SyncHashMap<ChunkPos, Arc<Chunk>>);

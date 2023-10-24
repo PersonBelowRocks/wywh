@@ -1,7 +1,10 @@
 use bevy::{prelude::*, render::render_resource::encase::vector::VectorScalar};
+use dashmap::DashMap;
 use std::array;
 
 use crate::data::tile::Face;
+
+pub type SyncHashMap<K, V> = DashMap<K, V, ahash::RandomState>;
 
 #[derive(te::Error, Debug, PartialEq, Eq)]
 #[error("Could not convert vector {0}")]

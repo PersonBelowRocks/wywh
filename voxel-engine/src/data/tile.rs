@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::util::Axis3D;
 
 use super::error::TileDataConversionError;
+use super::registry::TextureId;
 
 #[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq, dm::Display)]
 pub enum Transparency {
@@ -163,19 +164,6 @@ impl VoxelId {
 impl From<u32> for VoxelId {
     fn from(value: u32) -> Self {
         Self(value)
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, dm::From, dm::Into)]
-pub struct TextureId(u32);
-
-impl TextureId {
-    pub fn new(d: u32) -> Self {
-        Self(d)
-    }
-
-    pub fn inner(self) -> u32 {
-        self.0
     }
 }
 
