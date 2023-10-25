@@ -1,5 +1,6 @@
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use bevy::prelude::Asset;
@@ -10,6 +11,7 @@ use cb::channel::Receiver;
 use cb::channel::SendError;
 use cb::channel::Sender;
 
+use crate::data::registry::RegistryManager;
 use crate::data::tile::VoxelId;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;
@@ -24,13 +26,18 @@ pub struct MesherOutput {
     pub mesh: Mesh,
 }
 
+pub struct Context<'a> {
+    pub adjacency: &'a AdjacentTransparency,
+    pub registries: &'a RegistryManager,
+}
+
 pub trait Mesher: Clone + Send + 'static {
     type Material: Material + Asset;
 
     fn build<Acc>(
         &self,
         access: &Acc,
-        adjacency: &AdjacentTransparency,
+        adjacency: Context,
     ) -> Result<MesherOutput, MesherError<Acc::ReadErr>>
     where
         Acc: ReadAccess<ReadType = VoxelId> + ChunkBounds;
@@ -67,6 +74,7 @@ impl MesherWorker {
         cmd_receiver: &Receiver<MesherWorkerCommand>,
         mesh_sender: &Sender<MesherWorkerOutput>,
         mesher: &impl Mesher<Material = Mat>,
+        registries: Arc<RegistryManager>,
     ) -> Self {
         let cmd_receiver = cmd_receiver.clone();
         let mesh_sender = mesh_sender.clone();
@@ -85,7 +93,11 @@ impl MesherWorker {
                         let mesh = data
                             .chunk_ref
                             .with_read_access(|access| {
-                                mesher.build(&access, &data.adjacency).unwrap()
+                                let cx = Context {
+                                    adjacency: &data.adjacency,
+                                    registries: registries.as_ref(),
+                                };
+                                mesher.build(&access, cx).unwrap()
                             })
                             .unwrap();
 
@@ -111,6 +123,7 @@ pub struct ParallelMeshBuilder<HQM: Mesher, LQM: Mesher> {
     cmd_sender: Sender<MesherWorkerCommand>,
     mesh_receiver: Receiver<MesherWorkerOutput>,
     pending_tasks: hb::HashSet<MeshingTaskId>,
+    registries: Arc<RegistryManager>,
     hq_mesher: HQM,
     lq_mesher: LQM,
 }
@@ -121,18 +134,19 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
         cmd_recv: &Receiver<MesherWorkerCommand>,
         mesh_send: &Sender<MesherWorkerOutput>,
         mesher: &HQM,
+        registries: Arc<RegistryManager>,
     ) -> Vec<MesherWorker> {
         let mut workers = Vec::new();
 
         for _ in 0..number {
-            let worker = MesherWorker::spawn(cmd_recv, mesh_send, mesher);
+            let worker = MesherWorker::spawn(cmd_recv, mesh_send, mesher, registries);
             workers.push(worker);
         }
 
         workers
     }
 
-    pub fn new(hq_mesher: HQM, lq_mesher: LQM) -> Self {
+    pub fn new(hq_mesher: HQM, lq_mesher: LQM, registries: Arc<RegistryManager>) -> Self {
         let num_cpus: usize = std::thread::available_parallelism().unwrap().into();
 
         // TODO: create these channels in Self::spawn_workers instead
@@ -140,10 +154,17 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
         let (mesh_send, mesh_recv) = cb::channel::unbounded::<MesherWorkerOutput>();
 
         Self {
-            workers: Self::spawn_workers(num_cpus as _, &cmd_recv, &mesh_send, &hq_mesher),
+            workers: Self::spawn_workers(
+                num_cpus as _,
+                &cmd_recv,
+                &mesh_send,
+                &hq_mesher,
+                registries.clone(),
+            ),
             cmd_sender: cmd_send,
             mesh_receiver: mesh_recv,
             pending_tasks: hb::HashSet::new(),
+            registries,
             hq_mesher,
             lq_mesher,
         }

@@ -23,6 +23,7 @@ use crate::topo::error::ChunkVoxelAccessError;
 
 use super::adjacency::AdjacentTransparency;
 use super::error::MesherError;
+use super::mesh_builder::Context;
 use super::mesh_builder::Mesher;
 use super::mesh_builder::MesherOutput;
 
@@ -48,7 +49,7 @@ impl Mesher for SimplePbrMesher {
     fn build<Acc>(
         &self,
         access: &Acc,
-        adjacency: &AdjacentTransparency,
+        cx: Context,
     ) -> Result<MesherOutput, MesherError<Acc::ReadErr>>
     where
         Acc: ReadAccess<ReadType = VoxelId> + ChunkBounds,
@@ -77,7 +78,7 @@ impl Mesher for SimplePbrMesher {
                             Ok(adjacent_voxel_id) => adjacent_voxel_id.debug_transparency(),
                             Err(_) => {
                                 let pos_in_adjacent_chunk = mask_pos_with_face(face, adjacent_pos);
-                                adjacency.sample(face, pos_in_adjacent_chunk).expect("We're only iterating through 0..16 so the position should be valid")
+                                cx.adjacency.sample(face, pos_in_adjacent_chunk).expect("We're only iterating through 0..16 so the position should be valid")
                             }
                         };
 
@@ -149,7 +150,7 @@ impl Mesher for GreedyMesher {
     fn build<Acc>(
         &self,
         access: &Acc,
-        adjacency: &AdjacentTransparency,
+        cx: Context,
     ) -> Result<MesherOutput, MesherError<Acc::ReadErr>>
     where
         Acc: ReadAccess<ReadType = VoxelId> + ChunkBounds,
@@ -172,10 +173,11 @@ impl Mesher for GreedyMesher {
 
         let mut quads = Vec::<PositionedQuad>::new();
 
+        // TODO: dont duplicate these 3 loops, its silly
         // X sweep
         for face in [Face::North, Face::South] {
             for x in 0..Chunk::SIZE {
-                let mut slice = VoxelChunkSlice::new(face, access, adjacency, x);
+                let mut slice = VoxelChunkSlice::new(face, access, cx.adjacency, x);
                 for y in 0..Chunk::SIZE {
                     for z in 0..Chunk::SIZE {
                         let pos = IVec2::new(y, z);
@@ -233,7 +235,7 @@ impl Mesher for GreedyMesher {
         // Y sweep
         for face in [Face::Top, Face::Bottom] {
             for y in 0..Chunk::SIZE {
-                let mut slice = VoxelChunkSlice::new(face, access, adjacency, y);
+                let mut slice = VoxelChunkSlice::new(face, access, cx.adjacency, y);
                 for x in 0..Chunk::SIZE {
                     for z in 0..Chunk::SIZE {
                         let pos = IVec2::new(x, z);
@@ -291,7 +293,7 @@ impl Mesher for GreedyMesher {
         // Z sweep
         for face in [Face::East, Face::West] {
             for z in 0..Chunk::SIZE {
-                let mut slice = VoxelChunkSlice::new(face, access, adjacency, z);
+                let mut slice = VoxelChunkSlice::new(face, access, cx.adjacency, z);
                 for x in 0..Chunk::SIZE {
                     for y in 0..Chunk::SIZE {
                         let pos = IVec2::new(x, y);
