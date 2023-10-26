@@ -1,10 +1,9 @@
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, RwLock, RwLockReadGuard, Weak,
+    Arc, Weak,
 };
 
-use bevy::{prelude::Resource, utils::AHasher};
-use dashmap::DashMap;
+use bevy::prelude::Resource;
 
 use crate::util::SyncHashMap;
 

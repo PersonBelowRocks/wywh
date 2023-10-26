@@ -1,9 +1,6 @@
 use bevy::{
-    pbr::{
-        ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
-        MaterialPipeline, MaterialPipelineKey,
-    },
-    prelude::{Asset, Material, StandardMaterial},
+    pbr::{MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
+    prelude::Asset,
     reflect::TypePath,
     render::{
         mesh::{MeshVertexAttribute, MeshVertexBufferLayout},
@@ -24,10 +21,10 @@ impl GreedyMeshMaterial {
 
 impl MaterialExtension for GreedyMeshMaterial {
     fn specialize(
-        pipeline: &MaterialExtensionPipeline,
+        _pipeline: &MaterialExtensionPipeline,
         descriptor: &mut RenderPipelineDescriptor,
         layout: &MeshVertexBufferLayout,
-        key: MaterialExtensionKey<Self>,
+        _key: MaterialExtensionKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
         descriptor.label = Some("silly_pipeline".into());
 

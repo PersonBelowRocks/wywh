@@ -1,4 +1,4 @@
-use bevy::prelude::{Axis, IVec2};
+use bevy::prelude::IVec2;
 
 use crate::{
     data::tile::{Face, Transparency, VoxelId},
@@ -6,7 +6,6 @@ use crate::{
         access::{ChunkBounds, ReadAccess},
         chunk::Chunk,
     },
-    util::Axis3D,
 };
 
 use super::adjacency::AdjacentTransparency;

@@ -4,7 +4,7 @@ use bevy::{asset::AssetPath, prelude::*};
 
 use super::{
     error::TextureLoadingError,
-    tile::{Transparency, VoxelId},
+    tile::VoxelId,
     voxel::{Voxel, VoxelModel, VoxelProperties},
 };
 

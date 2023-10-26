@@ -32,7 +32,7 @@ pub struct Generator {
 
 impl Generator {
     pub fn new(seed: u32) -> Self {
-        let noise = Perlin::new(seed);
+        let _noise = Perlin::new(seed);
 
         Self {
             noise: Perlin::new(seed),

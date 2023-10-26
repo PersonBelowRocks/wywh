@@ -1,7 +1,7 @@
 use bevy::{
     pbr::{
-        MaterialPipeline, MaterialPipelineKey, MeshPipelineKey, StandardMaterialFlags,
-        PBR_PREPASS_SHADER_HANDLE, PBR_SHADER_HANDLE,
+        MaterialPipeline, MaterialPipelineKey, StandardMaterialFlags, PBR_PREPASS_SHADER_HANDLE,
+        PBR_SHADER_HANDLE,
     },
     prelude::*,
     reflect::{Reflect, TypeUuid},

@@ -8,7 +8,7 @@ use crate::data::{
 pub struct Void;
 
 impl Voxel for Void {
-    fn model(textures: &VoxelTextureRegistry) -> Option<VoxelModel> {
+    fn model(_textures: &VoxelTextureRegistry) -> Option<VoxelModel> {
         None
     }
 

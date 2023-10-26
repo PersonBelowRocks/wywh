@@ -1,10 +1,8 @@
-use std::f32::consts::FRAC_PI_2;
 use std::f32::consts::PI;
 
-use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
-use bevy::render::view::WindowSurfaces;
+
 use bevy::window::CursorGrabMode;
 
 #[derive(Component, Default, Copy, Clone)]

@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 
 use bevy::{
     prelude::*,
@@ -9,18 +9,15 @@ use bevy::{
 };
 
 use crate::{
-    data::tile::Transparency,
     render::{
         adjacency::{mask_pos_with_face, voxel_id_to_transparency_debug},
         face_mesh::FaceMesh,
-        vertex::VoxelFaceVertexData,
     },
     topo::{
         access::ReadAccess,
         chunk::ChunkPos,
         chunk_ref::{ChunkRef, ChunkRefVxlReadAccess},
         error::ChunkVoxelAccessError,
-        realm::ChunkManager,
     },
 };
 

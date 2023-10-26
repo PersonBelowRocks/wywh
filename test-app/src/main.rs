@@ -3,23 +3,16 @@ extern crate voxel_engine as ve;
 mod camera;
 mod debug_info;
 
-use std::f32::consts::PI;
-
-use bevy::core_pipeline::prepass::{DepthPrepass, NormalPrepass};
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
-use bevy::pbr::{
-    CascadeShadowConfigBuilder, ScreenSpaceAmbientOcclusionBundle,
-    ScreenSpaceAmbientOcclusionQualityLevel, ScreenSpaceAmbientOcclusionSettings,
-};
+use bevy::pbr::ScreenSpaceAmbientOcclusionBundle;
 use bevy::prelude::*;
-use bevy::render::render_resource::SpecializedMeshPipeline;
+
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, PositionText};
 use ve::data::tile::VoxelId;
-use ve::topo::chunk::{Chunk, ChunkPos};
+
 use ve::topo::generator::{GenerateChunk, GeneratorChoice};
-use ve::ChunkEntity;
 
 fn main() {
     App::new()
@@ -56,7 +49,7 @@ fn main() {
 
 fn setup(
     mut writer: EventWriter<GenerateChunk<VoxelId>>,
-    mut wireframe_config: ResMut<WireframeConfig>,
+    _wireframe_config: ResMut<WireframeConfig>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -179,7 +172,7 @@ fn setup(
         .insert(ScreenSpaceAmbientOcclusionBundle::default())
         // .insert(DepthPrepass)
         // .insert(NormalPrepass)
-        .with_children(|builder| {
+        .with_children(|_builder| {
             // builder.spawn((
             //     SpotLightBundle {
             //         spot_light: SpotLight {

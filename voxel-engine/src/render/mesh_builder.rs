@@ -1,6 +1,3 @@
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
-use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use bevy::prelude::Asset;
@@ -8,7 +5,7 @@ use bevy::prelude::Material;
 use bevy::prelude::Mesh;
 use bevy::prelude::Resource;
 use cb::channel::Receiver;
-use cb::channel::SendError;
+
 use cb::channel::Sender;
 
 use crate::data::registry::Registries;

@@ -1,12 +1,11 @@
 use std::array;
 
 use bevy::prelude::IVec3;
-use bevy::prelude::Mesh;
+
 use bevy::prelude::UVec2;
 
 use crate::data::tile::Face;
 
-use super::mesh::ChunkMesh;
 use super::vertex::VoxelFaceVertexData;
 
 #[derive(Copy, Clone, Debug)]

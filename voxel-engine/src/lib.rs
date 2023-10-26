@@ -6,13 +6,9 @@ extern crate thiserror as te;
 #[macro_use]
 extern crate num_derive;
 
-use std::{borrow::BorrowMut, sync::mpsc};
-
 use bevy::{
-    ecs::schedule::{ScheduleBuildSettings, ScheduleLabel},
     pbr::{wireframe::Wireframe, ExtendedMaterial},
     prelude::*,
-    render::view::NoFrustumCulling,
 };
 use data::{
     registry::{Registries, VoxelRegistryBuilder, VoxelTextureRegistryBuilder},
@@ -20,14 +16,12 @@ use data::{
 };
 use render::{
     adjacency::AdjacentTransparency,
-    mesh::ChunkMesh,
     mesh_builder::{Mesher, ParallelMeshBuilder},
     meshing_algos::SimplePbrMesher,
 };
 use topo::{
-    access::WriteAccess,
     chunk::Chunk,
-    containers::{ChunkVoxelDataStorage, RawChunkVoxelContainer},
+    containers::RawChunkVoxelContainer,
     generator::{GenerateChunk, Generator},
     realm::VoxelRealm,
 };

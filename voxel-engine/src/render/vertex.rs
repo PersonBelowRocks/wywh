@@ -137,9 +137,7 @@ impl VoxelFaceVertexData {
 
 #[cfg(test)]
 mod tests {
-    use bevy::prelude::{Mat3, Vec3, Vec3Swizzles};
-
-    use super::*;
+    use bevy::prelude::{Vec3, Vec3Swizzles};
 
     #[test]
     fn swizzle_transforms() {

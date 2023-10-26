@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Weak,
+    Weak,
 };
 
 use bevy::prelude::IVec3;
@@ -8,8 +8,7 @@ use bevy::prelude::IVec3;
 use crate::data::tile::VoxelId;
 
 use super::{
-    access::{ChunkBounds, HasBounds, ReadAccess, WriteAccess},
-    bounding_box::BoundingBox,
+    access::{ChunkBounds, ReadAccess, WriteAccess},
     chunk::{Chunk, ChunkPos},
     containers::{SyncChunkVoxelContainerAccess, SyncChunkVoxelContainerReadAccess},
     error::{ChunkRefAccessError, ChunkVoxelAccessError},

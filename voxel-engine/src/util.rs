@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::render_resource::encase::vector::VectorScalar};
+use bevy::prelude::*;
 use dashmap::DashMap;
 use std::array;
 
