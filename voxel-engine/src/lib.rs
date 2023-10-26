@@ -149,15 +149,15 @@ fn setup<HQM: Mesher, LQM: Mesher>(
     mut hqs: ResMut<Assets<ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>>>,
     mut lqs: ResMut<Assets<StandardMaterial>>,
 ) {
+    println!("running setup");
     let available_parallelism = std::thread::available_parallelism().unwrap();
-    let mut texture_reg_builder =
-        VoxelTextureRegistryBuilder::new(server.as_ref(), textures.as_mut());
+    let mut texture_reg_builder = VoxelTextureRegistryBuilder::new(server.as_ref());
 
     texture_reg_builder
         .add_texture("textures/debug_texture.png")
         .unwrap();
 
-    let texture_registry = texture_reg_builder.finish();
+    let texture_registry = texture_reg_builder.finish(textures.as_mut()).unwrap();
     let atlas_texture = texture_registry.atlas_texture();
 
     let mut voxel_reg_builder = VoxelRegistryBuilder::new(&texture_registry);

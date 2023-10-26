@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use super::registry::TextureId;
+
 #[derive(te::Error, Debug)]
 #[error("TODO")]
 pub struct TileDataConversionError;
@@ -8,6 +10,6 @@ pub struct TileDataConversionError;
 pub enum TextureLoadingError {
     #[error("Error loading texture to registry. Path: {0}")]
     FileNotFound(PathBuf),
-    #[error("Textures must be square and 2D")]
-    InvalidTextureDimensions(PathBuf),
+    #[error("Texture {0:?} was either not square or not 2D")]
+    InvalidTextureDimensions(TextureId),
 }
