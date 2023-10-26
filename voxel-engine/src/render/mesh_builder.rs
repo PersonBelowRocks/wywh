@@ -28,7 +28,7 @@ pub struct Context<'a> {
     pub registries: &'a Registries,
 }
 
-pub trait Mesher: Clone + Send + 'static {
+pub trait Mesher: Clone + Send + Sync + 'static {
     type Material: Material + Asset;
 
     fn build<Acc>(

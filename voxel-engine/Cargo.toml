@@ -22,4 +22,5 @@ rand = "0.8.5"
 rayon = "1.7.0"
 serde = { version = "1.0.152", features = ["serde_derive"] }
 smallvec = "1.11.1"
+static_assertions = "1.1.0"
 thiserror = "1.0.38"

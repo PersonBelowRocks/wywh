@@ -1,6 +1,7 @@
 extern crate crossbeam as cb;
 extern crate derive_more as dm;
 extern crate hashbrown as hb;
+extern crate static_assertions as sa;
 extern crate thiserror as te;
 
 #[macro_use]
@@ -79,14 +80,7 @@ impl Plugin for VoxelPlugin {
         >::default());
         app.add_event::<GenerateChunk<VoxelId>>();
 
-        app.add_systems(
-            Startup,
-            (
-                setup::<Hqm, Lqm>,
-                insert_hq_material::<Hqm, Lqm>,
-                insert_lq_material::<Hqm, Lqm>,
-            ),
-        );
+        app.add_systems(Startup, setup::<Hqm, Lqm>);
 
         app.add_systems(PreUpdate, insert_meshes::<Hqm, Lqm>);
         app.add_systems(
@@ -147,28 +141,13 @@ fn insert_meshes<HQM: Mesher, LQM: Mesher>(
     }
 }
 
-fn insert_hq_material<HQM: Mesher, LQM: Mesher>(
-    mut cmds: Commands,
-    mut materials: ResMut<Assets<HQM::Material>>,
-    mesh_builder: NonSend<ParallelMeshBuilder<HQM, LQM>>,
-) {
-    let hq = materials.add(mesh_builder.hq_material());
-    cmds.insert_resource(HqMaterial(hq))
-}
-
-fn insert_lq_material<HQM: Mesher, LQM: Mesher>(
-    mut cmds: Commands,
-    mut materials: ResMut<Assets<LQM::Material>>,
-    mesh_builder: NonSend<ParallelMeshBuilder<HQM, LQM>>,
-) {
-    let lq = materials.add(mesh_builder.lq_material());
-    cmds.insert_resource(LqMaterial(lq))
-}
-
 fn setup<HQM: Mesher, LQM: Mesher>(
     mut cmds: Commands,
     server: Res<AssetServer>,
     mut textures: ResMut<Assets<Image>>,
+
+    mut hqs: ResMut<Assets<ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>>>,
+    mut lqs: ResMut<Assets<StandardMaterial>>,
 ) {
     let available_parallelism = std::thread::available_parallelism().unwrap();
     let mut texture_reg_builder =
@@ -193,9 +172,17 @@ fn setup<HQM: Mesher, LQM: Mesher>(
     cmds.insert_resource(EngineThreadPool::new(available_parallelism.into()));
     cmds.insert_resource(DefaultGenerator(Generator::new(112456754)));
 
-    cmds.insert_resource(ParallelMeshBuilder::new(
+    let mesh_builder = ParallelMeshBuilder::new(
         GreedyMesher::new(atlas_texture),
         SimplePbrMesher::new(),
         registries,
-    ));
+    );
+
+    let hq = hqs.add(mesh_builder.hq_material());
+    cmds.insert_resource(HqMaterial(hq));
+
+    let lq = lqs.add(mesh_builder.lq_material());
+    cmds.insert_resource(LqMaterial(lq));
+
+    cmds.insert_resource(mesh_builder);
 }
