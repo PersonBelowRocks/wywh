@@ -33,7 +33,7 @@ impl MaterialExtension for GreedyMeshMaterial {
 
         let buffers = layout.get_layout(&[Self::TEXTURE_MESH_ATTR.at_shader_location(10)])?;
 
-        // descriptor.vertex.buffers.push(buffers);
+        descriptor.vertex.buffers.push(buffers);
 
         Ok(())
     }

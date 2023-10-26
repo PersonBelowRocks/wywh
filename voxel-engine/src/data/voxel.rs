@@ -1,28 +1,38 @@
 use std::any::type_name;
 
-use bevy::render::render_resource::TextureId;
-
 use crate::util::FaceMap;
 
-use super::tile::Transparency;
+use super::{
+    registry::{TextureId, VoxelTextureRegistry},
+    tile::Transparency,
+};
 
 pub trait Voxel: Default {
     fn label() -> &'static str {
         type_name::<Self>()
     }
 
+    fn model(textures: &VoxelTextureRegistry) -> Option<VoxelModel>;
+
     fn properties() -> VoxelProperties;
 }
 
 #[derive(Clone)]
 pub struct VoxelProperties {
-    transparency: Transparency,
-    model: Option<VoxelModel>,
+    pub transparency: Transparency,
 }
 
 #[derive(Copy, Clone)]
 pub struct BlockModel {
-    textures: FaceMap<TextureId>,
+    pub textures: FaceMap<TextureId>,
+}
+
+impl BlockModel {
+    pub fn filled(id: TextureId) -> Self {
+        Self {
+            textures: FaceMap::filled(id),
+        }
+    }
 }
 
 #[derive(Copy, Clone)]

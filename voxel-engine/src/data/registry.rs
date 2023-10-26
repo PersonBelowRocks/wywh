@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy::{asset::AssetPath, prelude::*};
 
 use super::{
@@ -6,18 +8,25 @@ use super::{
     voxel::{Voxel, VoxelModel, VoxelProperties},
 };
 
-pub struct RegistryManager {
-    pub textures: VoxelTextureRegistry,
-    pub voxels: VoxelRegistry,
+#[derive(Clone, Resource)]
+pub struct Registries {
+    pub textures: Arc<VoxelTextureRegistry>,
+    pub voxels: Arc<VoxelRegistry>,
 }
 
-pub struct RegistryBuilder<'a, 'b> {
-    textures: VoxelTextureRegistryBuilder<'a, 'b>,
+impl Registries {
+    pub fn new(textures: VoxelTextureRegistry, voxels: VoxelRegistry) -> Self {
+        Self {
+            textures: Arc::new(textures),
+            voxels: Arc::new(voxels),
+        }
+    }
 }
 
 pub struct VoxelRegistry {
     labels: hb::HashMap<&'static str, VoxelId>,
     properties: Vec<VoxelProperties>,
+    models: Vec<Option<VoxelModel>>,
 }
 
 impl VoxelRegistry {
@@ -27,24 +36,33 @@ impl VoxelRegistry {
 
     pub fn get_properties_from_label(&self, label: &str) -> Option<VoxelProperties> {
         let id = self.labels.get(label)?;
-        Some(self.properties[id.to_usize()])
+        Some(self.properties[id.to_usize()].clone())
     }
 
     pub fn get_properties(&self, id: VoxelId) -> VoxelProperties {
-        self.properties[id.to_usize()]
+        self.properties[id.to_usize()].clone()
+    }
+
+    pub fn get_model(&self, id: VoxelId) -> Option<VoxelModel> {
+        self.models[id.to_usize()]
     }
 }
 
-pub struct VoxelRegistryBuilder {
+pub struct VoxelRegistryBuilder<'a> {
+    textures: &'a VoxelTextureRegistry,
+
     labels: hb::HashMap<&'static str, VoxelId>,
     properties: Vec<VoxelProperties>,
+    models: Vec<Option<VoxelModel>>,
 }
 
-impl VoxelRegistryBuilder {
-    pub fn new() -> Self {
+impl<'a> VoxelRegistryBuilder<'a> {
+    pub fn new(textures: &'a VoxelTextureRegistry) -> Self {
         Self {
+            textures,
             labels: hb::HashMap::new(),
             properties: Vec::new(),
+            models: Vec::new(),
         }
     }
 
@@ -62,6 +80,7 @@ impl VoxelRegistryBuilder {
         VoxelRegistry {
             labels: self.labels,
             properties: self.properties,
+            models: self.models,
         }
     }
 }
@@ -79,6 +98,7 @@ pub struct VoxelTextureRegistryBuilder<'a, 'b> {
     server: &'a AssetServer,
     textures: &'b mut Assets<Image>,
     builder: TextureAtlasBuilder,
+    labels: hb::HashMap<String, TextureId>,
 }
 
 impl<'a, 'b> VoxelTextureRegistryBuilder<'a, 'b> {
@@ -87,6 +107,7 @@ impl<'a, 'b> VoxelTextureRegistryBuilder<'a, 'b> {
             server,
             textures,
             builder: TextureAtlasBuilder::default(),
+            labels: hb::HashMap::new(),
         }
     }
 
@@ -102,11 +123,14 @@ impl<'a, 'b> VoxelTextureRegistryBuilder<'a, 'b> {
             .get(handle.clone())
             .ok_or_else(|| TextureLoadingError::FileNotFound(path.clone().into()))?;
         if texture.texture_descriptor.size.width != texture.texture_descriptor.size.height {
-            return Err(TextureLoadingError::InvalidTextureDimensions(path.into()));
+            return Err(TextureLoadingError::InvalidTextureDimensions(
+                path.clone().into(),
+            ));
         }
 
         let id: AssetId<Image> = handle.into();
 
+        self.labels.insert(path.to_string(), TextureId(id));
         self.builder.add_texture(id, texture);
 
         Ok(TextureId(id))
@@ -115,16 +139,23 @@ impl<'a, 'b> VoxelTextureRegistryBuilder<'a, 'b> {
     pub fn finish(mut self) -> VoxelTextureRegistry {
         let atlas = self.builder.finish(&mut self.textures).unwrap();
 
-        VoxelTextureRegistry { atlas }
+        VoxelTextureRegistry {
+            labels: self.labels,
+            atlas,
+        }
     }
 }
 
 pub struct VoxelTextureRegistry {
-    // texture_atlas_uvs: SyncHashMap<TextureId, Rect>,
+    labels: hb::HashMap<String, TextureId>,
     atlas: TextureAtlas,
 }
 
 impl VoxelTextureRegistry {
+    pub fn get_id(&self, label: &str) -> Option<TextureId> {
+        self.labels.get(label).copied()
+    }
+
     pub fn get(&self, id: TextureId) -> Option<Rect> {
         let idx = self.atlas.get_texture_index(id.inner())?;
         self.atlas.textures.get(idx).copied()

@@ -91,3 +91,9 @@ impl<T> FaceMap<T> {
         self.0[face.to_usize().unwrap()] = Some(data)
     }
 }
+
+impl<T: Copy> FaceMap<T> {
+    pub fn filled(data: T) -> Self {
+        Self([Some(data); 6])
+    }
+}

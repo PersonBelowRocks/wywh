@@ -11,7 +11,7 @@ use cb::channel::Receiver;
 use cb::channel::SendError;
 use cb::channel::Sender;
 
-use crate::data::registry::RegistryManager;
+use crate::data::registry::Registries;
 use crate::data::tile::VoxelId;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;
@@ -28,7 +28,7 @@ pub struct MesherOutput {
 
 pub struct Context<'a> {
     pub adjacency: &'a AdjacentTransparency,
-    pub registries: &'a RegistryManager,
+    pub registries: &'a Registries,
 }
 
 pub trait Mesher: Clone + Send + 'static {
@@ -74,7 +74,7 @@ impl MesherWorker {
         cmd_receiver: &Receiver<MesherWorkerCommand>,
         mesh_sender: &Sender<MesherWorkerOutput>,
         mesher: &impl Mesher<Material = Mat>,
-        registries: Arc<RegistryManager>,
+        registries: Registries,
     ) -> Self {
         let cmd_receiver = cmd_receiver.clone();
         let mesh_sender = mesh_sender.clone();
@@ -95,7 +95,7 @@ impl MesherWorker {
                             .with_read_access(|access| {
                                 let cx = Context {
                                     adjacency: &data.adjacency,
-                                    registries: registries.as_ref(),
+                                    registries: &registries,
                                 };
                                 mesher.build(&access, cx).unwrap()
                             })
@@ -123,7 +123,7 @@ pub struct ParallelMeshBuilder<HQM: Mesher, LQM: Mesher> {
     cmd_sender: Sender<MesherWorkerCommand>,
     mesh_receiver: Receiver<MesherWorkerOutput>,
     pending_tasks: hb::HashSet<MeshingTaskId>,
-    registries: Arc<RegistryManager>,
+    registries: Registries,
     hq_mesher: HQM,
     lq_mesher: LQM,
 }
@@ -134,19 +134,19 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
         cmd_recv: &Receiver<MesherWorkerCommand>,
         mesh_send: &Sender<MesherWorkerOutput>,
         mesher: &HQM,
-        registries: Arc<RegistryManager>,
+        registries: Registries,
     ) -> Vec<MesherWorker> {
         let mut workers = Vec::new();
 
         for _ in 0..number {
-            let worker = MesherWorker::spawn(cmd_recv, mesh_send, mesher, registries);
+            let worker = MesherWorker::spawn(cmd_recv, mesh_send, mesher, registries.clone());
             workers.push(worker);
         }
 
         workers
     }
 
-    pub fn new(hq_mesher: HQM, lq_mesher: LQM, registries: Arc<RegistryManager>) -> Self {
+    pub fn new(hq_mesher: HQM, lq_mesher: LQM, registries: Registries) -> Self {
         let num_cpus: usize = std::thread::available_parallelism().unwrap().into();
 
         // TODO: create these channels in Self::spawn_workers instead

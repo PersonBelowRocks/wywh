@@ -14,7 +14,10 @@ use bevy::{
     prelude::*,
     render::view::NoFrustumCulling,
 };
-use data::tile::VoxelId;
+use data::{
+    registry::{Registries, VoxelRegistryBuilder, VoxelTextureRegistryBuilder},
+    tile::VoxelId,
+};
 use render::{
     adjacency::AdjacentTransparency,
     mesh::ChunkMesh,
@@ -30,6 +33,7 @@ use topo::{
 };
 
 pub mod data;
+pub mod defaults;
 pub mod render;
 pub mod topo;
 pub mod util;
@@ -74,10 +78,6 @@ impl Plugin for VoxelPlugin {
         type Hqm = GreedyMesher;
         type Lqm = SimplePbrMesher;
 
-        app.insert_non_send_resource(ParallelMeshBuilder::new(
-            GreedyMesher::new(),
-            SimplePbrMesher::new(),
-        ));
         // app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
         // app.add_plugins(MaterialPlugin::<GreedyMeshMaterial>::default());
         app.add_plugins(MaterialPlugin::<
@@ -171,46 +171,37 @@ fn insert_lq_material<HQM: Mesher, LQM: Mesher>(
     cmds.insert_resource(LqMaterial(lq))
 }
 
-fn setup<HQM: Mesher, LQM: Mesher>(mut cmds: Commands) {
+fn setup<HQM: Mesher, LQM: Mesher>(
+    mut cmds: Commands,
+    server: Res<AssetServer>,
+    mut textures: ResMut<Assets<Image>>,
+) {
     let available_parallelism = std::thread::available_parallelism().unwrap();
+    let mut texture_reg_builder =
+        VoxelTextureRegistryBuilder::new(server.as_ref(), textures.as_mut());
 
+    texture_reg_builder
+        .add_texture("textures/debug_texture.png")
+        .unwrap();
+
+    let texture_registry = texture_reg_builder.finish();
+    let atlas_texture = texture_registry.atlas_texture();
+
+    let mut voxel_reg_builder = VoxelRegistryBuilder::new(&texture_registry);
+    voxel_reg_builder.register::<defaults::Void>();
+    voxel_reg_builder.register::<defaults::DebugVoxel>();
+
+    let voxel_registry = voxel_reg_builder.finish();
+    let registries = Registries::new(texture_registry, voxel_registry);
+
+    cmds.insert_resource(registries.clone());
     cmds.insert_resource(VoxelRealm::new());
     cmds.insert_resource(EngineThreadPool::new(available_parallelism.into()));
     cmds.insert_resource(DefaultGenerator(Generator::new(112456754)));
+
+    cmds.insert_resource(ParallelMeshBuilder::new(
+        GreedyMesher::new(atlas_texture),
+        SimplePbrMesher::new(),
+        registries,
+    ));
 }
-
-/*
-fn setup(
-    mut cmds: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<VoxelChunkMaterial>>,
-) {
-    let mut chunk = Chunk::new(ChunkVoxelDataStorage::new(0.into()));
-
-    #[allow(unused)]
-    {
-        let mut access = chunk.voxels.access();
-        access.set([5, 5, 5].into(), 1.into());
-        access.set([5, 6, 5].into(), 1.into());
-        access.set([5, 7, 5].into(), 1.into());
-
-        access.set([0, 0, 0].into(), 1.into());
-        access.set([0, 1, 0].into(), 1.into());
-
-        access.set([0, 1, 2].into(), 1.into());
-    }
-
-    let chunk_mesh = ChunkMesh::build(&chunk).unwrap();
-
-    let mesh = meshes.add(chunk_mesh.into());
-    let material = materials.add(VoxelChunkMaterial {});
-
-    cmds.spawn(MaterialMeshBundle {
-        mesh,
-        material,
-        ..default()
-    })
-    // TODO: culling system
-    .insert(NoFrustumCulling);
-}
-*/

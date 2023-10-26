@@ -1,12 +1,12 @@
+use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::default;
-use bevy::prelude::shape::Cube;
 use bevy::prelude::Color;
+use bevy::prelude::Handle;
 use bevy::prelude::IVec2;
 use bevy::prelude::IVec3;
+use bevy::prelude::Image;
 use bevy::prelude::Mesh;
 use bevy::prelude::StandardMaterial;
-use bevy::prelude::Vec2;
-use bevy::prelude::Vec3;
 use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
 
@@ -16,13 +16,11 @@ use crate::render::adjacency::mask_pos_with_face;
 use crate::render::greedy_mesh::VoxelChunkSlice;
 use crate::render::quad::Quad;
 use crate::topo::access::ChunkBounds;
-use crate::topo::access::HasBounds;
 use crate::topo::access::ReadAccess;
 use crate::topo::chunk::Chunk;
-use crate::topo::error::ChunkVoxelAccessError;
 
-use super::adjacency::AdjacentTransparency;
 use super::error::MesherError;
+use super::greedy_mesh_material::GreedyMeshMaterial;
 use super::mesh_builder::Context;
 use super::mesh_builder::Mesher;
 use super::mesh_builder::MesherOutput;
@@ -129,15 +127,18 @@ impl Mesher for SimplePbrMesher {
 
 #[derive(Clone)]
 pub struct GreedyMesher {
-    material: StandardMaterial,
+    material: ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>,
 }
 
 impl GreedyMesher {
-    pub fn new() -> Self {
+    pub fn new(atlas_texture: Handle<Image>) -> Self {
         Self {
-            material: StandardMaterial {
-                base_color: Color::INDIGO,
-                ..default()
+            material: ExtendedMaterial {
+                base: StandardMaterial {
+                    base_color_texture: Some(atlas_texture),
+                    ..default()
+                },
+                extension: GreedyMeshMaterial {},
             },
         }
     }
@@ -145,7 +146,7 @@ impl GreedyMesher {
 
 impl Mesher for GreedyMesher {
     // TODO: greedy meshing mat
-    type Material = StandardMaterial;
+    type Material = ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>;
 
     fn build<Acc>(
         &self,
