@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bevy::{asset::AssetPath, prelude::*};
+use bevy::{asset::AssetPath, prelude::*, sprite::TextureAtlasBuilderError};
 
 use super::{
     error::TextureLoadingError,
@@ -94,95 +94,32 @@ impl TextureId {
     }
 }
 
-pub struct VoxelTextureRegistryBuilder<'a> {
-    server: &'a AssetServer,
-    handles: hb::HashMap<String, TextureId>,
+pub struct VoxelTextureRegistryBuilder {
+    builder: TextureAtlasBuilder,
+    labels: hb::HashMap<String, TextureId>,
 }
 
-impl<'a> VoxelTextureRegistryBuilder<'a> {
-    pub fn new(server: &'a AssetServer) -> Self {
+impl VoxelTextureRegistryBuilder {
+    pub fn new() -> Self {
         Self {
-            server,
-            handles: hb::HashMap::new(),
+            builder: Default::default(),
+            labels: Default::default(),
         }
     }
 
-    pub fn add_texture<'p>(
-        &mut self,
-        path: impl Into<AssetPath<'p>>,
-    ) -> Result<TextureId, TextureLoadingError> {
-        let path: AssetPath = path.into();
-
-        let handle = self.server.load::<Image>(path.clone());
-        let id: AssetId<Image> = handle.into();
-
-        self.handles.insert(path.to_string(), TextureId(id));
-        // self.builder.add_texture(id, texture);
-
-        Ok(TextureId(id))
-    }
-
-    fn block_until_loaded<'t>(
-        &self,
-        textures: &'t Assets<Image>,
-    ) -> Result<hb::HashMap<TextureId, &'t Image>, TextureLoadingError> {
-        let mut finished =
-            hb::HashMap::<TextureId, &Image>::with_capacity(self.handles.values().len());
-        let mut resume_polling = true;
-
-        while resume_polling {
-            resume_polling = false;
-
-            for id in self.handles.values() {
-                if finished.contains_key(id) {
-                    continue;
-                }
-
-                // TODO: doesnt work because we cant access the handle in the same system, we need to try it later
-                if let Some(image) = textures.get(id.inner()) {
-                    println!("loaded an image with id {id:?}");
-                    let size = image.texture_descriptor.size;
-                    if size.height != size.width {
-                        return Err(TextureLoadingError::InvalidTextureDimensions(*id));
-                    }
-
-                    finished.insert(*id, image);
-                } else {
-                    resume_polling = true;
-                }
-            }
-        }
-
-        Ok(finished)
+    pub fn add_texture(&mut self, handle: impl Into<AssetId<Image>>, image: &Image, label: String) {
+        self.builder.add_texture(handle.into(), image);
+        self.labels.insert(label, TextureId(handle.into()));
     }
 
     pub fn finish(
-        mut self,
-        textures: &mut Assets<Image>,
-    ) -> Result<VoxelTextureRegistry, TextureLoadingError> {
-        /*
-        let texture = self
-            .textures
-            .get(handle.clone())
-            .ok_or_else(|| TextureLoadingError::FileNotFound(path.clone().into()))?;
-        if texture.texture_descriptor.size.width != texture.texture_descriptor.size.height {
-            return Err(TextureLoadingError::InvalidTextureDimensions(
-                path.clone().into(),
-            ));
-        }
-        */
-        let mut builder = TextureAtlasBuilder::default();
-
-        println!("loading textures");
-        for (id, texture) in self.block_until_loaded(textures)? {
-            builder.add_texture(id.inner(), texture);
-        }
-        println!("textures loaded");
-
-        let atlas = builder.finish(textures).unwrap();
+        self,
+        images: &mut Assets<Image>,
+    ) -> Result<VoxelTextureRegistry, TextureAtlasBuilderError> {
+        let atlas = self.builder.finish(images)?;
 
         Ok(VoxelTextureRegistry {
-            labels: self.handles,
+            labels: self.labels,
             atlas,
         })
     }

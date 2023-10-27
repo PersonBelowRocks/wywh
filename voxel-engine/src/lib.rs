@@ -68,6 +68,13 @@ impl EngineThreadPool {
     }
 }
 
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash, States)]
+pub enum AppState {
+    #[default]
+    Setup,
+    Finished,
+}
+
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
         type Hqm = GreedyMesher;
