@@ -1,5 +1,6 @@
 use std::thread::JoinHandle;
 
+use bevy::prelude::error;
 use bevy::prelude::Asset;
 use bevy::prelude::Material;
 use bevy::prelude::Mesh;
@@ -81,7 +82,10 @@ impl MesherWorker {
             let mut interrupt = false;
             while !interrupt {
                 // TODO: error handling
-                let cmd = cmd_receiver.recv().unwrap();
+                let cmd = cmd_receiver.recv().unwrap_or_else(|err| {
+                    error!("MesherWorker errored when receiving from command channel and is shutting down. Error: {err:?}");
+                    MesherWorkerCommand::Shutdown
+                });
 
                 match cmd {
                     MesherWorkerCommand::Shutdown => interrupt = true,

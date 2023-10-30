@@ -4,6 +4,7 @@ use bevy::{asset::AssetPath, prelude::*, sprite::TextureAtlasBuilderError};
 
 use super::{
     error::TextureLoadingError,
+    textures::VoxelTextureRegistryError,
     tile::VoxelId,
     voxel::{Voxel, VoxelModel, VoxelProperties},
 };
@@ -108,8 +109,10 @@ impl VoxelTextureRegistryBuilder {
     }
 
     pub fn add_texture(&mut self, handle: impl Into<AssetId<Image>>, image: &Image, label: String) {
-        self.builder.add_texture(handle.into(), image);
-        self.labels.insert(label, TextureId(handle.into()));
+        let id: AssetId<Image> = handle.into();
+
+        self.builder.add_texture(id, image);
+        self.labels.insert(label, TextureId(id));
     }
 
     pub fn finish(

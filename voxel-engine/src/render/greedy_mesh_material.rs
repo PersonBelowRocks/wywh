@@ -1,6 +1,6 @@
 use bevy::{
     pbr::{MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
-    prelude::Asset,
+    prelude::{info, Asset, Mesh},
     reflect::TypePath,
     render::{
         mesh::{MeshVertexAttribute, MeshVertexBufferLayout},
@@ -28,9 +28,15 @@ impl MaterialExtension for GreedyMeshMaterial {
     ) -> Result<(), SpecializedMeshPipelineError> {
         descriptor.label = Some("silly_pipeline".into());
 
-        let buffers = layout.get_layout(&[Self::TEXTURE_MESH_ATTR.at_shader_location(10)])?;
+        let buffers = layout.get_layout(&[
+            Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+            Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
+            Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+            Self::TEXTURE_MESH_ATTR.at_shader_location(10),
+        ])?;
 
-        descriptor.vertex.buffers.push(buffers);
+        descriptor.vertex.buffers = vec![buffers];
+        info!("{:?}", descriptor.vertex.buffers);
 
         Ok(())
     }

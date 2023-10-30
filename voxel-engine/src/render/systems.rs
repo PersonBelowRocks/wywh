@@ -1,8 +1,13 @@
-use bevy::{pbr::ExtendedMaterial, prelude::*};
+use bevy::{
+    pbr::{wireframe::Wireframe, ExtendedMaterial},
+    prelude::*,
+};
 
 use crate::{
-    data::registry::{Registries, VoxelTextureAtlas},
-    HqMaterial, LqMaterial,
+    data::{registry::Registries, textures::VoxelTextureAtlas},
+    render::adjacency::AdjacentTransparency,
+    topo::{chunk::Chunk, realm::VoxelRealm},
+    ChunkEntity, HqMaterial, LqMaterial,
 };
 
 use super::{
@@ -33,4 +38,39 @@ pub(crate) fn setup_mesh_builder<Hqm: Mesher, Lqm: Mesher>(
     cmds.insert_resource(LqMaterial(lq));
 
     cmds.insert_resource(mesh_builder);
+}
+
+pub(crate) fn build_meshes<HQM: Mesher, LQM: Mesher>(
+    realm: Res<VoxelRealm>,
+    mut mesh_builder: ResMut<ParallelMeshBuilder<HQM, LQM>>,
+) {
+    for chunk in realm.chunk_manager.changed_chunks() {
+        // TODO: adjacency system feels a little half baked... maybe do some caching of some sort?
+        let adjacency = AdjacentTransparency::new(chunk.pos(), &realm.chunk_manager);
+        let id = mesh_builder.queue_chunk(chunk, adjacency);
+
+        println!("Chunk meshing task with ID {:?} started", id);
+    }
+}
+
+pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
+    mut cmds: Commands,
+    mut mesh_builder: ResMut<ParallelMeshBuilder<HQM, LQM>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    hq_material: Res<HqMaterial<HQM::Material>>,
+) {
+    for finished_mesh in mesh_builder.finished_meshes().into_iter() {
+        println!("Inserting mesh at {:?}", finished_mesh.pos());
+        let pos = (*finished_mesh.pos() * Chunk::SIZE).as_vec3() + Vec3::splat(0.5);
+
+        cmds.spawn(MaterialMeshBundle {
+            mesh: meshes.add(finished_mesh.into()),
+            material: hq_material.clone(),
+            transform: Transform::from_translation(pos),
+
+            ..default()
+        })
+        // .insert(Chunk::BOUNDING_BOX.to_aabb())
+        .insert((ChunkEntity, Chunk::BOUNDING_BOX.to_aabb(), Wireframe));
+    }
 }

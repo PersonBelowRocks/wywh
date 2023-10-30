@@ -1,12 +1,24 @@
 #import bevy_pbr::{
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::alpha_discard,
+    view_transformations::position_world_to_clip,
+    pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
 }
 
+#ifdef PREPASS_PIPELINE
 #import bevy_pbr::{
-    forward_io::FragmentOutput,
+    prepass_io::{VertexOutput, FragmentOutput},
+    pbr_deferred_functions::deferred_output,
+}
+#else
+#import bevy_pbr::{
+    forward_io::{VertexOutput, FragmentOutput},
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
 }
+#endif
+
+#import bevy_pbr::mesh_functions
+#import bevy_render::instance_index::get_instance_index
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
@@ -26,7 +38,7 @@ struct Vertex {
 #ifdef VERTEX_COLORS
     @location(5) color: vec4<f32>,
 #endif
-    // @location(10) texture: vec2<f32>,
+    @location(10) texture: vec2<f32>,
 };
 
 struct GreedyVertexOutput {
@@ -47,8 +59,7 @@ struct GreedyVertexOutput {
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     @location(5) @interpolate(flat) instance_index: u32,
 #endif
-
-    // @location(10) texture: vec2<f32>,
+    @location(10) texture: vec2<f32>,
 }
 
 
@@ -57,10 +68,9 @@ fn vertex(
     vertex_no_morph: Vertex
 ) -> GreedyVertexOutput {
     var out: GreedyVertexOutput;
-    out.texture = v.texture;
-
     var vertex = vertex_no_morph;
 
+    out.texture = vertex.texture;
     // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
     // See https://github.com/gfx-rs/naga/issues/2416 .
     var model = mesh_functions::get_model_matrix(vertex_no_morph.instance_index);
@@ -76,7 +86,7 @@ fn vertex(
 
 #ifdef VERTEX_POSITIONS
     out.world_position = mesh_functions::mesh_position_local_to_world(model, vec4<f32>(vertex.position, 1.0));
-    out.position = mesh_functions::mesh_position_world_to_clip(out.world_position);
+    out.position = position_world_to_clip(out.world_position.xyz);
 #endif
 
 #ifdef VERTEX_UVS
@@ -108,10 +118,21 @@ fn vertex(
 
 @fragment
 fn fragment(
-    in: GreedyVertexOutput,
+    raw_in: GreedyVertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    in.uv = (fract(in.uv) + in.texture)
+    var in: VertexOutput;
+
+    in.position = raw_in.position;
+    in.world_position = raw_in.world_position;
+    in.world_normal = raw_in.world_normal;
+#ifdef VERTEX_UVS
+    in.uv = (fract(raw_in.uv) + raw_in.texture);
+#endif
+#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
+    in.instance_index = raw_in.instance_index;
+#endif
+    // in.uv = (fract(in.uv) + in.texture);
 
     // generate a PbrInput struct from the StandardMaterial bindings
     var pbr_input = pbr_input_from_standard_material(in, is_front);

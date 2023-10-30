@@ -36,12 +36,14 @@ pub enum VoxelTextureRegistryError {
     CannotMakePath(UntypedHandle),
     #[error("{0:?} did not resolve to an `Image` asset")]
     BadAssetType(AssetPath<'static>),
+    #[error("{0:?} was not a square image")]
+    InvalidImageDimensions(AssetPath<'static>),
     #[error("{0}")]
     AtlasBuilderError(#[from] TextureAtlasBuilderError),
 }
 
 pub(crate) fn create_voxel_texture_registry(
-    mut cmds: Commands,
+    // mut cmds: Commands,
     voxel_textures: Res<VoxelTextureFolder>,
     mut textures: ResMut<Assets<Image>>,
     folders: Res<Assets<LoadedFolder>>,
@@ -56,6 +58,12 @@ pub(crate) fn create_voxel_texture_registry(
 
         let id = handle.id().typed_unchecked::<Image>();
         if let Some(tex) = textures.get(id) {
+            if tex.height() != tex.width() {
+                return Err(VoxelTextureRegistryError::InvalidImageDimensions(
+                    path.clone(),
+                ));
+            }
+            info!("Loaded texture at path: '{}'", path);
             builder.add_texture(handle, tex, path.to_string())
         } else {
             return Err(VoxelTextureRegistryError::BadAssetType(path.clone()));
