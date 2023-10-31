@@ -26,26 +26,34 @@ impl MaterialExtension for GreedyMeshMaterial {
         layout: &MeshVertexBufferLayout,
         _key: MaterialExtensionKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
-        descriptor.label = Some("silly_pipeline".into());
+        // descriptor.label = Some("silly_pipeline".into());
 
-        let buffers = layout.get_layout(&[
+        let buffer = layout.get_layout(&[
             Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
             Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
-            Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+            // Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
             Self::TEXTURE_MESH_ATTR.at_shader_location(10),
         ])?;
 
-        descriptor.vertex.buffers = vec![buffers];
+        descriptor.vertex.buffers = vec![buffer];
         info!("{:?}", descriptor.vertex.buffers);
 
         Ok(())
     }
 
     fn vertex_shader() -> ShaderRef {
-        "shaders/greedy_mesh_material.wgsl".into()
+        "shaders/greedy_mesh_vert.wgsl".into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/greedy_mesh_material.wgsl".into()
+        "shaders/greedy_mesh_frag.wgsl".into()
+    }
+
+    fn prepass_vertex_shader() -> ShaderRef {
+        "shaders/greedy_mesh_prepass.wgsl".into()
+    }
+
+    fn prepass_fragment_shader() -> ShaderRef {
+        "shaders/greedy_mesh_prepass.wgsl".into()
     }
 }

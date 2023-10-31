@@ -136,6 +136,8 @@ impl GreedyMesher {
             material: ExtendedMaterial {
                 base: StandardMaterial {
                     base_color_texture: Some(atlas_texture),
+                    base_color: Color::rgb(0.5, 0.5, 0.65),
+
                     ..default()
                 },
                 extension: GreedyMeshMaterial {},
@@ -381,7 +383,7 @@ impl Mesher for GreedyMesher {
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, textures);
         mesh.set_indices(Some(Indices::U32(indices)));
 
