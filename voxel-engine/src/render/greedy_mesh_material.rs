@@ -31,7 +31,7 @@ impl MaterialExtension for GreedyMeshMaterial {
         let buffer = layout.get_layout(&[
             Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
             Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
-            // Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+            Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
             Self::TEXTURE_MESH_ATTR.at_shader_location(10),
         ])?;
 

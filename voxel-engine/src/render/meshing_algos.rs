@@ -368,7 +368,12 @@ impl Mesher for GreedyMesher {
             let vertex_positions = quad.positions(face, magnitude).map(|v| v.to_array());
             positions.extend(vertex_positions.into_iter());
             normals.extend([face.normal().as_vec3().to_array(); 4]);
-            uvs.extend([[0.0, 0.0]; 4]);
+            uvs.extend([
+                [0.0, 0.0],
+                [quad.width(), 0.0],
+                [0.0, quad.height()],
+                [quad.width(), quad.height()],
+            ]);
             textures.extend([[0.0, 0.0]; 4]);
 
             let face_indices = [0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx);
@@ -383,7 +388,7 @@ impl Mesher for GreedyMesher {
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, textures);
         mesh.set_indices(Some(Indices::U32(indices)));
 

@@ -58,5 +58,8 @@ fn fragment(
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
 
+    let fract_uv = fract(raw_in.uv);
+    out.color = vec4(fract_uv.x, 0.0, fract_uv.y, 1.0);
+
     return out;
 }
