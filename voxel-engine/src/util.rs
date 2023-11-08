@@ -97,3 +97,54 @@ impl<T: Copy> FaceMap<T> {
         Self([Some(data); 6])
     }
 }
+
+pub fn circular_shift<T: Copy, const C: usize>(arr: [T; C], shift: isize) -> [T; C] {
+    let mut out = arr;
+
+    for (i, &e) in arr.iter().enumerate() {
+        let shifted_index = (i as isize + shift).rem_euclid(C as isize);
+
+        out[shifted_index as usize] = e;
+    }
+
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_circular_shift() {
+        let arr = [0, 1, 2, 3];
+
+        assert_eq!([3, 0, 1, 2], circular_shift(arr, 1));
+        assert_eq!([1, 2, 3, 0], circular_shift(arr, -1));
+        assert_eq!([2, 3, 0, 1], circular_shift(arr, 2));
+        assert_eq!([2, 3, 0, 1], circular_shift(arr, -2));
+        assert_eq!([1, 2, 3, 0], circular_shift(arr, 3));
+        assert_eq!([3, 0, 1, 2], circular_shift(arr, -3));
+    }
+
+    #[test]
+    fn test_circular_shift_modulo() {
+        let arr = [0, 1, 2, 3];
+
+        assert_eq!([2, 3, 0, 1], circular_shift(arr, 6));
+        assert_eq!([2, 3, 0, 1], circular_shift(arr, -6));
+
+        assert_eq!([1, 2, 3, 0], circular_shift(arr, 7));
+        assert_eq!([3, 0, 1, 2], circular_shift(arr, -7));
+    }
+
+    #[test]
+    fn test_circular_shift_unchanged() {
+        let arr = [0, 1, 2, 3];
+
+        assert_eq!(arr, circular_shift(arr, 4));
+        assert_eq!(arr, circular_shift(arr, -4));
+
+        assert_eq!(arr, circular_shift(arr, 0));
+        assert_eq!(arr, circular_shift(arr, -0));
+    }
+}

@@ -5,12 +5,17 @@ use bevy::prelude::Asset;
 use bevy::prelude::Material;
 use bevy::prelude::Mesh;
 use bevy::prelude::Resource;
+use bevy::prelude::Vec2;
+use bevy::prelude::Vec3;
+use bevy::render::mesh::Indices;
+use bevy::render::render_resource::PrimitiveTopology;
 use cb::channel::Receiver;
 
 use cb::channel::Sender;
 
 use crate::data::registry::Registries;
 use crate::data::tile::VoxelId;
+use crate::render::greedy_mesh_material::GreedyMeshMaterial;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;
 use crate::topo::chunk::ChunkPos;
@@ -255,5 +260,50 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
 
     pub fn hq_material(&self) -> HQM::Material {
         self.hq_mesher.material()
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ChunkMeshAttributes {
+    pub positions: Vec<Vec3>,
+    pub normals: Vec<Vec3>,
+    pub uvs: Vec<Vec2>,
+    pub textures: Vec<Vec2>,
+    pub indices: Vec<u32>,
+}
+
+impl ChunkMeshAttributes {
+    pub fn to_mesh(self) -> Mesh {
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+
+        mesh.set_indices(Some(Indices::U32(self.indices)));
+
+        let positions = self
+            .positions
+            .into_iter()
+            .map(|v| v.to_array())
+            .collect::<Vec<_>>();
+        let normals = self
+            .normals
+            .into_iter()
+            .map(|v| v.to_array())
+            .collect::<Vec<_>>();
+        let uvs = self
+            .uvs
+            .into_iter()
+            .map(|v| v.to_array())
+            .collect::<Vec<_>>();
+        let textures = self
+            .textures
+            .into_iter()
+            .map(|v| v.to_array())
+            .collect::<Vec<_>>();
+
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, textures);
+
+        mesh
     }
 }

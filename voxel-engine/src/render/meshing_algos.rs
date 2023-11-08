@@ -21,6 +21,7 @@ use crate::topo::chunk::Chunk;
 
 use super::error::MesherError;
 use super::greedy_mesh_material::GreedyMeshMaterial;
+use super::mesh_builder::ChunkMeshAttributes;
 use super::mesh_builder::Context;
 use super::mesh_builder::Mesher;
 use super::mesh_builder::MesherOutput;
@@ -368,48 +369,76 @@ impl Mesher for GreedyMesher {
         //     }
         // }
 
-        let mut positions = Vec::<[f32; 3]>::new();
-        let mut normals = Vec::<[f32; 3]>::new();
-        let mut uvs = Vec::<[f32; 2]>::new();
-        let mut textures = Vec::<[f32; 2]>::new();
+        let mut attrs = ChunkMeshAttributes::default();
+        let mut current_index = 0;
 
-        let mut indices = Vec::<u32>::new();
-        let mut current_idx: u32 = 0;
-
-        for PositionedQuad {
-            magnitude,
-            face,
-            quad,
-        } in quads.into_iter()
-        {
-            let vertex_positions = quad.positions(face, magnitude).map(|v| v.to_array());
-            positions.extend(vertex_positions.into_iter());
-            normals.extend([face.normal().as_vec3().to_array(); 4]);
-            uvs.extend([
-                [0.0, 0.0],
-                [quad.width(), 0.0],
-                [0.0, quad.height()],
-                [quad.width(), quad.height()],
-            ]);
-            textures.extend([[0.0, 0.0]; 4]);
-
-            let face_indices = [0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx);
-            if matches!(face, Face::Bottom | Face::East | Face::North) {
-                indices.extend(face_indices.into_iter().rev())
-            } else {
-                indices.extend(face_indices.into_iter())
-            }
-            current_idx += 4;
+        for quad in quads.into_iter() {
+            quad.add_to_mesh(current_index, &mut attrs);
+            current_index += 4;
         }
 
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, textures);
-        mesh.set_indices(Some(Indices::U32(indices)));
+        Ok(MesherOutput {
+            mesh: attrs.to_mesh(),
+        })
 
-        Ok(MesherOutput { mesh })
+        // let mut positions = Vec::<[f32; 3]>::new();
+        // let mut normals = Vec::<[f32; 3]>::new();
+        // let mut uvs = Vec::<[f32; 2]>::new();
+        // let mut textures = Vec::<[f32; 2]>::new();
+
+        // let mut indices = Vec::<u32>::new();
+        // let mut current_idx: u32 = 0;
+
+        // for PositionedQuad {
+        //     magnitude,
+        //     face,
+        //     quad,
+        // } in quads.into_iter()
+        // {
+        //     let vertex_positions = quad.positions(face, magnitude).map(|v| v.to_array());
+        //     positions.extend(vertex_positions.into_iter());
+        //     normals.extend([face.normal().as_vec3().to_array(); 4]);
+        //     let raw_uvs = [
+        //         [0.0, 0.0],
+        //         [quad.width(), 0.0],
+        //         [0.0, quad.height()],
+        //         [quad.width(), quad.height()],
+        //     ];
+        //     uvs.extend(raw_uvs);
+        //     textures.extend([[0.0, 0.0]; 4]);
+
+        //     // let face_indices = [0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx);
+        //     // if matches!(face, Face::Bottom | Face::East | Face::North) {
+        //     //     indices.extend(face_indices[0..3].iter().rev());
+        //     //     indices.extend(face_indices[3..6].iter().rev());
+        //     // } else {
+        //     //     indices.extend(face_indices.into_iter());
+        //     // }
+        //     // current_idx += 4;
+
+        //     /*
+        //         0---1
+        //         |   |
+        //         2---3
+        //     */
+
+        //     if matches!(face, Face::Bottom | Face::East | Face::North) {
+        //         indices.extend([0, 2, 3, 0, 3, 1].map(|idx| idx + current_idx))
+        //     } else {
+        //         indices.extend([0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx))
+        //     }
+
+        //     current_idx += 4;
+        // }
+
+        // let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        // mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, textures);
+        // mesh.set_indices(Some(Indices::U32(indices)));
+
+        // Ok(MesherOutput { mesh })
     }
 
     fn material(&self) -> Self::Material {

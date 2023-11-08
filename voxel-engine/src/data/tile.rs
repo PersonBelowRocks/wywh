@@ -127,6 +127,11 @@ impl Face {
     pub fn rotation_between(self, target: Self) -> Quat {
         Quat::from_rotation_arc(self.normal().as_vec3(), target.normal().as_vec3())
     }
+
+    #[inline]
+    pub fn is_horizontal(self) -> bool {
+        matches!(self, Self::North | Self::East | Self::South | Self::West)
+    }
 }
 
 #[derive(dm::Into, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, Clone)]
