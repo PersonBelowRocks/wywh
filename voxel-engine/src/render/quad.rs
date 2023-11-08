@@ -123,3 +123,10 @@ impl Quad {
         self.widen((n as f32) * step)
     }
 }
+
+#[derive(Debug, Copy, Clone)]
+pub struct PositionedQuad {
+    pub magnitude: f32,
+    pub face: Face,
+    pub quad: Quad,
+}

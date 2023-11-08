@@ -7,9 +7,9 @@ members = [
 ]
 
 [workspace.dependencies]
-bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "32a5c7db3535250c43738e3da5877497b1274960"}
+bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "4852fc7578b7a55db4c05a6fb9f8ebdd290571e1"}
 
 [profile.release]
-opt-level = 3
+opt-level = 2
 overflow-checks = false
 # lto = "thin"
