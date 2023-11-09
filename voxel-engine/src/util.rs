@@ -110,6 +110,22 @@ pub fn circular_shift<T: Copy, const C: usize>(arr: [T; C], shift: isize) -> [T;
     out
 }
 
+pub trait ArrayExt {
+    fn circular_shift(self, shift: isize) -> Self;
+    fn reversed(self) -> Self;
+}
+
+impl<T: Copy, const SIZE: usize> ArrayExt for [T; SIZE] {
+    fn circular_shift(self, shift: isize) -> Self {
+        circular_shift(self, shift)
+    }
+
+    fn reversed(mut self) -> Self {
+        self.reverse();
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

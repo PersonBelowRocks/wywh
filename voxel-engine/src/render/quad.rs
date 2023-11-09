@@ -143,6 +143,43 @@ pub struct PositionedQuad {
 }
 
 impl PositionedQuad {
+    #[rustfmt::skip]
+    pub(crate) fn unswapped_uvs(self) -> [Vec2; 4] {
+        use util::ArrayExt;
+
+        let [hx, hy] = [self.quad.width(), self.quad.height()];
+        let [lx, ly] = [0.0, 0.0];
+
+        /*
+            0---1
+            |   |
+            2---3
+        */
+
+        match self.face {
+            Face::Top | Face::Bottom => [
+                vec2(lx, hy), vec2(hx, hy),
+                vec2(lx, ly), vec2(hx, ly)
+            ].circular_shift(2),
+            Face::North => [
+                vec2(lx, hy), vec2(hx, hy),
+                vec2(lx, ly), vec2(hx, ly)
+            ].circular_shift(2),
+            Face::South => [
+                vec2(lx, hy), vec2(hx, hy),
+                vec2(lx, ly), vec2(hx, ly)
+            ],
+            Face::West => [
+                vec2(hx, ly), vec2(lx, ly),
+                vec2(hx, hy), vec2(lx, hy)
+            ].circular_shift(2),
+            Face::East => [
+                vec2(lx, hy), vec2(hx, hy),
+                vec2(lx, ly), vec2(hx, ly)
+            ]
+        }
+    }
+
     pub fn positions(self) -> [Vec3; 4] {
         self.quad.positions(self.face, self.magnitude)
     }
@@ -153,10 +190,10 @@ impl PositionedQuad {
 
         let uv_max = vec2(self.quad.width(), self.quad.height());
 
-        let [hx, hy] = uv_max.to_array();
-        let [lx, ly] = [0.0, 0.0];
+        // let [hx, hy] = uv_max.to_array();
+        // let [lx, ly] = [0.0, 0.0];
 
-        let raw_uvs = [vec2(lx, hy), vec2(hx, hy), vec2(lx, ly), vec2(hx, ly)];
+        // let raw_uvs = [vec2(lx, hy), vec2(hx, hy), vec2(lx, ly), vec2(hx, ly)];
 
         /*
             0---1
@@ -164,16 +201,13 @@ impl PositionedQuad {
             2---3
         */
 
-        // let uvs = match self.face {
-        //     Face::Top | Face::Bottom | Face::East => raw_uv.into_iter().rev(),
-        //     Face::West => raw_uv.into_iter(),
+        let uvs = self.unswapped_uvs();
 
-        //     Face::North | Face::South => util::circular_shift(raw_uv, 2)
-        // };
-
-        let uvs = raw_uvs;
-
-        let indices = [0, 1, 2, 1, 3, 2].map(|i| i + idx);
+        let indices = match self.face {
+            Face::North | Face::Bottom | Face::East => [0, 2, 1, 1, 2, 3],
+            _ => [0, 1, 2, 1, 3, 2],
+        }
+        .map(|i| i + idx);
 
         mesh.indices.extend(indices);
         mesh.normals.extend([normal; 4]);

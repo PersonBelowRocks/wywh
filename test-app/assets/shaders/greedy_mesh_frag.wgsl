@@ -28,7 +28,18 @@ fn fragment(
     in.world_position = raw_in.world_position;
     in.world_normal = raw_in.world_normal;
 #ifdef VERTEX_UVS
-    in.uv = (fract(raw_in.uv) + texture);
+    let fract_uv = fract(raw_in.uv);
+    var uv: vec2<f32> = fract_uv;
+
+    if in.world_normal.x != 0.0 { // north/south face aka. X axis
+        uv = fract_uv.yx;
+    }
+
+    if in.world_normal.y != 0.0 { // top/bottom face aka. Y axis
+        uv = fract_uv.yx;
+    }
+
+    in.uv = (uv + texture);
 #endif
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     in.instance_index = raw_in.instance_index;
@@ -58,8 +69,9 @@ fn fragment(
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
 
-    let fract_uv = fract(raw_in.uv);
-    out.color = vec4(fract_uv.x, 0.0, fract_uv.y, 1.0);
+#ifdef VERTEX_UVS
+    out.color = vec4(uv.x, 0.0, uv.y, 1.0);
+#endif
 
     return out;
 }
