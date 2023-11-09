@@ -1,6 +1,6 @@
 use bevy::{
     pbr::{MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
-    prelude::{info, Asset, Mesh},
+    prelude::{debug, info, Asset, Mesh},
     reflect::TypePath,
     render::{
         mesh::{MeshVertexAttribute, MeshVertexBufferLayout},
@@ -36,7 +36,7 @@ impl MaterialExtension for GreedyMeshMaterial {
         ])?;
 
         descriptor.vertex.buffers = vec![buffer];
-        info!("{:?}", descriptor.vertex.buffers);
+        debug!("{:?}", descriptor.vertex.buffers);
 
         Ok(())
     }

@@ -49,7 +49,7 @@ pub(crate) fn build_meshes<HQM: Mesher, LQM: Mesher>(
         let adjacency = AdjacentTransparency::new(chunk.pos(), &realm.chunk_manager);
         let id = mesh_builder.queue_chunk(chunk, adjacency);
 
-        println!("Chunk meshing task with ID {:?} started", id);
+        debug!("Chunk meshing task with ID {:?} started", id);
     }
 }
 
@@ -60,7 +60,7 @@ pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
     hq_material: Res<HqMaterial<HQM::Material>>,
 ) {
     for finished_mesh in mesh_builder.finished_meshes().into_iter() {
-        println!("Inserting mesh at {:?}", finished_mesh.pos());
+        debug!("Inserting mesh at {:?}", finished_mesh.pos());
         let pos = (*finished_mesh.pos() * Chunk::SIZE).as_vec3() + Vec3::splat(0.5);
 
         cmds.spawn(MaterialMeshBundle {

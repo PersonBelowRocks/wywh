@@ -64,7 +64,7 @@ pub(crate) fn create_voxel_texture_registry(
                 ));
             }
             info!("Loaded texture at path: '{}'", path);
-            builder.add_texture(handle, tex, path.to_string())
+            builder.add_texture(handle, tex, path.to_string());
         } else {
             return Err(VoxelTextureRegistryError::BadAssetType(path.clone()));
         }

@@ -146,4 +146,10 @@ impl VoxelTextureRegistry {
     pub fn atlas_texture(&self) -> Handle<Image> {
         self.atlas.texture.clone()
     }
+
+    pub fn iter_rects(&self) -> impl Iterator<Item = (&'_ str, Rect)> {
+        self.labels
+            .iter()
+            .map(|(lbl, &id)| (lbl.as_str(), self.get(id).unwrap()))
+    }
 }
