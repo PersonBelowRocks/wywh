@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetPath, LoadState, LoadedFolder},
+    asset::{AssetPath, LoadedFolder},
     prelude::*,
     sprite::TextureAtlasBuilderError,
 };

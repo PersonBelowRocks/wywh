@@ -1,6 +1,6 @@
 use bevy::{
     pbr::{MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
-    prelude::{debug, info, Asset, Mesh},
+    prelude::{debug, Asset, Mesh},
     reflect::TypePath,
     render::{
         mesh::{MeshVertexAttribute, MeshVertexBufferLayout},

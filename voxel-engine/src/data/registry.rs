@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
-use bevy::{asset::AssetPath, prelude::*, sprite::TextureAtlasBuilderError};
+use bevy::{prelude::*, sprite::TextureAtlasBuilderError};
 
 use super::{
-    error::TextureLoadingError,
-    textures::VoxelTextureRegistryError,
     tile::VoxelId,
     voxel::{Voxel, VoxelModel, VoxelProperties},
 };

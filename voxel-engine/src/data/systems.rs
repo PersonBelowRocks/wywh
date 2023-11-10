@@ -11,7 +11,7 @@ pub(crate) fn create_registries(
     In(result): In<Result<VoxelTextureRegistry, VoxelTextureRegistryError>>,
 
     mut cmds: Commands,
-    mut textures: ResMut<Assets<Image>>,
+    _textures: ResMut<Assets<Image>>,
 ) {
     if let Err(error) = result {
         error!("Encountered error when building voxel texture registry: {error}");

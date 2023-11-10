@@ -1,7 +1,7 @@
 use std::array;
 
 use bevy::math::vec2;
-use bevy::prelude::Mesh;
+
 use bevy::prelude::Vec2;
 use bevy::prelude::Vec3;
 
@@ -176,7 +176,7 @@ impl PositionedQuad {
         let normal = self.face.normal().as_vec3();
         let positions = self.positions();
 
-        let uv_max = vec2(self.quad.width(), self.quad.height());
+        let _uv_max = vec2(self.quad.width(), self.quad.height());
 
         // let [hx, hy] = uv_max.to_array();
         // let [lx, ly] = [0.0, 0.0];
