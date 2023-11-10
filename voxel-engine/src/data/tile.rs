@@ -2,9 +2,6 @@ use bevy::prelude::*;
 
 use crate::util::Axis3D;
 
-use super::error::TileDataConversionError;
-use super::registry::TextureId;
-
 #[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq, dm::Display)]
 pub enum Transparency {
     #[default]
@@ -174,27 +171,4 @@ impl From<u32> for VoxelId {
     fn from(value: u32) -> Self {
         Self(value)
     }
-}
-
-#[derive(PartialEq, Eq)]
-pub struct TileData {
-    voxel_id: VoxelId,
-    texture_id: TextureId,
-}
-
-enum TextureType {
-    Mono(Handle<Image>),
-    Multi {
-        default: Handle<Image>,
-        faces: hb::HashMap<Face, Handle<Image>>,
-    },
-}
-
-pub struct VoxelTexture {
-    texture: TextureType,
-}
-
-pub trait AsTile: Sized {
-    fn to_tile_data(&self) -> Result<TileData, TileDataConversionError>;
-    fn from_tile_data(data: &TileData) -> Result<Self, TileDataConversionError>;
 }
