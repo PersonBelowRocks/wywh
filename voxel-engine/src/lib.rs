@@ -7,10 +7,7 @@ extern crate thiserror as te;
 #[macro_use]
 extern crate num_derive;
 
-use bevy::{
-    pbr::ExtendedMaterial,
-    prelude::*,
-};
+use bevy::{pbr::ExtendedMaterial, prelude::*};
 use data::tile::VoxelId;
 use render::meshing_algos::SimplePbrMesher;
 use topo::{
