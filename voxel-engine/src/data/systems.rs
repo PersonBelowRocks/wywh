@@ -21,7 +21,10 @@ pub(crate) fn create_registries(
     let voxel_texture_registry = result.unwrap();
 
     for (lbl, rect) in voxel_texture_registry.iter_rects() {
-        info!("Texture '{lbl}' has dimensions {rect:?}");
+        let min = rect.min;
+        let max = rect.max;
+
+        info!("Texture '{lbl}' has dimensions {min}..{max}");
     }
 
     let atlas = voxel_texture_registry.atlas_texture();
