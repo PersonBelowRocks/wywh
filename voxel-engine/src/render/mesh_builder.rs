@@ -8,6 +8,7 @@ use bevy::prelude::Resource;
 use bevy::prelude::Vec2;
 use bevy::prelude::Vec3;
 use bevy::render::mesh::Indices;
+use bevy::render::mesh::VertexAttributeValues;
 use bevy::render::render_resource::PrimitiveTopology;
 use cb::channel::Receiver;
 
@@ -269,6 +270,7 @@ pub struct ChunkMeshAttributes {
     pub normals: Vec<Vec3>,
     pub uvs: Vec<Vec2>,
     pub textures: Vec<Vec2>,
+    pub misc_data: Vec<[u8; 2]>,
     pub indices: Vec<u32>,
 }
 
@@ -278,31 +280,14 @@ impl ChunkMeshAttributes {
 
         mesh.set_indices(Some(Indices::U32(self.indices)));
 
-        let positions = self
-            .positions
-            .into_iter()
-            .map(|v| v.to_array())
-            .collect::<Vec<_>>();
-        let normals = self
-            .normals
-            .into_iter()
-            .map(|v| v.to_array())
-            .collect::<Vec<_>>();
-        let uvs = self
-            .uvs
-            .into_iter()
-            .map(|v| v.to_array())
-            .collect::<Vec<_>>();
-        let textures = self
-            .textures
-            .into_iter()
-            .map(|v| v.to_array())
-            .collect::<Vec<_>>();
-
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, textures);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, self.positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs);
+        mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, self.textures);
+        mesh.insert_attribute(
+            GreedyMeshMaterial::MISC_DATA_ATTR,
+            VertexAttributeValues::Uint8x2(self.misc_data),
+        );
 
         mesh
     }

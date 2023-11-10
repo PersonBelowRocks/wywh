@@ -1,6 +1,5 @@
 use bevy::math::ivec2;
 use bevy::pbr::ExtendedMaterial;
-use bevy::prelude::Rect;
 use bevy::prelude::default;
 use bevy::prelude::Color;
 use bevy::prelude::Handle;
@@ -8,6 +7,7 @@ use bevy::prelude::IVec2;
 use bevy::prelude::IVec3;
 use bevy::prelude::Image;
 use bevy::prelude::Mesh;
+use bevy::prelude::Rect;
 use bevy::prelude::StandardMaterial;
 use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
@@ -141,8 +141,6 @@ pub struct GreedyMesher {
 
 impl GreedyMesher {
     pub fn new(registries: Registries) -> Self {
-        let atlas_texture = registries.textures.atlas_texture();
-
         Self {
             material: ExtendedMaterial {
                 base: StandardMaterial {
