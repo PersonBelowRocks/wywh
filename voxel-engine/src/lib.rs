@@ -8,15 +8,11 @@ extern crate thiserror as te;
 extern crate num_derive;
 
 use bevy::{
-    pbr::{ExtendedMaterial},
+    pbr::ExtendedMaterial,
     prelude::*,
 };
-use data::{
-    tile::VoxelId,
-};
-use render::{
-    meshing_algos::SimplePbrMesher,
-};
+use data::tile::VoxelId;
+use render::meshing_algos::SimplePbrMesher;
 use topo::{
     generator::{GenerateChunk, Generator, GeneratorChoice},
     realm::VoxelRealm,
