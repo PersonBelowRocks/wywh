@@ -78,18 +78,6 @@ impl Quad {
         })
     }
 
-    #[rustfmt::skip]
-    pub fn uvs(self) -> [Vec2; 4] {
-        let span = (self.max() - self.min()).abs();
-
-        [
-            [0.0, span.y],
-            [span.x, span.y],
-            [0.0, 0.0],
-            [span.x, 0.0]
-        ].map(Into::into)
-    }
-
     pub fn width(self) -> f32 {
         self.width
     }

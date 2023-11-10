@@ -8,21 +8,16 @@ extern crate thiserror as te;
 extern crate num_derive;
 
 use bevy::{
-    pbr::{wireframe::Wireframe, ExtendedMaterial},
+    pbr::{ExtendedMaterial},
     prelude::*,
 };
 use data::{
-    registry::{Registries, VoxelRegistryBuilder, VoxelTextureRegistryBuilder},
     tile::VoxelId,
 };
 use render::{
-    adjacency::AdjacentTransparency,
-    mesh_builder::{Mesher, ParallelMeshBuilder},
     meshing_algos::SimplePbrMesher,
 };
 use topo::{
-    chunk::Chunk,
-    containers::RawChunkVoxelContainer,
     generator::{GenerateChunk, Generator, GeneratorChoice},
     realm::VoxelRealm,
 };
@@ -32,8 +27,6 @@ pub mod defaults;
 pub mod render;
 pub mod topo;
 pub mod util;
-
-pub use render::material::VoxelChunkMaterial;
 
 use crate::{
     data::{
