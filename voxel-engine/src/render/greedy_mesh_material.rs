@@ -12,11 +12,17 @@ use bevy::{
 };
 
 #[derive(AsBindGroup, Asset, TypePath, Clone, Debug)]
-pub struct GreedyMeshMaterial {}
+pub struct GreedyMeshMaterial {
+    #[uniform(100)]
+    pub texture_scale: f32,
+}
 
 impl GreedyMeshMaterial {
     pub const TEXTURE_MESH_ATTR: MeshVertexAttribute =
         MeshVertexAttribute::new("Greedy_Texture", 4099_1, VertexFormat::Float32x2);
+
+    pub const MISC_DATA_ATTR: MeshVertexAttribute =
+        MeshVertexAttribute::new("Misc_Data", 4099_2, VertexFormat::Uint8x2);
 }
 
 impl MaterialExtension for GreedyMeshMaterial {
@@ -33,6 +39,7 @@ impl MaterialExtension for GreedyMeshMaterial {
             Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
             Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
             Self::TEXTURE_MESH_ATTR.at_shader_location(10),
+            Self::MISC_DATA_ATTR.at_shader_location(11),
         ])?;
 
         descriptor.vertex.buffers = vec![buffer];

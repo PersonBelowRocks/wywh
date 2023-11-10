@@ -1,4 +1,6 @@
+use bevy::math::ivec2;
 use bevy::pbr::ExtendedMaterial;
+use bevy::prelude::Rect;
 use bevy::prelude::default;
 use bevy::prelude::Color;
 use bevy::prelude::Handle;
@@ -10,8 +12,10 @@ use bevy::prelude::StandardMaterial;
 use bevy::render::mesh::Indices;
 use bevy::render::render_resource::PrimitiveTopology;
 
+use crate::data::registry::Registries;
 use crate::data::tile::Face;
 use crate::data::tile::VoxelId;
+use crate::data::voxel::FaceTextureRotation;
 use crate::render::adjacency::mask_pos_with_face;
 use crate::render::greedy_mesh::VoxelChunkSlice;
 use crate::render::quad::Quad;
@@ -20,12 +24,14 @@ use crate::topo::access::ReadAccess;
 use crate::topo::chunk::Chunk;
 
 use super::error::MesherError;
+use super::greedy_mesh::ChunkSliceMask;
 use super::greedy_mesh_material::GreedyMeshMaterial;
 use super::mesh_builder::ChunkMeshAttributes;
 use super::mesh_builder::Context;
 use super::mesh_builder::Mesher;
 use super::mesh_builder::MesherOutput;
-use super::quad::PositionedQuad;
+use super::quad::MeshableQuad;
+use super::quad::QuadTextureData;
 
 #[derive(Clone)]
 pub struct SimplePbrMesher {
@@ -130,21 +136,90 @@ impl Mesher for SimplePbrMesher {
 #[derive(Clone)]
 pub struct GreedyMesher {
     material: ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>,
+    registries: Registries,
 }
 
 impl GreedyMesher {
-    pub fn new(atlas_texture: Handle<Image>) -> Self {
+    pub fn new(registries: Registries) -> Self {
+        let atlas_texture = registries.textures.atlas_texture();
+
         Self {
             material: ExtendedMaterial {
                 base: StandardMaterial {
-                    base_color_texture: Some(atlas_texture),
+                    base_color_texture: Some(registries.textures.atlas_texture()),
                     base_color: Color::rgb(0.5, 0.5, 0.65),
 
                     ..default()
                 },
-                extension: GreedyMeshMaterial {},
+                extension: GreedyMeshMaterial {
+                    texture_scale: registries.textures.texture_scale(),
+                },
             },
+
+            registries,
         }
+    }
+
+    fn calculate_slice_quads<A: ReadAccess<ReadType = VoxelId> + ChunkBounds>(
+        &self,
+        slice: &VoxelChunkSlice<A>,
+        buffer: &mut Vec<MeshableQuad>,
+    ) -> Result<(), MesherError<A::ReadErr>> {
+        let mut mask = ChunkSliceMask::default();
+
+        for k in 0..Chunk::SIZE {
+            for j in 0..Chunk::SIZE {
+                let pos = IVec2::new(k, j);
+                if !slice.is_meshable(pos).unwrap() || mask.is_masked(pos).unwrap() {
+                    continue;
+                }
+
+                let quad = Quad::from_points(pos.as_vec2(), pos.as_vec2());
+
+                let mut quad_end = pos;
+
+                let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
+                    let candidate_pos = ivec2(pos.x + n as i32, pos.y);
+                    if !slice.is_meshable(candidate_pos).unwrap()
+                        || mask.is_masked(candidate_pos).unwrap()
+                    {
+                        quad_end.x = (pos.x + n as i32) - 1;
+                        true
+                    } else {
+                        false
+                    }
+                });
+
+                let heightened = widened.heighten_until(1.0, Chunk::SIZE as u32, |n| {
+                    let mut abort = false;
+                    for q_x in pos.x..=quad_end.x {
+                        let candidate_pos = ivec2(q_x, pos.y + n as i32);
+                        if !slice.is_meshable(candidate_pos).unwrap()
+                            || mask.is_masked(candidate_pos).unwrap()
+                        {
+                            quad_end.y = (pos.y + n as i32) - 1;
+                            abort = true;
+                            break;
+                        }
+                    }
+                    abort
+                });
+
+                mask.mask_region(pos, quad_end);
+
+                buffer.push(MeshableQuad {
+                    magnitude: slice.layer as _,
+                    face: slice.face,
+                    quad: heightened,
+                    quad_tex: QuadTextureData {
+                        rect: Rect::new(0.0, 0.0, 16.0, 16.0),
+                        rotation: FaceTextureRotation::default(),
+                    },
+                })
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -160,214 +235,33 @@ impl Mesher for GreedyMesher {
     where
         Acc: ReadAccess<ReadType = VoxelId> + ChunkBounds,
     {
-        // due to greedy meshing (and meshing in general) being a somewhat complicated
-        // process, this function is deliberately written very verbosely,
-        // using only common operations and language features to keep it as
-        // language agnostic as possible and avoid logic errors.
-
         // we separate the meshing process into 3 sweeps across each of the 3D axes.
         // this lets us convert the 3D problem into a 2D one, by building planes
         // of geometry at a time instead of the whole cubic volume at once.
 
-        let mut quads = Vec::<PositionedQuad>::new();
+        // TOOD: this is horribly inefficient when it comes to allocations, we should preserve a vec with a high capacity between meshing passes
+        let mut quads = Vec::<MeshableQuad>::new();
 
         for face in [Face::Top, Face::Bottom] {
             for y in 0..Chunk::SIZE {
                 let slice = VoxelChunkSlice::new(face, access, cx.adjacency, y);
-
-                slice.calculate_quads(&mut quads)?;
+                self.calculate_slice_quads(&slice, &mut quads)?;
             }
         }
 
         for face in [Face::North, Face::South] {
             for x in 0..Chunk::SIZE {
                 let slice = VoxelChunkSlice::new(face, access, cx.adjacency, x);
-
-                slice.calculate_quads(&mut quads)?;
+                self.calculate_slice_quads(&slice, &mut quads)?;
             }
         }
 
         for face in [Face::East, Face::West] {
             for z in 0..Chunk::SIZE {
                 let slice = VoxelChunkSlice::new(face, access, cx.adjacency, z);
-
-                slice.calculate_quads(&mut quads)?;
+                self.calculate_slice_quads(&slice, &mut quads)?;
             }
         }
-        // Y sweep
-        // for face in [Face::Top, Face::Bottom] {
-        //     for y in 0..Chunk::SIZE {
-        //         let mut slice = VoxelChunkSlice::new(face, access, cx.adjacency, y);
-        //         for x in 0..Chunk::SIZE {
-        //             for z in 0..Chunk::SIZE {
-        //                 let pos = IVec2::new(x, z);
-        //                 if !slice.is_meshable(pos).unwrap() {
-        //                     continue;
-        //                 }
-
-        //                 let quad = Quad::from_points(
-        //                     pos.as_vec2(),
-        //                     pos.as_vec2(), //  + Vec2::splat(1.0),
-        //                 );
-
-        //                 let mut quad_end = pos;
-
-        //                 // println!("widening");
-        //                 let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
-        //                     // print!("{:?} ", (pos.x + n as i32, pos.y));
-        //                     if !slice.is_meshable([pos.x + n as i32, pos.y].into()).unwrap() {
-        //                         quad_end.x = (pos.x + n as i32) - 1;
-        //                         true
-        //                     } else {
-        //                         false
-        //                     }
-        //                 });
-        //                 // println!("");
-
-        //                 // println!("heightening");
-        //                 let heightened = widened.heighten_until(1.0, Chunk::SIZE as u32, |n| {
-        //                     let mut abort = false;
-        //                     for q_x in pos.x..=quad_end.x {
-        //                         // print!("{:?} ", (q_x, pos.y + n as i32));
-        //                         if !slice.is_meshable([q_x, pos.y + n as i32].into()).unwrap() {
-        //                             quad_end.y = (pos.y + n as i32) - 1;
-        //                             abort = true;
-        //                             break;
-        //                         }
-        //                     }
-        //                     abort
-        //                 });
-        //                 // println!("");
-        //                 // println!("---------");
-
-        //                 slice.mask(pos, quad_end);
-
-        //                 quads.push(PositionedQuad {
-        //                     magnitude: y as _,
-        //                     face,
-        //                     quad: heightened, // widened.heighten(1.0),
-        //                 })
-        //             }
-        //         }
-        //     }
-        // }
-
-        // TODO: dont duplicate these 3 loops, its silly
-        // // X sweep
-        // for face in [Face::North, Face::South] {
-        //     for x in 0..Chunk::SIZE {
-        //         let mut slice = VoxelChunkSlice::new(face, access, cx.adjacency, x);
-        //         for y in 0..Chunk::SIZE {
-        //             for z in 0..Chunk::SIZE {
-        //                 let pos = IVec2::new(y, z);
-        //                 if !slice.is_meshable(pos).unwrap() {
-        //                     continue;
-        //                 }
-
-        //                 let quad = Quad::from_points(
-        //                     pos.as_vec2(),
-        //                     pos.as_vec2(), //  + Vec2::splat(1.0),
-        //                 );
-
-        //                 let mut quad_end = pos;
-
-        //                 // println!("widening");
-        //                 let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
-        //                     // print!("{:?} ", (pos.x + n as i32, pos.y));
-        //                     if !slice.is_meshable([pos.x + n as i32, pos.y].into()).unwrap() {
-        //                         quad_end.x = (pos.x + n as i32) - 1;
-        //                         true
-        //                     } else {
-        //                         false
-        //                     }
-        //                 });
-        //                 // println!("");
-
-        //                 // println!("heightening");
-        //                 let heightened = widened.heighten_until(1.0, Chunk::SIZE as u32, |n| {
-        //                     let mut abort = false;
-        //                     for q_x in pos.x..=quad_end.x {
-        //                         // print!("{:?} ", (q_x, pos.y + n as i32));
-        //                         if !slice.is_meshable([q_x, pos.y + n as i32].into()).unwrap() {
-        //                             quad_end.y = (pos.y + n as i32) - 1;
-        //                             abort = true;
-        //                             break;
-        //                         }
-        //                     }
-        //                     abort
-        //                 });
-        //                 // println!("");
-        //                 // println!("---------");
-
-        //                 slice.mask(pos, quad_end);
-
-        //                 quads.push(PositionedQuad {
-        //                     magnitude: x as _,
-        //                     face,
-        //                     quad: heightened, // widened.heighten(1.0),
-        //                 })
-        //             }
-        //         }
-        //     }
-        // }
-
-        // Z sweep
-        // for face in [Face::East, Face::West] {
-        //     for z in 0..Chunk::SIZE {
-        //         let mut slice = VoxelChunkSlice::new(face, access, cx.adjacency, z);
-        //         for x in 0..Chunk::SIZE {
-        //             for y in 0..Chunk::SIZE {
-        //                 let pos = IVec2::new(x, y);
-        //                 if !slice.is_meshable(pos).unwrap() {
-        //                     continue;
-        //                 }
-
-        //                 let quad = Quad::from_points(
-        //                     pos.as_vec2(),
-        //                     pos.as_vec2(), //  + Vec2::splat(1.0),
-        //                 );
-
-        //                 let mut quad_end = pos;
-
-        //                 // println!("widening");
-        //                 let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
-        //                     // print!("{:?} ", (pos.x + n as i32, pos.y));
-        //                     if !slice.is_meshable([pos.x + n as i32, pos.y].into()).unwrap() {
-        //                         quad_end.x = (pos.x + n as i32) - 1;
-        //                         true
-        //                     } else {
-        //                         false
-        //                     }
-        //                 });
-        //                 // println!("");
-
-        //                 // println!("heightening");
-        //                 let heightened = widened.heighten_until(1.0, Chunk::SIZE as u32, |n| {
-        //                     let mut abort = false;
-        //                     for q_x in pos.x..=quad_end.x {
-        //                         // print!("{:?} ", (q_x, pos.y + n as i32));
-        //                         if !slice.is_meshable([q_x, pos.y + n as i32].into()).unwrap() {
-        //                             quad_end.y = (pos.y + n as i32) - 1;
-        //                             abort = true;
-        //                             break;
-        //                         }
-        //                     }
-        //                     abort
-        //                 });
-        //                 // println!("");
-        //                 // println!("---------");
-
-        //                 slice.mask(pos, quad_end);
-
-        //                 quads.push(PositionedQuad {
-        //                     magnitude: z as _,
-        //                     face,
-        //                     quad: heightened, // widened.heighten(1.0),
-        //                 })
-        //             }
-        //         }
-        //     }
-        // }
 
         let mut attrs = ChunkMeshAttributes::default();
         let mut current_index = 0;
@@ -380,65 +274,6 @@ impl Mesher for GreedyMesher {
         Ok(MesherOutput {
             mesh: attrs.to_mesh(),
         })
-
-        // let mut positions = Vec::<[f32; 3]>::new();
-        // let mut normals = Vec::<[f32; 3]>::new();
-        // let mut uvs = Vec::<[f32; 2]>::new();
-        // let mut textures = Vec::<[f32; 2]>::new();
-
-        // let mut indices = Vec::<u32>::new();
-        // let mut current_idx: u32 = 0;
-
-        // for PositionedQuad {
-        //     magnitude,
-        //     face,
-        //     quad,
-        // } in quads.into_iter()
-        // {
-        //     let vertex_positions = quad.positions(face, magnitude).map(|v| v.to_array());
-        //     positions.extend(vertex_positions.into_iter());
-        //     normals.extend([face.normal().as_vec3().to_array(); 4]);
-        //     let raw_uvs = [
-        //         [0.0, 0.0],
-        //         [quad.width(), 0.0],
-        //         [0.0, quad.height()],
-        //         [quad.width(), quad.height()],
-        //     ];
-        //     uvs.extend(raw_uvs);
-        //     textures.extend([[0.0, 0.0]; 4]);
-
-        //     // let face_indices = [0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx);
-        //     // if matches!(face, Face::Bottom | Face::East | Face::North) {
-        //     //     indices.extend(face_indices[0..3].iter().rev());
-        //     //     indices.extend(face_indices[3..6].iter().rev());
-        //     // } else {
-        //     //     indices.extend(face_indices.into_iter());
-        //     // }
-        //     // current_idx += 4;
-
-        //     /*
-        //         0---1
-        //         |   |
-        //         2---3
-        //     */
-
-        //     if matches!(face, Face::Bottom | Face::East | Face::North) {
-        //         indices.extend([0, 2, 3, 0, 3, 1].map(|idx| idx + current_idx))
-        //     } else {
-        //         indices.extend([0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx))
-        //     }
-
-        //     current_idx += 4;
-        // }
-
-        // let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-        // mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        // mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        // mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, textures);
-        // mesh.set_indices(Some(Indices::U32(indices)));
-
-        // Ok(MesherOutput { mesh })
     }
 
     fn material(&self) -> Self::Material {

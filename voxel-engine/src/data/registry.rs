@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bevy::{prelude::*, sprite::TextureAtlasBuilderError};
 
 use super::{
-    tile::VoxelId,
+    tile::{TextureId, VoxelId},
     voxel::{Voxel, VoxelModel, VoxelProperties},
 };
 
@@ -84,15 +84,6 @@ impl<'a> VoxelRegistryBuilder<'a> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, dm::From, dm::Into)]
-pub struct TextureId(AssetId<Image>);
-
-impl TextureId {
-    pub fn inner(self) -> AssetId<Image> {
-        self.0
-    }
-}
-
 pub struct VoxelTextureRegistryBuilder {
     builder: TextureAtlasBuilder,
     labels: hb::HashMap<String, TextureId>,
@@ -132,6 +123,11 @@ pub struct VoxelTextureRegistry {
 }
 
 impl VoxelTextureRegistry {
+    pub fn texture_scale(&self) -> f32 {
+        // TODO: this should be configurable without recompiling so we can support textures of different resolutions
+        16.0
+    }
+
     pub fn get_id(&self, label: &str) -> Option<TextureId> {
         self.labels.get(label).copied()
     }

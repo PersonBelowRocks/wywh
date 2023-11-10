@@ -172,3 +172,12 @@ impl From<u32> for VoxelId {
         Self(value)
     }
 }
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, dm::From, dm::Into)]
+pub struct TextureId(pub(crate) AssetId<Image>);
+
+impl TextureId {
+    pub fn inner(self) -> AssetId<Image> {
+        self.0
+    }
+}

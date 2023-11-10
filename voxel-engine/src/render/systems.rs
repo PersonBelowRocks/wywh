@@ -26,7 +26,7 @@ pub(crate) fn setup_mesh_builder<Hqm: Mesher, Lqm: Mesher>(
     mut lqs: ResMut<Assets<StandardMaterial>>,
 ) {
     let mesh_builder = ParallelMeshBuilder::new(
-        GreedyMesher::new(atlas_texture.0.clone()),
+        GreedyMesher::new(registries.clone()),
         SimplePbrMesher::new(),
         registries.as_ref().clone(),
     );

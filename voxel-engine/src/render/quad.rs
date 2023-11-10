@@ -2,10 +2,13 @@ use std::array;
 
 use bevy::math::vec2;
 
+use bevy::prelude::Rect;
 use bevy::prelude::Vec2;
 use bevy::prelude::Vec3;
 
 use crate::data::tile::Face;
+use crate::data::tile::TextureId;
+use crate::data::voxel::FaceTextureRotation;
 use crate::util;
 
 use super::mesh_builder::ChunkMeshAttributes;
@@ -124,13 +127,20 @@ impl Quad {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct PositionedQuad {
+pub struct QuadTextureData {
+    pub rect: Rect,
+    pub rotation: FaceTextureRotation,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MeshableQuad {
     pub magnitude: f32,
     pub face: Face,
     pub quad: Quad,
+    pub quad_tex: QuadTextureData,
 }
 
-impl PositionedQuad {
+impl MeshableQuad {
     #[rustfmt::skip]
     pub(crate) fn unswapped_uvs(self) -> [Vec2; 4] {
         use util::ArrayExt;

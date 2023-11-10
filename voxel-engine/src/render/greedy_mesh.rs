@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-use super::{adjacency::AdjacentTransparency, quad::PositionedQuad};
+use super::{adjacency::AdjacentTransparency, quad::MeshableQuad};
 
 pub(crate) trait ChunkAccess: ReadAccess<ReadType = VoxelId> + ChunkBounds {}
 impl<T> ChunkAccess for T where T: ReadAccess<ReadType = VoxelId> + ChunkBounds {}
@@ -60,10 +60,10 @@ impl ChunkSliceMask {
 
 pub(crate) struct VoxelChunkSlice<'a, 'b, A: ChunkAccess> {
     // mask: [[bool; Chunk::USIZE]; Chunk::USIZE],
-    face: Face,
+    pub face: Face,
     access: &'a A,
     adjacency: &'b AdjacentTransparency,
-    layer: i32,
+    pub layer: i32,
 }
 
 impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
@@ -124,59 +124,5 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
                 // && !self.is_masked(pos)?
                 && self.get_transparency_above(pos)?.is_transparent(),
         )
-    }
-
-    pub fn calculate_quads(&self, buffer: &mut Vec<PositionedQuad>) -> Result<(), A::ReadErr> {
-        let mut mask = ChunkSliceMask::default();
-
-        for k in 0..Chunk::SIZE {
-            for j in 0..Chunk::SIZE {
-                let pos = IVec2::new(k, j);
-                if !self.is_meshable(pos).unwrap() || mask.is_masked(pos).unwrap() {
-                    continue;
-                }
-
-                let quad = Quad::from_points(pos.as_vec2(), pos.as_vec2());
-
-                let mut quad_end = pos;
-
-                let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
-                    let candidate_pos = ivec2(pos.x + n as i32, pos.y);
-                    if !self.is_meshable(candidate_pos).unwrap()
-                        || mask.is_masked(candidate_pos).unwrap()
-                    {
-                        quad_end.x = (pos.x + n as i32) - 1;
-                        true
-                    } else {
-                        false
-                    }
-                });
-
-                let heightened = widened.heighten_until(1.0, Chunk::SIZE as u32, |n| {
-                    let mut abort = false;
-                    for q_x in pos.x..=quad_end.x {
-                        let candidate_pos = ivec2(q_x, pos.y + n as i32);
-                        if !self.is_meshable(candidate_pos).unwrap()
-                            || mask.is_masked(candidate_pos).unwrap()
-                        {
-                            quad_end.y = (pos.y + n as i32) - 1;
-                            abort = true;
-                            break;
-                        }
-                    }
-                    abort
-                });
-
-                mask.mask_region(pos, quad_end);
-
-                buffer.push(PositionedQuad {
-                    magnitude: self.layer as _,
-                    face: self.face,
-                    quad: heightened, // widened.heighten(1.0),
-                })
-            }
-        }
-
-        Ok(())
     }
 }

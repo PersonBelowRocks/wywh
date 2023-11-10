@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use super::registry::TextureId;
+use super::tile::TextureId;
 
 #[derive(te::Error, Debug)]
 #[error("TODO")]
