@@ -3,35 +3,13 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use bevy::prelude::*;
 
+use crate::topo::access::{HasBounds, ReadAccess, WriteAccess};
+use crate::topo::bounding_box::BoundingBox;
+use crate::topo::chunk::Chunk;
+use crate::topo::error::ChunkVoxelAccessError;
 use crate::util;
 
-use super::access::{HasBounds, ReadAccess, WriteAccess};
-use super::bounding_box::BoundingBox;
-use super::chunk::Chunk;
-use super::error::ChunkVoxelAccessError;
-
-type CubicArray<const SIZE: usize, T> = [[[T; SIZE]; SIZE]; SIZE];
-
-#[derive(Clone)]
-pub struct ChunkVoxelDataStorage<T>(pub(crate) CubicArray<{ Chunk::USIZE }, T>);
-
-impl<T: Copy> ChunkVoxelDataStorage<T> {
-    pub fn new(filling: T) -> Self {
-        Self([[[filling; Chunk::USIZE]; Chunk::USIZE]; Chunk::USIZE])
-    }
-}
-
-impl<T> ChunkVoxelDataStorage<T> {
-    pub fn get_ref(&self, idx: [usize; 3]) -> Option<&T> {
-        let [x, y, z] = idx;
-        self.0.get(x)?.get(y)?.get(z)
-    }
-
-    pub fn get_mut(&mut self, idx: [usize; 3]) -> Option<&mut T> {
-        let [x, y, z] = idx;
-        self.0.get_mut(x)?.get_mut(y)?.get_mut(z)
-    }
-}
+use super::data_structures::ChunkVoxelDataStorage;
 
 impl<T> HasBounds for ChunkVoxelDataStorage<T> {
     fn bounds(&self) -> BoundingBox {

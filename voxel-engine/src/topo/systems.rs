@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use crate::{data::tile::VoxelId, DefaultGenerator};
 
 use super::{
-    chunk::Chunk, containers::RawChunkVoxelContainer, generator::GenerateChunk, realm::VoxelRealm,
+    chunk::Chunk, generator::GenerateChunk, realm::VoxelRealm,
+    storage::containers::RawChunkVoxelContainer,
 };
 
 pub(crate) fn generate_chunks_from_events(

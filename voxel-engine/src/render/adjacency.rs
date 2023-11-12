@@ -6,8 +6,7 @@ use crate::topo::access::ReadAccess;
 use crate::topo::chunk::{Chunk, ChunkPos};
 use crate::topo::error::ChunkVoxelAccessError;
 use crate::topo::realm::ChunkManager;
-
-type SquareArray<const SIZE: usize, T> = [[T; SIZE]; SIZE];
+use crate::util::SquareArray;
 
 struct ChunkFace<T> {
     data: SquareArray<{ Chunk::USIZE }, T>,

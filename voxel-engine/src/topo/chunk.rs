@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
 use super::bounding_box::BoundingBox;
-use super::containers::{ChunkVoxelDataStorage, RawChunkVoxelContainer, SyncChunkVoxelContainer};
+use super::storage::containers::{RawChunkVoxelContainer, SyncChunkVoxelContainer};
+use super::storage::data_structures::ChunkVoxelDataStorage;
 use crate::data::tile::VoxelId;
 
 const CHUNK_SIZE: usize = 16;

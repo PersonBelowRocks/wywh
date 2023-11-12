@@ -11,13 +11,13 @@ use super::{
 };
 
 // TODO: error handling
-pub trait VoxelStorage: Sized {
+pub trait VoxelData: Sized {
     fn write<W: Write>(&self, buf: &mut W);
     fn read<R: Read>(buf: &mut R) -> Option<Self>;
 }
 
 pub trait Voxel: Default {
-    type Stored: VoxelStorage;
+    type Stored: VoxelData;
 
     fn label() -> &'static str {
         type_name::<Self>()
@@ -35,7 +35,7 @@ pub trait Voxel: Default {
 #[derive(Copy, Clone, Debug)]
 pub struct SimpleStorage;
 
-impl VoxelStorage for SimpleStorage {
+impl VoxelData for SimpleStorage {
     fn write<W: Write>(&self, _buf: &mut W) {
         panic!(
             "{} is only a marker type and shouldn't be attempted to be written to a buffer!",

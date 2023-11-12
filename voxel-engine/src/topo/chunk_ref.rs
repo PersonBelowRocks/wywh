@@ -10,8 +10,8 @@ use crate::data::tile::VoxelId;
 use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
     chunk::{Chunk, ChunkPos},
-    containers::{SyncChunkVoxelContainerAccess, SyncChunkVoxelContainerReadAccess},
     error::{ChunkRefAccessError, ChunkVoxelAccessError},
+    storage::containers::{SyncChunkVoxelContainerAccess, SyncChunkVoxelContainerReadAccess},
 };
 
 #[derive(Clone)]

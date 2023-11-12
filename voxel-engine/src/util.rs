@@ -5,6 +5,8 @@ use std::array;
 use crate::data::tile::Face;
 
 pub type SyncHashMap<K, V> = DashMap<K, V, ahash::RandomState>;
+pub type SquareArray<const SIZE: usize, T> = [[T; SIZE]; SIZE];
+pub type CubicArray<const SIZE: usize, T> = [[[T; SIZE]; SIZE]; SIZE];
 
 #[derive(te::Error, Debug, PartialEq, Eq)]
 #[error("Could not convert vector {0}")]
