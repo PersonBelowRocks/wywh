@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::bounding_box::BoundingBox;
 use super::storage::containers::{RawChunkVoxelContainer, SyncChunkVoxelContainer};
-use super::storage::data_structures::ChunkVoxelDataStorage;
+use super::storage::data_structures::DenseChunkStorage;
 use crate::data::tile::VoxelId;
 
 const CHUNK_SIZE: usize = 16;
@@ -37,7 +37,7 @@ impl Chunk {
     };
 
     #[inline]
-    pub fn new(voxel_data: ChunkVoxelDataStorage<VoxelId>) -> Self {
+    pub fn new(voxel_data: DenseChunkStorage<VoxelId>) -> Self {
         Self {
             voxels: SyncChunkVoxelContainer::new(voxel_data),
         }

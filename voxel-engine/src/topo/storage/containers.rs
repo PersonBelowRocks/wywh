@@ -9,15 +9,15 @@ use crate::topo::chunk::Chunk;
 use crate::topo::error::ChunkVoxelAccessError;
 use crate::util;
 
-use super::data_structures::ChunkVoxelDataStorage;
+use super::data_structures::DenseChunkStorage;
 
-impl<T> HasBounds for ChunkVoxelDataStorage<T> {
+impl<T> HasBounds for DenseChunkStorage<T> {
     fn bounds(&self) -> BoundingBox {
         Chunk::BOUNDING_BOX
     }
 }
 
-impl<T> WriteAccess for ChunkVoxelDataStorage<T> {
+impl<T> WriteAccess for DenseChunkStorage<T> {
     type WriteType = T;
     type WriteErr = ChunkVoxelAccessError;
 
@@ -33,7 +33,7 @@ impl<T> WriteAccess for ChunkVoxelDataStorage<T> {
     }
 }
 
-impl<T: Copy> ReadAccess for ChunkVoxelDataStorage<T> {
+impl<T: Copy> ReadAccess for DenseChunkStorage<T> {
     type ReadType = T;
     type ReadErr = ChunkVoxelAccessError;
 
@@ -48,7 +48,7 @@ impl<T: Copy> ReadAccess for ChunkVoxelDataStorage<T> {
 
 #[derive(Clone)]
 pub enum RawChunkVoxelContainer<T> {
-    Filled(Box<ChunkVoxelDataStorage<T>>),
+    Filled(Box<DenseChunkStorage<T>>),
     Empty,
 }
 
@@ -80,7 +80,7 @@ impl<'a, T: Copy> WriteAccess for AutoChunkVoxelContainerAccess<'a, T> {
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
         match self.container {
             RawChunkVoxelContainer::Empty => {
-                let mut storage = Box::new(ChunkVoxelDataStorage::new(self.default));
+                let mut storage = Box::new(DenseChunkStorage::new(self.default));
                 storage.set(pos, data)?;
                 *self.container = RawChunkVoxelContainer::Filled(storage);
                 Ok(())
@@ -97,7 +97,7 @@ impl<'a, T: Copy> HasBounds for AutoChunkVoxelContainerAccess<'a, T> {
 }
 
 impl<T: Copy> RawChunkVoxelContainer<T> {
-    pub fn filled(data: ChunkVoxelDataStorage<T>) -> Self {
+    pub fn filled(data: DenseChunkStorage<T>) -> Self {
         Self::Filled(Box::new(data))
     }
 
@@ -105,7 +105,7 @@ impl<T: Copy> RawChunkVoxelContainer<T> {
         Self::Empty
     }
 
-    pub fn fill(&mut self, data: ChunkVoxelDataStorage<T>) {
+    pub fn fill(&mut self, data: DenseChunkStorage<T>) {
         match self {
             Self::Empty => *self = Self::Filled(Box::new(data)),
             Self::Filled(b) => *b.deref_mut() = data,
@@ -153,7 +153,7 @@ impl<T: Copy> SyncChunkVoxelContainer<T> {
         Self(RwLock::new(RawChunkVoxelContainer::Empty))
     }
 
-    pub fn new(data: ChunkVoxelDataStorage<T>) -> Self {
+    pub fn new(data: DenseChunkStorage<T>) -> Self {
         Self(RwLock::new(RawChunkVoxelContainer::filled(data)))
     }
 
@@ -168,7 +168,7 @@ impl<T: Copy> SyncChunkVoxelContainer<T> {
 
 impl<'a, T: Copy> ReadAccess for SyncChunkVoxelContainerAccess<'a, T> {
     type ReadType = T;
-    type ReadErr = <ChunkVoxelDataStorage<T> as ReadAccess>::ReadErr;
+    type ReadErr = <DenseChunkStorage<T> as ReadAccess>::ReadErr;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
         self.0.internal_get(pos)
@@ -177,7 +177,7 @@ impl<'a, T: Copy> ReadAccess for SyncChunkVoxelContainerAccess<'a, T> {
 
 impl<'a, T: Copy> WriteAccess for SyncChunkVoxelContainerAccess<'a, T> {
     type WriteType = T;
-    type WriteErr = <ChunkVoxelDataStorage<T> as WriteAccess>::WriteErr;
+    type WriteErr = <DenseChunkStorage<T> as WriteAccess>::WriteErr;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
         self.0.internal_set(pos, data)
@@ -192,7 +192,7 @@ impl<'a, T: Copy> HasBounds for SyncChunkVoxelContainerAccess<'a, T> {
 
 impl<'a, T: Copy> ReadAccess for SyncChunkVoxelContainerReadAccess<'a, T> {
     type ReadType = T;
-    type ReadErr = <ChunkVoxelDataStorage<T> as ReadAccess>::ReadErr;
+    type ReadErr = <DenseChunkStorage<T> as ReadAccess>::ReadErr;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
         self.0.internal_get(pos)
