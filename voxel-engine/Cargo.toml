@@ -29,3 +29,12 @@ thiserror = "1.0.38"
 
 [dev-dependencies]
 criterion = "0.5.1"
+
+[[bench]]
+name = "layered_chunk_storage"
+harness = false
+
+
+[[bench]]
+name = "hashmap_chunk_storage"
+harness = false

@@ -166,15 +166,15 @@ impl<T> HashmapChunkStorage<T> {
         Ok(())
     }
 
-    pub fn get(&self, pos: IVec3) -> Result<Option<T>, OutOfBounds>
+    pub fn get(&self, pos: IVec3) -> Option<T>
     where
         T: Copy,
     {
-        if !Self::contains(pos) {
-            return Err(OutOfBounds);
-        }
+        self.0.get(&pos).copied()
+    }
 
-        Ok(self.0.get(&pos).copied())
+    pub fn clear(&mut self, pos: IVec3) {
+        self.0.remove(&pos);
     }
 }
 
