@@ -1,9 +1,11 @@
 use bevy::prelude::*;
 
 use super::bounding_box::BoundingBox;
-use super::storage::containers::{RawChunkVoxelContainer, SyncChunkVoxelContainer};
+use super::storage::containers::data_storage::SyncLayeredChunkContainer;
+use super::storage::containers::dense::{DenseChunkContainer, SyncDenseChunkContainer};
 use super::storage::data_structures::DenseChunkStorage;
 use crate::data::tile::VoxelId;
+use crate::data::voxel::BlockModel;
 
 const CHUNK_SIZE: usize = 16;
 
@@ -23,7 +25,8 @@ impl ChunkPos {
 }
 
 pub struct Chunk {
-    pub voxels: SyncChunkVoxelContainer<VoxelId>,
+    pub voxels: SyncDenseChunkContainer<VoxelId>,
+    pub models: SyncLayeredChunkContainer<BlockModel>,
 }
 
 #[allow(dead_code)]
@@ -39,21 +42,24 @@ impl Chunk {
     #[inline]
     pub fn new(voxel_data: DenseChunkStorage<VoxelId>) -> Self {
         Self {
-            voxels: SyncChunkVoxelContainer::new(voxel_data),
+            voxels: SyncDenseChunkContainer::new(voxel_data),
+            models: SyncLayeredChunkContainer::new(),
         }
     }
 
     #[inline]
-    pub fn new_from_container(container: RawChunkVoxelContainer<VoxelId>) -> Self {
+    pub fn new_from_container(container: DenseChunkContainer<VoxelId>) -> Self {
         Self {
-            voxels: SyncChunkVoxelContainer(container.into()),
+            voxels: SyncDenseChunkContainer(container.into()),
+            models: SyncLayeredChunkContainer::new(),
         }
     }
 
     #[inline]
     pub fn empty() -> Self {
         Self {
-            voxels: SyncChunkVoxelContainer::empty(),
+            voxels: SyncDenseChunkContainer::empty(),
+            models: SyncLayeredChunkContainer::new(),
         }
     }
 }

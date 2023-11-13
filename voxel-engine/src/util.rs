@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use dashmap::DashMap;
-use std::array;
+use std::{array, fmt::Debug};
 
 use crate::data::tile::Face;
 
@@ -97,6 +97,20 @@ impl<T> FaceMap<T> {
 impl<T: Copy> FaceMap<T> {
     pub fn filled(data: T) -> Self {
         Self([Some(data); 6])
+    }
+}
+
+impl<T: Debug> Debug for FaceMap<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut map = f.debug_map();
+
+        for face in Face::FACES {
+            if let Some(v) = self.get(face) {
+                map.entry(&face, v);
+            }
+        }
+
+        map.finish()
     }
 }
 

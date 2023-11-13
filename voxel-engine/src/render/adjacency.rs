@@ -4,6 +4,7 @@ use crate::data::tile::Transparency;
 use crate::data::tile::{Face, VoxelId};
 use crate::topo::access::ReadAccess;
 use crate::topo::chunk::{Chunk, ChunkPos};
+use crate::topo::chunk_ref::ChunkVoxelOutput;
 use crate::topo::error::ChunkVoxelAccessError;
 use crate::topo::realm::ChunkManager;
 use crate::util::SquareArray;
@@ -76,7 +77,7 @@ pub(crate) fn voxel_id_to_transparency_debug(id: VoxelId) -> Transparency {
 }
 
 fn transparency_for_adjacent_chunk_face(
-    access: impl ReadAccess<ReadType = VoxelId, ReadErr = ChunkVoxelAccessError>,
+    access: impl ReadAccess<ReadType = ChunkVoxelOutput, ReadErr = ChunkVoxelAccessError>,
     face: Face,
 ) -> Option<ChunkFace<Transparency>> {
     let mut chunk_face_transparency = ChunkFace::<Transparency>::new(face);
@@ -91,8 +92,8 @@ fn transparency_for_adjacent_chunk_face(
                 return None;
             }
 
-            let voxel_id = result.expect("Result should be okay'd by previous checks.");
-            let transparency = voxel_id_to_transparency_debug(voxel_id);
+            let voxel = result.expect("Result should be okay'd by previous checks.");
+            let transparency = voxel_id_to_transparency_debug(voxel.id);
 
             chunk_face_transparency.set([k, j].into(), transparency);
         }

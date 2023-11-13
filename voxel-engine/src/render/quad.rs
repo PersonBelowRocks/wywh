@@ -128,7 +128,7 @@ impl Quad {
 
 #[derive(Debug, Copy, Clone)]
 pub struct QuadTextureData {
-    pub rect: Rect,
+    pub pos: Vec2,
     pub rotation: FaceTextureRotation,
 }
 

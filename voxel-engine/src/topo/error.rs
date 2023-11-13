@@ -2,6 +2,8 @@ use std::error::Error;
 
 use crate::util::ConversionError;
 
+use super::storage::error::OutOfBounds;
+
 #[derive(te::Error, Debug, PartialEq, Eq)]
 pub enum ChunkVoxelAccessError {
     /// Could not convert the position vector's components into [`usize`]. (Usually [`i32`] -> [`usize`])
@@ -13,6 +15,12 @@ pub enum ChunkVoxelAccessError {
     /// The voxel storage is not initialized.
     #[error("Voxel storage not initialized")]
     NotInitialized,
+}
+
+impl From<OutOfBounds> for ChunkVoxelAccessError {
+    fn from(_value: OutOfBounds) -> Self {
+        Self::OutOfBounds
+    }
 }
 
 #[derive(te::Error, Debug, PartialEq, Eq)]

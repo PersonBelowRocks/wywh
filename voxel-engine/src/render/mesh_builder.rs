@@ -16,11 +16,16 @@ use cb::channel::Sender;
 
 use crate::data::registry::Registries;
 use crate::data::tile::VoxelId;
+use crate::data::voxel::BlockModel;
 use crate::render::greedy_mesh_material::GreedyMeshMaterial;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;
+use crate::topo::chunk::Chunk;
 use crate::topo::chunk::ChunkPos;
 use crate::topo::chunk_ref::ChunkRef;
+use crate::topo::chunk_ref::ChunkRefVxlReadAccess;
+use crate::topo::chunk_ref::ChunkVoxelOutput;
+use crate::topo::storage::data_structures::DenseChunkStorage;
 
 use super::adjacency::AdjacentTransparency;
 use super::error::MesherError;
@@ -44,7 +49,7 @@ pub trait Mesher: Clone + Send + Sync + 'static {
         adjacency: Context,
     ) -> Result<MesherOutput, MesherError<Acc::ReadErr>>
     where
-        Acc: ReadAccess<ReadType = VoxelId> + ChunkBounds;
+        Acc: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds;
 
     fn material(&self) -> Self::Material;
 }
@@ -104,6 +109,7 @@ impl MesherWorker {
                                     adjacency: &data.adjacency,
                                     registries: &registries,
                                 };
+
                                 mesher.build(&access, cx).unwrap()
                             })
                             .unwrap();

@@ -9,6 +9,9 @@ use crate::{
 
 use super::error::OutOfBounds;
 
+// TODO: octree based storage
+
+/// DCS for short
 #[derive(Clone)]
 pub struct DenseChunkStorage<T>(pub(crate) CubicArray<{ Chunk::USIZE }, T>);
 
@@ -33,6 +36,7 @@ impl<T> DenseChunkStorage<T> {
 type SqChunkArray<T> = SquareArray<{ Chunk::USIZE }, Option<T>>;
 
 // TODO: tests & benchmarks
+/// LCS for short
 pub struct LayeredChunkStorage<T: Sized>([Option<Box<SqChunkArray<T>>>; Chunk::USIZE]);
 
 impl<T> LayeredChunkStorage<T> {
@@ -145,6 +149,7 @@ impl<T> LayeredChunkStorage<T> {
 }
 
 // TODO: is this applicable here? http://www.beosil.com/download/CollisionDetectionHashing_VMV03.pdf
+/// HMCS/HMS for short
 #[derive(Clone, Default)]
 pub struct HashmapChunkStorage<T>(hb::HashMap<IVec3, T>);
 

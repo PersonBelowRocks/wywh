@@ -5,13 +5,19 @@ use std::sync::{
 
 use bevy::prelude::IVec3;
 
-use crate::data::tile::VoxelId;
+use crate::data::{
+    tile::VoxelId,
+    voxel::{BlockModel, VoxelModel},
+};
 
 use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
     chunk::{Chunk, ChunkPos},
     error::{ChunkRefAccessError, ChunkVoxelAccessError},
-    storage::containers::{SyncChunkVoxelContainerAccess, SyncChunkVoxelContainerReadAccess},
+    storage::containers::{
+        data_storage::{SlccAccess, SlccReadAccess},
+        dense::{SyncDenseContainerAccess, SyncDenseContainerReadAccess},
+    },
 };
 
 #[derive(Clone)]
@@ -43,9 +49,13 @@ impl ChunkRef {
         let chunk = self.chunk.upgrade().ok_or(ChunkRefAccessError::Unloaded)?;
         self.treat_as_changed()?;
 
-        let internal_access = chunk.voxels.access();
+        let voxel_access = chunk.voxels.access();
+        let model_access = chunk.models.access();
 
-        let x = Ok(f(ChunkRefVxlAccess(internal_access)));
+        let x = Ok(f(ChunkRefVxlAccess {
+            voxels: voxel_access,
+            models: model_access,
+        }));
         x
     }
 
@@ -56,32 +66,72 @@ impl ChunkRef {
     {
         let chunk = self.chunk.upgrade().ok_or(ChunkRefAccessError::Unloaded)?;
 
-        let internal_access = chunk.voxels.read_access();
+        let voxel_access = chunk.voxels.read_access();
+        let model_access = chunk.models.read_access();
 
-        let x = Ok(f(ChunkRefVxlReadAccess(internal_access)));
+        let x = Ok(f(ChunkRefVxlReadAccess {
+            voxels: voxel_access,
+            models: model_access,
+        }));
         x
     }
 }
 
-pub struct ChunkRefVxlReadAccess<'a>(SyncChunkVoxelContainerReadAccess<'a, VoxelId>);
+pub struct ChunkRefVxlReadAccess<'a> {
+    voxels: SyncDenseContainerReadAccess<'a, VoxelId>,
+    models: SlccReadAccess<'a, BlockModel>,
+}
 
-pub struct ChunkRefVxlAccess<'a>(SyncChunkVoxelContainerAccess<'a, VoxelId>);
+#[derive(Copy, Clone, Debug)]
+pub struct ChunkVoxelOutput {
+    pub id: VoxelId,
+    pub model: Option<BlockModel>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ChunkVoxelInput {
+    id: VoxelId,
+    model: Option<VoxelModel>,
+}
+
+pub struct ChunkRefVxlAccess<'a> {
+    voxels: SyncDenseContainerAccess<'a, VoxelId>,
+    models: SlccAccess<'a, BlockModel>,
+}
 
 impl<'a> WriteAccess for ChunkRefVxlAccess<'a> {
     type WriteErr = ChunkVoxelAccessError;
-    type WriteType = VoxelId;
+    type WriteType = ChunkVoxelInput;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.0.set(pos, data)
+        match data.model {
+            None => {
+                self.voxels.set(pos, data.id)?;
+                self.models.set(pos, None);
+            }
+            Some(vxl_model) if matches!(VoxelModel::Block, vxl_model) => {
+                self.voxels.set(pos, data.id)?;
+                let VoxelModel::Block(model) = vxl_model else {
+                    unreachable!()
+                };
+                self.models.set(pos, Some(model));
+            }
+            _ => todo!(),
+        }
+
+        Ok(())
     }
 }
 
 impl<'a> ReadAccess for ChunkRefVxlAccess<'a> {
     type ReadErr = ChunkVoxelAccessError;
-    type ReadType = VoxelId;
+    type ReadType = ChunkVoxelOutput;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        self.0.get(pos)
+        Ok(ChunkVoxelOutput {
+            id: self.voxels.get(pos)?,
+            model: self.models.get(pos)?,
+        })
     }
 }
 
@@ -89,10 +139,13 @@ impl<'a> ChunkBounds for ChunkRefVxlAccess<'a> {}
 
 impl<'a> ReadAccess for ChunkRefVxlReadAccess<'a> {
     type ReadErr = ChunkVoxelAccessError;
-    type ReadType = VoxelId;
+    type ReadType = ChunkVoxelOutput;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        self.0.get(pos)
+        Ok(ChunkVoxelOutput {
+            id: self.voxels.get(pos)?,
+            model: self.models.get(pos)?,
+        })
     }
 }
 

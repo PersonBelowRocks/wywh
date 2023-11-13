@@ -64,7 +64,7 @@ pub enum FaceTextureRotation {
     Right,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct FaceTexture {
     pub rotation: FaceTextureRotation,
     pub tex_pos: Vec2,
@@ -83,7 +83,7 @@ impl FaceTexture {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct BlockModel {
     pub textures: FaceMap<FaceTexture>,
 }
@@ -96,7 +96,7 @@ impl BlockModel {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum VoxelModel {
     Block(BlockModel),
 }

@@ -6,13 +6,14 @@ use crate::{
     topo::{
         access::{ChunkBounds, ReadAccess},
         chunk::Chunk,
+        chunk_ref::ChunkVoxelOutput,
     },
 };
 
 use super::{adjacency::AdjacentTransparency, quad::MeshableQuad};
 
-pub(crate) trait ChunkAccess: ReadAccess<ReadType = VoxelId> + ChunkBounds {}
-impl<T> ChunkAccess for T where T: ReadAccess<ReadType = VoxelId> + ChunkBounds {}
+pub(crate) trait ChunkAccess: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
+impl<T> ChunkAccess for T where T: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
 
 #[derive(Default)]
 pub(crate) struct ChunkSliceMask([[bool; Chunk::USIZE]; Chunk::USIZE]);
@@ -83,7 +84,7 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
             .contains(self.face.axis().pos_in_3d(pos, self.layer))
     }
 
-    pub fn get(&self, pos: IVec2) -> Result<VoxelId, A::ReadErr> {
+    pub fn get(&self, pos: IVec2) -> Result<ChunkVoxelOutput, A::ReadErr> {
         let pos_3d = self.face.axis().pos_in_3d(pos, self.layer);
         self.access.get(pos_3d)
     }
@@ -95,7 +96,7 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
 
         let pos_3d = self.face.axis().pos_in_3d(pos, self.layer) + self.face.normal();
         let transparency = match self.access.get(pos_3d) {
-            Ok(adjacent_voxel_id) => adjacent_voxel_id.debug_transparency(),
+            Ok(adjacent_voxel) => adjacent_voxel.id.debug_transparency(),
             Err(_) => {
                 let pos_in_adjacent_chunk = self.face.pos_on_face(pos_3d);
                 self.adjacency.sample(self.face, pos_in_adjacent_chunk)?
@@ -120,7 +121,7 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
         }
 
         Some(
-            self.get(pos).ok()?.debug_transparency().is_opaque()
+            self.get(pos).ok()?.id.debug_transparency().is_opaque()
                 // && !self.is_masked(pos)?
                 && self.get_transparency_above(pos)?.is_transparent(),
         )
