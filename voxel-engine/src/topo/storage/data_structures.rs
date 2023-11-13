@@ -40,17 +40,14 @@ impl<T> LayeredChunkStorage<T> {
         Self(array::from_fn(|_| None))
     }
 
-    pub(crate) fn get_layer_mut(
+    pub fn get_layer_mut(
         &mut self,
         idx: usize,
     ) -> Result<&mut Option<Box<SqChunkArray<T>>>, OutOfBounds> {
         self.0.get_mut(idx).ok_or(OutOfBounds)
     }
 
-    pub(crate) fn get_layer(
-        &self,
-        idx: usize,
-    ) -> Result<&Option<Box<SqChunkArray<T>>>, OutOfBounds> {
+    pub fn get_layer(&self, idx: usize) -> Result<&Option<Box<SqChunkArray<T>>>, OutOfBounds> {
         self.0.get(idx).ok_or(OutOfBounds)
     }
 
@@ -62,6 +59,32 @@ impl<T> LayeredChunkStorage<T> {
     pub fn clear_layer(&mut self, idx: usize) -> Result<(), OutOfBounds> {
         *self.get_layer_mut(idx)? = None;
         Ok(())
+    }
+
+    pub fn clear_empty_layers(&mut self) -> usize {
+        let mut cleared = 0;
+
+        for y in 0..Chunk::USIZE {
+            let mut should_clear = false;
+            if let Some(layer) = self.get_layer(y).unwrap().as_deref() {
+                should_clear = true;
+                'outer: for x in 0..Chunk::USIZE {
+                    for z in 0..Chunk::USIZE {
+                        if layer[x][z].is_some() {
+                            should_clear = false;
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+
+            if should_clear {
+                cleared += 1;
+                self.clear_layer(y).unwrap()
+            }
+        }
+
+        cleared
     }
 
     pub fn contains(pos: IVec3) -> bool {
@@ -94,14 +117,28 @@ impl<T> LayeredChunkStorage<T> {
 
         match layer {
             Some(inner) => {
-                inner[x][z].as_mut().map(|slot| *slot = data);
+                inner[x][z] = Some(data);
             }
             None => {
                 let mut new_layer = SqChunkArray::<T>::default();
-                new_layer[x][z].as_mut().map(|slot| *slot = data);
+                new_layer[x][z] = Some(data);
                 self.insert_layer(new_layer, y).unwrap();
             }
         }
+
+        Ok(())
+    }
+
+    pub fn clear(&mut self, pos: IVec3) -> Result<(), OutOfBounds> {
+        let y = pos.y as usize;
+
+        let layer = self.get_layer_mut(y)?;
+        let [x, _, z] = util::try_ivec3_to_usize_arr(pos).unwrap();
+        if !Self::contains(pos) {
+            return Err(OutOfBounds);
+        }
+
+        layer.as_deref_mut().map(|inner| inner[x][z] = None);
 
         Ok(())
     }
@@ -138,5 +175,91 @@ impl<T> HashmapChunkStorage<T> {
         }
 
         Ok(self.0.get(&pos).copied())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::math::ivec3;
+
+    use super::*;
+
+    #[test]
+    fn test_layered_chunk_storage_y() {
+        let mut storage = LayeredChunkStorage::<u32>::new();
+
+        assert!(storage.set(ivec3(0, 0, 0), 10).is_ok());
+        assert!(storage.set(ivec3(0, 1, 0), 11).is_ok());
+        assert!(storage.set(ivec3(0, 2, 0), 12).is_ok());
+        assert!(storage.set(ivec3(0, 3, 0), 13).is_ok());
+
+        assert!(storage.set(ivec3(0, 15, 0), 14).is_ok());
+
+        assert!(storage.set(ivec3(0, 16, 0), 99).is_err());
+        assert!(storage.set(ivec3(0, -1, 0), 99).is_err());
+
+        assert_eq!(Some(10), storage.get(ivec3(0, 0, 0)).unwrap());
+        assert_eq!(Some(11), storage.get(ivec3(0, 1, 0)).unwrap());
+        assert_eq!(Some(12), storage.get(ivec3(0, 2, 0)).unwrap());
+        assert_eq!(Some(13), storage.get(ivec3(0, 3, 0)).unwrap());
+
+        assert_eq!(Some(14), storage.get(ivec3(0, 15, 0)).unwrap());
+
+        assert!(storage.get(ivec3(0, 16, 0)).is_err());
+        assert!(storage.get(ivec3(0, -1, 0)).is_err());
+    }
+
+    #[test]
+    fn test_layered_chunk_storage_xz() {
+        let mut storage = LayeredChunkStorage::<u32>::new();
+
+        assert!(storage.set(ivec3(15, 0, 15), 10).is_ok());
+        assert!(storage.set(ivec3(10, 0, 10), 11).is_ok());
+
+        assert!(storage.set(ivec3(16, 0, 15), 99).is_err());
+        assert!(storage.set(ivec3(15, 0, 16), 99).is_err());
+
+        for x in 0..Chunk::SIZE {
+            for z in 0..Chunk::SIZE {
+                assert!(storage.set(ivec3(x, 4, z), 50).is_ok())
+            }
+        }
+
+        for x in 0..Chunk::SIZE {
+            for z in 0..Chunk::SIZE {
+                assert_eq!(Some(50), storage.get(ivec3(x, 4, z)).unwrap())
+            }
+        }
+
+        assert_eq!(Some(10), storage.get(ivec3(15, 0, 15)).unwrap());
+        assert_eq!(Some(11), storage.get(ivec3(10, 0, 10)).unwrap());
+    }
+
+    #[test]
+    fn test_layered_chunk_storage_raw_layer() {
+        let mut storage = LayeredChunkStorage::<u32>::new();
+
+        let mut arr = <[[Option<u32>; Chunk::USIZE]; Chunk::USIZE]>::default();
+        arr[14][8] = Some(10);
+        arr[15][15] = Some(11);
+        arr[0][0] = Some(12);
+
+        storage.insert_layer(arr, 8).unwrap();
+
+        assert!(storage.get_layer(8).unwrap().is_some());
+
+        assert_eq!(Some(10), storage.get(ivec3(14, 8, 8)).unwrap());
+        assert_eq!(Some(11), storage.get(ivec3(15, 8, 15)).unwrap());
+        assert_eq!(Some(12), storage.get(ivec3(0, 8, 0)).unwrap());
+
+        assert!(storage.clear(ivec3(14, 8, 8)).is_ok());
+        assert!(storage.clear(ivec3(15, 8, 15)).is_ok());
+        assert!(storage.clear(ivec3(0, 8, 0)).is_ok());
+
+        assert!(storage.get_layer(8).unwrap().is_some());
+
+        assert_eq!(1, storage.clear_empty_layers());
+
+        assert!(storage.get_layer(8).unwrap().is_none());
     }
 }
