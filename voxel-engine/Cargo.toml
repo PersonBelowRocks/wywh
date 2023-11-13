@@ -26,3 +26,6 @@ serde = { version = "1.0.152", features = ["serde_derive"] }
 smallvec = "1.11.1"
 static_assertions = "1.1.0"
 thiserror = "1.0.38"
+
+[dev-dependencies]
+criterion = "0.5.1"

@@ -128,11 +128,16 @@ impl VoxelTextureRegistry {
         16.0
     }
 
+    pub fn get_texture_pos(&self, label: &str) -> Option<Vec2> {
+        let id = self.get_id(label)?;
+        self.get_rect(id).map(|r| r.min)
+    }
+
     pub fn get_id(&self, label: &str) -> Option<TextureId> {
         self.labels.get(label).copied()
     }
 
-    pub fn get(&self, id: TextureId) -> Option<Rect> {
+    pub fn get_rect(&self, id: TextureId) -> Option<Rect> {
         let idx = self.atlas.get_texture_index(id.inner())?;
         self.atlas.textures.get(idx).copied()
     }
@@ -144,6 +149,6 @@ impl VoxelTextureRegistry {
     pub fn iter_rects(&self) -> impl Iterator<Item = (&'_ str, Rect)> {
         self.labels
             .iter()
-            .map(|(lbl, &id)| (lbl.as_str(), self.get(id).unwrap()))
+            .map(|(lbl, &id)| (lbl.as_str(), self.get_rect(id).unwrap()))
     }
 }

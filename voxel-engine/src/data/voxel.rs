@@ -3,12 +3,11 @@ use std::{
     io::{Read, Write},
 };
 
+use bevy::math::Vec2;
+
 use crate::util::FaceMap;
 
-use super::{
-    registry::VoxelTextureRegistry,
-    tile::{TextureId, Transparency},
-};
+use super::{registry::VoxelTextureRegistry, tile::Transparency};
 
 // TODO: error handling
 pub trait VoxelData: Sized {
@@ -68,19 +67,19 @@ pub enum FaceTextureRotation {
 #[derive(Copy, Clone)]
 pub struct FaceTexture {
     pub rotation: FaceTextureRotation,
-    pub id: TextureId,
+    pub tex_pos: Vec2,
 }
 
 impl FaceTexture {
-    pub fn new(id: TextureId) -> Self {
+    pub fn new(tex_pos: Vec2) -> Self {
         Self {
-            id,
+            tex_pos,
             rotation: Default::default(),
         }
     }
 
-    pub fn new_rotated(id: TextureId, rotation: FaceTextureRotation) -> Self {
-        Self { id, rotation }
+    pub fn new_rotated(tex_pos: Vec2, rotation: FaceTextureRotation) -> Self {
+        Self { tex_pos, rotation }
     }
 }
 
@@ -90,9 +89,9 @@ pub struct BlockModel {
 }
 
 impl BlockModel {
-    pub fn filled(id: TextureId) -> Self {
+    pub fn filled(tex_pos: Vec2) -> Self {
         Self {
-            textures: FaceMap::filled(FaceTexture::new(id)),
+            textures: FaceMap::filled(FaceTexture::new(tex_pos)),
         }
     }
 }

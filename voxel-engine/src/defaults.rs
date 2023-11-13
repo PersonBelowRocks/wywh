@@ -36,7 +36,9 @@ impl Voxel for DebugVoxel {
     type Stored = SimpleStorage;
 
     fn model(&self, textures: &VoxelTextureRegistry) -> Option<VoxelModel> {
-        let debug_texture = textures.get_id("textures/debug_texture.png").unwrap();
+        let debug_texture = textures
+            .get_texture_pos("textures/debug_texture.png")
+            .unwrap();
         let model = BlockModel::filled(debug_texture);
         Some(VoxelModel::Block(model))
     }
