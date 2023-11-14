@@ -186,7 +186,7 @@ impl<T> HashmapChunkStorage<T> {
 
 /// ICS for short.
 ///
-/// An ICS work similarly to the `indexmap` crate, it stores the actual data in a vector and holds
+/// An ICS is similar to the `indexmap` crate, it stores the actual data in a vector and holds
 /// a separate `DenseChunkStorage` full of indices into that vector. This is useful when storing data that is duplicate
 /// across many positions, such as various voxel attributes and whatnot.
 ///
