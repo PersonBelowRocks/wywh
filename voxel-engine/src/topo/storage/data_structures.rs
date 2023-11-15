@@ -1,6 +1,13 @@
-use std::{array, collections::HashMap, mem, ptr};
+use std::{
+    array,
+    collections::HashMap,
+    hash::{self, BuildHasher},
+    mem, ptr,
+};
 
+use ahash::AHasher;
 use bevy::math::{ivec3, IVec3};
+use hashbrown::HashTable;
 
 use crate::{
     topo::{access::ReadAccess, chunk::Chunk},
@@ -196,13 +203,20 @@ impl<T> HashmapChunkStorage<T> {
 /// method only partially handles duplicates, see the method documentation for more info).
 /// Optimizing is done by calling the `optimize` method, but it's quite slow so it should be done sparingly.
 #[derive(Clone)]
-pub struct IndexedChunkStorage<T: Eq + std::hash::Hash + Clone> {
+pub struct IndexedChunkStorage<T: Eq + hash::Hash, S: BuildHasher = ahash::RandomState> {
     indices: DenseChunkStorage<u16>,
     values: Vec<T>,
-    last_index: usize,
+    idx_table: HashTable<usize>,
+    random_state: S,
 }
 
-impl<T: Eq + std::hash::Hash + Clone> IndexedChunkStorage<T> {
+impl<T: Eq + hash::Hash> IndexedChunkStorage<T, ahash::RandomState> {
+    pub fn new() -> Self {
+        Self::internal_new(ahash::RandomState::new())
+    }
+}
+
+impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
     const EMPTY_VALUE: u16 = 0b1000_0000_0000_0000;
 
     fn get_idx(&self, pos: IVec3) -> Option<usize> {
@@ -220,15 +234,38 @@ impl<T: Eq + std::hash::Hash + Clone> IndexedChunkStorage<T> {
         let us = util::try_ivec3_to_usize_arr(pos).unwrap();
         let slot = self.indices.get_mut(us).unwrap();
         *slot = idx as u16;
-        self.last_index = idx;
     }
 
-    pub fn new() -> Self {
+    fn insert_new_unique_value(&mut self, pos: IVec3, data: T) {
+        let idx = self.values.len();
+        let hash = self.random_state.hash_one(&data);
+
+        self.set_idx(pos, idx);
+        self.values.push(data);
+
+        let hasher = |i: &_| self.random_state.hash_one(&self.values[*i]);
+
+        self.idx_table.insert_unique(hash, idx, hasher);
+    }
+
+    fn get_existing_index_for_data(&self, data: &T) -> Option<usize> {
+        let hash = self.random_state.hash_one(data);
+        self.idx_table
+            .find(hash, |&i| &self.values[i] == data)
+            .copied()
+    }
+
+    fn internal_new(random_state: S) -> Self {
         Self {
             indices: DenseChunkStorage::new(Self::EMPTY_VALUE),
             values: Vec::new(),
-            last_index: 0,
+            idx_table: HashTable::new(),
+            random_state,
         }
+    }
+
+    pub fn with_random_state(random_state: S) -> Self {
+        Self::internal_new(random_state)
     }
 
     pub fn contains_pos(pos: IVec3) -> bool {
@@ -239,33 +276,20 @@ impl<T: Eq + std::hash::Hash + Clone> IndexedChunkStorage<T> {
         self.values.contains(value)
     }
 
-    /// Set the given `pos` to `data`. If the value at `pos` is equal to `data` then the function will return an [`Ok(Some(T))`] containing the data, giving it back.
-    /// Otherwise returns [`Ok(None)`] on success or [`Err(OutOfBounds)`] if the `pos` is out of bounds.
     pub fn set(&mut self, pos: IVec3, data: T) -> Result<Option<T>, OutOfBounds> {
         if !Self::contains_pos(pos) {
             return Err(OutOfBounds);
         }
 
-        if self.values.get(self.last_index) == Some(&data) {
-            self.set_idx(pos, self.last_index);
+        match self.get_existing_index_for_data(&data) {
+            Some(existing_index) => {
+                self.set_idx(pos, existing_index);
+                return Ok(Some(data));
+            }
+            None => self.insert_new_unique_value(pos, data),
         }
 
-        match self.get_idx(pos) {
-            Some(idx) => {
-                if self.values[idx] != data {
-                    self.set_idx(pos, self.values.len());
-                    self.values.push(data);
-                    return Ok(None);
-                }
-            }
-            None => {
-                self.set_idx(pos, self.values.len());
-                self.values.push(data);
-                return Ok(None);
-            }
-        }
-
-        Ok(Some(data))
+        Ok(None)
     }
 
     pub fn clear(&mut self, pos: IVec3) -> Result<(), OutOfBounds> {
@@ -279,28 +303,28 @@ impl<T: Eq + std::hash::Hash + Clone> IndexedChunkStorage<T> {
         Ok(())
     }
 
-    /// Sets all the given `positions` to `data`, only using a single copy of `data`.
-    /// Does not check for existing copies of `data` to index to.
-    /// Returns [`Err(OutOfBounds)`] if all `positions` are out of bounds.
     pub fn set_many(&mut self, positions: &[IVec3], data: T) -> Result<(), OutOfBounds> {
-        let idx = self.values.len();
-        let mut all_oob = true;
-
-        for &pos in positions.iter() {
-            if !Self::contains_pos(pos) {
-                continue;
-            }
-
-            all_oob = false;
-            self.set_idx(pos, idx);
+        if positions.iter().any(|&pos| !Self::contains_pos(pos)) {
+            return Err(OutOfBounds);
         }
 
-        if !all_oob {
+        let idx = self.get_existing_index_for_data(&data).unwrap_or_else(|| {
+            let idx = self.values.len();
+            let hash = self.random_state.hash_one(&data);
+
             self.values.push(data);
-            Ok(())
-        } else {
-            Err(OutOfBounds)
+
+            let hasher = |i: &_| self.random_state.hash_one(&self.values[*i]);
+            self.idx_table.insert_unique(hash, idx, hasher);
+
+            idx
+        });
+
+        for &position in positions {
+            self.set_idx(position, idx)
         }
+
+        Ok(())
     }
 
     pub fn get(&self, pos: IVec3) -> Result<Option<&T>, OutOfBounds> {
@@ -319,108 +343,85 @@ impl<T: Eq + std::hash::Hash + Clone> IndexedChunkStorage<T> {
         self.values.len()
     }
 
-    fn experimental_optimize(&mut self) -> usize {
-        let old_value_count = self.values();
-        let mut data_to_positions =
-            hb::HashMap::<&T, tinyvec::TinyVec<[IVec3; 8]>>::with_capacity(self.values());
+    pub fn optimize(&mut self) -> usize {
+        let old_value_count = self.values.len();
 
-        // Initial pass gets information of the relationship between data and positions
+        let mut present_values = hb::HashSet::<usize>::with_capacity(self.values());
+
+        // Pass 1: discover all indices currently accessible
         for x in 0..Chunk::SIZE {
             for y in 0..Chunk::SIZE {
                 for z in 0..Chunk::SIZE {
                     let pos = ivec3(x, y, z);
 
                     if let Some(idx) = self.get_idx(pos) {
-                        let data = &self.values[idx];
-                        data_to_positions
-                            .entry(data)
-                            .or_insert(tinyvec::TinyVec::new())
-                            .push(pos)
+                        present_values.insert(idx);
                     }
                 }
             }
         }
 
-        let mut new_values = Vec::<T>::with_capacity(data_to_positions.len());
-        let mut new_indices = DenseChunkStorage::<u16>::new(Self::EMPTY_VALUE);
-
-        // Second pass initializes the new data structures with the deduplicated data.
-        for (data, positions) in data_to_positions.into_iter() {
-            let idx = new_values.len();
-            // TODO: investigate if we can use a pointer read here and if it'll speed things up
-            new_values.push(data.clone());
-
-            for pos in positions.into_iter() {
-                let xyz = util::try_ivec3_to_usize_arr(pos).unwrap();
-                *new_indices.get_mut(xyz).unwrap() = idx as u16;
+        // find which values have no accessible index pointing to it
+        let mut removed_values = hb::HashSet::<usize>::new();
+        for (i, _) in self.values.iter().enumerate() {
+            if !present_values.contains(&i) {
+                removed_values.insert(i);
             }
         }
 
-        self.values = new_values;
-        self.indices = new_indices;
-        self.last_index = 0;
+        // nothing to optimize!
+        if removed_values.len() <= 0 {
+            return 0;
+        }
 
-        let new_value_count = self.values();
+        let total_values = present_values.len() - removed_values.len();
 
-        return old_value_count - new_value_count;
-    }
+        // ???
+        let mut old2new = hb::HashMap::<usize, usize>::with_capacity(total_values);
+        for (i, &val) in present_values.iter().enumerate() {
+            old2new.insert(val, i);
+        }
 
-    fn prototype_optimize(&mut self) -> usize {
-        let old_value_count = self.values();
+        // remove and remap all our stuff in the index map
+        self.idx_table.retain(|idx| {
+            if present_values.contains(idx) {
+                let new_index = old2new[idx];
+                *idx = new_index;
+                true
+            } else {
+                false
+            }
+        });
 
-        let new_values = Vec::<T>::with_capacity(self.values());
-        let new_indices = DenseChunkStorage::<u16>::new(Self::EMPTY_VALUE);
+        // reinitialize our values
+        let mut new_values = Vec::from_iter((0..present_values.len()).map(|_| None));
+        let old_values = mem::replace(&mut self.values, Vec::new());
+        for (i, value) in old_values.into_iter().enumerate() {
+            if present_values.contains(&i) {
+                let new_index = old2new[&i];
+                new_values[new_index] = Some(value);
+            }
+        }
 
-        let old_values = mem::replace(&mut self.values, new_values);
-        let old_indices = mem::replace(&mut self.indices, new_indices);
+        self.values
+            .extend(new_values.into_iter().map(Option::unwrap));
 
-        let mut moved_indices = hb::HashMap::<usize, usize>::with_capacity(self.values());
-
+        // Pass 2: remap all indices to the new ones
         for x in 0..Chunk::SIZE {
             for y in 0..Chunk::SIZE {
                 for z in 0..Chunk::SIZE {
                     let pos = ivec3(x, y, z);
 
-                    let old_index = old_indices.get(pos).unwrap();
-                    if old_index == Self::EMPTY_VALUE {
-                        continue;
-                    }
-
-                    if let Some(&new_index) = moved_indices.get(&(old_index as usize)) {
+                    if let Some(idx) = self.get_idx(pos) {
+                        let new_index = old2new[&idx];
                         self.set_idx(pos, new_index);
-                        continue;
-                    }
-
-                    let data = &old_values[old_index as usize];
-                    match self.values.iter().enumerate().find(|(_, v)| v == &data) {
-                        Some((existing_index, _)) => {
-                            self.set_idx(pos, existing_index);
-                        }
-                        None => {
-                            // TODO: get miri to take a little look at this
-                            // SAFETY: this address is valid to read from (came from a regular borrow/reference)
-                            // and we keep track of everything we've read from so we don't read the same address twice
-                            // (so we're basically moving the value here)
-                            let data =
-                                unsafe { ptr::read(&old_values[old_index as usize] as *const T) };
-
-                            let new_index = self.values.len();
-                            self.values.push(data);
-                            moved_indices.insert(old_index as usize, new_index);
-                        }
                     }
                 }
             }
         }
 
-        self.values.shrink_to_fit();
-        let new_value_count = self.values();
-
+        let new_value_count = self.values.len();
         old_value_count - new_value_count
-    }
-
-    pub fn optimize(&mut self) -> usize {
-        self.prototype_optimize()
     }
 }
 
@@ -548,16 +549,20 @@ mod tests {
         )
         .unwrap();
 
-        // this guy is different!
         ics.set(ivec3(0, 2, 0), 11).unwrap();
 
         ics.set(ivec3(0, 1, 0), 10).unwrap();
 
-        assert_eq!(3, ics.values());
+        assert_eq!(2, ics.values());
 
+        // we clear out only '11' in the storage
+        ics.clear(ivec3(0, 2, 0)).unwrap();
+
+        // upon optimizing it should be removed
         assert_eq!(1, ics.optimize());
 
-        assert_eq!(2, ics.values());
+        // we should only have a '10' left in here
+        assert_eq!(1, ics.values());
     }
 
     #[test]
