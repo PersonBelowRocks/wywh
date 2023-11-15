@@ -199,6 +199,7 @@ impl<T> HashmapChunkStorage<T> {
 pub struct IndexedChunkStorage<T: PartialEq> {
     indices: DenseChunkStorage<u16>,
     values: Vec<T>,
+    last_index: usize,
 }
 
 impl<T: PartialEq> IndexedChunkStorage<T> {
@@ -219,12 +220,14 @@ impl<T: PartialEq> IndexedChunkStorage<T> {
         let us = util::try_ivec3_to_usize_arr(pos).unwrap();
         let slot = self.indices.get_mut(us).unwrap();
         *slot = idx as u16;
+        self.last_index = idx;
     }
 
     pub fn new() -> Self {
         Self {
             indices: DenseChunkStorage::new(Self::EMPTY_VALUE),
             values: Vec::new(),
+            last_index: 0,
         }
     }
 
@@ -243,10 +246,15 @@ impl<T: PartialEq> IndexedChunkStorage<T> {
             return Err(OutOfBounds);
         }
 
+        if self.values.get(self.last_index) == Some(&data) {
+            self.set_idx(pos, self.last_index);
+        }
+
         match self.get_idx(pos) {
             Some(idx) => {
                 if self.values[idx] != data {
-                    self.values[idx] = data;
+                    self.set_idx(pos, self.values.len());
+                    self.values.push(data);
                     return Ok(None);
                 }
             }
@@ -490,15 +498,14 @@ mod tests {
         )
         .unwrap();
 
-        ics.set(ivec3(0, 0, 0), 10).unwrap();
-        ics.set(ivec3(0, 1, 0), 10).unwrap();
-
         // this guy is different!
         ics.set(ivec3(0, 2, 0), 11).unwrap();
 
-        assert_eq!(4, ics.values());
+        ics.set(ivec3(0, 1, 0), 10).unwrap();
 
-        assert_eq!(2, ics.optimize());
+        assert_eq!(3, ics.values());
+
+        assert_eq!(1, ics.optimize());
 
         assert_eq!(2, ics.values());
     }
