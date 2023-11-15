@@ -74,7 +74,7 @@ fn ics_optimize(c: &mut Criterion) {
     };
 
     const UNIQUE_POSITIONS: usize = 15 * 15 * 15;
-    const UNIQUE_VALUES: usize = 16;
+    const UNIQUE_VALUES: usize = 64;
 
     let positions = generate_positions(UNIQUE_POSITIONS);
 

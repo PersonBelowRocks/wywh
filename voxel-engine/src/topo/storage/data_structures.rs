@@ -1,4 +1,4 @@
-use std::{array, mem, ptr};
+use std::{array, collections::HashMap, mem, ptr};
 
 use bevy::math::{ivec3, IVec3};
 
@@ -196,13 +196,13 @@ impl<T> HashmapChunkStorage<T> {
 /// method only partially handles duplicates, see the method documentation for more info).
 /// Optimizing is done by calling the `optimize` method, but it's quite slow so it should be done sparingly.
 #[derive(Clone)]
-pub struct IndexedChunkStorage<T: PartialEq> {
+pub struct IndexedChunkStorage<T: Eq + std::hash::Hash + Clone> {
     indices: DenseChunkStorage<u16>,
     values: Vec<T>,
     last_index: usize,
 }
 
-impl<T: PartialEq> IndexedChunkStorage<T> {
+impl<T: Eq + std::hash::Hash + Clone> IndexedChunkStorage<T> {
     const EMPTY_VALUE: u16 = 0b1000_0000_0000_0000;
 
     fn get_idx(&self, pos: IVec3) -> Option<usize> {
@@ -319,7 +319,53 @@ impl<T: PartialEq> IndexedChunkStorage<T> {
         self.values.len()
     }
 
-    pub fn optimize(&mut self) -> usize {
+    fn experimental_optimize(&mut self) -> usize {
+        let old_value_count = self.values();
+        let mut data_to_positions =
+            hb::HashMap::<&T, tinyvec::TinyVec<[IVec3; 8]>>::with_capacity(self.values());
+
+        // Initial pass gets information of the relationship between data and positions
+        for x in 0..Chunk::SIZE {
+            for y in 0..Chunk::SIZE {
+                for z in 0..Chunk::SIZE {
+                    let pos = ivec3(x, y, z);
+
+                    if let Some(idx) = self.get_idx(pos) {
+                        let data = &self.values[idx];
+                        data_to_positions
+                            .entry(data)
+                            .or_insert(tinyvec::TinyVec::new())
+                            .push(pos)
+                    }
+                }
+            }
+        }
+
+        let mut new_values = Vec::<T>::with_capacity(data_to_positions.len());
+        let mut new_indices = DenseChunkStorage::<u16>::new(Self::EMPTY_VALUE);
+
+        // Second pass initializes the new data structures with the deduplicated data.
+        for (data, positions) in data_to_positions.into_iter() {
+            let idx = new_values.len();
+            // TODO: investigate if we can use a pointer read here and if it'll speed things up
+            new_values.push(data.clone());
+
+            for pos in positions.into_iter() {
+                let xyz = util::try_ivec3_to_usize_arr(pos).unwrap();
+                *new_indices.get_mut(xyz).unwrap() = idx as u16;
+            }
+        }
+
+        self.values = new_values;
+        self.indices = new_indices;
+        self.last_index = 0;
+
+        let new_value_count = self.values();
+
+        return old_value_count - new_value_count;
+    }
+
+    fn prototype_optimize(&mut self) -> usize {
         let old_value_count = self.values();
 
         let new_values = Vec::<T>::with_capacity(self.values());
@@ -371,6 +417,10 @@ impl<T: PartialEq> IndexedChunkStorage<T> {
         let new_value_count = self.values();
 
         old_value_count - new_value_count
+    }
+
+    pub fn optimize(&mut self) -> usize {
+        self.prototype_optimize()
     }
 }
 

@@ -9,6 +9,7 @@ anyhow = "1.0.75"
 anymap2 = "0.13.0"
 bevy = {workspace = true}
 bevy_rapier3d = "0.23.0"
+bimap = "0.6.3"
 bracket-noise = "0.8.7"
 crossbeam = "0.8.2"
 dashmap = "5.5.3"
@@ -27,6 +28,7 @@ serde = { version = "1.0.152", features = ["serde_derive"] }
 smallvec = "1.11.1"
 static_assertions = "1.1.0"
 thiserror = "1.0.38"
+tinyvec = { version = "1.6.0", features = ["alloc"] }
 
 [dev-dependencies]
 criterion = "0.5.1"
