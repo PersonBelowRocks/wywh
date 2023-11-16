@@ -282,6 +282,11 @@ impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
 
         let hasher = |i: &_| self.random_state.hash_one(&self.values[*i]);
 
+        if self.idx_table.capacity() <= self.idx_table.len() {
+            self.idx_table
+                .reserve(self.idx_table.len() * self.idx_table.len(), hasher);
+        }
+
         self.idx_table.insert_unique(hash, idx, hasher);
     }
 
@@ -381,6 +386,10 @@ impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
     }
 
     pub fn optimize(&mut self) -> usize {
+        // if the capacity of self.idx_table is this much greater than the length of self.idx_table,
+        // we call shrink_to_fit() to clear up memory
+        const IDX_TABLE_CAPACITY_THRESHOLD: usize = 8;
+
         let old_value_count = self.values.len();
 
         let mut present_values = hb::HashSet::<usize>::with_capacity(self.values());
@@ -406,7 +415,13 @@ impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
             }
         }
 
-        // nothing to optimize!
+        // optimization being ran is the perfect excuse for us to shrink our index table to clear up even more memory!
+        if self.idx_table.capacity() - self.idx_table.len() > IDX_TABLE_CAPACITY_THRESHOLD {
+            self.idx_table
+                .shrink_to_fit(|i: &_| self.random_state.hash_one(&self.values[*i]));
+        }
+
+        // nothing more to optimize!
         if removed_values.len() <= 0 {
             return 0;
         }
