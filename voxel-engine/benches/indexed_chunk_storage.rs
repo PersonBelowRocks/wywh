@@ -2,7 +2,7 @@ use std::array;
 
 use bevy::math::{ivec3, IVec3};
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
-use rand::{thread_rng, Rng};
+use rand::{thread_rng, Rng, RngCore};
 use voxel_engine::topo::{chunk::Chunk, storage::data_structures::IndexedChunkStorage};
 
 fn random_chunk_pos<R: Rng>(rng: &mut R) -> IVec3 {
@@ -33,14 +33,42 @@ fn ics_read_write(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("ics-write-random", |b| {
+    c.bench_function("ics-write-random-pos", |b| {
         let mut storage = IndexedChunkStorage::<u32>::new();
         let mut rng = thread_rng();
 
         b.iter_batched(
             || random_chunk_pos(&mut rng),
             |pos: IVec3| set_single(black_box(&mut storage), black_box(pos), black_box(10)),
-            criterion::BatchSize::LargeInput,
+            BatchSize::SmallInput,
+        );
+    });
+
+    c.bench_function("ics-write-random-value", |b| {
+        let mut storage = IndexedChunkStorage::<u32>::new();
+        let mut rng = thread_rng();
+
+        b.iter_batched(
+            || rng.next_u32(),
+            |val| {
+                set_single(
+                    black_box(&mut storage),
+                    black_box(ivec3(1, 1, 1)),
+                    black_box(val),
+                )
+            },
+            BatchSize::SmallInput,
+        );
+    });
+
+    c.bench_function("ics-write-random-pos-and-value", |b| {
+        let mut storage = IndexedChunkStorage::<u32>::new();
+        let mut rng = thread_rng();
+
+        b.iter_batched(
+            || (random_chunk_pos(&mut rng), rng.next_u32()),
+            |(pos, val)| set_single(black_box(&mut storage), black_box(pos), black_box(val)),
+            BatchSize::SmallInput,
         );
     });
 
