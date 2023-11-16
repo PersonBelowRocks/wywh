@@ -282,9 +282,15 @@ impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
 
         let hasher = |i: &_| self.random_state.hash_one(&self.values[*i]);
 
-        if self.idx_table.capacity() <= self.idx_table.len() {
-            self.idx_table
-                .reserve(self.idx_table.len() * self.idx_table.len(), hasher);
+        if self.idx_table.capacity() <= self.idx_table.len()
+            && self.idx_table.capacity() < Chunk::USIZE.pow(3)
+        {
+            let max_add = Chunk::USIZE
+                .pow(3)
+                .saturating_sub(self.idx_table.capacity());
+            let grow_by = usize::min(max_add, self.idx_table.len());
+
+            self.idx_table.reserve(grow_by, hasher);
         }
 
         self.idx_table.insert_unique(hash, idx, hasher);
