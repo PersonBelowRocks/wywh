@@ -193,15 +193,52 @@ impl<T> HashmapChunkStorage<T> {
 
 /// ICS for short.
 ///
-/// An ICS is similar to the `indexmap` crate, it stores the actual data in a vector and holds
-/// a separate `DenseChunkStorage` full of indices into that vector. This is useful when storing data that is duplicate
-/// across many positions, such as various voxel attributes and whatnot.
+/// An ICS is useful for storing duplicated voxel data. Internally it has a DCS, vector of all stored data, and a hash table mapping data to their indices.
+/// Both reads and writes are in O(1) complexity, but writes are a bit slower than reads because they require a lookup in the hash table.
 ///
-/// The tradeoff here is that an ICS must be optimized between insertions to get rid of duplicates. This isn't necessary for it
-/// to actually function but it won't automatically handle duplicates otherwise and therefore will use more memory than needed,
-/// thereby defeating one of the main points of actually using an ICS in the first place (note that the [`IndexedChunkStorage::set_many`]
-/// method only partially handles duplicates, see the method documentation for more info).
-/// Optimizing is done by calling the `optimize` method, but it's quite slow so it should be done sparingly.
+/// A flowchart for inserting a value where
+///     `pos`: The position we're gonna insert to,
+///     `val`: The value we're inserting,
+///     `DCS`: [`DenseChunkStorage`] mapping positions to indices in V,
+///     `V`: [`Vec`] of all our stored data,
+///     `HT`: Hashtable that maps data to indices in V.
+///
+/// ```txt
+/// if HT contains an index for val:
+///     index = HT(val)
+///     old_index = DCS(pos)
+///     old_index = index
+/// if HT does not contain val:
+///     index = len(V)
+///     HT.insert(val, index) (HT does not own val, it only stores val's hash. V owns val)
+///     V.push(val)
+///     old_index = DCS(pos)
+///     old_index = index
+/// ```
+///
+/// Flowchart for reading a value, terms are same as for inserting (see above):
+/// ```txt
+/// Option<index> = DCS(pos)
+/// if index is not None:
+///     return V(index)
+/// else:
+///     return None
+/// ```
+///
+/// Removal of data (by calling `self.clear(pos)`) at a position is done by just removing the index at that position.
+/// It does NOT remove the actual underlying data. It just makes it impossible to access.
+/// The reason for this is because there is no way to get all positions that point to a piece of data without doing
+/// an expensive linear search through the whole storage (`O(chunk volume)`) and then a bunch of shuffling of data to keep the vector
+/// of values contiguous and also remapping every position to point to the new, shuffled, indices.
+///
+/// Doing all this every time you write to the storage, quite frankly, sucks, and is a terrible idea that makes it (almost) unusable.
+/// Therefore there is a provided "garbage collection" method: [`Self::optimize`]. This method does all the reshuffling and remapping mentioned above
+/// and is designed to do so as quickly as it can. It's good to optimize your ICS if you've done a lot of removals or overwrites of values to keep the memory
+/// footprint down.
+///
+/// ICSes are an incredible tool when you need super fast reads, but writes aren't as important.
+/// Or when you need to store lots of duplicate data (like various voxel attributes) without using
+/// a bunch of redudant memory.
 #[derive(Clone)]
 pub struct IndexedChunkStorage<T: Eq + hash::Hash, S: BuildHasher = ahash::RandomState> {
     indices: DenseChunkStorage<u16>,
@@ -599,5 +636,89 @@ mod tests {
             .is_err());
 
         assert_eq!(1, ics.values());
+    }
+
+    #[test]
+    fn test_ICS_overwrite() {
+        let mut ics = IndexedChunkStorage::<u32>::new();
+
+        ics.set(ivec3(2, 2, 2), 10).unwrap();
+
+        ics.set(ivec3(2, 3, 2), 11).unwrap();
+        ics.set(ivec3(2, 3, 3), 11).unwrap();
+        ics.set(ivec3(3, 2, 2), 11).unwrap();
+
+        // overwrite our first value
+        ics.set(ivec3(2, 2, 2), 11).unwrap();
+
+        assert_eq!(2, ics.values());
+
+        assert_eq!(1, ics.optimize());
+
+        assert_eq!(1, ics.values());
+
+        assert_eq!(Some(&11), ics.get(ivec3(2, 2, 2)).unwrap());
+        assert_eq!(Some(&11), ics.get(ivec3(2, 3, 2)).unwrap());
+        assert_eq!(Some(&11), ics.get(ivec3(2, 3, 3)).unwrap());
+        assert_eq!(Some(&11), ics.get(ivec3(3, 2, 2)).unwrap());
+        assert_eq!(Some(&11), ics.get(ivec3(2, 2, 2)).unwrap());
+    }
+
+    #[test]
+    fn test_ICS_clear() {
+        let mut ics = IndexedChunkStorage::<u32>::new();
+
+        ics.set(ivec3(0, 0, 0), 10).unwrap();
+
+        ics.set(ivec3(1, 0, 0), 11).unwrap();
+        ics.set(ivec3(2, 0, 0), 11).unwrap();
+        ics.set(ivec3(3, 0, 0), 11).unwrap();
+
+        ics.clear(ivec3(0, 0, 0)).unwrap();
+
+        assert_eq!(2, ics.values());
+
+        assert_eq!(None, ics.get(ivec3(0, 0, 0)).unwrap());
+
+        assert_eq!(1, ics.optimize());
+
+        assert_eq!(1, ics.values());
+
+        assert_eq!(None, ics.get(ivec3(0, 0, 0)).unwrap());
+
+        assert_eq!(Some(&11), ics.get(ivec3(1, 0, 0)).unwrap());
+        assert_eq!(Some(&11), ics.get(ivec3(2, 0, 0)).unwrap());
+        assert_eq!(Some(&11), ics.get(ivec3(3, 0, 0)).unwrap());
+    }
+
+    #[test]
+    fn test_ICS_reordering_optimization() {
+        let mut ics = IndexedChunkStorage::<u32>::new();
+
+        ics.set(ivec3(0, 0, 0), 10).unwrap();
+        ics.set(ivec3(0, 1, 0), 11).unwrap();
+        ics.set(ivec3(0, 2, 0), 12).unwrap();
+        ics.set(ivec3(0, 3, 0), 13).unwrap();
+
+        ics.clear(ivec3(0, 1, 0)).unwrap();
+        ics.clear(ivec3(0, 2, 0)).unwrap();
+
+        assert_eq!(Some(&10), ics.get(ivec3(0, 0, 0)).unwrap());
+        assert_eq!(Some(&13), ics.get(ivec3(0, 3, 0)).unwrap());
+
+        assert_eq!(None, ics.get(ivec3(0, 1, 0)).unwrap());
+        assert_eq!(None, ics.get(ivec3(0, 2, 0)).unwrap());
+
+        assert_eq!(4, ics.values());
+
+        assert_eq!(2, ics.optimize());
+
+        assert_eq!(2, ics.values());
+
+        assert_eq!(Some(&10), ics.get(ivec3(0, 0, 0)).unwrap());
+        assert_eq!(Some(&13), ics.get(ivec3(0, 3, 0)).unwrap());
+
+        assert_eq!(None, ics.get(ivec3(0, 1, 0)).unwrap());
+        assert_eq!(None, ics.get(ivec3(0, 2, 0)).unwrap());
     }
 }
