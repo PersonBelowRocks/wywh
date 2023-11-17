@@ -282,6 +282,8 @@ impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
 
         let hasher = |i: &_| self.random_state.hash_one(&self.values[*i]);
 
+        // this little allocation dance here seems to only improve performance on some systems, no clue whats going on
+        // TODO: investigate!
         if self.idx_table.capacity() <= self.idx_table.len()
             && self.idx_table.capacity() < Chunk::USIZE.pow(3)
         {

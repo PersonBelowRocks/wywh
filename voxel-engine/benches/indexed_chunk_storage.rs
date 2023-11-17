@@ -1,4 +1,4 @@
-use std::array;
+use std::{array, time::Duration};
 
 use bevy::math::{ivec3, IVec3};
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
@@ -22,29 +22,12 @@ fn ics_read_write(c: &mut Criterion) {
         storage.get(pos).unwrap().copied()
     };
 
-    c.bench_function("ics-write-same", |b| {
-        let mut storage = IndexedChunkStorage::<u32>::new();
-        b.iter(|| {
-            set_single(
-                black_box(&mut storage),
-                black_box(ivec3(1, 1, 1)),
-                black_box(10),
-            )
-        });
-    });
-
-    c.bench_function("ics-write-random-pos", |b| {
-        let mut storage = IndexedChunkStorage::<u32>::new();
-        let mut rng = thread_rng();
-
-        b.iter_batched(
-            || random_chunk_pos(&mut rng),
-            |pos: IVec3| set_single(black_box(&mut storage), black_box(pos), black_box(10)),
-            BatchSize::SmallInput,
-        );
-    });
-
-    c.bench_function("ics-write-random-value", |b| {
+    let mut group = c.benchmark_group("ics-writes");
+    // FIXME: performance for random value writes seems to improve with higher sample size... ugh i hate benchmarking
+    group
+        .sample_size(1000)
+        .measurement_time(Duration::from_secs(10));
+    group.bench_function("ics-write-random-value", |b| {
         let mut storage = IndexedChunkStorage::<u32>::new();
         let mut rng = thread_rng();
 
@@ -61,7 +44,7 @@ fn ics_read_write(c: &mut Criterion) {
         );
     });
 
-    c.bench_function("ics-write-random-pos-and-value", |b| {
+    group.bench_function("ics-write-random-pos-and-value", |b| {
         let mut storage = IndexedChunkStorage::<u32>::new();
         let mut rng = thread_rng();
 
@@ -71,6 +54,30 @@ fn ics_read_write(c: &mut Criterion) {
             BatchSize::SmallInput,
         );
     });
+
+    group.bench_function("ics-write-same", |b| {
+        let mut storage = IndexedChunkStorage::<u32>::new();
+        b.iter(|| {
+            set_single(
+                black_box(&mut storage),
+                black_box(ivec3(1, 1, 1)),
+                black_box(10),
+            )
+        });
+    });
+
+    group.bench_function("ics-write-random-pos", |b| {
+        let mut storage = IndexedChunkStorage::<u32>::new();
+        let mut rng = thread_rng();
+
+        b.iter_batched(
+            || random_chunk_pos(&mut rng),
+            |pos: IVec3| set_single(black_box(&mut storage), black_box(pos), black_box(10)),
+            BatchSize::SmallInput,
+        );
+    });
+
+    group.finish();
 
     c.bench_function("ics-read", |b| {
         let mut storage = IndexedChunkStorage::<u32>::new();
