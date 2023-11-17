@@ -73,7 +73,7 @@ impl AxisMagnitude {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct FaceMap<T>([Option<T>; 6]);
 
 impl<T> FaceMap<T> {

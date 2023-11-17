@@ -16,10 +16,14 @@
 }
 #endif
 
+@group(1) @binding(100)
+var<uniform> texture_scale: f32;
+
 @fragment
 fn fragment(
     raw_in: VertexOutput,
     @location(10) @interpolate(flat) texture: vec2<f32>,
+    @location(11) @interpolate(flat) texture_rot: f32,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
     var in: VertexOutput;
@@ -39,7 +43,16 @@ fn fragment(
         uv = fract_uv.yx;
     }
 
-    in.uv = (uv + texture);
+    let a = texture_rot;
+    let M = mat2x2(
+        cos(a), -sin(a),
+        sin(a)   cos(a)
+    );
+
+    let offset = vec2(0.5, 0.5);
+    uv = (M * (uv - offset)) + offset;
+
+    in.uv = ((uv * texture_scale) + texture);
 #endif
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     in.instance_index = raw_in.instance_index;

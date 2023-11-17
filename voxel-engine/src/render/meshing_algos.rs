@@ -63,72 +63,6 @@ impl Mesher for SimplePbrMesher {
     where
         Acc: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds,
     {
-        // let mut positions = Vec::<[f32; 3]>::new();
-        // let mut normals = Vec::<[f32; 3]>::new();
-        // let mut uvs = Vec::<[f32; 2]>::new();
-
-        // let mut indices = Vec::<u32>::new();
-        // let mut current_idx: u32 = 0;
-
-        // // for face in Face::FACES {
-        // for x in 0..Chunk::SIZE {
-        //     for y in 0..Chunk::SIZE {
-        //         for z in 0..Chunk::SIZE {
-        //             let pos = IVec3::new(x, y, z);
-        //             let voxel_id = access.get(pos)?;
-
-        //             if voxel_id.debug_transparency().is_transparent() {
-        //                 continue;
-        //             }
-
-        //             for face in Face::FACES {
-        //                 let adjacent_pos = face.offset_position(pos);
-        //                 let adjacent_transparency = match access.get(adjacent_pos) {
-        //                     Ok(adjacent_voxel_id) => adjacent_voxel_id.debug_transparency(),
-        //                     Err(_) => {
-        //                         let pos_in_adjacent_chunk = mask_pos_with_face(face, adjacent_pos);
-        //                         cx.adjacency.sample(face, pos_in_adjacent_chunk).expect("We're only iterating through 0..16 so the position should be valid")
-        //                     }
-        //                 };
-
-        //                 if adjacent_transparency.is_transparent() {
-        //                     let pos_on_face = face.pos_on_face(pos);
-        //                     let quad = Quad::from_points(
-        //                         pos_on_face.as_vec2(),
-        //                         (pos_on_face + IVec2::splat(1)).as_vec2(),
-        //                     );
-
-        //                     let vertex_positions = quad
-        //                         .positions(face, face.axis().choose(pos.as_vec3()))
-        //                         .map(|v| v.to_array());
-
-        //                     positions.extend(vertex_positions.into_iter());
-        //                     normals.extend([face.normal().as_vec3().to_array(); 4]);
-        //                     uvs.extend([[0.0, 0.0]; 4]);
-
-        //                     let face_indices = [0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx);
-        //                     if matches!(face, Face::Bottom | Face::East | Face::North) {
-        //                         indices.extend(face_indices.into_iter().rev())
-        //                     } else {
-        //                         indices.extend(face_indices.into_iter())
-        //                     }
-        //                     current_idx += 4;
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-        // // }
-
-        // let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-
-        // mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        // mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        // // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        // mesh.set_indices(Some(Indices::U32(indices)));
-
-        // Ok(MesherOutput { mesh })
-
         todo!()
     }
 
@@ -176,6 +110,10 @@ impl GreedyMesher {
                     continue;
                 }
 
+                let Some(tex) = slice.get_texture(pos)? else {
+                    continue;
+                };
+
                 let quad = Quad::from_points(pos.as_vec2(), pos.as_vec2());
 
                 let mut quad_end = pos;
@@ -184,6 +122,7 @@ impl GreedyMesher {
                     let candidate_pos = ivec2(pos.x + n as i32, pos.y);
                     if !slice.is_meshable(candidate_pos).unwrap()
                         || mask.is_masked(candidate_pos).unwrap()
+                        || slice.get_texture(candidate_pos).unwrap() != Some(tex)
                     {
                         quad_end.x = (pos.x + n as i32) - 1;
                         true
@@ -198,6 +137,7 @@ impl GreedyMesher {
                         let candidate_pos = ivec2(q_x, pos.y + n as i32);
                         if !slice.is_meshable(candidate_pos).unwrap()
                             || mask.is_masked(candidate_pos).unwrap()
+                            || slice.get_texture(candidate_pos).unwrap() != Some(tex)
                         {
                             quad_end.y = (pos.y + n as i32) - 1;
                             abort = true;
@@ -214,8 +154,8 @@ impl GreedyMesher {
                     face: slice.face,
                     quad: heightened,
                     quad_tex: QuadTextureData {
-                        pos: vec2(0.0, 0.0),
-                        rotation: FaceTextureRotation::default(),
+                        pos: tex.tex_pos(),
+                        rotation: tex.rotation,
                     },
                 })
             }

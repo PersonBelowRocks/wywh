@@ -276,7 +276,7 @@ pub struct ChunkMeshAttributes {
     pub normals: Vec<Vec3>,
     pub uvs: Vec<Vec2>,
     pub textures: Vec<Vec2>,
-    pub misc_data: Vec<[u8; 2]>,
+    pub misc_data: Vec<u32>,
     pub indices: Vec<u32>,
 }
 
@@ -290,10 +290,7 @@ impl ChunkMeshAttributes {
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs);
         mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, self.textures);
-        mesh.insert_attribute(
-            GreedyMeshMaterial::MISC_DATA_ATTR,
-            VertexAttributeValues::Uint8x2(self.misc_data),
-        );
+        mesh.insert_attribute(GreedyMeshMaterial::MISC_DATA_ATTR, self.misc_data);
 
         mesh
     }

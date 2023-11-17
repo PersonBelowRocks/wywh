@@ -22,7 +22,7 @@ impl GreedyMeshMaterial {
         MeshVertexAttribute::new("Greedy_Texture", 4099_1, VertexFormat::Float32x2);
 
     pub const MISC_DATA_ATTR: MeshVertexAttribute =
-        MeshVertexAttribute::new("Misc_Data", 4099_2, VertexFormat::Uint8x2);
+        MeshVertexAttribute::new("Misc_Data", 4099_2, VertexFormat::Uint32);
 }
 
 impl MaterialExtension for GreedyMeshMaterial {

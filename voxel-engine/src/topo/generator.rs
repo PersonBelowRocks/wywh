@@ -3,11 +3,15 @@ use std::{iter::Zip, ops::RangeInclusive};
 use bevy::prelude::{Event, IVec3};
 use noise::{NoiseFn, Perlin};
 
-use crate::data::tile::VoxelId;
+use crate::{
+    data::{registry::Registries, tile::VoxelId, voxel::Voxel},
+    defaults::DebugVoxel,
+};
 
 use super::{
     access::{HasBounds, WriteAccess},
     chunk::{Chunk, ChunkPos},
+    chunk_ref::ChunkVoxelInput,
     error::GeneratorError,
 };
 
@@ -24,17 +28,19 @@ pub struct GenerateChunk<T> {
     pub default_value: T,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Generator {
+    registries: Registries,
     noise: Perlin,
     scale: f64,
 }
 
 impl Generator {
-    pub fn new(seed: u32) -> Self {
+    pub fn new(seed: u32, registries: Registries) -> Self {
         let _noise = Perlin::new(seed);
 
         Self {
+            registries,
             noise: Perlin::new(seed),
             scale: 0.1,
         }
@@ -54,7 +60,7 @@ impl Generator {
         access: &mut Acc,
     ) -> Result<(), GeneratorError<Acc::WriteErr>>
     where
-        Acc: WriteAccess<WriteType = VoxelId> + HasBounds,
+        Acc: WriteAccess<WriteType = ChunkVoxelInput> + HasBounds,
     {
         if !access.bounds().is_chunk() {
             Err(GeneratorError::AccessNotChunk)?
@@ -62,6 +68,10 @@ impl Generator {
 
         let ws_min = cs_pos.worldspace_min();
         let ws_max = cs_pos.worldspace_max();
+
+        let voxel = DebugVoxel;
+        let model = voxel.model(&self.registries.textures).unwrap();
+        let id = self.registries.voxels.get_id(DebugVoxel::label()).unwrap();
 
         for (ls_x, ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
             for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
@@ -76,7 +86,15 @@ impl Generator {
                     };
 
                     let ls_pos = IVec3::new(ls_x, ls_y, ls_z);
-                    access.set(ls_pos, voxel_id)?;
+                    let voxel = DebugVoxel;
+
+                    let id = access.set(
+                        ls_pos,
+                        ChunkVoxelInput {
+                            id,
+                            model: Some(model),
+                        },
+                    )?;
                 }
             }
         }

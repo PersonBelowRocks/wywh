@@ -82,7 +82,7 @@ pub struct ChunkRefVxlReadAccess<'a> {
     models: SlccReadAccess<'a, BlockModel>,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ChunkVoxelOutput {
     pub id: VoxelId,
     pub model: Option<BlockModel>,
@@ -90,8 +90,8 @@ pub struct ChunkVoxelOutput {
 
 #[derive(Copy, Clone, Debug)]
 pub struct ChunkVoxelInput {
-    id: VoxelId,
-    model: Option<VoxelModel>,
+    pub id: VoxelId,
+    pub model: Option<VoxelModel>,
 }
 
 pub struct ChunkRefVxlAccess<'a> {
@@ -107,14 +107,11 @@ impl<'a> WriteAccess for ChunkRefVxlAccess<'a> {
         match data.model {
             None => {
                 self.voxels.set(pos, data.id)?;
-                self.models.set(pos, None);
+                self.models.set(pos, None)?;
             }
-            Some(vxl_model) if matches!(VoxelModel::Block, vxl_model) => {
+            Some(VoxelModel::Block(block_model)) => {
                 self.voxels.set(pos, data.id)?;
-                let VoxelModel::Block(model) = vxl_model else {
-                    unreachable!()
-                };
-                self.models.set(pos, Some(model));
+                self.models.set(pos, Some(block_model))?;
             }
             _ => todo!(),
         }

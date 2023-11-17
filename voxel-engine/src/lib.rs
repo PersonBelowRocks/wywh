@@ -8,7 +8,7 @@ extern crate thiserror as te;
 extern crate num_derive;
 
 use bevy::{pbr::ExtendedMaterial, prelude::*};
-use data::tile::VoxelId;
+use data::{registry::Registries, tile::VoxelId};
 use render::meshing_algos::SimplePbrMesher;
 use topo::{
     generator::{GenerateChunk, Generator, GeneratorChoice},
@@ -85,7 +85,7 @@ impl Plugin for VoxelPlugin {
         app.add_event::<GenerateChunk<VoxelId>>();
         app.add_state::<AppState>();
 
-        app.add_systems(Startup, setup);
+        // app.add_systems(Startup, setup);
         app.add_systems(OnEnter(AppState::Setup), load_textures);
         app.add_systems(Update, check_textures.run_if(in_state(AppState::Setup)));
         app.add_systems(
@@ -95,6 +95,7 @@ impl Plugin for VoxelPlugin {
                 apply_deferred,
                 setup_mesh_builder::<Hqm, Lqm>,
                 apply_deferred,
+                setup,
                 generate_debug_chunks,
             )
                 .chain(),
@@ -133,7 +134,7 @@ fn generate_debug_chunks(mut events: EventWriter<GenerateChunk<VoxelId>>) {
     }
 }
 
-fn setup(mut cmds: Commands) {
+fn setup(mut cmds: Commands, registries: Res<Registries>) {
     println!("running setup");
     let available_parallelism = std::thread::available_parallelism().unwrap();
     // let mut texture_reg_builder = VoxelTextureRegistryBuilder::new(server.as_ref());
@@ -155,7 +156,10 @@ fn setup(mut cmds: Commands) {
     // cmds.insert_resource(registries.clone());
     cmds.insert_resource(VoxelRealm::new());
     cmds.insert_resource(EngineThreadPool::new(available_parallelism.into()));
-    cmds.insert_resource(DefaultGenerator(Generator::new(112456754)));
+    cmds.insert_resource(DefaultGenerator(Generator::new(
+        112456754,
+        registries.clone(),
+    )));
 
     // let mesh_builder = ParallelMeshBuilder::new(
     //     GreedyMesher::new(atlas_texture),

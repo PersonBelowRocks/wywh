@@ -45,6 +45,7 @@ struct GreedyVertexOutput {
     @location(7) color: vec4<f32>,
 #endif
     @location(10) @interpolate(flat) texture: vec2<f32>,
+    @location(11) @interpolate(flat) texture_rot: f32,
 }
 
 struct Vertex {
@@ -68,11 +69,40 @@ struct Vertex {
 }
 
 @vertex
-fn vertex(vertex_no_morph: Vertex, @location(10) texture: vec2<f32>) -> GreedyVertexOutput {
+fn vertex(
+    vertex_no_morph: Vertex, 
+    @location(10) texture: vec2<f32>,
+    @location(11) misc: u32
+) -> GreedyVertexOutput {
     var out: GreedyVertexOutput;
-
+    
     var vertex = vertex_no_morph;
     out.texture = texture;
+
+    var texture_rot: f32;
+    switch misc {
+        case 0: // up
+            texture_rot = radians(0.0);
+            break;
+
+        case 1: // down
+            texture_rot = radians(180.0);
+            break;
+
+        case 2: // left
+            texture_rot = radians(90.0);
+            break;
+
+        case 3: // right
+            texture_rot = radians(270.0);
+            break;
+
+        default:
+            texture_rot = radians(0.0);
+            break;
+    }
+
+    out.texture_rot = texture_rot;
 
     // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
     // See https://github.com/gfx-rs/naga/issues/2416
@@ -135,7 +165,11 @@ fn vertex(vertex_no_morph: Vertex, @location(10) texture: vec2<f32>) -> GreedyVe
 
 #ifdef PREPASS_FRAGMENT
 @fragment
-fn fragment(in: VertexOutput, @location(10) @interpolate(flat) texture: vec2<f32>) -> FragmentOutput {
+fn fragment(
+    in: VertexOutput, 
+    @location(10) @interpolate(flat) texture: vec2<f32>,
+    @location(11) @interpolate(flat) texture_rot: f32,
+) -> FragmentOutput {
     var out: FragmentOutput;
 
 #ifdef NORMAL_PREPASS

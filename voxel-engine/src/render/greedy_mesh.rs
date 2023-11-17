@@ -1,7 +1,10 @@
 use bevy::{math::ivec2, prelude::IVec2};
 
 use crate::{
-    data::tile::{Face, Transparency, VoxelId},
+    data::{
+        tile::{Face, Transparency, VoxelId},
+        voxel::FaceTexture,
+    },
     render::quad::Quad,
     topo::{
         access::{ChunkBounds, ReadAccess},
@@ -87,6 +90,13 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
     pub fn get(&self, pos: IVec2) -> Result<ChunkVoxelOutput, A::ReadErr> {
         let pos_3d = self.face.axis().pos_in_3d(pos, self.layer);
         self.access.get(pos_3d)
+    }
+
+    pub fn get_texture(&self, pos: IVec2) -> Result<Option<FaceTexture>, A::ReadErr> {
+        let pos_3d = self.face.axis().pos_in_3d(pos, self.layer);
+        let vox = self.access.get(pos_3d)?;
+
+        Ok(vox.model.map(|m| m.texture(self.face)))
     }
 
     pub fn get_transparency_above(&self, pos: IVec2) -> Option<Transparency> {
