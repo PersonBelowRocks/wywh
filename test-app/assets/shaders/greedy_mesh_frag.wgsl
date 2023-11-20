@@ -46,7 +46,7 @@ fn fragment(
     let a = texture_rot;
     let M = mat2x2(
         cos(a), -sin(a),
-        sin(a)   cos(a)
+        sin(a),  cos(a)
     );
 
     let offset = vec2(0.5, 0.5);

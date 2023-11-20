@@ -1,7 +1,7 @@
 use std::ops::DerefMut;
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use bevy::prelude::*;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::topo::access::{HasBounds, ReadAccess, WriteAccess};
 use crate::topo::bounding_box::BoundingBox;
@@ -55,6 +55,12 @@ pub enum DenseChunkContainer<T> {
 pub struct AutoDenseContainerAccess<'a, T: Copy> {
     container: &'a mut DenseChunkContainer<T>,
     default: T,
+}
+
+impl<'a, T: Copy> AutoDenseContainerAccess<'a, T> {
+    pub fn new(container: &'a mut DenseChunkContainer<T>, default: T) -> Self {
+        Self { container, default }
+    }
 }
 
 impl<'a, T: Copy> ReadAccess for AutoDenseContainerAccess<'a, T> {
@@ -154,11 +160,11 @@ impl<T: Copy> SyncDenseChunkContainer<T> {
     }
 
     pub fn access(&self) -> SyncDenseContainerAccess<'_, T> {
-        SyncDenseContainerAccess(self.0.write().unwrap())
+        SyncDenseContainerAccess(self.0.write())
     }
 
     pub fn read_access(&self) -> SyncDenseContainerReadAccess<'_, T> {
-        SyncDenseContainerReadAccess(self.0.read().unwrap())
+        SyncDenseContainerReadAccess(self.0.read())
     }
 }
 

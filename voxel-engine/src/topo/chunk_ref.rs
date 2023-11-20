@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Weak,
+use std::{
+    hash::BuildHasher,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Weak,
+    },
 };
 
 use bevy::prelude::IVec3;
@@ -15,7 +18,7 @@ use super::{
     chunk::{Chunk, ChunkPos},
     error::{ChunkRefAccessError, ChunkVoxelAccessError},
     storage::containers::{
-        data_storage::{SlccAccess, SlccReadAccess},
+        data_storage::{SiccAccess, SiccReadAccess, SlccAccess, SlccReadAccess},
         dense::{SyncDenseContainerAccess, SyncDenseContainerReadAccess},
     },
 };
@@ -44,7 +47,7 @@ impl ChunkRef {
     #[allow(clippy::let_and_return)] // We need do to this little crime so the borrowchecker doesn't yell at us
     pub fn with_access<F, U>(&self, f: F) -> Result<U, ChunkRefAccessError>
     where
-        F: for<'a> FnOnce(ChunkRefVxlAccess<'a>) -> U,
+        F: for<'a> FnOnce(ChunkRefVxlAccess<'a, ahash::RandomState>) -> U,
     {
         let chunk = self.chunk.upgrade().ok_or(ChunkRefAccessError::Unloaded)?;
         self.treat_as_changed()?;
@@ -62,7 +65,7 @@ impl ChunkRef {
     #[allow(clippy::let_and_return)]
     pub fn with_read_access<F, U>(&self, f: F) -> Result<U, ChunkRefAccessError>
     where
-        F: for<'a> FnOnce(ChunkRefVxlReadAccess<'a>) -> U,
+        F: for<'a> FnOnce(ChunkRefVxlReadAccess<'a, ahash::RandomState>) -> U,
     {
         let chunk = self.chunk.upgrade().ok_or(ChunkRefAccessError::Unloaded)?;
 
@@ -77,9 +80,9 @@ impl ChunkRef {
     }
 }
 
-pub struct ChunkRefVxlReadAccess<'a> {
+pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher> {
     voxels: SyncDenseContainerReadAccess<'a, VoxelId>,
-    models: SlccReadAccess<'a, BlockModel>,
+    models: SiccReadAccess<'a, BlockModel, S>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -94,12 +97,12 @@ pub struct ChunkVoxelInput {
     pub model: Option<VoxelModel>,
 }
 
-pub struct ChunkRefVxlAccess<'a> {
+pub struct ChunkRefVxlAccess<'a, S: BuildHasher> {
     voxels: SyncDenseContainerAccess<'a, VoxelId>,
-    models: SlccAccess<'a, BlockModel>,
+    models: SiccAccess<'a, BlockModel, S>,
 }
 
-impl<'a> WriteAccess for ChunkRefVxlAccess<'a> {
+impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
     type WriteErr = ChunkVoxelAccessError;
     type WriteType = ChunkVoxelInput;
 
@@ -120,7 +123,7 @@ impl<'a> WriteAccess for ChunkRefVxlAccess<'a> {
     }
 }
 
-impl<'a> ReadAccess for ChunkRefVxlAccess<'a> {
+impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlAccess<'a, S> {
     type ReadErr = ChunkVoxelAccessError;
     type ReadType = ChunkVoxelOutput;
 
@@ -132,9 +135,9 @@ impl<'a> ReadAccess for ChunkRefVxlAccess<'a> {
     }
 }
 
-impl<'a> ChunkBounds for ChunkRefVxlAccess<'a> {}
+impl<'a, S: BuildHasher> ChunkBounds for ChunkRefVxlAccess<'a, S> {}
 
-impl<'a> ReadAccess for ChunkRefVxlReadAccess<'a> {
+impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlReadAccess<'a, S> {
     type ReadErr = ChunkVoxelAccessError;
     type ReadType = ChunkVoxelOutput;
 
@@ -146,4 +149,4 @@ impl<'a> ReadAccess for ChunkRefVxlReadAccess<'a> {
     }
 }
 
-impl<'a> ChunkBounds for ChunkRefVxlReadAccess<'a> {}
+impl<'a, S: BuildHasher> ChunkBounds for ChunkRefVxlReadAccess<'a, S> {}

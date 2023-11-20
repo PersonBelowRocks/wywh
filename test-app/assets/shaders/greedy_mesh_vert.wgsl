@@ -43,25 +43,30 @@ fn vertex(
 
     var texture_rot: f32;
     switch misc {
-        case 0: // up
+        case 0u: {
             texture_rot = radians(0.0);
             break;
-
-        case 1: // down
+        } // up
+            
+        case 1u: {
             texture_rot = radians(180.0);
             break;
+        } // down
 
-        case 2: // left
+        case 2u: {
             texture_rot = radians(90.0);
             break;
+        } // left
 
-        case 3: // right
+        case 3u: {
             texture_rot = radians(270.0);
             break;
-
-        default:
+        } // right
+            
+        default: {
             texture_rot = radians(0.0);
             break;
+        }
     }
 
     out.texture_rot = texture_rot;

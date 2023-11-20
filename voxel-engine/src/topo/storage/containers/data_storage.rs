@@ -77,7 +77,7 @@ impl<'a, T: Copy> ReadAccess for SlccReadAccess<'a, T> {
 
 // SICC for short
 pub struct SyncIndexedChunkContainer<T: hash::Hash + Eq, S: BuildHasher = ahash::RandomState>(
-    RwLock<IndexedChunkStorage<T, S>>,
+    pub(crate) RwLock<IndexedChunkStorage<T, S>>,
 );
 
 /// Avoid writing the huge name of SyncIndexedChunkContainer
@@ -129,6 +129,15 @@ impl<'a, T: hash::Hash + Eq, S: BuildHasher> WriteAccess for SiccAccess<'a, T, S
         }
 
         Ok(())
+    }
+}
+
+impl<'a, T: hash::Hash + Eq + Copy, S: BuildHasher> ReadAccess for SiccAccess<'a, T, S> {
+    type ReadErr = OutOfBounds;
+    type ReadType = Option<T>;
+
+    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+        Ok(self.0.get(pos)?.copied())
     }
 }
 
