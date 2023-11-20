@@ -1,9 +1,7 @@
 use bevy::prelude::*;
 
 use super::bounding_box::BoundingBox;
-use super::storage::containers::data_storage::{
-    SyncIndexedChunkContainer, SyncLayeredChunkContainer,
-};
+use super::storage::containers::data_storage::SyncIndexedChunkContainer;
 use super::storage::containers::dense::{DenseChunkContainer, SyncDenseChunkContainer};
 use super::storage::data_structures::DenseChunkStorage;
 use crate::data::tile::VoxelId;

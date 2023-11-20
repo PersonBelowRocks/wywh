@@ -2,12 +2,11 @@ use std::array;
 
 use bevy::math::vec2;
 
-use bevy::prelude::Rect;
 use bevy::prelude::Vec2;
 use bevy::prelude::Vec3;
 
 use crate::data::tile::Face;
-use crate::data::tile::TextureId;
+
 use crate::data::voxel::FaceTextureRotation;
 use crate::util;
 

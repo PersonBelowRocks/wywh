@@ -19,7 +19,7 @@ use super::{
 pub(crate) fn setup_mesh_builder<Hqm: Mesher, Lqm: Mesher>(
     mut cmds: Commands,
 
-    atlas_texture: Res<VoxelTextureAtlas>,
+    _atlas_texture: Res<VoxelTextureAtlas>,
     registries: Res<Registries>,
 
     mut hqs: ResMut<Assets<ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>>>,

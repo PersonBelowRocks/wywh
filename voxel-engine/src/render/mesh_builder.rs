@@ -8,24 +8,22 @@ use bevy::prelude::Resource;
 use bevy::prelude::Vec2;
 use bevy::prelude::Vec3;
 use bevy::render::mesh::Indices;
-use bevy::render::mesh::VertexAttributeValues;
+
 use bevy::render::render_resource::PrimitiveTopology;
 use cb::channel::Receiver;
 
 use cb::channel::Sender;
 
 use crate::data::registry::Registries;
-use crate::data::tile::VoxelId;
-use crate::data::voxel::BlockModel;
+
 use crate::render::greedy_mesh_material::GreedyMeshMaterial;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;
-use crate::topo::chunk::Chunk;
+
 use crate::topo::chunk::ChunkPos;
 use crate::topo::chunk_ref::ChunkRef;
-use crate::topo::chunk_ref::ChunkRefVxlReadAccess;
+
 use crate::topo::chunk_ref::ChunkVoxelOutput;
-use crate::topo::storage::data_structures::DenseChunkStorage;
 
 use super::adjacency::AdjacentTransparency;
 use super::error::MesherError;

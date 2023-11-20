@@ -1,11 +1,9 @@
 use std::{
     array,
-    collections::HashMap,
     hash::{self, BuildHasher},
-    mem, ptr,
+    mem,
 };
 
-use ahash::AHasher;
 use bevy::math::{ivec3, IVec3};
 use hashbrown::HashTable;
 

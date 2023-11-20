@@ -18,7 +18,7 @@ use super::{
     chunk::{Chunk, ChunkPos},
     error::{ChunkRefAccessError, ChunkVoxelAccessError},
     storage::containers::{
-        data_storage::{SiccAccess, SiccReadAccess, SlccAccess, SlccReadAccess},
+        data_storage::{SiccAccess, SiccReadAccess},
         dense::{SyncDenseContainerAccess, SyncDenseContainerReadAccess},
     },
 };

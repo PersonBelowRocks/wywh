@@ -2,10 +2,9 @@ use bevy::{math::ivec2, prelude::IVec2};
 
 use crate::{
     data::{
-        tile::{Face, Transparency, VoxelId},
+        tile::{Face, Transparency},
         voxel::FaceTexture,
     },
-    render::quad::Quad,
     topo::{
         access::{ChunkBounds, ReadAccess},
         chunk::Chunk,
@@ -13,7 +12,7 @@ use crate::{
     },
 };
 
-use super::{adjacency::AdjacentTransparency, quad::MeshableQuad};
+use super::adjacency::AdjacentTransparency;
 
 pub(crate) trait ChunkAccess: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
 impl<T> ChunkAccess for T where T: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}

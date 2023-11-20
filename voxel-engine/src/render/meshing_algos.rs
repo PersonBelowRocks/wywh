@@ -1,24 +1,16 @@
-use bevy::log::info;
 use bevy::math::ivec2;
-use bevy::math::vec2;
+
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::default;
 use bevy::prelude::Color;
-use bevy::prelude::Handle;
+
 use bevy::prelude::IVec2;
-use bevy::prelude::IVec3;
-use bevy::prelude::Image;
-use bevy::prelude::Mesh;
-use bevy::prelude::Rect;
+
 use bevy::prelude::StandardMaterial;
-use bevy::render::mesh::Indices;
-use bevy::render::render_resource::PrimitiveTopology;
 
 use crate::data::registry::Registries;
 use crate::data::tile::Face;
-use crate::data::tile::VoxelId;
-use crate::data::voxel::FaceTextureRotation;
-use crate::render::adjacency::mask_pos_with_face;
+
 use crate::render::greedy_mesh::VoxelChunkSlice;
 use crate::render::quad::Quad;
 use crate::topo::access::ChunkBounds;
@@ -58,8 +50,8 @@ impl Mesher for SimplePbrMesher {
 
     fn build<Acc>(
         &self,
-        access: &Acc,
-        cx: Context,
+        _access: &Acc,
+        _cx: Context,
     ) -> Result<MesherOutput, MesherError<Acc::ReadErr>>
     where
         Acc: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds,

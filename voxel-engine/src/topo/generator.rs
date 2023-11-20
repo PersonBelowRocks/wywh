@@ -15,7 +15,6 @@ use crate::{
 
 use super::{
     access::{ChunkBounds, HasBounds, WriteAccess},
-    bounding_box::BoundingBox,
     chunk::{Chunk, ChunkPos},
     chunk_ref::ChunkVoxelInput,
     error::{ChunkVoxelAccessError, GeneratorError},
