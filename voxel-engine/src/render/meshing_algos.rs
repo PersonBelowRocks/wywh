@@ -76,8 +76,7 @@ impl GreedyMesher {
             material: ExtendedMaterial {
                 base: StandardMaterial {
                     base_color_texture: Some(registries.textures.atlas_texture()),
-                    base_color: Color::rgb(0.5, 0.5, 0.65),
-
+                    // base_color: Color::rgb(0.5, 0.5, 0.65),
                     ..default()
                 },
                 extension: GreedyMeshMaterial {

@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::texture::ImageSampler};
 
 use crate::defaults;
 
@@ -11,7 +11,7 @@ pub(crate) fn create_registries(
     In(result): In<Result<VoxelTextureRegistry, VoxelTextureRegistryError>>,
 
     mut cmds: Commands,
-    _textures: ResMut<Assets<Image>>,
+    mut textures: ResMut<Assets<Image>>,
 ) {
     if let Err(error) = result {
         error!("Encountered error when building voxel texture registry: {error}");
@@ -28,6 +28,8 @@ pub(crate) fn create_registries(
     }
 
     let atlas = voxel_texture_registry.atlas_texture();
+    let voxel_tex_atlas_img = textures.get_mut(atlas.clone()).unwrap();
+    voxel_tex_atlas_img.sampler = ImageSampler::nearest();
 
     cmds.insert_resource(VoxelTextureAtlas(atlas));
 
