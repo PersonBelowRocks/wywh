@@ -43,6 +43,8 @@ fn fragment(
         uv = fract_uv.yx;
     }
 
+    uv.y = 1.0 - uv.y;
+
     let a = texture_rot;
     let M = mat2x2(
         cos(a), -sin(a),
