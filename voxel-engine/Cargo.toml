@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 ahash = "0.8.3"
 anyhow = "1.0.75"
-anymap2 = "0.13.0"
+anymap = "0.12.1"
 bevy = {workspace = true}
 bevy_rapier3d = "0.23.0"
 bimap = "0.6.3"
