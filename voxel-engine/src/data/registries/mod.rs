@@ -2,7 +2,7 @@ use std::{any::type_name, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use anymap::any::Any;
 use bevy::ecs::system::Resource;
-use parking_lot::RwLock;
+use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
 use self::error::RegistryError;
 
@@ -38,15 +38,10 @@ impl<R: Registry> RegistryId<R> {
 }
 
 pub trait Registry: Send + Sync {
-    type ItemIn;
-    type ItemOut;
+    type Item;
 
-    fn register(&mut self, label: &str, entry: Self::ItemIn) -> RegistryId<Self>;
-    /// Freeze the registry and prevent further additions being made.
-    fn freeze(&mut self);
-    fn is_frozen(&self) -> bool;
-    fn get_by_label(&self, label: &str) -> Option<&Self::ItemOut>;
-    fn get_by_id(&self, id: RegistryId<Self>) -> &Self::ItemOut;
+    fn get_by_label(&self, label: &str) -> Option<&Self::Item>;
+    fn get_by_id(&self, id: RegistryId<Self>) -> &Self::Item;
     fn get_id(&self, label: &str) -> RegistryId<Self>;
 }
 
@@ -63,6 +58,8 @@ pub struct Registries {
     registries: Arc<RwLock<RegistriesAnymap>>,
 }
 
+pub type RegistryRef<'a, R> = MappedRwLockReadGuard<'a, R>;
+
 impl Registries {
     pub fn new() -> Self {
         Self {
@@ -71,15 +68,17 @@ impl Registries {
     }
 
     pub fn add_registry<R: Registry + 'static>(&self, registry: R) -> Result<(), RegistryError> {
-        if !registry.is_frozen() {
-            return Err(RegistryError::RegistryNotFrozen);
-        }
-
-        self.registries.write().insert(Arc::new(registry));
+        self.registries.write().insert(registry);
         Ok(())
     }
 
-    pub fn get_registry<R: Registry + 'static>(&self) -> Option<Arc<R>> {
-        self.registries.read().get::<Arc<R>>().cloned()
+    pub fn get_registry<R: Registry + 'static>(&self) -> Option<RegistryRef<'_, R>> {
+        let guard = self.registries.read();
+
+        if !guard.contains::<R>() {
+            return None;
+        } else {
+            Some(RwLockReadGuard::map(guard, |g| g.get::<R>().unwrap()))
+        }
     }
 }

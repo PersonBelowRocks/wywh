@@ -1,5 +1,5 @@
 use bevy::{
-    asset::AssetId,
+    asset::{AssetId, Handle},
     math::Vec2,
     render::texture::Image,
     sprite::{TextureAtlas, TextureAtlasBuilder},
@@ -11,16 +11,12 @@ use super::{Registry, RegistryId, RegistryStage};
 pub struct TextureRegistry {
     map: DashMap<String, RegistryId<Self>, ahash::RandomState>,
     entries: Vec<TextureRegistryEntry>,
-    atlas: RegistryStage<TextureAtlasBuilder, TextureAtlas>,
+    atlas: TextureAtlas,
 }
 
 impl TextureRegistry {
-    pub fn new() -> Self {
-        Self {
-            map: DashMap::with_hasher(ahash::RandomState::new()),
-            entries: Vec::new(),
-            atlas: RegistryStage::Loading(TextureAtlasBuilder::default()),
-        }
+    pub fn atlas_texture(&self) -> &Handle<Image> {
+        &self.atlas.texture
     }
 }
 
@@ -36,32 +32,13 @@ pub struct RegistrableTexture {
 }
 
 impl Registry for TextureRegistry {
-    type ItemIn = RegistrableTexture;
-    type ItemOut = TextureRegistryEntry;
+    type Item = TextureRegistryEntry;
 
-    fn register(&mut self, label: &str, entry: Self::ItemIn) -> RegistryId<Self> {
-        let RegistryStage::Loading(builder) = &mut self.atlas else {
-            panic!("Cannot add entry to frozen registry")
-        };
-
-        builder.add_texture(entry.id, &entry.img);
-
+    fn get_by_label(&self, label: &str) -> Option<&Self::Item> {
         todo!()
     }
 
-    fn freeze(&mut self) {
-        todo!()
-    }
-
-    fn is_frozen(&self) -> bool {
-        todo!()
-    }
-
-    fn get_by_label(&self, label: &str) -> Option<&Self::ItemOut> {
-        todo!()
-    }
-
-    fn get_by_id(&self, id: RegistryId<Self>) -> &Self::ItemOut {
+    fn get_by_id(&self, id: RegistryId<Self>) -> &Self::Item {
         todo!()
     }
 
