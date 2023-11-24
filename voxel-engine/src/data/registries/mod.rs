@@ -4,16 +4,23 @@ use anymap::any::Any;
 use bevy::ecs::system::Resource;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
-use self::error::RegistryError;
-
 pub mod error;
 pub mod texture;
 
-#[derive(Copy, Clone)]
 pub struct RegistryId<R: Registry + ?Sized> {
     id: u64,
     _reg: PhantomData<fn() -> R>,
 }
+
+impl<R: Registry + ?Sized> Clone for RegistryId<R> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            _reg: PhantomData,
+        }
+    }
+}
+impl<R: Registry + ?Sized> Copy for RegistryId<R> {}
 
 impl<R: Registry> Debug for RegistryId<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -38,11 +45,13 @@ impl<R: Registry> RegistryId<R> {
 }
 
 pub trait Registry: Send + Sync {
-    type Item;
+    type Item<'a>
+    where
+        Self: 'a;
 
-    fn get_by_label(&self, label: &str) -> Option<&Self::Item>;
-    fn get_by_id(&self, id: RegistryId<Self>) -> &Self::Item;
-    fn get_id(&self, label: &str) -> RegistryId<Self>;
+    fn get_by_label(&self, label: &str) -> Option<Self::Item<'_>>;
+    fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_>;
+    fn get_id(&self, label: &str) -> Option<RegistryId<Self>>;
 }
 
 #[derive(Clone, Debug)]
@@ -67,9 +76,8 @@ impl Registries {
         }
     }
 
-    pub fn add_registry<R: Registry + 'static>(&self, registry: R) -> Result<(), RegistryError> {
+    pub fn add_registry<R: Registry + 'static>(&self, registry: R) {
         self.registries.write().insert(registry);
-        Ok(())
     }
 
     pub fn get_registry<R: Registry + 'static>(&self) -> Option<RegistryRef<'_, R>> {
