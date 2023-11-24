@@ -75,6 +75,8 @@ impl Registries {
     pub fn get_registry<R: Registry + 'static>(&self) -> Option<RegistryRef<'_, R>> {
         let guard = self.registries.read();
 
+        // The call to anymap::Map::get here returns an option but due to the closure signature in RwLockReadGuard we have to return a reference
+        // to a type. Therefore we unwrap on the get call and test if the type exists in the map before we get there.
         if !guard.contains::<R>() {
             return None;
         } else {
