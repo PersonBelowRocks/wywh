@@ -27,15 +27,3 @@ pub(crate) fn check_textures(
         }
     }
 }
-
-#[derive(te::Error, Debug)]
-pub enum VoxelTextureRegistryError {
-    #[error("Could not get path for handle {0:?}")]
-    CannotMakePath(UntypedHandle),
-    #[error("{0:?} did not resolve to an `Image` asset")]
-    BadAssetType(AssetPath<'static>),
-    #[error("{0:?} was not a square image")]
-    InvalidImageDimensions(AssetPath<'static>),
-    #[error("{0}")]
-    AtlasBuilderError(#[from] TextureAtlasBuilderError),
-}
