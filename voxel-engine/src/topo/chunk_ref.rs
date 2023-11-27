@@ -9,7 +9,7 @@ use std::{
 use bevy::prelude::IVec3;
 
 use crate::data::{
-    tile::VoxelId,
+    tile::Transparency,
     voxel::{BlockModel, VoxelModel},
 };
 
@@ -52,11 +52,11 @@ impl ChunkRef {
         let chunk = self.chunk.upgrade().ok_or(ChunkRefAccessError::Unloaded)?;
         self.treat_as_changed()?;
 
-        let voxel_access = chunk.voxels.access();
+        let transparency_access = chunk.transparency.access();
         let model_access = chunk.models.access();
 
         let x = Ok(f(ChunkRefVxlAccess {
-            voxels: voxel_access,
+            transparency: transparency_access,
             models: model_access,
         }));
         x
@@ -69,11 +69,11 @@ impl ChunkRef {
     {
         let chunk = self.chunk.upgrade().ok_or(ChunkRefAccessError::Unloaded)?;
 
-        let voxel_access = chunk.voxels.read_access();
+        let voxel_access = chunk.transparency.read_access();
         let model_access = chunk.models.read_access();
 
         let x = Ok(f(ChunkRefVxlReadAccess {
-            voxels: voxel_access,
+            transparency: voxel_access,
             models: model_access,
         }));
         x
@@ -81,24 +81,24 @@ impl ChunkRef {
 }
 
 pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher> {
-    voxels: SyncDenseContainerReadAccess<'a, VoxelId>,
+    transparency: SyncDenseContainerReadAccess<'a, Transparency>,
     models: SiccReadAccess<'a, BlockModel, S>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ChunkVoxelOutput {
-    pub id: VoxelId,
+    pub transparency: Transparency,
     pub model: Option<BlockModel>,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct ChunkVoxelInput {
-    pub id: VoxelId,
+    pub transparency: Transparency,
     pub model: Option<VoxelModel>,
 }
 
 pub struct ChunkRefVxlAccess<'a, S: BuildHasher> {
-    voxels: SyncDenseContainerAccess<'a, VoxelId>,
+    transparency: SyncDenseContainerAccess<'a, Transparency>,
     models: SiccAccess<'a, BlockModel, S>,
 }
 
@@ -109,11 +109,11 @@ impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
         match data.model {
             None => {
-                self.voxels.set(pos, data.id)?;
+                self.transparency.set(pos, data.transparency)?;
                 self.models.set(pos, None)?;
             }
             Some(VoxelModel::Block(block_model)) => {
-                self.voxels.set(pos, data.id)?;
+                self.transparency.set(pos, data.transparency)?;
                 self.models.set(pos, Some(block_model))?;
             }
             _ => todo!(),
@@ -129,7 +129,7 @@ impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlAccess<'a, S> {
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
         Ok(ChunkVoxelOutput {
-            id: self.voxels.get(pos)?,
+            transparency: self.transparency.get(pos)?,
             model: self.models.get(pos)?,
         })
     }
@@ -143,7 +143,7 @@ impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlReadAccess<'a, S> {
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
         Ok(ChunkVoxelOutput {
-            id: self.voxels.get(pos)?,
+            transparency: self.transparency.get(pos)?,
             model: self.models.get(pos)?,
         })
     }

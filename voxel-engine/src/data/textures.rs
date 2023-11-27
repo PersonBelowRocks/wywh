@@ -6,8 +6,6 @@ use bevy::{
 
 use crate::AppState;
 
-use super::registry::{VoxelTextureRegistry, VoxelTextureRegistryBuilder};
-
 #[derive(Resource, Default)]
 pub struct VoxelTextureFolder(pub Handle<LoadedFolder>);
 
@@ -40,34 +38,4 @@ pub enum VoxelTextureRegistryError {
     InvalidImageDimensions(AssetPath<'static>),
     #[error("{0}")]
     AtlasBuilderError(#[from] TextureAtlasBuilderError),
-}
-
-pub(crate) fn create_voxel_texture_registry(
-    voxel_textures: Res<VoxelTextureFolder>,
-    mut textures: ResMut<Assets<Image>>,
-    folders: Res<Assets<LoadedFolder>>,
-) -> Result<VoxelTextureRegistry, VoxelTextureRegistryError> {
-    let folder = folders.get(&voxel_textures.0).unwrap();
-    let mut builder = VoxelTextureRegistryBuilder::new();
-
-    for handle in folder.handles.iter() {
-        let Some(path) = handle.path() else {
-            return Err(VoxelTextureRegistryError::CannotMakePath(handle.clone()));
-        };
-
-        let id = handle.id().typed_unchecked::<Image>();
-        if let Some(tex) = textures.get(id) {
-            if tex.height() != tex.width() {
-                return Err(VoxelTextureRegistryError::InvalidImageDimensions(
-                    path.clone(),
-                ));
-            }
-            info!("Loaded texture at path: '{}'", path);
-            builder.add_texture(id, tex, path.to_string());
-        } else {
-            return Err(VoxelTextureRegistryError::BadAssetType(path.clone()));
-        }
-    }
-
-    Ok(builder.finish(textures.as_mut())?)
 }

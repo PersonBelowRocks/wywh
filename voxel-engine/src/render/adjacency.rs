@@ -1,7 +1,7 @@
 use bevy::prelude::{IVec2, IVec3};
 
+use crate::data::tile::Face;
 use crate::data::tile::Transparency;
-use crate::data::tile::{Face, VoxelId};
 use crate::topo::access::ReadAccess;
 use crate::topo::chunk::{Chunk, ChunkPos};
 use crate::topo::chunk_ref::ChunkVoxelOutput;
@@ -69,13 +69,6 @@ pub(crate) fn mask_pos_with_face(face: Face, pos: IVec3) -> IVec2 {
     IVec2::new(k, j)
 }
 
-pub(crate) fn voxel_id_to_transparency_debug(id: VoxelId) -> Transparency {
-    match u32::from(id) {
-        0 => Transparency::Transparent,
-        _ => Transparency::Opaque,
-    }
-}
-
 fn transparency_for_adjacent_chunk_face(
     access: impl ReadAccess<ReadType = ChunkVoxelOutput, ReadErr = ChunkVoxelAccessError>,
     face: Face,
@@ -93,9 +86,8 @@ fn transparency_for_adjacent_chunk_face(
             }
 
             let voxel = result.expect("Result should be okay'd by previous checks.");
-            let transparency = voxel_id_to_transparency_debug(voxel.id);
 
-            chunk_face_transparency.set([k, j].into(), transparency);
+            chunk_face_transparency.set([k, j].into(), voxel.transparency);
         }
     }
 

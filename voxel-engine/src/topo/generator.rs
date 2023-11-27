@@ -4,13 +4,10 @@ use bevy::prelude::{Event, IVec3};
 use noise::{NoiseFn, Perlin};
 use parking_lot::RwLock;
 
-use crate::{
-    data::{
-        registry::Registries,
-        tile::VoxelId,
-        voxel::{BlockModel, Voxel, VoxelModel},
-    },
-    defaults::DebugVoxel,
+use crate::data::{
+    registries::Registries,
+    tile::Transparency,
+    voxel::{BlockModel, VoxelModel},
 };
 
 use super::{
@@ -34,7 +31,7 @@ pub enum GeneratorChoice {
 }
 
 pub struct GeneratorInputAccess<'a> {
-    ids: AutoDenseContainerAccess<'a, VoxelId>,
+    transparency: AutoDenseContainerAccess<'a, Transparency>,
     models: &'a mut IndexedChunkStorage<BlockModel>,
 }
 
@@ -45,7 +42,7 @@ impl<'a> WriteAccess for GeneratorInputAccess<'a> {
     type WriteErr = ChunkVoxelAccessError;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.ids.set(pos, data.id)?;
+        self.transparency.set(pos, data.transparency)?;
 
         if let Some(VoxelModel::Block(model)) = data.model {
             self.models.set(pos, model);
@@ -56,38 +53,40 @@ impl<'a> WriteAccess for GeneratorInputAccess<'a> {
 }
 
 pub struct GeneratorInput {
-    ids: DenseChunkContainer<VoxelId>,
+    transparency: DenseChunkContainer<Transparency>,
     models: IndexedChunkStorage<BlockModel>,
 }
 
 impl GeneratorInput {
     pub fn new() -> Self {
         Self {
-            ids: DenseChunkContainer::Empty,
+            transparency: DenseChunkContainer::Empty,
             models: IndexedChunkStorage::new(),
         }
     }
 
-    pub fn access(&mut self, default: VoxelId) -> GeneratorInputAccess<'_> {
+    pub fn access(&mut self) -> GeneratorInputAccess<'_> {
         GeneratorInputAccess {
-            ids: AutoDenseContainerAccess::new(&mut self.ids, default),
+            transparency: AutoDenseContainerAccess::new(
+                &mut self.transparency,
+                Transparency::Transparent,
+            ),
             models: &mut self.models,
         }
     }
 
     pub fn to_chunk(self) -> Chunk {
         Chunk {
-            voxels: SyncDenseChunkContainer(RwLock::new(self.ids)),
+            transparency: SyncDenseChunkContainer(RwLock::new(self.transparency)),
             models: SyncIndexedChunkContainer(RwLock::new(self.models)),
         }
     }
 }
 
 #[derive(Event, Debug)]
-pub struct GenerateChunk<T> {
+pub struct GenerateChunk {
     pub pos: ChunkPos,
     pub generator: GeneratorChoice,
-    pub default_value: T,
 }
 
 #[derive(Clone)]
@@ -131,10 +130,6 @@ impl Generator {
         let ws_min = cs_pos.worldspace_min();
         let ws_max = cs_pos.worldspace_max();
 
-        let voxel = DebugVoxel;
-        let model = voxel.model(&self.registries.textures).unwrap();
-        let id = self.registries.voxels.get_id(DebugVoxel::label()).unwrap();
-
         for (ls_x, ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
             for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
                 for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
@@ -142,23 +137,7 @@ impl Generator {
                     let ls_pos = IVec3::new(ls_x, ls_y, ls_z);
 
                     let noise = self.noise.get(noise_pos.into());
-                    if noise > 0.5 {
-                        access.set(
-                            ls_pos,
-                            ChunkVoxelInput {
-                                id,
-                                model: Some(model),
-                            },
-                        )?;
-                    } else {
-                        access.set(
-                            ls_pos,
-                            ChunkVoxelInput {
-                                id: VoxelId::VOID,
-                                model: None,
-                            },
-                        )?;
-                    }
+                    todo!()
                 }
             }
         }

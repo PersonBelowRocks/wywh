@@ -4,7 +4,7 @@ use super::bounding_box::BoundingBox;
 use super::storage::containers::data_storage::SyncIndexedChunkContainer;
 use super::storage::containers::dense::{DenseChunkContainer, SyncDenseChunkContainer};
 use super::storage::data_structures::DenseChunkStorage;
-use crate::data::tile::VoxelId;
+use crate::data::tile::Transparency;
 use crate::data::voxel::BlockModel;
 
 const CHUNK_SIZE: usize = 16;
@@ -25,7 +25,7 @@ impl ChunkPos {
 }
 
 pub struct Chunk {
-    pub voxels: SyncDenseChunkContainer<VoxelId>,
+    pub transparency: SyncDenseChunkContainer<Transparency>,
     pub models: SyncIndexedChunkContainer<BlockModel>,
 }
 
@@ -40,17 +40,17 @@ impl Chunk {
     };
 
     #[inline]
-    pub fn new(voxel_data: DenseChunkStorage<VoxelId>) -> Self {
+    pub fn new(voxel_data: DenseChunkStorage<Transparency>) -> Self {
         Self {
-            voxels: SyncDenseChunkContainer::new(voxel_data),
+            transparency: SyncDenseChunkContainer::new(voxel_data),
             models: SyncIndexedChunkContainer::new(),
         }
     }
 
     #[inline]
-    pub fn new_from_container(container: DenseChunkContainer<VoxelId>) -> Self {
+    pub fn new_from_container(container: DenseChunkContainer<Transparency>) -> Self {
         Self {
-            voxels: SyncDenseChunkContainer(container.into()),
+            transparency: SyncDenseChunkContainer(container.into()),
             models: SyncIndexedChunkContainer::new(),
         }
     }
@@ -58,7 +58,7 @@ impl Chunk {
     #[inline]
     pub fn empty() -> Self {
         Self {
-            voxels: SyncDenseChunkContainer::empty(),
+            transparency: SyncDenseChunkContainer::empty(),
             models: SyncIndexedChunkContainer::new(),
         }
     }

@@ -14,8 +14,7 @@ use cb::channel::Receiver;
 
 use cb::channel::Sender;
 
-use crate::data::registry::Registries;
-
+use crate::data::registries::Registries;
 use crate::render::greedy_mesh_material::GreedyMeshMaterial;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;

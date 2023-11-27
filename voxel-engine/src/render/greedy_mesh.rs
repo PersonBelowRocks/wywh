@@ -105,7 +105,7 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
 
         let pos_3d = self.face.axis().pos_in_3d(pos, self.layer) + self.face.normal();
         let transparency = match self.access.get(pos_3d) {
-            Ok(adjacent_voxel) => adjacent_voxel.id.debug_transparency(),
+            Ok(adjacent_voxel) => adjacent_voxel.transparency,
             Err(_) => {
                 let pos_in_adjacent_chunk = self.face.pos_on_face(pos_3d);
                 self.adjacency.sample(self.face, pos_in_adjacent_chunk)?
@@ -130,7 +130,7 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
         }
 
         Some(
-            self.get(pos).ok()?.id.debug_transparency().is_opaque()
+            self.get(pos).ok()?.transparency.is_opaque()
                 // && !self.is_masked(pos)?
                 && self.get_transparency_above(pos)?.is_transparent(),
         )

@@ -8,51 +8,7 @@ use ordered_float::NotNan;
 
 use crate::util::FaceMap;
 
-use super::{
-    registry::VoxelTextureRegistry,
-    tile::{Face, Transparency},
-};
-
-// TODO: error handling
-pub trait VoxelData: Sized {
-    fn write<W: Write>(&self, buf: &mut W);
-    fn read<R: Read>(buf: &mut R) -> Option<Self>;
-}
-
-pub trait Voxel: Default {
-    type Stored: VoxelData;
-
-    fn label() -> &'static str {
-        type_name::<Self>()
-    }
-
-    fn from_stored(storage: Self::Stored) -> Self;
-
-    fn store(&self) -> Self::Stored;
-
-    fn model(&self, textures: &VoxelTextureRegistry) -> Option<VoxelModel>;
-
-    fn properties() -> VoxelProperties;
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct SimpleStorage;
-
-impl VoxelData for SimpleStorage {
-    fn write<W: Write>(&self, _buf: &mut W) {
-        panic!(
-            "{} is only a marker type and shouldn't be attempted to be written to a buffer!",
-            type_name::<Self>()
-        );
-    }
-
-    fn read<R: Read>(_buf: &mut R) -> Option<Self> {
-        panic!(
-            "{} is only a marker type and shouldn't be attempted to be read from a buffer!",
-            type_name::<Self>()
-        );
-    }
-}
+use super::tile::{Face, Transparency};
 
 #[derive(Clone)]
 pub struct VoxelProperties {

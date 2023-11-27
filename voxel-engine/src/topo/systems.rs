@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{data::tile::VoxelId, DefaultGenerator};
+use crate::DefaultGenerator;
 
 use super::{
     generator::{GenerateChunk, GeneratorInput},
@@ -8,13 +8,13 @@ use super::{
 };
 
 pub(crate) fn generate_chunks_from_events(
-    mut reader: EventReader<GenerateChunk<VoxelId>>,
+    mut reader: EventReader<GenerateChunk>,
     realm: Res<VoxelRealm>,
     generator: Res<DefaultGenerator>,
 ) {
     for event in reader.read() {
         let mut input = GeneratorInput::new();
-        let mut access = input.access(VoxelId::VOID);
+        let mut access = input.access();
 
         generator.write_to_chunk(event.pos, &mut access).unwrap();
 

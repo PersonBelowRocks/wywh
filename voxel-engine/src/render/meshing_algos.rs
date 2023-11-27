@@ -8,7 +8,8 @@ use bevy::prelude::IVec2;
 
 use bevy::prelude::StandardMaterial;
 
-use crate::data::registry::Registries;
+use crate::data::registries::texture::TextureRegistry;
+use crate::data::registries::Registries;
 use crate::data::tile::Face;
 
 use crate::render::greedy_mesh::VoxelChunkSlice;
@@ -72,19 +73,21 @@ pub struct GreedyMesher {
 
 impl GreedyMesher {
     pub fn new(registries: Registries) -> Self {
+        let texture_registry = registries.get_registry::<TextureRegistry>().unwrap();
+
         Self {
             material: ExtendedMaterial {
                 base: StandardMaterial {
-                    base_color_texture: Some(registries.textures.atlas_texture()),
+                    base_color_texture: Some(texture_registry.atlas_texture().clone()),
                     // base_color: Color::rgb(0.5, 0.5, 0.65),
                     ..default()
                 },
                 extension: GreedyMeshMaterial {
-                    texture_scale: registries.textures.texture_scale(),
+                    texture_scale: texture_registry.texture_scale(),
                 },
             },
 
-            registries,
+            registries: registries.clone(),
         }
     }
 

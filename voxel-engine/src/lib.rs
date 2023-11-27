@@ -8,7 +8,7 @@ extern crate thiserror as te;
 extern crate num_derive;
 
 use bevy::{pbr::ExtendedMaterial, prelude::*};
-use data::{registry::Registries, tile::VoxelId};
+use data::registries::Registries;
 use render::meshing_algos::SimplePbrMesher;
 use topo::{
     generator::{GenerateChunk, Generator, GeneratorChoice},
@@ -16,16 +16,12 @@ use topo::{
 };
 
 pub mod data;
-pub mod defaults;
 pub mod render;
 pub mod topo;
 pub mod util;
 
 use crate::{
-    data::{
-        systems::create_registries,
-        textures::{check_textures, create_voxel_texture_registry, load_textures},
-    },
+    data::textures::{check_textures, load_textures},
     render::{
         greedy_mesh_material::GreedyMeshMaterial,
         meshing_algos::GreedyMesher,
@@ -82,7 +78,7 @@ impl Plugin for VoxelPlugin {
         app.add_plugins(MaterialPlugin::<
             ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>,
         >::default());
-        app.add_event::<GenerateChunk<VoxelId>>();
+        app.add_event::<GenerateChunk>();
         app.add_state::<AppState>();
 
         // app.add_systems(Startup, setup);
@@ -91,8 +87,6 @@ impl Plugin for VoxelPlugin {
         app.add_systems(
             OnEnter(AppState::Finished),
             (
-                create_voxel_texture_registry.pipe(create_registries),
-                apply_deferred,
                 setup_mesh_builder::<Hqm, Lqm>,
                 apply_deferred,
                 setup,
@@ -120,14 +114,13 @@ impl Plugin for VoxelPlugin {
     }
 }
 
-fn generate_debug_chunks(mut events: EventWriter<GenerateChunk<VoxelId>>) {
+fn generate_debug_chunks(mut events: EventWriter<GenerateChunk>) {
     for x in -1..=1 {
         for y in -1..=1 {
             for z in -1..=1 {
                 events.send(GenerateChunk {
                     pos: IVec3::new(x, y, z).into(),
                     generator: GeneratorChoice::Default,
-                    default_value: VoxelId::VOID,
                 });
             }
         }
