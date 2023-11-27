@@ -69,7 +69,7 @@ pub enum FaceTextureRotation {
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-// is this worth it? it cuts the size of BlockModel down a lot...
+// TODO: is this worth it? it cuts the size of BlockModel down a lot...
 #[repr(packed)]
 pub struct FaceTexture {
     pub rotation: FaceTextureRotation,
@@ -123,7 +123,7 @@ impl BlockModel {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum VoxelModel {
     Block(BlockModel),

@@ -128,7 +128,7 @@ fn generate_debug_chunks(mut events: EventWriter<GenerateChunk<VoxelId>>) {
                     pos: IVec3::new(x, y, z).into(),
                     generator: GeneratorChoice::Default,
                     default_value: VoxelId::VOID,
-                })
+                });
             }
         }
     }

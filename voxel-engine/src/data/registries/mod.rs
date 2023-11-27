@@ -5,7 +5,9 @@ use bevy::ecs::system::Resource;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
 pub mod error;
+pub mod model;
 pub mod texture;
+pub mod variant;
 
 pub struct RegistryId<R: Registry + ?Sized> {
     id: u64,
@@ -20,7 +22,16 @@ impl<R: Registry + ?Sized> Clone for RegistryId<R> {
         }
     }
 }
+
 impl<R: Registry + ?Sized> Copy for RegistryId<R> {}
+
+impl<R: Registry + ?Sized> PartialEq for RegistryId<R> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+    }
+}
+
+impl<R: Registry + ?Sized> Eq for RegistryId<R> {}
 
 impl<R: Registry> Debug for RegistryId<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -39,7 +50,7 @@ impl<R: Registry> RegistryId<R> {
         }
     }
 
-    pub fn id(self) -> u64 {
+    pub fn inner(self) -> u64 {
         self.id
     }
 }

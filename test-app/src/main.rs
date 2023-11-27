@@ -61,7 +61,7 @@ fn setup(
                     pos: IVec3::new(x, y, z).into(),
                     generator: GeneratorChoice::Default,
                     default_value: VoxelId::new(0),
-                })
+                });
             }
         }
     }

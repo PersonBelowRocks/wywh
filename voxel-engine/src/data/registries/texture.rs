@@ -2,11 +2,10 @@ use std::marker::PhantomData;
 
 use bevy::{
     asset::{AssetId, Assets, Handle},
-    math::{Rect, Vec2},
+    math::Vec2,
     render::texture::Image,
     sprite::{TextureAtlas, TextureAtlasBuilder, TextureAtlasBuilderError},
 };
-use dashmap::DashMap;
 
 use super::{Registry, RegistryId};
 
@@ -23,13 +22,13 @@ impl TextureRegistryLoader {
         }
     }
 
-    pub fn register(&mut self, label: String, id: AssetId<Image>, tex: &Image) {
+    pub fn register(&mut self, label: impl Into<String>, id: AssetId<Image>, tex: &Image) {
         self.builder.add_texture(id, tex);
-        self.map.insert(label, id);
+        self.map.insert(label.into(), id);
     }
 
     pub fn build_registry(
-        mut self,
+        self,
         textures: &mut Assets<Image>,
     ) -> Result<TextureRegistry, TextureAtlasBuilderError> {
         let mut registry_map =
@@ -71,7 +70,7 @@ impl TextureRegistry {
 
 #[derive(Copy, Clone, Debug, dm::Constructor)]
 pub struct TextureRegistryEntry<'a> {
-    texture_pos: Vec2,
+    pub texture_pos: Vec2,
 
     // Placeholder in case we wanna store some other funny stuff in here
     _data: PhantomData<&'a ()>,
@@ -86,7 +85,7 @@ impl Registry for TextureRegistry {
     }
 
     fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_> {
-        let idx = id.id() as usize;
+        let idx = id.inner() as usize;
         TextureRegistryEntry {
             texture_pos: self.atlas.textures[idx].min,
             _data: PhantomData,
@@ -100,6 +99,8 @@ impl Registry for TextureRegistry {
 
 #[cfg(test)]
 mod tests {
+    use bevy::utils::Uuid;
+
     use super::*;
 
     // this is just a compile time test to make sure lifetimes and everything work out
@@ -107,5 +108,11 @@ mod tests {
         let loader = TextureRegistryLoader::new();
         let registry = loader.build_registry(todo!()).unwrap();
         let tex = registry.get_by_label("wowza!").unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn texture_registry_basics() {
+        todo!()
     }
 }
