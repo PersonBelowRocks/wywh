@@ -57,8 +57,8 @@ pub fn update_direction_text(
     text.sections[0].value = format!("Facing: {0}", direction_letter)
 }
 
-pub fn chunk_borders(mut giz: Gizmos, chunks: Query<(&Transform, With<ChunkEntity>)>) {
-    for (chunk_tf, _) in chunks.iter() {
+pub fn chunk_borders(mut giz: Gizmos, chunks: Query<&Transform, With<ChunkEntity>>) {
+    for chunk_tf in chunks.iter() {
         let gizmo_translation = chunk_tf.translation + (Vec3::splat(Chunk::SIZE as _) / 2.0);
 
         let gizmo_tf = Transform::from_translation(gizmo_translation)
