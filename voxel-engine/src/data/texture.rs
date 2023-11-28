@@ -1,6 +1,8 @@
 use bevy::math::{vec2, Vec2};
 use ordered_float::NotNan;
 
+use crate::util::notnan_arr;
+
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FaceTextureRotation {
     #[default]
@@ -20,16 +22,12 @@ pub struct FaceTexture {
 }
 
 impl FaceTexture {
-    fn notnan_xy(pos: Vec2) -> [NotNan<f32>; 2] {
-        [NotNan::new(pos.x).unwrap(), NotNan::new(pos.y).unwrap()]
-    }
-
     pub fn tex_pos(&self) -> Vec2 {
         vec2(self.tex_pos_x.into_inner(), self.tex_pos_y.into_inner())
     }
 
     pub fn new(tex_pos: Vec2) -> Self {
-        let [tex_pos_x, tex_pos_y] = Self::notnan_xy(tex_pos);
+        let [tex_pos_x, tex_pos_y] = notnan_arr(tex_pos.into()).unwrap();
 
         Self {
             tex_pos_x,
@@ -39,7 +37,7 @@ impl FaceTexture {
     }
 
     pub fn new_rotated(tex_pos: Vec2, rotation: FaceTextureRotation) -> Self {
-        let [tex_pos_x, tex_pos_y] = Self::notnan_xy(tex_pos);
+        let [tex_pos_x, tex_pos_y] = notnan_arr(tex_pos.into()).unwrap();
         Self {
             tex_pos_x,
             tex_pos_y,

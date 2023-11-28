@@ -7,6 +7,8 @@ use super::{
     tile::{Face, Transparency},
 };
 
+pub mod descriptor;
+
 #[derive(Clone)]
 pub struct VoxelProperties {
     pub transparency: Transparency,

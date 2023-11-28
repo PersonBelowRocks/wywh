@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use dashmap::DashMap;
+use ordered_float::NotNan;
 use std::{array, fmt::Debug};
 
 use crate::data::tile::Face;
@@ -11,6 +12,14 @@ pub type CubicArray<const SIZE: usize, T> = [[[T; SIZE]; SIZE]; SIZE];
 #[derive(te::Error, Debug, PartialEq, Eq)]
 #[error("Could not convert vector {0}")]
 pub struct ConversionError(IVec3);
+
+pub fn notnan_arr<const SIZE: usize>(arr: [f32; SIZE]) -> Option<[NotNan<f32>; SIZE]> {
+    if arr.iter().any(|f| f.is_nan()) {
+        return None;
+    }
+
+    Some(arr.map(|f| NotNan::new(f).unwrap()))
+}
 
 pub fn try_ivec3_to_usize_arr(ivec: IVec3) -> Result<[usize; 3], ConversionError> {
     let [x, y, z] = ivec.to_array();
@@ -87,10 +96,28 @@ impl<T> FaceMap<T> {
         self.0[face.to_usize().unwrap()].as_ref()
     }
 
-    pub fn get_mut(&mut self, face: Face, data: T) {
+    pub fn set(&mut self, face: Face, data: T) {
         use num_traits::ToPrimitive;
 
         self.0[face.to_usize().unwrap()] = Some(data)
+    }
+
+    pub fn remove(&mut self, face: Face) -> Option<T> {
+        use num_traits::ToPrimitive;
+
+        self.0[face.to_usize().unwrap()].take()
+    }
+
+    pub fn map<U, F: FnMut(Face, &T) -> U>(&self, mut f: F) -> FaceMap<U> {
+        let mut mapped = FaceMap::<U>::new();
+
+        for face in Face::FACES {
+            if let Some(data) = self.get(face) {
+                mapped.set(face, f(face, data))
+            }
+        }
+
+        mapped
     }
 }
 

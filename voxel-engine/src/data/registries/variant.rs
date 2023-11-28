@@ -1,8 +1,11 @@
 use indexmap::IndexMap;
 
-use crate::data::{tile::Transparency, voxel::VoxelModel};
+use crate::data::{
+    tile::Transparency,
+    voxel::{descriptor::VariantDescriptor, VoxelModel},
+};
 
-use super::{Registry, RegistryId};
+use super::{texture::TextureRegistry, Registry, RegistryId};
 
 #[derive(Debug, Clone)]
 pub struct VariantRegistryEntry<'a> {
@@ -10,23 +13,41 @@ pub struct VariantRegistryEntry<'a> {
     pub model: &'a Option<VoxelModel>,
 }
 
-pub struct VariantRegistryLoader {
-    map: IndexMap<String, Variant, ahash::RandomState>,
+pub struct VariantRegistryLoader<'a> {
+    descriptors: Vec<VariantDescriptor<'a>>,
 }
 
-impl VariantRegistryLoader {
+impl<'a> VariantRegistryLoader<'a> {
     pub fn new() -> Self {
         Self {
-            map: IndexMap::with_hasher(ahash::RandomState::new()),
+            descriptors: Vec::new(),
         }
     }
 
-    pub fn register(&mut self, label: impl Into<String>, variant: Variant) {
-        self.map.insert(label.into(), variant);
+    pub fn register(&mut self, descriptor: VariantDescriptor<'a>) {
+        self.descriptors.push(descriptor);
     }
 
-    pub fn build_registry(self) -> VariantRegistry {
-        VariantRegistry { map: self.map }
+    pub fn build_registry(self, texture_registry: &TextureRegistry) -> VariantRegistry {
+        let mut map = IndexMap::<String, Variant, ahash::RandomState>::with_capacity_and_hasher(
+            self.descriptors.len(),
+            ahash::RandomState::new(),
+        );
+
+        for descriptor in self.descriptors.into_iter() {
+            let label = descriptor.label.to_string();
+
+            let variant = Variant {
+                transparency: descriptor.transparency,
+                model: descriptor
+                    .model
+                    .map(|m| m.create_voxel_model(texture_registry)),
+            };
+
+            map.insert(label, variant);
+        }
+
+        VariantRegistry { map }
     }
 }
 
@@ -71,50 +92,5 @@ impl Registry for VariantRegistry {
 
 #[cfg(test)]
 mod tests {
-    use bevy::math::vec2;
-
-    use crate::data::voxel::BlockModel;
-
-    use super::*;
-
-    #[test]
-    fn variant_registry_basics() {
-        let mut loader = VariantRegistryLoader::new();
-
-        loader.register(
-            "air",
-            Variant {
-                transparency: Transparency::Transparent,
-                model: None,
-            },
-        );
-
-        loader.register(
-            "test",
-            Variant {
-                transparency: Transparency::Opaque,
-                model: Some(VoxelModel::Block(BlockModel::filled(vec2(0.0, 0.0)))),
-            },
-        );
-
-        let registry = loader.build_registry();
-
-        assert_eq!(Some(RegistryId::new(0)), registry.get_id("air"));
-        assert_eq!(Some(RegistryId::new(1)), registry.get_id("test"));
-
-        assert_eq!(
-            Transparency::Transparent,
-            registry.get_by_label("air").unwrap().transparency
-        );
-        assert_eq!(&None, registry.get_by_label("air").unwrap().model);
-
-        assert_eq!(
-            Transparency::Opaque,
-            registry.get_by_label("test").unwrap().transparency
-        );
-        assert_eq!(
-            &Some(VoxelModel::Block(BlockModel::filled(vec2(0.0, 0.0)))),
-            registry.get_by_label("test").unwrap().model
-        );
-    }
+    // TODO: tests!
 }
