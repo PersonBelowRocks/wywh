@@ -4,7 +4,7 @@ use bevy::{
 };
 
 use crate::{
-    data::{registries::Registries, textures::VoxelTextureAtlas},
+    data::{registries::Registries, systems::VoxelTextureAtlas},
     render::adjacency::AdjacentTransparency,
     topo::{chunk::Chunk, realm::VoxelRealm},
     ChunkEntity, HqMaterial, LqMaterial,

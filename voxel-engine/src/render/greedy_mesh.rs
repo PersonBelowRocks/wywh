@@ -2,8 +2,8 @@ use bevy::{math::ivec2, prelude::IVec2};
 
 use crate::{
     data::{
+        texture::FaceTexture,
         tile::{Face, Transparency},
-        voxel::FaceTexture,
     },
     topo::{
         access::{ChunkBounds, ReadAccess},

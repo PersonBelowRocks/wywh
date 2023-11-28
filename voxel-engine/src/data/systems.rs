@@ -6,7 +6,7 @@ use bevy::{
     sprite::TextureAtlasBuilderError,
 };
 
-use crate::data::{registries::texture::TextureRegistryLoader, textures::VoxelTextureFolder};
+use crate::{data::registries::texture::TextureRegistryLoader, AppState};
 
 use super::registries::{texture::TextureRegistry, Registries};
 
@@ -26,6 +26,28 @@ pub enum TextureRegistryError {
     InvalidImageDimensions(AssetPath<'static>),
     #[error("Texture does not exist: {0:?}")]
     TextureDoesntExist(AssetPath<'static>),
+}
+
+#[derive(Resource, Default)]
+pub struct VoxelTextureFolder(pub Handle<LoadedFolder>);
+
+#[derive(Resource, Default)]
+pub struct VoxelTextureAtlas(pub Handle<Image>);
+
+pub(crate) fn load_textures(mut cmds: Commands, server: Res<AssetServer>) {
+    cmds.insert_resource(VoxelTextureFolder(server.load_folder("textures")));
+}
+
+pub(crate) fn check_textures(
+    mut next_state: ResMut<NextState<AppState>>,
+    folder: Res<VoxelTextureFolder>,
+    mut events: EventReader<AssetEvent<LoadedFolder>>,
+) {
+    for event in events.read() {
+        if event.is_loaded_with_dependencies(&folder.0) {
+            next_state.set(AppState::Finished);
+        }
+    }
 }
 
 fn create_texture_registry(
@@ -64,8 +86,7 @@ pub fn build_registries(world: &mut World) {
     let sysid = world.register_system(create_texture_registry);
     let result: Result<TextureRegistry, TextureRegistryError> = world.run_system(sysid).unwrap();
 
-    world.insert_resource(Registries::new());
-    let registries = world.get_resource::<Registries>().unwrap();
+    let registries = Registries::new();
 
     let textures = match result {
         Ok(textures) => textures,
@@ -76,4 +97,6 @@ pub fn build_registries(world: &mut World) {
     };
 
     registries.add_registry(textures);
+
+    world.insert_resource(registries);
 }

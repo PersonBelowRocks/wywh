@@ -1,6 +1,6 @@
 pub mod error;
 pub mod registries;
 pub mod systems;
-pub mod textures;
+pub mod texture;
 pub mod tile;
 pub mod voxel;

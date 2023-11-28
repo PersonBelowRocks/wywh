@@ -21,7 +21,7 @@ pub mod topo;
 pub mod util;
 
 use crate::{
-    data::textures::{check_textures, load_textures},
+    data::systems::{check_textures, load_textures},
     render::{
         greedy_mesh_material::GreedyMeshMaterial,
         meshing_algos::GreedyMesher,
