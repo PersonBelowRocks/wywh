@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 
 use crate::data::{tile::Transparency, voxel::VoxelModel};
 
-use super::{texture::TextureRegistry, Registry, RegistryId};
+use super::{Registry, RegistryId};
 
 #[derive(Debug, Clone)]
 pub struct VariantRegistryEntry<'a> {

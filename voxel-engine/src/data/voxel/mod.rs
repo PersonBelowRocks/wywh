@@ -1,5 +1,4 @@
-use bevy::math::{vec2, Vec2};
-use ordered_float::NotNan;
+use bevy::math::Vec2;
 
 use crate::util::FaceMap;
 

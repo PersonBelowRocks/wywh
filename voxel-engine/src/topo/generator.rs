@@ -134,9 +134,9 @@ impl Generator {
             for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
                 for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
                     let noise_pos = IVec3::new(ws_x, ws_y, ws_z).as_dvec3() * self.scale;
-                    let ls_pos = IVec3::new(ls_x, ls_y, ls_z);
+                    let _ls_pos = IVec3::new(ls_x, ls_y, ls_z);
 
-                    let noise = self.noise.get(noise_pos.into());
+                    let _noise = self.noise.get(noise_pos.into());
                     todo!()
                 }
             }
