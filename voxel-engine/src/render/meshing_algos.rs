@@ -9,6 +9,7 @@ use bevy::prelude::IVec2;
 use bevy::prelude::StandardMaterial;
 
 use crate::data::registries::texture::TextureRegistry;
+use crate::data::registries::variant::VariantRegistry;
 use crate::data::registries::Registries;
 use crate::data::tile::Face;
 
@@ -178,24 +179,25 @@ impl Mesher for GreedyMesher {
 
         // TODO: this is horribly inefficient when it comes to allocations, we should preserve a vec with a high capacity between meshing passes
         let mut quads = Vec::<MeshableQuad>::new();
+        let variants = self.registries.get_registry::<VariantRegistry>().unwrap();
 
         for face in [Face::Top, Face::Bottom] {
             for y in 0..Chunk::SIZE {
-                let slice = VoxelChunkSlice::new(face, access, cx.adjacency, y);
+                let slice = VoxelChunkSlice::new(face, y, access, cx.adjacency, &variants);
                 self.calculate_slice_quads(&slice, &mut quads)?;
             }
         }
 
         for face in [Face::North, Face::South] {
             for x in 0..Chunk::SIZE {
-                let slice = VoxelChunkSlice::new(face, access, cx.adjacency, x);
+                let slice = VoxelChunkSlice::new(face, x, access, cx.adjacency, &variants);
                 self.calculate_slice_quads(&slice, &mut quads)?;
             }
         }
 
         for face in [Face::East, Face::West] {
             for z in 0..Chunk::SIZE {
-                let slice = VoxelChunkSlice::new(face, access, cx.adjacency, z);
+                let slice = VoxelChunkSlice::new(face, z, access, cx.adjacency, &variants);
                 self.calculate_slice_quads(&slice, &mut quads)?;
             }
         }

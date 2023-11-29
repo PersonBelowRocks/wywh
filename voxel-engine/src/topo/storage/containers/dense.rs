@@ -6,7 +6,7 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use crate::topo::access::{HasBounds, ReadAccess, WriteAccess};
 use crate::topo::bounding_box::BoundingBox;
 use crate::topo::chunk::Chunk;
-use crate::topo::error::ChunkVoxelAccessError;
+use crate::topo::error::ChunkAccessError;
 use crate::util;
 
 use super::super::data_structures::DenseChunkStorage;
@@ -19,14 +19,11 @@ impl<T> HasBounds for DenseChunkStorage<T> {
 
 impl<T> WriteAccess for DenseChunkStorage<T> {
     type WriteType = T;
-    type WriteErr = ChunkVoxelAccessError;
+    type WriteErr = ChunkAccessError;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        let idx =
-            util::try_ivec3_to_usize_arr(pos).map_err(|_| ChunkVoxelAccessError::OutOfBounds)?;
-        let slot = self
-            .get_mut(idx)
-            .ok_or(ChunkVoxelAccessError::OutOfBounds)?;
+        let idx = util::try_ivec3_to_usize_arr(pos).map_err(|_| ChunkAccessError::OutOfBounds)?;
+        let slot = self.get_mut(idx).ok_or(ChunkAccessError::OutOfBounds)?;
 
         *slot = data;
         Ok(())
@@ -35,13 +32,12 @@ impl<T> WriteAccess for DenseChunkStorage<T> {
 
 impl<T: Copy> ReadAccess for DenseChunkStorage<T> {
     type ReadType = T;
-    type ReadErr = ChunkVoxelAccessError;
+    type ReadErr = ChunkAccessError;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        let idx =
-            util::try_ivec3_to_usize_arr(pos).map_err(|_| ChunkVoxelAccessError::OutOfBounds)?;
+        let idx = util::try_ivec3_to_usize_arr(pos).map_err(|_| ChunkAccessError::OutOfBounds)?;
         self.get_ref(idx)
-            .ok_or(ChunkVoxelAccessError::OutOfBounds)
+            .ok_or(ChunkAccessError::OutOfBounds)
             .cloned()
     }
 }
@@ -64,12 +60,12 @@ impl<'a, T: Copy> AutoDenseContainerAccess<'a, T> {
 }
 
 impl<'a, T: Copy> ReadAccess for AutoDenseContainerAccess<'a, T> {
-    type ReadErr = ChunkVoxelAccessError;
+    type ReadErr = ChunkAccessError;
     type ReadType = T;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
         if !Chunk::BOUNDING_BOX.contains(pos) {
-            Err(ChunkVoxelAccessError::OutOfBounds)?
+            Err(ChunkAccessError::OutOfBounds)?
         }
 
         match &self.container {
@@ -80,7 +76,7 @@ impl<'a, T: Copy> ReadAccess for AutoDenseContainerAccess<'a, T> {
 }
 
 impl<'a, T: Copy> WriteAccess for AutoDenseContainerAccess<'a, T> {
-    type WriteErr = ChunkVoxelAccessError;
+    type WriteErr = ChunkAccessError;
     type WriteType = T;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
@@ -118,20 +114,16 @@ impl<T: Copy> DenseChunkContainer<T> {
         }
     }
 
-    pub(crate) fn internal_set(
-        &mut self,
-        pos: IVec3,
-        data: T,
-    ) -> Result<(), ChunkVoxelAccessError> {
+    pub(crate) fn internal_set(&mut self, pos: IVec3, data: T) -> Result<(), ChunkAccessError> {
         match self {
-            Self::Empty => Err(ChunkVoxelAccessError::NotInitialized),
+            Self::Empty => Err(ChunkAccessError::NotInitialized),
             Self::Filled(b) => b.set(pos, data),
         }
     }
 
-    pub(crate) fn internal_get(&self, pos: IVec3) -> Result<T, ChunkVoxelAccessError> {
+    pub(crate) fn internal_get(&self, pos: IVec3) -> Result<T, ChunkAccessError> {
         match self {
-            Self::Empty => Err(ChunkVoxelAccessError::NotInitialized),
+            Self::Empty => Err(ChunkAccessError::NotInitialized),
             Self::Filled(b) => b.get(pos),
         }
     }

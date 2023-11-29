@@ -2,6 +2,7 @@ use bevy::{math::ivec2, prelude::IVec2};
 
 use crate::{
     data::{
+        registries::{variant::VariantRegistry, Registry, RegistryRef},
         texture::FaceTexture,
         tile::{Face, Transparency},
     },
@@ -64,19 +65,28 @@ impl ChunkSliceMask {
 pub(crate) struct VoxelChunkSlice<'a, 'b, A: ChunkAccess> {
     // mask: [[bool; Chunk::USIZE]; Chunk::USIZE],
     pub face: Face,
-    access: &'a A,
-    adjacency: &'b AdjacentTransparency,
     pub layer: i32,
+
+    access: &'a A,
+    adjacency: &'a AdjacentTransparency,
+    registry: &'b RegistryRef<'a, VariantRegistry>,
 }
 
 impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
-    pub fn new(face: Face, access: &'a A, adjacency: &'b AdjacentTransparency, layer: i32) -> Self {
+    pub fn new(
+        face: Face,
+        layer: i32,
+        access: &'a A,
+        adjacency: &'a AdjacentTransparency,
+        registry: &'b RegistryRef<'a, VariantRegistry>,
+    ) -> Self {
         Self {
-            // mask: [[false; Chunk::USIZE]; Chunk::USIZE],
             face,
+            layer,
+
             access,
             adjacency,
-            layer,
+            registry,
         }
     }
 
@@ -95,7 +105,12 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
         let pos_3d = self.face.axis().pos_in_3d(pos, self.layer);
         let vox = self.access.get(pos_3d)?;
 
-        Ok(vox.model.map(|m| m.texture(self.face)))
+        let variant = self.registry.get_by_id(vox.variant);
+
+        Ok(variant
+            .model
+            .and_then(|vm| vm.as_block_model())
+            .map(|bm| bm.texture(self.face)))
     }
 
     pub fn get_transparency_above(&self, pos: IVec2) -> Option<Transparency> {

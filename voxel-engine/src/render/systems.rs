@@ -1,6 +1,7 @@
 use bevy::{
     pbr::{wireframe::Wireframe, ExtendedMaterial},
     prelude::*,
+    render::texture::ImageSampler,
 };
 
 use crate::{
@@ -72,4 +73,12 @@ pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
         })
         .insert((ChunkEntity, Chunk::BOUNDING_BOX.to_aabb(), Wireframe));
     }
+}
+
+pub(crate) fn configure_sampling(
+    atlas_handle: Res<VoxelTextureAtlas>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let texture = images.get_mut(&atlas_handle.0).unwrap();
+    texture.sampler = ImageSampler::nearest();
 }

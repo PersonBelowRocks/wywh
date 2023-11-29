@@ -5,16 +5,15 @@ use noise::{NoiseFn, Perlin};
 use parking_lot::RwLock;
 
 use crate::data::{
-    registries::Registries,
+    registries::{variant::VariantRegistry, Registries, Registry, RegistryId},
     tile::Transparency,
-    voxel::{BlockModel, VoxelModel},
 };
 
 use super::{
     access::{ChunkBounds, HasBounds, WriteAccess},
-    chunk::{Chunk, ChunkPos},
+    chunk::{Chunk, ChunkPos, VariantType},
     chunk_ref::ChunkVoxelInput,
-    error::{ChunkVoxelAccessError, GeneratorError},
+    error::{ChunkAccessError, GeneratorError},
     storage::{
         containers::{
             data_storage::SyncIndexedChunkContainer,
@@ -32,21 +31,18 @@ pub enum GeneratorChoice {
 
 pub struct GeneratorInputAccess<'a> {
     transparency: AutoDenseContainerAccess<'a, Transparency>,
-    models: &'a mut IndexedChunkStorage<BlockModel>,
+    variants: &'a mut IndexedChunkStorage<VariantType>,
 }
 
 impl<'a> ChunkBounds for GeneratorInputAccess<'a> {}
 
 impl<'a> WriteAccess for GeneratorInputAccess<'a> {
     type WriteType = ChunkVoxelInput;
-    type WriteErr = ChunkVoxelAccessError;
+    type WriteErr = ChunkAccessError;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
         self.transparency.set(pos, data.transparency)?;
-
-        if let Some(VoxelModel::Block(model)) = data.model {
-            self.models.set(pos, model);
-        }
+        self.variants.set(pos, data.variant)?;
 
         Ok(())
     }
@@ -54,14 +50,14 @@ impl<'a> WriteAccess for GeneratorInputAccess<'a> {
 
 pub struct GeneratorInput {
     transparency: DenseChunkContainer<Transparency>,
-    models: IndexedChunkStorage<BlockModel>,
+    variants: IndexedChunkStorage<VariantType>,
 }
 
 impl GeneratorInput {
     pub fn new() -> Self {
         Self {
             transparency: DenseChunkContainer::Empty,
-            models: IndexedChunkStorage::new(),
+            variants: IndexedChunkStorage::new(),
         }
     }
 
@@ -71,14 +67,14 @@ impl GeneratorInput {
                 &mut self.transparency,
                 Transparency::Transparent,
             ),
-            models: &mut self.models,
+            variants: &mut self.variants,
         }
     }
 
     pub fn to_chunk(self) -> Chunk {
         Chunk {
             transparency: SyncDenseChunkContainer(RwLock::new(self.transparency)),
-            models: SyncIndexedChunkContainer(RwLock::new(self.models)),
+            variants: SyncIndexedChunkContainer(RwLock::new(self.variants)),
         }
     }
 }
@@ -89,19 +85,29 @@ pub struct GenerateChunk {
     pub generator: GeneratorChoice,
 }
 
+#[derive(Copy, Clone)]
+struct GeneratorPalette {
+    void: RegistryId<VariantRegistry>,
+    debug: RegistryId<VariantRegistry>,
+}
+
 #[derive(Clone)]
 pub struct Generator {
-    registries: Registries,
+    palette: GeneratorPalette,
     noise: Perlin,
     scale: f64,
 }
 
 impl Generator {
-    pub fn new(seed: u32, registries: Registries) -> Self {
+    pub fn new(seed: u32, registries: &Registries) -> Self {
         let _noise = Perlin::new(seed);
+        let variants = registries.get_registry::<VariantRegistry>().unwrap();
 
         Self {
-            registries,
+            palette: GeneratorPalette {
+                void: variants.get_id("void").unwrap(),
+                debug: variants.get_id("debug").unwrap(),
+            },
             noise: Perlin::new(seed),
             scale: 0.1,
         }
@@ -121,8 +127,10 @@ impl Generator {
         access: &mut Acc,
     ) -> Result<(), GeneratorError<Acc::WriteErr>>
     where
-        Acc: WriteAccess<WriteType = ChunkVoxelInput> + HasBounds,
+        Acc: WriteAccess<WriteType = ChunkVoxelInput> + ChunkBounds,
     {
+        const THRESHOLD: f64 = 0.5;
+
         if !access.bounds().is_chunk() {
             Err(GeneratorError::AccessNotChunk)?
         }
@@ -134,10 +142,27 @@ impl Generator {
             for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
                 for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
                     let noise_pos = IVec3::new(ws_x, ws_y, ws_z).as_dvec3() * self.scale;
-                    let _ls_pos = IVec3::new(ls_x, ls_y, ls_z);
+                    let ls_pos = IVec3::new(ls_x, ls_y, ls_z);
 
-                    let _noise = self.noise.get(noise_pos.into());
-                    todo!()
+                    let noise = self.noise.get(noise_pos.into());
+
+                    if noise > THRESHOLD {
+                        access.set(
+                            ls_pos,
+                            ChunkVoxelInput {
+                                transparency: Transparency::Opaque,
+                                variant: self.palette.debug,
+                            },
+                        )?;
+                    } else {
+                        access.set(
+                            ls_pos,
+                            ChunkVoxelInput {
+                                transparency: Transparency::Transparent,
+                                variant: self.palette.void,
+                            },
+                        )?;
+                    }
                 }
             }
         }

@@ -9,14 +9,15 @@ use std::{
 use bevy::prelude::IVec3;
 
 use crate::data::{
+    registries::{variant::VariantRegistry, RegistryId},
     tile::Transparency,
     voxel::{BlockModel, VoxelModel},
 };
 
 use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
-    chunk::{Chunk, ChunkPos},
-    error::{ChunkRefAccessError, ChunkVoxelAccessError},
+    chunk::{Chunk, ChunkPos, VariantType},
+    error::{ChunkAccessError, ChunkRefAccessError},
     storage::containers::{
         data_storage::{SiccAccess, SiccReadAccess},
         dense::{SyncDenseContainerAccess, SyncDenseContainerReadAccess},
@@ -53,11 +54,11 @@ impl ChunkRef {
         self.treat_as_changed()?;
 
         let transparency_access = chunk.transparency.access();
-        let model_access = chunk.models.access();
+        let variant_access = chunk.variants.access();
 
         let x = Ok(f(ChunkRefVxlAccess {
             transparency: transparency_access,
-            models: model_access,
+            variants: variant_access,
         }));
         x
     }
@@ -70,11 +71,11 @@ impl ChunkRef {
         let chunk = self.chunk.upgrade().ok_or(ChunkRefAccessError::Unloaded)?;
 
         let voxel_access = chunk.transparency.read_access();
-        let model_access = chunk.models.read_access();
+        let variant_access = chunk.variants.read_access();
 
         let x = Ok(f(ChunkRefVxlReadAccess {
             transparency: voxel_access,
-            models: model_access,
+            variants: variant_access,
         }));
         x
     }
@@ -82,55 +83,49 @@ impl ChunkRef {
 
 pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher> {
     transparency: SyncDenseContainerReadAccess<'a, Transparency>,
-    models: SiccReadAccess<'a, BlockModel, S>,
+    variants: SiccReadAccess<'a, VariantType, S>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ChunkVoxelOutput {
     pub transparency: Transparency,
-    pub model: Option<BlockModel>,
+    pub variant: VariantType,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct ChunkVoxelInput {
     pub transparency: Transparency,
-    pub model: Option<VoxelModel>,
+    pub variant: RegistryId<VariantRegistry>,
 }
 
 pub struct ChunkRefVxlAccess<'a, S: BuildHasher> {
     transparency: SyncDenseContainerAccess<'a, Transparency>,
-    models: SiccAccess<'a, BlockModel, S>,
+    variants: SiccAccess<'a, VariantType, S>,
 }
 
 impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
-    type WriteErr = ChunkVoxelAccessError;
+    type WriteErr = ChunkAccessError;
     type WriteType = ChunkVoxelInput;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        match data.model {
-            None => {
-                self.transparency.set(pos, data.transparency)?;
-                self.models.set(pos, None)?;
-            }
-            Some(VoxelModel::Block(block_model)) => {
-                self.transparency.set(pos, data.transparency)?;
-                self.models.set(pos, Some(block_model))?;
-            }
-            _ => todo!(),
-        }
+        self.transparency.set(pos, data.transparency)?;
+        self.variants.set(pos, Some(data.variant))?;
 
         Ok(())
     }
 }
 
 impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlAccess<'a, S> {
-    type ReadErr = ChunkVoxelAccessError;
+    type ReadErr = ChunkAccessError;
     type ReadType = ChunkVoxelOutput;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
         Ok(ChunkVoxelOutput {
             transparency: self.transparency.get(pos)?,
-            model: self.models.get(pos)?,
+            variant: self
+                .variants
+                .get(pos)?
+                .ok_or(ChunkAccessError::NotInitialized)?,
         })
     }
 }
@@ -138,13 +133,16 @@ impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlAccess<'a, S> {
 impl<'a, S: BuildHasher> ChunkBounds for ChunkRefVxlAccess<'a, S> {}
 
 impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlReadAccess<'a, S> {
-    type ReadErr = ChunkVoxelAccessError;
+    type ReadErr = ChunkAccessError;
     type ReadType = ChunkVoxelOutput;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
         Ok(ChunkVoxelOutput {
             transparency: self.transparency.get(pos)?,
-            model: self.models.get(pos)?,
+            variant: self
+                .variants
+                .get(pos)?
+                .ok_or(ChunkAccessError::NotInitialized)?,
         })
     }
 }

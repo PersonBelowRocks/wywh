@@ -5,7 +5,7 @@ use crate::util::ConversionError;
 use super::storage::error::OutOfBounds;
 
 #[derive(te::Error, Debug, PartialEq, Eq)]
-pub enum ChunkVoxelAccessError {
+pub enum ChunkAccessError {
     /// Could not convert the position vector's components into [`usize`]. (Usually [`i32`] -> [`usize`])
     #[error("{0}")]
     ConversionError(#[from] ConversionError),
@@ -17,7 +17,7 @@ pub enum ChunkVoxelAccessError {
     NotInitialized,
 }
 
-impl From<OutOfBounds> for ChunkVoxelAccessError {
+impl From<OutOfBounds> for ChunkAccessError {
     fn from(_value: OutOfBounds) -> Self {
         Self::OutOfBounds
     }

@@ -8,7 +8,11 @@ use bevy::{
 
 use crate::{data::registries::texture::TextureRegistryLoader, AppState};
 
-use super::registries::{texture::TextureRegistry, Registries};
+use super::{
+    registries::{texture::TextureRegistry, variant::VariantRegistryLoader, Registries, Registry},
+    tile::Transparency,
+    voxel::descriptor::{BlockModelDescriptor, VariantDescriptor, VoxelModelDescriptor},
+};
 
 #[derive(te::Error, Debug)]
 pub enum TextureRegistryError {
@@ -96,7 +100,33 @@ pub fn build_registries(world: &mut World) {
         }
     };
 
+    world.insert_resource(VoxelTextureAtlas(textures.atlas_texture().clone()));
+
+    let builtin_variants = [
+        VariantDescriptor {
+            label: "void",
+            transparency: Transparency::Transparent,
+            model: None,
+        },
+        VariantDescriptor {
+            label: "debug",
+            transparency: Transparency::Opaque,
+            model: Some(VoxelModelDescriptor::Block(BlockModelDescriptor::filled(
+                textures.get_id("textures\\debug_texture.png").unwrap(),
+            ))),
+        },
+    ];
+
+    let mut loader = VariantRegistryLoader::new();
+
+    for variant in builtin_variants {
+        loader.register(variant);
+    }
+
+    let variants = loader.build_registry(&textures);
+
     registries.add_registry(textures);
+    registries.add_registry(variants);
 
     world.insert_resource(registries);
 }

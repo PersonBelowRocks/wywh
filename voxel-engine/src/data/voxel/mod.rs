@@ -36,3 +36,12 @@ impl BlockModel {
 pub enum VoxelModel {
     Block(BlockModel),
 }
+
+impl VoxelModel {
+    pub fn as_block_model(self) -> Option<BlockModel> {
+        match self {
+            Self::Block(model) => Some(model),
+            _ => None,
+        }
+    }
+}

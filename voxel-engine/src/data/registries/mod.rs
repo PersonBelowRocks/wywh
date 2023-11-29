@@ -1,4 +1,4 @@
-use std::{any::type_name, fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{any::type_name, fmt::Debug, hash, marker::PhantomData, sync::Arc};
 
 use anymap::any::Any;
 use bevy::ecs::system::Resource;
@@ -32,6 +32,12 @@ impl<R: Registry + ?Sized> PartialEq for RegistryId<R> {
 }
 
 impl<R: Registry + ?Sized> Eq for RegistryId<R> {}
+
+impl<R: Registry + ?Sized> hash::Hash for RegistryId<R> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.id);
+    }
+}
 
 impl<R: Registry> Debug for RegistryId<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

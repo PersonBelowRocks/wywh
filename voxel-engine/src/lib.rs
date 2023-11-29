@@ -8,7 +8,7 @@ extern crate thiserror as te;
 extern crate num_derive;
 
 use bevy::{pbr::ExtendedMaterial, prelude::*};
-use data::registries::Registries;
+use data::{registries::Registries, voxel::descriptor::VariantDescriptor};
 use render::meshing_algos::SimplePbrMesher;
 use topo::{
     generator::{GenerateChunk, Generator, GeneratorChoice},
@@ -21,11 +21,11 @@ pub mod topo;
 pub mod util;
 
 use crate::{
-    data::systems::{check_textures, load_textures},
+    data::systems::{build_registries, check_textures, load_textures},
     render::{
         greedy_mesh_material::GreedyMeshMaterial,
         meshing_algos::GreedyMesher,
-        systems::{build_meshes, insert_meshes, setup_mesh_builder},
+        systems::{build_meshes, configure_sampling, insert_meshes, setup_mesh_builder},
     },
     topo::systems::generate_chunks_from_events,
 };
@@ -87,7 +87,10 @@ impl Plugin for VoxelPlugin {
         app.add_systems(
             OnEnter(AppState::Finished),
             (
+                build_registries,
+                apply_deferred,
                 setup_mesh_builder::<Hqm, Lqm>,
+                configure_sampling,
                 apply_deferred,
                 setup,
                 generate_debug_chunks,
@@ -151,7 +154,7 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
     cmds.insert_resource(EngineThreadPool::new(available_parallelism.into()));
     cmds.insert_resource(DefaultGenerator(Generator::new(
         112456754,
-        registries.clone(),
+        registries.as_ref(),
     )));
 
     // let mesh_builder = ParallelMeshBuilder::new(

@@ -5,7 +5,7 @@ use crate::data::tile::Transparency;
 use crate::topo::access::ReadAccess;
 use crate::topo::chunk::{Chunk, ChunkPos};
 use crate::topo::chunk_ref::ChunkVoxelOutput;
-use crate::topo::error::ChunkVoxelAccessError;
+use crate::topo::error::ChunkAccessError;
 use crate::topo::realm::ChunkManager;
 use crate::util::SquareArray;
 
@@ -70,7 +70,7 @@ pub(crate) fn mask_pos_with_face(face: Face, pos: IVec3) -> IVec2 {
 }
 
 fn transparency_for_adjacent_chunk_face(
-    access: impl ReadAccess<ReadType = ChunkVoxelOutput, ReadErr = ChunkVoxelAccessError>,
+    access: impl ReadAccess<ReadType = ChunkVoxelOutput, ReadErr = ChunkAccessError>,
     face: Face,
 ) -> Option<ChunkFace<Transparency>> {
     let mut chunk_face_transparency = ChunkFace::<Transparency>::new(face);
@@ -81,7 +81,7 @@ fn transparency_for_adjacent_chunk_face(
 
             let result = access.get(position);
 
-            if let Err(ChunkVoxelAccessError::NotInitialized) = result {
+            if let Err(ChunkAccessError::NotInitialized) = result {
                 return None;
             }
 

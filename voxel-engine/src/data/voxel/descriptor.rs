@@ -45,3 +45,12 @@ pub struct BlockModelDescriptor {
     pub textures: FaceMap<RegistryId<TextureRegistry>>,
     pub rotations: FaceMap<FaceTextureRotation>,
 }
+
+impl BlockModelDescriptor {
+    pub fn filled(texture: RegistryId<TextureRegistry>) -> Self {
+        Self {
+            textures: FaceMap::filled(texture),
+            rotations: FaceMap::filled(FaceTextureRotation::default()),
+        }
+    }
+}

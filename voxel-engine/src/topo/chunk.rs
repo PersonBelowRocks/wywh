@@ -4,8 +4,9 @@ use super::bounding_box::BoundingBox;
 use super::storage::containers::data_storage::SyncIndexedChunkContainer;
 use super::storage::containers::dense::{DenseChunkContainer, SyncDenseChunkContainer};
 use super::storage::data_structures::DenseChunkStorage;
+use crate::data::registries::variant::VariantRegistry;
+use crate::data::registries::RegistryId;
 use crate::data::tile::Transparency;
-use crate::data::voxel::BlockModel;
 
 const CHUNK_SIZE: usize = 16;
 
@@ -24,9 +25,11 @@ impl ChunkPos {
     }
 }
 
+pub type VariantType = RegistryId<VariantRegistry>;
+
 pub struct Chunk {
     pub transparency: SyncDenseChunkContainer<Transparency>,
-    pub models: SyncIndexedChunkContainer<BlockModel>,
+    pub variants: SyncIndexedChunkContainer<VariantType>,
 }
 
 #[allow(dead_code)]
@@ -43,7 +46,7 @@ impl Chunk {
     pub fn new(voxel_data: DenseChunkStorage<Transparency>) -> Self {
         Self {
             transparency: SyncDenseChunkContainer::new(voxel_data),
-            models: SyncIndexedChunkContainer::new(),
+            variants: SyncIndexedChunkContainer::new(),
         }
     }
 
@@ -51,7 +54,7 @@ impl Chunk {
     pub fn new_from_container(container: DenseChunkContainer<Transparency>) -> Self {
         Self {
             transparency: SyncDenseChunkContainer(container.into()),
-            models: SyncIndexedChunkContainer::new(),
+            variants: SyncIndexedChunkContainer::new(),
         }
     }
 
@@ -59,7 +62,7 @@ impl Chunk {
     pub fn empty() -> Self {
         Self {
             transparency: SyncDenseChunkContainer::empty(),
-            models: SyncIndexedChunkContainer::new(),
+            variants: SyncIndexedChunkContainer::new(),
         }
     }
 }
