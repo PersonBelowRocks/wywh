@@ -11,7 +11,6 @@ use bevy::prelude::IVec3;
 use crate::data::{
     registries::{variant::VariantRegistry, RegistryId},
     tile::Transparency,
-    voxel::{BlockModel, VoxelModel},
 };
 
 use super::{

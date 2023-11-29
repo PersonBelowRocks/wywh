@@ -8,7 +8,7 @@ extern crate thiserror as te;
 extern crate num_derive;
 
 use bevy::{pbr::ExtendedMaterial, prelude::*};
-use data::{registries::Registries, voxel::descriptor::VariantDescriptor};
+use data::registries::Registries;
 use render::meshing_algos::SimplePbrMesher;
 use topo::{
     generator::{GenerateChunk, Generator, GeneratorChoice},
