@@ -4,7 +4,7 @@ use bevy::{
     asset::{AssetId, Assets, Handle},
     math::Vec2,
     render::texture::Image,
-    sprite::{TextureAtlas, TextureAtlasBuilder, TextureAtlasBuilderError},
+    sprite::{TextureAtlas, TextureAtlasBuilder},
 };
 
 use super::{error::TextureRegistryError, Registry, RegistryId};

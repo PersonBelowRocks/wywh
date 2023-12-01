@@ -1,10 +1,6 @@
 use crate::{
     data::{
-        registries::{
-            error::{TextureNotFound, VariantRegistryError},
-            texture::TextureRegistry,
-            Registry, RegistryId,
-        },
+        registries::{error::TextureNotFound, texture::TextureRegistry, Registry},
         texture::{FaceTexture, FaceTextureRotation},
         tile::{Face, Transparency},
     },

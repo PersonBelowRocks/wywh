@@ -1,8 +1,4 @@
-use bevy::{
-    pbr::{wireframe::Wireframe, ExtendedMaterial},
-    prelude::*,
-    render::texture::ImageSampler,
-};
+use bevy::{pbr::ExtendedMaterial, prelude::*, render::texture::ImageSampler};
 
 use crate::{
     data::{registries::Registries, systems::VoxelTextureAtlas},

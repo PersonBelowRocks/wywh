@@ -1,17 +1,11 @@
-use std::any::type_name;
-
-use bevy::{
-    asset::{AssetPath, LoadedFolder, UntypedAssetIdConversionError},
-    prelude::*,
-    sprite::TextureAtlasBuilderError,
-};
+use bevy::{asset::LoadedFolder, prelude::*};
 
 use crate::{data::registries::texture::TextureRegistryLoader, AppState};
 
 use super::{
     registries::{
         error::TextureRegistryError, texture::TextureRegistry, variant::VariantRegistryLoader,
-        Registries, Registry,
+        Registries,
     },
     tile::Transparency,
     voxel::descriptor::{BlockModelDescriptor, VariantDescriptor, VoxelModelDescriptor},
