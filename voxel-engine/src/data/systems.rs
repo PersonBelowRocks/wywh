@@ -8,7 +8,7 @@ use super::{
         Registries,
     },
     tile::Transparency,
-    voxel::descriptor::{BlockModelDescriptor, VariantDescriptor, VoxelModelDescriptor},
+    voxel::descriptor::{self, BlockModelDescriptor, VariantDescriptor, VoxelModelDescriptor},
 };
 
 #[derive(Resource, Default)]
@@ -82,24 +82,28 @@ pub fn build_registries(world: &mut World) {
     world.insert_resource(VoxelTextureAtlas(textures.atlas_texture().clone()));
 
     let builtin_variants = [
-        VariantDescriptor {
-            label: "void",
-            transparency: Transparency::Transparent,
-            model: None,
-        },
-        VariantDescriptor {
-            label: "debug",
-            transparency: Transparency::Opaque,
-            model: Some(VoxelModelDescriptor::Block(BlockModelDescriptor::filled(
-                "textures\\debug_texture.png",
-            ))),
-        },
+        (
+            "void",
+            VariantDescriptor {
+                transparency: Transparency::Transparent,
+                model: None,
+            },
+        ),
+        (
+            "debug",
+            VariantDescriptor {
+                transparency: Transparency::Opaque,
+                model: Some(VoxelModelDescriptor::Block(BlockModelDescriptor::filled(
+                    "textures\\debug_texture.png".into(),
+                ))),
+            },
+        ),
     ];
 
     let mut loader = VariantRegistryLoader::new();
 
-    for variant in builtin_variants {
-        loader.register(variant);
+    for (label, descriptor) in builtin_variants {
+        loader.register(label, descriptor);
     }
 
     let variants = loader.build_registry(&textures);

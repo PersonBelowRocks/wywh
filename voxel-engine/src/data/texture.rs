@@ -3,13 +3,31 @@ use ordered_float::NotNan;
 
 use crate::util::notnan_arr;
 
-#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(
+    Default, Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize,
+)]
 pub enum FaceTextureRotation {
     #[default]
+    #[serde(rename = "u")]
     Up = 0,
+    #[serde(rename = "d")]
     Down = 1,
+    #[serde(rename = "l")]
     Left = 2,
+    #[serde(rename = "r")]
     Right = 3,
+}
+
+impl FaceTextureRotation {
+    pub fn from_str(string: &str) -> Option<Self> {
+        match string {
+            "u" => Some(Self::Up),
+            "d" => Some(Self::Down),
+            "l" => Some(Self::Left),
+            "r" => Some(Self::Right),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]

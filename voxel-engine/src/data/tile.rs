@@ -2,10 +2,23 @@ use bevy::prelude::*;
 
 use crate::util::Axis3D;
 
-#[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq, dm::Display)]
+#[derive(
+    Copy,
+    Clone,
+    Default,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    dm::Display,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 pub enum Transparency {
     #[default]
+    #[serde(rename = "opaque")]
     Opaque,
+    #[serde(rename = "trans")]
     Transparent,
 }
 
@@ -21,13 +34,47 @@ impl Transparency {
 
 /// Faces of a cube
 #[allow(dead_code)]
-#[derive(FromPrimitive, ToPrimitive, PartialEq, Eq, Hash, Debug, Copy, Clone)]
+#[derive(
+    FromPrimitive,
+    ToPrimitive,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Copy,
+    Clone,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 pub enum Face {
+    #[serde(rename(serialize = "t"))]
+    #[serde(alias = "top")]
+    #[serde(alias = "t")]
     Top = 0,
+
+    #[serde(rename(serialize = "b"))]
+    #[serde(alias = "bottom")]
+    #[serde(alias = "b")]
     Bottom = 1,
+
+    #[serde(rename(serialize = "n"))]
+    #[serde(alias = "north")]
+    #[serde(alias = "n")]
     North = 2,
+
+    #[serde(rename(serialize = "e"))]
+    #[serde(alias = "east")]
+    #[serde(alias = "e")]
     East = 3,
+
+    #[serde(rename(serialize = "s"))]
+    #[serde(alias = "south")]
+    #[serde(alias = "s")]
     South = 4,
+
+    #[serde(rename(serialize = "w"))]
+    #[serde(alias = "west")]
+    #[serde(alias = "w")]
     West = 5,
 }
 

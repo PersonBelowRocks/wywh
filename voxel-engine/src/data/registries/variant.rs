@@ -13,19 +13,19 @@ pub struct VariantRegistryEntry<'a> {
     pub model: &'a Option<VoxelModel>,
 }
 
-pub struct VariantRegistryLoader<'a, 'b> {
-    descriptors: Vec<VariantDescriptor<'a, 'b>>,
+pub struct VariantRegistryLoader {
+    descriptors: hb::HashMap<String, VariantDescriptor>,
 }
 
-impl<'a, 'b> VariantRegistryLoader<'a, 'b> {
+impl VariantRegistryLoader {
     pub fn new() -> Self {
         Self {
-            descriptors: Vec::new(),
+            descriptors: hb::HashMap::new(),
         }
     }
 
-    pub fn register(&mut self, descriptor: VariantDescriptor<'a, 'b>) {
-        self.descriptors.push(descriptor);
+    pub fn register(&mut self, label: impl Into<String>, descriptor: VariantDescriptor) {
+        self.descriptors.insert(label.into(), descriptor);
     }
 
     pub fn build_registry(
@@ -37,8 +37,7 @@ impl<'a, 'b> VariantRegistryLoader<'a, 'b> {
             ahash::RandomState::new(),
         );
 
-        for descriptor in self.descriptors.into_iter() {
-            let label = descriptor.label.to_string();
+        for (label, descriptor) in self.descriptors.into_iter() {
             let model = descriptor
                 .model
                 .map(|m| m.create_voxel_model(texture_registry))

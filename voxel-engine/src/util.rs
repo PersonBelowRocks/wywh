@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use dashmap::DashMap;
 use ordered_float::NotNan;
-use std::{array, fmt::Debug};
+use std::{array, fmt::Debug, marker::PhantomData};
 
 use crate::data::tile::Face;
 
@@ -85,6 +85,53 @@ impl AxisMagnitude {
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct FaceMap<T>([Option<T>; 6]);
 
+impl<T: serde::Serialize> serde::Serialize for FaceMap<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+
+        let mut sermap = serializer.serialize_map(Some(self.len()))?;
+
+        self.map(|face, value| sermap.serialize_entry(&face, value));
+
+        sermap.end()
+    }
+}
+
+impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for FaceMap<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_map(FaceMapVisitor(PhantomData))
+    }
+}
+
+struct FaceMapVisitor<T>(PhantomData<T>);
+
+impl<'de, T: serde::Deserialize<'de>> serde::de::Visitor<'de> for FaceMapVisitor<T> {
+    type Value = FaceMap<T>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a map with keyed with the faces of a cube")
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        let mut out = FaceMap::<T>::new();
+
+        while let Some((face, value)) = map.next_entry::<Face, T>()? {
+            out.set(face, value);
+        }
+
+        Ok(out)
+    }
+}
+
 impl<T> FaceMap<T> {
     pub fn new() -> Self {
         Self(array::from_fn(|_| None))
@@ -118,6 +165,10 @@ impl<T> FaceMap<T> {
         }
 
         mapped
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.iter().filter(|&v| v.is_some()).count()
     }
 }
 
@@ -206,4 +257,27 @@ mod tests {
         assert_eq!(arr, circular_shift(arr, 0));
         assert_eq!(arr, circular_shift(arr, -0));
     }
+
+    #[test]
+    fn test_facemap_deserialize() {
+        let raw = r#"
+            {
+                north: 42,
+                w: 12,
+                east: 100,
+                b: 0,
+            }
+        "#;
+
+        let map = deser_hjson::from_str::<FaceMap<u32>>(raw).unwrap();
+        let mut expected_map = FaceMap::new();
+        expected_map.set(Face::North, 42);
+        expected_map.set(Face::West, 12);
+        expected_map.set(Face::East, 100);
+        expected_map.set(Face::Bottom, 0);
+
+        assert_eq!(expected_map, map);
+    }
+
+    // TODO: FaceMap serialization test
 }
