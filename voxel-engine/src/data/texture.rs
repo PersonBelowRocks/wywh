@@ -21,10 +21,10 @@ pub enum FaceTextureRotation {
 impl FaceTextureRotation {
     pub fn from_str(string: &str) -> Option<Self> {
         match string {
-            "u" => Some(Self::Up),
-            "d" => Some(Self::Down),
-            "l" => Some(Self::Left),
-            "r" => Some(Self::Right),
+            "u" | "up" => Some(Self::Up),
+            "d" | "down" => Some(Self::Down),
+            "l" | "left" => Some(Self::Left),
+            "r" | "right" => Some(Self::Right),
             _ => None,
         }
     }

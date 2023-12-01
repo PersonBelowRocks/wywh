@@ -7,10 +7,16 @@ use std::{
 
 use super::{error::VariantFileLoaderError, voxel::descriptor::VariantDescriptor};
 
+pub static VARIANT_FILE_EXTENSION: &'static str = "variant";
+
 fn path_to_label(path: &Path) -> Option<&str> {
+    path.extension()
+        .and_then(OsStr::to_str)
+        .filter(|&e| e == VARIANT_FILE_EXTENSION)?;
+
     path.file_stem()
         .and_then(OsStr::to_str)
-        .filter(|&s| s.contains(':'))
+        .filter(|&s| !s.contains(':'))
 }
 
 pub struct VariantFileLoader {
@@ -29,21 +35,31 @@ impl VariantFileLoader {
             let entry = entry?;
 
             if entry.file_type()?.is_file() {
-                let path = entry.path();
-                let mut file = File::open(&path)?;
-
-                let mut buffer = Vec::<u8>::with_capacity(file.metadata()?.len() as _);
-                file.read_to_end(&mut buffer)?;
-
-                let Some(label) = path_to_label(&path) else {
-                    return Err(VariantFileLoaderError::InvalidFileName(path));
-                };
-
-                self.raw_descriptors.insert(label.into(), buffer);
+                self.load_file(entry.path())?;
             }
         }
 
         Ok(())
+    }
+
+    pub fn load_file(&mut self, path: impl AsRef<Path>) -> Result<(), VariantFileLoaderError> {
+        let path = path.as_ref();
+
+        let Some(label) = path_to_label(&path) else {
+            return Err(VariantFileLoaderError::InvalidFileName(path.to_path_buf()));
+        };
+
+        let mut file = File::open(&path)?;
+
+        let mut buffer = Vec::<u8>::with_capacity(file.metadata()?.len() as _);
+        file.read_to_end(&mut buffer)?;
+
+        self.add_raw_buffer(label.into(), buffer);
+        Ok(())
+    }
+
+    pub fn add_raw_buffer(&mut self, label: String, buffer: Vec<u8>) {
+        self.raw_descriptors.insert(label, buffer);
     }
 
     pub fn parse(&self, label: &str) -> Result<VariantDescriptor, VariantFileLoaderError> {
