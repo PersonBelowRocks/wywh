@@ -9,28 +9,13 @@ use bevy::{
 use crate::{data::registries::texture::TextureRegistryLoader, AppState};
 
 use super::{
-    registries::{texture::TextureRegistry, variant::VariantRegistryLoader, Registries, Registry},
+    registries::{
+        error::TextureRegistryError, texture::TextureRegistry, variant::VariantRegistryLoader,
+        Registries, Registry,
+    },
     tile::Transparency,
     voxel::descriptor::{BlockModelDescriptor, VariantDescriptor, VoxelModelDescriptor},
 };
-
-#[derive(te::Error, Debug)]
-pub enum TextureRegistryError {
-    #[error("Could not get path for handle {0:?}")]
-    CannotMakePath(UntypedHandle),
-    #[error("World does not contain resource '{}'", type_name::<VoxelTextureFolder>())]
-    VoxelTextureFolderNotFound,
-    #[error("Voxel texture folder asset is not loaded")]
-    VoxelTextureFolderNotLoaded,
-    #[error("Atlas builder error: {0}")]
-    AtlasBuilderError(#[from] TextureAtlasBuilderError),
-    #[error("Unexpected asset ID type: {0}")]
-    UnexpectedAssetIdType(#[from] UntypedAssetIdConversionError),
-    #[error("{0:?} was not a square image")]
-    InvalidImageDimensions(AssetPath<'static>),
-    #[error("Texture does not exist: {0:?}")]
-    TextureDoesntExist(AssetPath<'static>),
-}
 
 #[derive(Resource, Default)]
 pub struct VoxelTextureFolder(pub Handle<LoadedFolder>);
@@ -80,7 +65,7 @@ fn create_texture_registry(
         }
 
         info!("Loaded texture at path: '{}'", path);
-        registry_loader.register(path.to_string(), id, texture);
+        registry_loader.register(path.to_string(), id);
     }
 
     Ok(registry_loader.build_registry(images.as_mut())?)

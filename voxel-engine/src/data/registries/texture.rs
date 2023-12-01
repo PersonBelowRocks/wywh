@@ -7,36 +7,42 @@ use bevy::{
     sprite::{TextureAtlas, TextureAtlasBuilder, TextureAtlasBuilderError},
 };
 
-use super::{Registry, RegistryId};
+use super::{error::TextureRegistryError, Registry, RegistryId};
 
 pub struct TextureRegistryLoader {
     map: indexmap::IndexMap<String, AssetId<Image>, ahash::RandomState>,
-    builder: TextureAtlasBuilder,
 }
 
 impl TextureRegistryLoader {
     pub fn new() -> Self {
         Self {
             map: indexmap::IndexMap::with_hasher(ahash::RandomState::new()),
-            builder: TextureAtlasBuilder::default(),
         }
     }
 
-    pub fn register(&mut self, label: impl Into<String>, id: AssetId<Image>, tex: &Image) {
-        self.builder.add_texture(id, tex);
+    pub fn register(&mut self, label: impl Into<String>, id: AssetId<Image>) {
         self.map.insert(label.into(), id);
     }
 
     pub fn build_registry(
         self,
         textures: &mut Assets<Image>,
-    ) -> Result<TextureRegistry, TextureAtlasBuilderError> {
+    ) -> Result<TextureRegistry, TextureRegistryError> {
         let mut registry_map =
             hb::HashMap::<String, RegistryId<TextureRegistry>, ahash::RandomState>::with_capacity_and_hasher(
                 self.map.len(),
                 ahash::RandomState::new(),
             );
-        let atlas = self.builder.finish(textures)?;
+
+        let mut builder = TextureAtlasBuilder::default();
+        for id in self.map.values().cloned() {
+            let tex = textures
+                .get(id)
+                .ok_or(TextureRegistryError::TextureNotLoaded(id))?;
+            builder.add_texture(id, tex);
+        }
+
+        let atlas = builder.finish(textures)?;
 
         registry_map.extend(
             self.map
