@@ -12,6 +12,8 @@ use crate::data::systems::VoxelTextureFolder;
 pub enum TextureRegistryError {
     #[error("Could not get path for handle {0:?}")]
     CannotMakePath(UntypedHandle),
+    #[error("Bad file name for texture: '{0}'")]
+    BadFileName(AssetPath<'static>),
     #[error("World does not contain resource '{}'", type_name::<VoxelTextureFolder>())]
     VoxelTextureFolderNotFound,
     #[error("Voxel texture folder asset is not loaded")]

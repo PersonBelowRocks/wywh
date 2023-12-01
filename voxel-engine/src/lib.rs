@@ -118,9 +118,11 @@ impl Plugin for VoxelPlugin {
 }
 
 fn generate_debug_chunks(mut events: EventWriter<GenerateChunk>) {
-    for x in -1..=1 {
-        for y in -1..=1 {
-            for z in -1..=1 {
+    const DIMS: i32 = 4;
+
+    for x in -DIMS..=DIMS {
+        for y in -DIMS..=DIMS {
+            for z in -DIMS..=DIMS {
                 events.send(GenerateChunk {
                     pos: IVec3::new(x, y, z).into(),
                     generator: GeneratorChoice::Default,

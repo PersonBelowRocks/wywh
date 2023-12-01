@@ -1,0 +1,12 @@
+{
+    trans: "opaque",
+    model: {
+        type: "block",
+        top: "debug_texture",
+        bottom: "debug_texture",
+        north: "debug_texture",
+        east: "debug_texture",
+        south: "debug_texture",
+        west: "debug_texture",
+    }
+}

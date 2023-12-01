@@ -1,3 +1,5 @@
+use std::ffi::OsStr;
+
 use bevy::{asset::LoadedFolder, prelude::*};
 
 use crate::{data::registries::texture::TextureRegistryLoader, AppState};
@@ -59,7 +61,12 @@ fn create_texture_registry(
         }
 
         info!("Loaded texture at path: '{}'", path);
-        registry_loader.register(path.to_string(), id);
+        let label = path
+            .path()
+            .file_stem()
+            .and_then(OsStr::to_str)
+            .ok_or(TextureRegistryError::BadFileName(path.clone()))?;
+        registry_loader.register(label.to_string(), id);
     }
 
     Ok(registry_loader.build_registry(images.as_mut())?)
@@ -94,7 +101,7 @@ pub fn build_registries(world: &mut World) {
             VariantDescriptor {
                 transparency: Transparency::Opaque,
                 model: Some(VoxelModelDescriptor::Block(BlockModelDescriptor::filled(
-                    "textures\\debug_texture.png".into(),
+                    "debug_texture".into(),
                 ))),
             },
         ),
