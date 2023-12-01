@@ -17,6 +17,7 @@ use ve::topo::generator::{GenerateChunk, GeneratorChoice};
 
 fn main() {
     App::new()
+        .insert_resource(ClearColor(Color::rgb(0.4, 0.75, 0.9)))
         .add_plugins((
             DefaultPlugins.set(RenderPlugin {
                 render_creation: WgpuSettings {

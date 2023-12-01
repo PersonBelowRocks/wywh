@@ -1,38 +1,54 @@
 use crate::{
     data::{
-        registries::{texture::TextureRegistry, Registry, RegistryId},
+        registries::{
+            error::{TextureNotFound, VariantRegistryError},
+            texture::TextureRegistry,
+            Registry, RegistryId,
+        },
         texture::{FaceTexture, FaceTextureRotation},
-        tile::Transparency,
+        tile::{Face, Transparency},
     },
     util::FaceMap,
 };
 
 use super::{BlockModel, VoxelModel};
 
-pub struct VariantDescriptor<'lbl> {
+pub struct VariantDescriptor<'lbl, 'mdl> {
     pub label: &'lbl str,
-    pub model: Option<VoxelModelDescriptor>,
+    pub model: Option<VoxelModelDescriptor<'mdl>>,
     pub transparency: Transparency,
 }
 
 #[derive(Clone)]
 #[non_exhaustive]
-pub enum VoxelModelDescriptor {
-    Block(BlockModelDescriptor),
+pub enum VoxelModelDescriptor<'a> {
+    Block(BlockModelDescriptor<'a>),
 }
 
-impl VoxelModelDescriptor {
-    pub fn create_voxel_model(&self, texture_registry: &TextureRegistry) -> VoxelModel {
+impl<'a> VoxelModelDescriptor<'a> {
+    pub fn create_voxel_model(
+        &self,
+        texture_registry: &TextureRegistry,
+    ) -> Result<VoxelModel, TextureNotFound> {
         match self {
             VoxelModelDescriptor::Block(model) => {
-                let textures = model.textures.map(|face, &id| {
-                    let rotation = *model.rotations.get(face).unwrap();
-                    let texture = texture_registry.get_by_id(id);
+                let mut textures = FaceMap::new();
 
-                    FaceTexture::new_rotated(texture.texture_pos, rotation)
-                });
+                for face in Face::FACES {
+                    if let Some(&label) = model.textures.get(face) {
+                        let rotation = *model.rotations.get(face).unwrap();
+                        let texture = texture_registry
+                            .get_by_label(label)
+                            .ok_or(TextureNotFound(label.into()))?;
 
-                VoxelModel::Block(BlockModel { textures })
+                        textures.set(
+                            face,
+                            FaceTexture::new_rotated(texture.texture_pos, rotation),
+                        )
+                    }
+                }
+
+                Ok(VoxelModel::Block(BlockModel { textures }))
             }
 
             _ => todo!(),
@@ -41,15 +57,15 @@ impl VoxelModelDescriptor {
 }
 
 #[derive(Clone, Debug)]
-pub struct BlockModelDescriptor {
-    pub textures: FaceMap<RegistryId<TextureRegistry>>,
+pub struct BlockModelDescriptor<'a> {
+    pub textures: FaceMap<&'a str>,
     pub rotations: FaceMap<FaceTextureRotation>,
 }
 
-impl BlockModelDescriptor {
-    pub fn filled(texture: RegistryId<TextureRegistry>) -> Self {
+impl<'a> BlockModelDescriptor<'a> {
+    pub fn filled(label: &'a str) -> Self {
         Self {
-            textures: FaceMap::filled(texture),
+            textures: FaceMap::filled(label),
             rotations: FaceMap::filled(FaceTextureRotation::default()),
         }
     }

@@ -112,7 +112,7 @@ pub fn build_registries(world: &mut World) {
             label: "debug",
             transparency: Transparency::Opaque,
             model: Some(VoxelModelDescriptor::Block(BlockModelDescriptor::filled(
-                textures.get_id("textures\\debug_texture.png").unwrap(),
+                "textures\\debug_texture.png",
             ))),
         },
     ];
@@ -124,9 +124,13 @@ pub fn build_registries(world: &mut World) {
     }
 
     let variants = loader.build_registry(&textures);
+    if let Err(error) = variants {
+        error!("Error building variant registry: '{error}'");
+        panic!();
+    }
 
     registries.add_registry(textures);
-    registries.add_registry(variants);
+    registries.add_registry(variants.unwrap());
 
     world.insert_resource(registries);
 }

@@ -71,7 +71,7 @@ pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
 
             ..default()
         })
-        .insert((ChunkEntity, Chunk::BOUNDING_BOX.to_aabb(), Wireframe));
+        .insert((ChunkEntity, Chunk::BOUNDING_BOX.to_aabb()));
     }
 }
 

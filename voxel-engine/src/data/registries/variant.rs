@@ -5,7 +5,7 @@ use crate::data::{
     voxel::{descriptor::VariantDescriptor, VoxelModel},
 };
 
-use super::{texture::TextureRegistry, Registry, RegistryId};
+use super::{error::VariantRegistryError, texture::TextureRegistry, Registry, RegistryId};
 
 #[derive(Debug, Clone)]
 pub struct VariantRegistryEntry<'a> {
@@ -13,22 +13,25 @@ pub struct VariantRegistryEntry<'a> {
     pub model: &'a Option<VoxelModel>,
 }
 
-pub struct VariantRegistryLoader<'a> {
-    descriptors: Vec<VariantDescriptor<'a>>,
+pub struct VariantRegistryLoader<'a, 'b> {
+    descriptors: Vec<VariantDescriptor<'a, 'b>>,
 }
 
-impl<'a> VariantRegistryLoader<'a> {
+impl<'a, 'b> VariantRegistryLoader<'a, 'b> {
     pub fn new() -> Self {
         Self {
             descriptors: Vec::new(),
         }
     }
 
-    pub fn register(&mut self, descriptor: VariantDescriptor<'a>) {
+    pub fn register(&mut self, descriptor: VariantDescriptor<'a, 'b>) {
         self.descriptors.push(descriptor);
     }
 
-    pub fn build_registry(self, texture_registry: &TextureRegistry) -> VariantRegistry {
+    pub fn build_registry(
+        self,
+        texture_registry: &TextureRegistry,
+    ) -> Result<VariantRegistry, VariantRegistryError> {
         let mut map = IndexMap::<String, Variant, ahash::RandomState>::with_capacity_and_hasher(
             self.descriptors.len(),
             ahash::RandomState::new(),
@@ -36,18 +39,21 @@ impl<'a> VariantRegistryLoader<'a> {
 
         for descriptor in self.descriptors.into_iter() {
             let label = descriptor.label.to_string();
+            let model = descriptor
+                .model
+                .map(|m| m.create_voxel_model(texture_registry))
+                .map(|r| r.map(Some))
+                .unwrap_or(Ok(None))?;
 
             let variant = Variant {
                 transparency: descriptor.transparency,
-                model: descriptor
-                    .model
-                    .map(|m| m.create_voxel_model(texture_registry)),
+                model,
             };
 
             map.insert(label, variant);
         }
 
-        VariantRegistry { map }
+        Ok(VariantRegistry { map })
     }
 }
 
