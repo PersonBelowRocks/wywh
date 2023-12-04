@@ -155,8 +155,8 @@ impl MeshableQuad {
 
         match self.face {
             Face::Top | Face::Bottom => [
-                vec2(lx, hy), vec2(hx, hy),
-                vec2(lx, ly), vec2(hx, ly)
+                vec2(hx, hy), vec2(lx, hy),
+                vec2(hx, ly), vec2(lx, ly)
             ].circular_shift(2),
             Face::North => [
                 vec2(lx, hy), vec2(hx, hy),
