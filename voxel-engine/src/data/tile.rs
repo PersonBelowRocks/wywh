@@ -176,4 +176,9 @@ impl Face {
     pub fn is_horizontal(self) -> bool {
         matches!(self, Self::North | Self::East | Self::South | Self::West)
     }
+
+    #[inline]
+    pub fn is_orthogonal(self, other: Self) -> bool {
+        self.normal().dot(other.normal()) == 0
+    }
 }

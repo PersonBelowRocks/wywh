@@ -8,6 +8,7 @@ use super::{
 };
 
 pub mod descriptor;
+pub mod rotations;
 
 #[derive(Clone)]
 pub struct VoxelProperties {
