@@ -212,7 +212,8 @@ impl MeshableQuad {
         mesh.normals.extend([normal; 4]);
         mesh.positions.extend(positions);
         mesh.uvs.extend(uvs);
-        mesh.misc_data.extend([self.quad_tex.rotation as u32; 4]);
+        mesh.misc_data
+            .extend([self.quad_tex.rotation.inner() as u32; 4]);
         mesh.textures.extend([self.quad_tex.pos; 4]);
     }
 }

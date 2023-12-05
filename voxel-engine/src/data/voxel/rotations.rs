@@ -2,17 +2,77 @@ use bevy::math::IVec3;
 
 use crate::data::tile::Face;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    serde::Deserialize,
+    serde::Serialize,
+    FromPrimitive,
+    ToPrimitive,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum BlockModelFace {
+    #[serde(alias = "u")]
     Up = 0,
+    #[serde(alias = "d")]
     Down = 1,
+    #[serde(alias = "l")]
     Left = 2,
+    #[serde(alias = "r")]
     Right = 3,
+    #[serde(alias = "f")]
     Front = 4,
+    #[serde(alias = "b")]
     Back = 5,
 }
 
-#[derive(Copy, Clone, Debug)]
+impl BlockModelFace {
+    pub fn to_usize(self) -> usize {
+        use num_traits::ToPrimitive;
+        ToPrimitive::to_usize(&self).unwrap()
+    }
+}
+
+impl BlockModelFace {
+    pub const FACES: [Self; 6] = [
+        Self::Up,
+        Self::Down,
+        Self::Left,
+        Self::Right,
+        Self::Front,
+        Self::Back,
+    ];
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BlockModelFaceMap<T>([Option<T>; 6]);
+
+impl<T> BlockModelFaceMap<T> {
+    pub fn filled(value: T) -> Self
+    where
+        T: Copy,
+    {
+        Self([Some(value); 6])
+    }
+
+    pub fn get(&self, face: BlockModelFace) -> Option<&T> {
+        self.0[face.to_usize()].as_ref()
+    }
+
+    pub fn get_mut(&mut self, face: BlockModelFace) -> Option<&mut T> {
+        self.0[face.to_usize()].as_mut()
+    }
+
+    pub fn set(&mut self, face: BlockModelFace, value: T) -> Option<T> {
+        self.0[face.to_usize()].replace(value)
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlockModelRotation {
     fwd: Face,
     up: Face,
@@ -55,7 +115,7 @@ impl BlockModelRotation {
         Face::from_normal(-self.front().normal()).unwrap()
     }
 
-    pub fn get(self, face: BlockModelFace) -> Face {
+    pub fn get_cardinal_face(self, face: BlockModelFace) -> Face {
         match face {
             BlockModelFace::Up => self.up(),
             BlockModelFace::Down => self.down(),
@@ -63,6 +123,17 @@ impl BlockModelRotation {
             BlockModelFace::Right => self.right(),
             BlockModelFace::Front => self.front(),
             BlockModelFace::Back => self.back(),
+        }
+    }
+
+    pub fn get_model_face(self, face: Face) -> BlockModelFace {
+        match face {
+            Face::Top => todo!(),
+            Face::Bottom => todo!(),
+            Face::North => todo!(),
+            Face::East => todo!(),
+            Face::South => todo!(),
+            Face::West => todo!(),
         }
     }
 }

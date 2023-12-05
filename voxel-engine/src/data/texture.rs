@@ -6,27 +6,41 @@ use crate::util::notnan_arr;
 #[derive(
     Default, Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize,
 )]
-pub enum FaceTextureRotation {
-    #[default]
-    #[serde(rename = "u")]
-    Up = 0,
-    #[serde(rename = "d")]
-    Down = 1,
-    #[serde(rename = "l")]
-    Left = 2,
-    #[serde(rename = "r")]
-    Right = 3,
-}
+pub struct FaceTextureRotation(u8);
 
 impl FaceTextureRotation {
+    pub const TOTAL_ROTATIONS: i32 = 4;
+    pub const ONE_TURN_DEG: i32 = 90;
+    pub const ONE_TURN_RAD: f32 = 1.57079633;
+
     pub fn from_str(string: &str) -> Option<Self> {
-        match string {
-            "u" | "up" => Some(Self::Up),
-            "d" | "down" => Some(Self::Down),
-            "l" | "left" => Some(Self::Left),
-            "r" | "right" => Some(Self::Right),
-            _ => None,
-        }
+        todo!()
+    }
+
+    pub fn rotate_by(self, rot: i32) -> Self {
+        let new_rotation = self.0 as i32 + rot;
+        Self::from(new_rotation)
+    }
+
+    pub fn degrees(self) -> i32 {
+        self.0 as i32 * Self::ONE_TURN_DEG
+    }
+
+    pub fn radians(self) -> f32 {
+        self.0 as f32 * Self::ONE_TURN_RAD
+    }
+
+    pub fn inner(self) -> u8 {
+        self.0
+    }
+}
+
+impl From<i32> for FaceTextureRotation {
+    fn from(value: i32) -> Self {
+        let value: u32 = value.rem_euclid(Self::TOTAL_ROTATIONS) as _;
+        debug_assert!(value < Self::TOTAL_ROTATIONS as u32);
+
+        Self(value as _)
     }
 }
 
