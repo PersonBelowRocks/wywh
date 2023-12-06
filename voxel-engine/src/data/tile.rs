@@ -100,7 +100,7 @@ impl Face {
     }
 
     #[inline]
-    pub fn opposite(self) -> Self {
+    pub const fn opposite(self) -> Self {
         match self {
             Self::Top => Self::Bottom,
             Self::Bottom => Self::Top,
@@ -146,7 +146,7 @@ impl Face {
     }
 
     #[inline]
-    pub fn axis(self) -> Axis3D {
+    pub const fn axis(self) -> Axis3D {
         match self {
             Face::North | Face::South => Axis3D::X,
             Face::Top | Face::Bottom => Axis3D::Y,
@@ -155,7 +155,7 @@ impl Face {
     }
 
     #[inline]
-    pub fn from_normal(normal: IVec3) -> Option<Self> {
+    pub const fn from_normal(normal: IVec3) -> Option<Self> {
         match normal.to_array() {
             [0, 1, 0] => Some(Self::Top),
             [0, -1, 0] => Some(Self::Bottom),
@@ -173,7 +173,7 @@ impl Face {
     }
 
     #[inline]
-    pub fn is_horizontal(self) -> bool {
+    pub const fn is_horizontal(self) -> bool {
         matches!(self, Self::North | Self::East | Self::South | Self::West)
     }
 

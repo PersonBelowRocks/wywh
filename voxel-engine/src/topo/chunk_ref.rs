@@ -11,11 +11,12 @@ use bevy::prelude::IVec3;
 use crate::data::{
     registries::{variant::VariantRegistry, RegistryId},
     tile::Transparency,
+    voxel::rotations::BlockModelRotation,
 };
 
 use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
-    chunk::{Chunk, ChunkPos, VariantType},
+    chunk::{Chunk, ChunkPos, VariantType, VoxelVariantData},
     error::{ChunkAccessError, ChunkRefAccessError},
     storage::containers::{
         data_storage::{SiccAccess, SiccReadAccess},
@@ -82,24 +83,26 @@ impl ChunkRef {
 
 pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher> {
     transparency: SyncDenseContainerReadAccess<'a, Transparency>,
-    variants: SiccReadAccess<'a, VariantType, S>,
+    variants: SiccReadAccess<'a, VoxelVariantData, S>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ChunkVoxelOutput {
     pub transparency: Transparency,
-    pub variant: VariantType,
+    pub variant: RegistryId<VariantRegistry>,
+    pub rotation: Option<BlockModelRotation>,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct ChunkVoxelInput {
     pub transparency: Transparency,
     pub variant: RegistryId<VariantRegistry>,
+    pub rotation: Option<BlockModelRotation>,
 }
 
 pub struct ChunkRefVxlAccess<'a, S: BuildHasher> {
     transparency: SyncDenseContainerAccess<'a, Transparency>,
-    variants: SiccAccess<'a, VariantType, S>,
+    variants: SiccAccess<'a, VoxelVariantData, S>,
 }
 
 impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
@@ -108,7 +111,10 @@ impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
         self.transparency.set(pos, data.transparency)?;
-        self.variants.set(pos, Some(data.variant))?;
+        self.variants.set(
+            pos,
+            Some(VoxelVariantData::new(data.variant, data.rotation)),
+        )?;
 
         Ok(())
     }
@@ -119,12 +125,15 @@ impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlAccess<'a, S> {
     type ReadType = ChunkVoxelOutput;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+        let variant_data = self
+            .variants
+            .get(pos)?
+            .ok_or(ChunkAccessError::NotInitialized)?;
+
         Ok(ChunkVoxelOutput {
             transparency: self.transparency.get(pos)?,
-            variant: self
-                .variants
-                .get(pos)?
-                .ok_or(ChunkAccessError::NotInitialized)?,
+            variant: variant_data.variant,
+            rotation: variant_data.rotation,
         })
     }
 }
@@ -136,12 +145,15 @@ impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlReadAccess<'a, S> {
     type ReadType = ChunkVoxelOutput;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+        let variant_data = self
+            .variants
+            .get(pos)?
+            .ok_or(ChunkAccessError::NotInitialized)?;
+
         Ok(ChunkVoxelOutput {
             transparency: self.transparency.get(pos)?,
-            variant: self
-                .variants
-                .get(pos)?
-                .ok_or(ChunkAccessError::NotInitialized)?,
+            variant: variant_data.variant,
+            rotation: variant_data.rotation,
         })
     }
 }

@@ -7,6 +7,7 @@ use super::storage::data_structures::DenseChunkStorage;
 use crate::data::registries::variant::VariantRegistry;
 use crate::data::registries::RegistryId;
 use crate::data::tile::Transparency;
+use crate::data::voxel::rotations::BlockModelRotation;
 
 const CHUNK_SIZE: usize = 16;
 
@@ -27,9 +28,15 @@ impl ChunkPos {
 
 pub type VariantType = RegistryId<VariantRegistry>;
 
+#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, dm::Constructor)]
+pub(crate) struct VoxelVariantData {
+    pub variant: RegistryId<VariantRegistry>,
+    pub rotation: Option<BlockModelRotation>,
+}
+
 pub struct Chunk {
     pub transparency: SyncDenseChunkContainer<Transparency>,
-    pub variants: SyncIndexedChunkContainer<VariantType>,
+    pub variants: SyncIndexedChunkContainer<VoxelVariantData>,
 }
 
 #[allow(dead_code)]

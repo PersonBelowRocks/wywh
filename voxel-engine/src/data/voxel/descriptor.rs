@@ -32,22 +32,24 @@ impl VoxelModelDescriptor {
     ) -> Result<VoxelModel, TextureNotFound> {
         match self {
             VoxelModelDescriptor::Block(model) => {
-                let mut textures = FaceMap::new();
+                // let mut textures = FaceMap::new();
 
-                for face in Face::FACES {
-                    if let Some(tex_desc) = model.textures.get(face) {
-                        let Some(texture) = texture_registry.get_by_label(&tex_desc.label) else {
-                            return Err(TextureNotFound(tex_desc.label.clone()));
-                        };
+                // for face in Face::FACES {
+                //     if let Some(tex_desc) = model.textures.get(face) {
+                //         let Some(texture) = texture_registry.get_by_label(&tex_desc.label) else {
+                //             return Err(TextureNotFound(tex_desc.label.clone()));
+                //         };
 
-                        textures.set(
-                            face,
-                            FaceTexture::new_rotated(texture.texture_pos, tex_desc.rotation),
-                        )
-                    }
-                }
+                //         textures.set(
+                //             face,
+                //             FaceTexture::new_rotated(texture.texture_pos, tex_desc.rotation),
+                //         )
+                //     }
+                // }
 
-                Ok(VoxelModel::Block(BlockModel { textures }))
+                // Ok(VoxelModel::Block(BlockModel { textures }))
+
+                todo!()
             }
 
             _ => todo!(),

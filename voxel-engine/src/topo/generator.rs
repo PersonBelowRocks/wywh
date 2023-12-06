@@ -6,12 +6,13 @@ use parking_lot::RwLock;
 
 use crate::data::{
     registries::{variant::VariantRegistry, Registries, Registry, RegistryId},
-    tile::Transparency,
+    tile::{Face, Transparency},
+    voxel::rotations::BlockModelRotation,
 };
 
 use super::{
     access::{ChunkBounds, HasBounds, WriteAccess},
-    chunk::{Chunk, ChunkPos, VariantType},
+    chunk::{Chunk, ChunkPos, VariantType, VoxelVariantData},
     chunk_ref::ChunkVoxelInput,
     error::{ChunkAccessError, GeneratorError},
     storage::{
@@ -31,7 +32,7 @@ pub enum GeneratorChoice {
 
 pub struct GeneratorInputAccess<'a> {
     transparency: AutoDenseContainerAccess<'a, Transparency>,
-    variants: &'a mut IndexedChunkStorage<VariantType>,
+    variants: &'a mut IndexedChunkStorage<VoxelVariantData>,
 }
 
 impl<'a> ChunkBounds for GeneratorInputAccess<'a> {}
@@ -42,7 +43,8 @@ impl<'a> WriteAccess for GeneratorInputAccess<'a> {
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
         self.transparency.set(pos, data.transparency)?;
-        self.variants.set(pos, data.variant)?;
+        self.variants
+            .set(pos, VoxelVariantData::new(data.variant, data.rotation))?;
 
         Ok(())
     }
@@ -50,7 +52,7 @@ impl<'a> WriteAccess for GeneratorInputAccess<'a> {
 
 pub struct GeneratorInput {
     transparency: DenseChunkContainer<Transparency>,
-    variants: IndexedChunkStorage<VariantType>,
+    variants: IndexedChunkStorage<VoxelVariantData>,
 }
 
 impl GeneratorInput {
@@ -94,6 +96,7 @@ struct GeneratorPalette {
 #[derive(Clone)]
 pub struct Generator {
     palette: GeneratorPalette,
+    default_rotation: BlockModelRotation,
     noise: Perlin,
     scale: f64,
 }
@@ -108,6 +111,7 @@ impl Generator {
                 void: variants.get_id("void").unwrap(),
                 debug: variants.get_id("debug").unwrap(),
             },
+            default_rotation: BlockModelRotation::new(Face::North, Face::Top).unwrap(),
             noise: Perlin::new(seed),
             scale: 0.1,
         }
@@ -152,6 +156,7 @@ impl Generator {
                             ChunkVoxelInput {
                                 transparency: Transparency::Opaque,
                                 variant: self.palette.debug,
+                                rotation: Some(self.default_rotation),
                             },
                         )?;
                     } else {
@@ -160,6 +165,7 @@ impl Generator {
                             ChunkVoxelInput {
                                 transparency: Transparency::Transparent,
                                 variant: self.palette.void,
+                                rotation: None,
                             },
                         )?;
                     }

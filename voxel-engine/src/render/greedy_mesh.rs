@@ -107,10 +107,11 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
 
         let variant = self.registry.get_by_id(vox.variant);
 
-        Ok(variant
-            .model
-            .and_then(|vm| vm.as_block_model())
-            .map(|bm| bm.texture(self.face)))
+        todo!()
+        // Ok(variant
+        //     .model
+        //     .and_then(|vm| vm.as_block_model())
+        //     .map(|bm| bm.texture(self.face)))
     }
 
     pub fn get_transparency_above(&self, pos: IVec2) -> Option<Transparency> {
