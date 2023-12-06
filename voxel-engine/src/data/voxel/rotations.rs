@@ -141,7 +141,6 @@ impl BlockModelRotation {
 
     pub fn pitch(self) -> i32 {
         let front_normal = self.front().normal().as_vec3();
-        // pitch in degrees
         let pitch = f32::asin(front_normal.y);
 
         (pitch / FRAC_PI_2) as i32
