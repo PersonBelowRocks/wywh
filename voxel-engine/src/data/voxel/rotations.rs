@@ -1,4 +1,6 @@
-use bevy::math::IVec3;
+use std::f32::consts::{FRAC_PI_2, PI};
+
+use bevy::math::{vec2, IVec3};
 
 use crate::data::tile::Face;
 
@@ -136,11 +138,91 @@ impl BlockModelRotation {
             Face::West => todo!(),
         }
     }
+
+    pub fn pitch(self) -> i32 {
+        let front_normal = self.front().normal().as_vec3();
+        // pitch in degrees
+        let pitch = f32::asin(front_normal.y);
+
+        (pitch / FRAC_PI_2) as i32
+    }
+
+    pub fn yaw(self) -> i32 {
+        let front_normal = self.front().normal().as_vec3();
+        let yaw = f32::atan2(front_normal.z, front_normal.x);
+
+        (yaw / FRAC_PI_2) as i32
+    }
+
+    pub fn roll(self) -> i32 {
+        let yaw = (self.yaw() as f32) * FRAC_PI_2;
+        let up = self.up().normal().as_vec3();
+        let right_vector = vec2(f32::sin(yaw), -f32::cos(yaw));
+
+        let mut roll = -f32::asin(up.x * right_vector.x + up.z * right_vector.y);
+
+        if up.y < 0.0 {
+            roll = PI - roll;
+        }
+
+        (roll / FRAC_PI_2) as i32
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_pitch() {
+        let rot = BlockModelRotation::new(Face::North, Face::Top).unwrap();
+        assert_eq!(0, rot.pitch());
+
+        let rot = BlockModelRotation::new(Face::East, Face::Top).unwrap();
+        assert_eq!(0, rot.pitch());
+
+        let rot = BlockModelRotation::new(Face::Bottom, Face::North).unwrap();
+        assert_eq!(-1, rot.pitch());
+
+        let rot = BlockModelRotation::new(Face::Top, Face::South).unwrap();
+        assert_eq!(1, rot.pitch());
+    }
+
+    #[test]
+    fn test_yaw() {
+        let rot = BlockModelRotation::new(Face::North, Face::Top).unwrap();
+        assert_eq!(0, rot.yaw());
+
+        let rot = BlockModelRotation::new(Face::South, Face::Top).unwrap();
+        assert_eq!(2, rot.yaw());
+
+        let rot = BlockModelRotation::new(Face::East, Face::Top).unwrap();
+        assert_eq!(1, rot.yaw());
+
+        let rot = BlockModelRotation::new(Face::West, Face::Top).unwrap();
+        assert_eq!(-1, rot.yaw());
+
+        let rot = BlockModelRotation::new(Face::Bottom, Face::North).unwrap();
+        assert_eq!(0, rot.yaw());
+
+        let rot = BlockModelRotation::new(Face::Top, Face::South).unwrap();
+        assert_eq!(0, rot.yaw());
+    }
+
+    #[test]
+    fn test_roll() {
+        let rot = BlockModelRotation::new(Face::North, Face::Top).unwrap();
+        assert_eq!(0, rot.roll());
+
+        let rot = BlockModelRotation::new(Face::North, Face::East).unwrap();
+        assert_eq!(1, rot.roll());
+
+        let rot = BlockModelRotation::new(Face::North, Face::West).unwrap();
+        assert_eq!(-1, rot.roll());
+
+        let rot = BlockModelRotation::new(Face::North, Face::Bottom).unwrap();
+        assert_eq!(2, rot.roll());
+    }
 
     #[test]
     fn test_correct_handedness() {
