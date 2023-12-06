@@ -5,6 +5,7 @@ use crate::{
         registries::{variant::VariantRegistry, Registry, RegistryRef},
         texture::FaceTexture,
         tile::{Face, Transparency},
+        voxel::rotations::BlockModelRotation,
     },
     topo::{
         access::{ChunkBounds, ReadAccess},
@@ -64,6 +65,8 @@ impl ChunkSliceMask {
 
 pub(crate) struct VoxelChunkSlice<'a, 'b, A: ChunkAccess> {
     // mask: [[bool; Chunk::USIZE]; Chunk::USIZE],
+    default_rotation: BlockModelRotation,
+
     pub face: Face,
     pub layer: i32,
 
@@ -81,6 +84,8 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
         registry: &'b RegistryRef<'a, VariantRegistry>,
     ) -> Self {
         Self {
+            default_rotation: BlockModelRotation::new(Face::North, Face::Top).unwrap(),
+
             face,
             layer,
 
@@ -105,13 +110,14 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
         let pos_3d = self.face.axis().pos_in_3d(pos, self.layer);
         let vox = self.access.get(pos_3d)?;
 
+        let rotation = vox.rotation.unwrap_or(self.default_rotation);
+
         let variant = self.registry.get_by_id(vox.variant);
 
-        todo!()
-        // Ok(variant
-        //     .model
-        //     .and_then(|vm| vm.as_block_model())
-        //     .map(|bm| bm.texture(self.face)))
+        Ok(variant
+            .model
+            .and_then(|vm| vm.as_block_model())
+            .and_then(|bm| bm.faces_for_rotation(rotation).get(self.face).copied()))
     }
 
     pub fn get_transparency_above(&self, pos: IVec2) -> Option<Transparency> {

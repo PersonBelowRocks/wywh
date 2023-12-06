@@ -17,9 +17,16 @@ impl FaceTextureRotation {
         todo!()
     }
 
+    pub fn new(value: i32) -> Self {
+        let value: u32 = value.rem_euclid(Self::TOTAL_ROTATIONS) as _;
+        debug_assert!(value < Self::TOTAL_ROTATIONS as u32);
+
+        Self(value as _)
+    }
+
     pub fn rotate_by(self, rot: i32) -> Self {
         let new_rotation = self.0 as i32 + rot;
-        Self::from(new_rotation)
+        Self::new(new_rotation)
     }
 
     pub fn degrees(self) -> i32 {
@@ -32,15 +39,6 @@ impl FaceTextureRotation {
 
     pub fn inner(self) -> u8 {
         self.0
-    }
-}
-
-impl From<i32> for FaceTextureRotation {
-    fn from(value: i32) -> Self {
-        let value: u32 = value.rem_euclid(Self::TOTAL_ROTATIONS) as _;
-        debug_assert!(value < Self::TOTAL_ROTATIONS as u32);
-
-        Self(value as _)
     }
 }
 

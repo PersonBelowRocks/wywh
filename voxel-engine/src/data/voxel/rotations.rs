@@ -1,4 +1,7 @@
-use std::f32::consts::{FRAC_PI_2, PI};
+use std::{
+    array,
+    f32::consts::{FRAC_PI_2, PI},
+};
 
 use bevy::math::{vec2, IVec3};
 
@@ -54,6 +57,10 @@ impl BlockModelFace {
 pub struct BlockModelFaceMap<T>([Option<T>; 6]);
 
 impl<T> BlockModelFaceMap<T> {
+    pub fn new() -> Self {
+        Self(array::from_fn(|_| None))
+    }
+
     pub fn filled(value: T) -> Self
     where
         T: Copy,
