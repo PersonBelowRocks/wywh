@@ -16,7 +16,7 @@
 }
 #endif
 
-@group(1) @binding(100)
+@group(2) @binding(100)
 var<uniform> texture_scale: f32;
 
 @fragment

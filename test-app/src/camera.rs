@@ -67,7 +67,7 @@ pub(crate) fn mouse_controls(
 }
 
 pub fn kb_controls(
-    input: Res<Input<KeyCode>>,
+    input: Res<ButtonInput<KeyCode>>,
     mut q: Query<(&mut Transform, &PlayerCamController)>,
     t: Res<Time>,
 ) {
@@ -101,8 +101,8 @@ pub fn kb_controls(
 pub fn cursor_grab(
     mut q_window: Query<&mut Window>,
     mut q_controller: Query<&mut PlayerCamController>,
-    btn: Res<Input<MouseButton>>,
-    key: Res<Input<KeyCode>>,
+    btn: Res<ButtonInput<MouseButton>>,
+    key: Res<ButtonInput<KeyCode>>,
 ) {
     let mut window = q_window.single_mut();
     let mut controller = q_controller.single_mut();

@@ -96,7 +96,7 @@ fn setup(
                 },
             ),
         ])
-        .with_text_alignment(TextAlignment::Left)
+        .with_text_justify(JustifyText::Left)
         .with_style(Style {
             position_type: PositionType::Absolute,
             bottom: Val::Percent(85.0),
@@ -115,7 +115,7 @@ fn setup(
                 ..default()
             },
         )
-        .with_text_alignment(TextAlignment::Left)
+        .with_text_justify(JustifyText::Left)
         .with_style(Style {
             position_type: PositionType::Absolute,
             bottom: Val::Percent(85.0),
