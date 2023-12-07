@@ -178,6 +178,11 @@ impl Face {
     }
 
     #[inline]
+    pub const fn is_vertical(self) -> bool {
+        !self.is_horizontal()
+    }
+
+    #[inline]
     pub fn is_orthogonal(self, other: Self) -> bool {
         self.normal().dot(other.normal()) == 0
     }

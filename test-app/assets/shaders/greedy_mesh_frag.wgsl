@@ -24,6 +24,8 @@ fn fragment(
     raw_in: VertexOutput,
     @location(10) @interpolate(flat) texture: vec2<f32>,
     @location(11) @interpolate(flat) texture_rot: f32,
+    @location(12) @interpolate(flat) flip_uv_x: u32,
+    @location(13) @interpolate(flat) flip_uv_y: u32,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
     var in: VertexOutput;
@@ -31,19 +33,17 @@ fn fragment(
     in.position = raw_in.position;
     in.world_position = raw_in.world_position;
     in.world_normal = raw_in.world_normal;
-#ifdef VERTEX_UVS
+
     let fract_uv = fract(raw_in.uv);
     var uv: vec2<f32> = fract_uv;
 
-    if in.world_normal.x != 0.0 { // north/south face aka. X axis
-        uv = fract_uv.yx;
+    if flip_uv_x != 0u {
+        uv.x = (1.0 - uv.x);
     }
 
-    if in.world_normal.y != 0.0 { // top/bottom face aka. Y axis
-        uv = fract_uv.yx;
+    if flip_uv_y != 0u {
+        uv.y = (1.0 - uv.y);
     }
-
-    uv.y = 1.0 - uv.y;
 
     let a = texture_rot;
     let M = mat2x2(
@@ -55,7 +55,7 @@ fn fragment(
     uv = (M * (uv - offset)) + offset;
 
     in.uv = ((uv / texture_scale) + texture);
-#endif
+
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     in.instance_index = raw_in.instance_index;
 #endif
@@ -82,10 +82,6 @@ fn fragment(
     // apply in-shader post processing (fog, alpha-premultiply, and also tonemapping, debanding if the camera is non-hdr)
     // note this does not include fullscreen postprocessing effects like bloom.
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
-#endif
-
-#ifdef VERTEX_UVS
-    // out.color = vec4(uv.x, 0.0, uv.y, 1.0);
 #endif
 
     return out;

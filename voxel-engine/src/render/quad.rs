@@ -125,10 +125,37 @@ impl Quad {
     }
 }
 
+#[rustfmt::skip]
+pub mod consts {
+    pub const ROTATION_MASK: u32 = 0b00000000_00000000_00000000_00000011;
+    pub const FLIP_UV_X: u32     = 0b00000000_00000000_00000000_00000100;
+    pub const FLIP_UV_Y: u32     = 0b00000000_00000000_00000000_00001000;
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct QuadTextureData {
     pub pos: Vec2,
     pub rotation: FaceTextureRotation,
+    pub flip_uv_x: bool,
+    pub flip_uv_y: bool,
+}
+
+impl QuadTextureData {
+    pub fn bitfield(self) -> u32 {
+        let mut bits: u32 = 0;
+
+        bits |= self.rotation.inner() as u32;
+
+        if self.flip_uv_x {
+            bits |= consts::FLIP_UV_X;
+        }
+
+        if self.flip_uv_y {
+            bits |= consts::FLIP_UV_Y
+        }
+
+        bits
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -142,8 +169,6 @@ pub struct MeshableQuad {
 impl MeshableQuad {
     #[rustfmt::skip]
     pub(crate) fn unswapped_uvs(self) -> [Vec2; 4] {
-        use util::ArrayExt;
-
         let [hx, hy] = [self.quad.width(), self.quad.height()];
         let [lx, ly] = [0.0, 0.0];
 
@@ -153,28 +178,10 @@ impl MeshableQuad {
             2---3
         */
 
-        match self.face {
-            Face::Top | Face::Bottom => [
-                vec2(hx, hy), vec2(lx, hy),
-                vec2(hx, ly), vec2(lx, ly)
-            ].circular_shift(2),
-            Face::North => [
+        [
                 vec2(lx, hy), vec2(hx, hy),
                 vec2(lx, ly), vec2(hx, ly)
-            ].circular_shift(2),
-            Face::South => [
-                vec2(lx, hy), vec2(hx, hy),
-                vec2(lx, ly), vec2(hx, ly)
-            ],
-            Face::West => [
-                vec2(hx, ly), vec2(lx, ly),
-                vec2(hx, hy), vec2(lx, hy)
-            ].circular_shift(2),
-            Face::East => [
-                vec2(lx, hy), vec2(hx, hy),
-                vec2(lx, ly), vec2(hx, ly)
-            ]
-        }
+        ]
     }
 
     pub fn positions(self) -> [Vec3; 4] {
@@ -184,13 +191,6 @@ impl MeshableQuad {
     pub fn add_to_mesh(self, idx: u32, mesh: &mut ChunkMeshAttributes) {
         let normal = self.face.normal().as_vec3();
         let positions = self.positions();
-
-        let _uv_max = vec2(self.quad.width(), self.quad.height());
-
-        // let [hx, hy] = uv_max.to_array();
-        // let [lx, ly] = [0.0, 0.0];
-
-        // let raw_uvs = [vec2(lx, hy), vec2(hx, hy), vec2(lx, ly), vec2(hx, ly)];
 
         /*
             0---1
@@ -212,8 +212,7 @@ impl MeshableQuad {
         mesh.normals.extend([normal; 4]);
         mesh.positions.extend(positions);
         mesh.uvs.extend(uvs);
-        mesh.misc_data
-            .extend([self.quad_tex.rotation.inner() as u32; 4]);
+        mesh.misc_data.extend([self.quad_tex.bitfield(); 4]);
         mesh.textures.extend([self.quad_tex.pos; 4]);
     }
 }

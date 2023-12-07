@@ -40,7 +40,7 @@ impl BlockModel {
             if let Some(mut tex) = self.texture(face) {
                 tex.rotation = match face {
                     BlockModelFace::Up | BlockModelFace::Down => {
-                        FaceTextureRotation::new(rotation.yaw())
+                        FaceTextureRotation::new(-rotation.yaw())
                     }
                     BlockModelFace::Front => FaceTextureRotation::new(-rotation.roll()),
                     BlockModelFace::Back => FaceTextureRotation::new(rotation.roll()),
@@ -152,8 +152,8 @@ mod tests {
         assert_eq!(RIGHT, south.tex_pos());
         assert_eq!(BACK, west.tex_pos());
 
-        assert_eq!(FaceTextureRotation::new(1), top.rotation);
-        assert_eq!(FaceTextureRotation::new(1), bottom.rotation);
+        assert_eq!(FaceTextureRotation::new(-1), top.rotation);
+        assert_eq!(FaceTextureRotation::new(-1), bottom.rotation);
         assert_eq!(FaceTextureRotation::new(0), north.rotation);
         assert_eq!(FaceTextureRotation::new(0), east.rotation);
         assert_eq!(FaceTextureRotation::new(0), south.rotation);

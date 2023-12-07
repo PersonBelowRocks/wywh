@@ -3,7 +3,7 @@ use bevy::{math::ivec2, prelude::IVec2};
 use crate::{
     data::{
         registries::{variant::VariantRegistry, Registry, RegistryRef},
-        texture::FaceTexture,
+        texture::{FaceTexture, FaceTextureRotation},
         tile::{Face, Transparency},
         voxel::rotations::BlockModelRotation,
     },
@@ -116,7 +116,15 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
         Ok(variant
             .model
             .and_then(|vm| vm.as_block_model())
-            .and_then(|bm| bm.faces_for_rotation(rotation).get(self.face).copied()))
+            .and_then(|bm| bm.faces_for_rotation(rotation).get(self.face).copied())
+            .map(|mut tex| {
+                tex.rotation += if self.face.is_vertical() {
+                    FaceTextureRotation::new(2)
+                } else {
+                    FaceTextureRotation::new(1)
+                };
+                tex
+            }))
     }
 
     pub fn get_transparency_above(&self, pos: IVec2) -> Option<Transparency> {

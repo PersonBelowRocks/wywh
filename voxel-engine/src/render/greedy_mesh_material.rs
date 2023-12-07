@@ -5,8 +5,8 @@ use bevy::{
     render::{
         mesh::{MeshVertexAttribute, MeshVertexBufferLayout},
         render_resource::{
-            AsBindGroup, RenderPipelineDescriptor, ShaderRef, SpecializedMeshPipelineError,
-            VertexFormat,
+            AsBindGroup, RenderPipelineDescriptor, ShaderDefVal, ShaderRef,
+            SpecializedMeshPipelineError, VertexFormat,
         },
     },
 };
@@ -25,6 +25,12 @@ impl GreedyMeshMaterial {
         MeshVertexAttribute::new("Misc_Data", 4099_2, VertexFormat::Uint32);
 }
 
+macro_rules! uint_shader_def {
+    ($label:ident) => {
+        ShaderDefVal::UInt(stringify!($label).to_string(), $label)
+    };
+}
+
 impl MaterialExtension for GreedyMeshMaterial {
     fn specialize(
         _pipeline: &MaterialExtensionPipeline,
@@ -32,7 +38,13 @@ impl MaterialExtension for GreedyMeshMaterial {
         layout: &MeshVertexBufferLayout,
         _key: MaterialExtensionKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
-        // descriptor.label = Some("silly_pipeline".into());
+        use crate::render::quad::consts::*;
+
+        let shader_defs = [
+            uint_shader_def!(ROTATION_MASK),
+            uint_shader_def!(FLIP_UV_X),
+            uint_shader_def!(FLIP_UV_Y),
+        ];
 
         let buffer = layout.get_layout(&[
             Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
@@ -44,6 +56,14 @@ impl MaterialExtension for GreedyMeshMaterial {
 
         descriptor.vertex.buffers = vec![buffer];
         debug!("{:?}", descriptor.vertex.buffers);
+
+        descriptor
+            .vertex
+            .shader_defs
+            .extend_from_slice(&shader_defs);
+        if let Some(fragment) = descriptor.fragment.as_mut() {
+            fragment.shader_defs.extend_from_slice(&shader_defs);
+        }
 
         Ok(())
     }

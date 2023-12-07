@@ -1,6 +1,9 @@
 use std::{iter::Zip, ops::RangeInclusive};
 
-use bevy::prelude::{Event, IVec3};
+use bevy::{
+    math::ivec3,
+    prelude::{Event, IVec3},
+};
 use noise::{NoiseFn, Perlin};
 use parking_lot::RwLock;
 
@@ -99,6 +102,7 @@ pub struct Generator {
     default_rotation: BlockModelRotation,
     noise: Perlin,
     scale: f64,
+    positions: hb::HashMap<IVec3, ChunkVoxelInput>,
 }
 
 impl Generator {
@@ -106,14 +110,77 @@ impl Generator {
         let _noise = Perlin::new(seed);
         let variants = registries.get_registry::<VariantRegistry>().unwrap();
 
+        let palette = GeneratorPalette {
+            void: variants.get_id("void").unwrap(),
+            debug: variants.get_id("debug").unwrap(),
+        };
+
+        let positions = [
+            (
+                ivec3(0, 0, 0),
+                ChunkVoxelInput {
+                    transparency: Transparency::Opaque,
+                    variant: palette.debug,
+                    rotation: Some(BlockModelRotation::new(Face::North, Face::Top).unwrap()),
+                },
+            ),
+            (
+                ivec3(2, 0, 0),
+                ChunkVoxelInput {
+                    transparency: Transparency::Opaque,
+                    variant: palette.debug,
+                    rotation: Some(BlockModelRotation::new(Face::East, Face::Top).unwrap()),
+                },
+            ),
+            (
+                ivec3(4, 0, 0),
+                ChunkVoxelInput {
+                    transparency: Transparency::Opaque,
+                    variant: palette.debug,
+                    rotation: Some(BlockModelRotation::new(Face::South, Face::Top).unwrap()),
+                },
+            ),
+            (
+                ivec3(6, 0, 0),
+                ChunkVoxelInput {
+                    transparency: Transparency::Opaque,
+                    variant: palette.debug,
+                    rotation: Some(BlockModelRotation::new(Face::West, Face::Top).unwrap()),
+                },
+            ),
+            // pitching
+            (
+                ivec3(0, 8, 0),
+                ChunkVoxelInput {
+                    transparency: Transparency::Opaque,
+                    variant: palette.debug,
+                    rotation: Some(BlockModelRotation::new(Face::North, Face::Top).unwrap()),
+                },
+            ),
+            (
+                ivec3(2, 8, 0),
+                ChunkVoxelInput {
+                    transparency: Transparency::Opaque,
+                    variant: palette.debug,
+                    rotation: Some(BlockModelRotation::new(Face::Top, Face::South).unwrap()),
+                },
+            ),
+            (
+                ivec3(4, 8, 0),
+                ChunkVoxelInput {
+                    transparency: Transparency::Opaque,
+                    variant: palette.debug,
+                    rotation: Some(BlockModelRotation::new(Face::Bottom, Face::North).unwrap()),
+                },
+            ),
+        ];
+
         Self {
-            palette: GeneratorPalette {
-                void: variants.get_id("void").unwrap(),
-                debug: variants.get_id("debug").unwrap(),
-            },
+            palette,
             default_rotation: BlockModelRotation::new(Face::North, Face::Top).unwrap(),
             noise: Perlin::new(seed),
             scale: 0.1,
+            positions: hb::HashMap::from_iter(positions),
         }
     }
 
@@ -145,30 +212,21 @@ impl Generator {
         for (ls_x, ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
             for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
                 for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
-                    let noise_pos = IVec3::new(ws_x, ws_y, ws_z).as_dvec3() * self.scale;
-                    let ls_pos = IVec3::new(ls_x, ls_y, ls_z);
+                    let noise_pos = ivec3(ws_x, ws_y, ws_z).as_dvec3() * self.scale;
+                    let ls_pos = ivec3(ls_x, ls_y, ls_z);
+                    let ws_pos = ivec3(ws_x, ws_y, ws_z);
 
-                    let noise = self.noise.get(noise_pos.into());
+                    let input = self
+                        .positions
+                        .get(&ws_pos)
+                        .copied()
+                        .unwrap_or(ChunkVoxelInput {
+                            transparency: Transparency::Transparent,
+                            variant: self.palette.void,
+                            rotation: None,
+                        });
 
-                    if noise > THRESHOLD {
-                        access.set(
-                            ls_pos,
-                            ChunkVoxelInput {
-                                transparency: Transparency::Opaque,
-                                variant: self.palette.debug,
-                                rotation: Some(self.default_rotation),
-                            },
-                        )?;
-                    } else {
-                        access.set(
-                            ls_pos,
-                            ChunkVoxelInput {
-                                transparency: Transparency::Transparent,
-                                variant: self.palette.void,
-                                rotation: None,
-                            },
-                        )?;
-                    }
+                    access.set(ls_pos, input)?;
                 }
             }
         }

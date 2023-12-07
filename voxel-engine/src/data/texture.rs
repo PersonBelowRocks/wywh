@@ -17,6 +17,12 @@ impl ops::Add<Self> for FaceTextureRotation {
     }
 }
 
+impl ops::AddAssign<Self> for FaceTextureRotation {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 impl FaceTextureRotation {
     pub const TOTAL_ROTATIONS: i32 = 4;
     pub const ONE_TURN_DEG: i32 = 90;
