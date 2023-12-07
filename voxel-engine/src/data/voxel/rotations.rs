@@ -68,6 +68,10 @@ impl<T> BlockModelFaceMap<T> {
         Self([Some(value); 6])
     }
 
+    pub fn from_fn<F: FnMut(BlockModelFace) -> Option<T>>(f: F) -> Self {
+        Self(BlockModelFace::FACES.map(f))
+    }
+
     pub fn get(&self, face: BlockModelFace) -> Option<&T> {
         self.0[face.to_usize()].as_ref()
     }
@@ -78,6 +82,22 @@ impl<T> BlockModelFaceMap<T> {
 
     pub fn set(&mut self, face: BlockModelFace, value: T) -> Option<T> {
         self.0[face.to_usize()].replace(value)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.iter().filter(|&v| v.is_some()).count()
+    }
+
+    pub fn map<U, F: FnMut(BlockModelFace, &T) -> U>(&self, mut f: F) -> BlockModelFaceMap<U> {
+        let mut mapped = BlockModelFaceMap::<U>::new();
+
+        for face in BlockModelFace::FACES {
+            if let Some(data) = self.get(face) {
+                mapped.set(face, f(face, data));
+            }
+        }
+
+        mapped
     }
 }
 

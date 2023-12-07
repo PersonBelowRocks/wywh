@@ -64,7 +64,6 @@ impl ChunkSliceMask {
 }
 
 pub(crate) struct VoxelChunkSlice<'a, 'b, A: ChunkAccess> {
-    // mask: [[bool; Chunk::USIZE]; Chunk::USIZE],
     default_rotation: BlockModelRotation,
 
     pub face: Face,
@@ -136,14 +135,6 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
 
         Some(transparency)
     }
-
-    // pub fn is_masked(&self, pos: IVec2) -> Option<bool> {
-    //     if !self.contains(pos) {
-    //         return None;
-    //     }
-
-    //     Some(self.mask[pos.x as usize][pos.y as usize])
-    // }
 
     // TODO: should return a result
     pub fn is_meshable(&self, pos: IVec2) -> Option<bool> {

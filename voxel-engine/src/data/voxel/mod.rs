@@ -11,6 +11,7 @@ use super::{
 
 pub mod descriptor;
 pub mod rotations;
+pub mod serialization;
 
 #[derive(Clone)]
 pub struct VoxelProperties {

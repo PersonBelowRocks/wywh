@@ -1,3 +1,5 @@
+use std::ops;
+
 use bevy::math::{vec2, Vec2};
 use ordered_float::NotNan;
 
@@ -7,6 +9,13 @@ use crate::util::notnan_arr;
     Default, Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize,
 )]
 pub struct FaceTextureRotation(u8);
+
+impl ops::Add<Self> for FaceTextureRotation {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        Self((self.0 + rhs.0).rem_euclid(Self::TOTAL_ROTATIONS as _))
+    }
+}
 
 impl FaceTextureRotation {
     pub const TOTAL_ROTATIONS: i32 = 4;

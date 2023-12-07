@@ -4,11 +4,12 @@ use crate::{
         registries::{error::TextureNotFound, texture::TextureRegistry, Registry},
         texture::{FaceTexture, FaceTextureRotation},
         tile::{Face, Transparency},
+        voxel::rotations::BlockModelFace,
     },
     util::FaceMap,
 };
 
-use super::{BlockModel, VoxelModel};
+use super::{rotations::BlockModelFaceMap, BlockModel, VoxelModel};
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct VariantDescriptor {
@@ -32,24 +33,22 @@ impl VoxelModelDescriptor {
     ) -> Result<VoxelModel, TextureNotFound> {
         match self {
             VoxelModelDescriptor::Block(model) => {
-                // let mut textures = FaceMap::new();
+                let mut textures = BlockModelFaceMap::new();
 
-                // for face in Face::FACES {
-                //     if let Some(tex_desc) = model.textures.get(face) {
-                //         let Some(texture) = texture_registry.get_by_label(&tex_desc.label) else {
-                //             return Err(TextureNotFound(tex_desc.label.clone()));
-                //         };
+                for face in BlockModelFace::FACES {
+                    if let Some(tex_desc) = model.textures.get(face) {
+                        let Some(texture) = texture_registry.get_by_label(&tex_desc.label) else {
+                            return Err(TextureNotFound(tex_desc.label.clone()));
+                        };
 
-                //         textures.set(
-                //             face,
-                //             FaceTexture::new_rotated(texture.texture_pos, tex_desc.rotation),
-                //         )
-                //     }
-                // }
+                        textures.set(
+                            face,
+                            FaceTexture::new_rotated(texture.texture_pos, tex_desc.rotation),
+                        );
+                    }
+                }
 
-                // Ok(VoxelModel::Block(BlockModel { textures }))
-
-                todo!()
+                Ok(VoxelModel::Block(BlockModel { textures }))
             }
 
             _ => todo!(),
@@ -60,7 +59,7 @@ impl VoxelModelDescriptor {
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 pub struct BlockModelDescriptor {
     #[serde(flatten)]
-    pub textures: FaceMap<RotatedTextureDescriptor>,
+    pub textures: BlockModelFaceMap<RotatedTextureDescriptor>,
 }
 
 #[derive(serde::Deserialize, Debug, Clone, PartialEq, dm::Constructor)]
@@ -102,22 +101,19 @@ struct UnparsedRotatedTextureDescriptor(String);
 
 impl BlockModelDescriptor {
     pub fn filled(label: String) -> Self {
-        let mut textures = FaceMap::new();
-        for face in Face::FACES {
-            textures.set(
-                face,
-                RotatedTextureDescriptor {
+        Self {
+            textures: BlockModelFaceMap::from_fn(|_| {
+                Some(RotatedTextureDescriptor {
                     label: label.clone(),
                     rotation: Default::default(),
-                },
-            );
+                })
+            }),
         }
-
-        Self { textures }
     }
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
 
     use crate::{
