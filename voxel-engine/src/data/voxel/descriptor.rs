@@ -1,6 +1,11 @@
+use std::str::FromStr;
+
 use crate::{
     data::{
-        error::RotatedTextureDescriptorParseError,
+        error::{
+            BlockModelDescriptorParseError, FaceTextureDescriptorParseError,
+            FaceTextureRotationParseError, RotatedTextureDescriptorParseError,
+        },
         registries::{error::TextureNotFound, texture::TextureRegistry, Registry},
         texture::{FaceTexture, FaceTextureRotation},
         tile::{Face, Transparency},
@@ -57,30 +62,96 @@ impl VoxelModelDescriptor {
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(try_from = "UnparsedBlockModelDescriptor")]
 pub struct BlockModelDescriptor {
-    #[serde(flatten)]
-    pub textures: BlockModelFaceMap<RotatedTextureDescriptor>,
+    pub textures: BlockModelFaceMap<FaceTextureDescriptor>,
 }
 
-#[derive(serde::Deserialize, Debug, Clone, PartialEq, dm::Constructor)]
+impl TryFrom<UnparsedBlockModelDescriptor> for BlockModelDescriptor {
+    type Error = BlockModelDescriptorParseError;
+
+    fn try_from(value: UnparsedBlockModelDescriptor) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct UnparsedBlockModelDescriptor {
+    faces: BlockModelFaceMap<FaceTextureDescriptor>,
+    rotation: FaceMap<FaceMap<RotatedTextureDescriptor>>,
+}
+
+#[derive(serde::Deserialize)]
 #[serde(try_from = "UnparsedRotatedTextureDescriptor")]
-pub struct RotatedTextureDescriptor {
-    label: String,
-    rotation: FaceTextureRotation,
+enum RotatedTextureDescriptor {
+    SelfFace {
+        face: BlockModelFace,
+        rotation: FaceTextureRotation,
+    },
+    OtherTexture {
+        label: String,
+        rotation: FaceTextureRotation,
+    },
 }
 
 impl TryFrom<UnparsedRotatedTextureDescriptor> for RotatedTextureDescriptor {
     type Error = RotatedTextureDescriptorParseError;
 
     fn try_from(value: UnparsedRotatedTextureDescriptor) -> Result<Self, Self::Error> {
-        type E = RotatedTextureDescriptorParseError;
+        let string = value.0;
 
+        if let Some(tex) = string.strip_prefix("self:") {
+            let (face, rotation) = tex
+                .split_once(':')
+                .map(|(f, r)| {
+                    (
+                        BlockModelFace::from_str(f),
+                        FaceTextureRotation::from_str(r),
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        BlockModelFace::from_str(tex),
+                        Ok(FaceTextureRotation::default()),
+                    )
+                });
+
+            let face = face?;
+            let rotation = rotation?;
+
+            Ok(Self::SelfFace { face, rotation })
+        } else {
+            let (label, rotation) = string
+                .split_once(':')
+                .map(|(lbl, r)| (lbl.to_string(), FaceTextureRotation::from_str(r)))
+                .unwrap_or_else(|| (string, Ok(FaceTextureRotation::default())));
+
+            let rotation = rotation?;
+
+            Ok(Self::OtherTexture { label, rotation })
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct UnparsedRotatedTextureDescriptor(String);
+
+#[derive(serde::Deserialize, Debug, Clone, PartialEq, dm::Constructor)]
+#[serde(try_from = "UnparsedRotatedTextureDescriptor")]
+pub struct FaceTextureDescriptor {
+    label: String,
+    rotation: FaceTextureRotation,
+}
+
+impl TryFrom<UnparsedRotatedTextureDescriptor> for FaceTextureDescriptor {
+    type Error = FaceTextureDescriptorParseError;
+
+    fn try_from(value: UnparsedRotatedTextureDescriptor) -> Result<Self, Self::Error> {
         let string = value.0;
 
         match string.split_once(':') {
             Some((texture, rotation)) => {
-                let rotation =
-                    FaceTextureRotation::from_str(rotation).ok_or(E::new(string.clone()))?;
+                let rotation = FaceTextureRotation::from_str(rotation)?;
                 Ok(Self {
                     label: texture.to_string(),
                     rotation,
@@ -96,14 +167,11 @@ impl TryFrom<UnparsedRotatedTextureDescriptor> for RotatedTextureDescriptor {
     }
 }
 
-#[derive(serde::Deserialize, Debug, Clone)]
-struct UnparsedRotatedTextureDescriptor(String);
-
 impl BlockModelDescriptor {
     pub fn filled(label: String) -> Self {
         Self {
             textures: BlockModelFaceMap::from_fn(|_| {
-                Some(RotatedTextureDescriptor {
+                Some(FaceTextureDescriptor {
                     label: label.clone(),
                     rotation: Default::default(),
                 })
@@ -121,7 +189,7 @@ mod tests {
             texture::FaceTextureRotation,
             tile::{Face, Transparency},
             voxel::descriptor::{
-                BlockModelDescriptor, RotatedTextureDescriptor, VariantDescriptor,
+                BlockModelDescriptor, FaceTextureDescriptor, VariantDescriptor,
                 VoxelModelDescriptor,
             },
         },
@@ -131,20 +199,51 @@ mod tests {
     #[test]
     #[ignore]
     fn deserialize_variant_descriptor() {
-        todo!();
+        let raw = br#"
+        {
+            trans: opaque,
+            model: {
+                type: "block",
+                faces: {
+                    up: "tex1:0",
+                    down: "tex1:0",
+                    left: "tex1:0",
+                    right: "tex1:0",
+                    front: "tex1:0",
+                    back: "tex1:0",
+                },
+            }
+        }
+        "#;
 
         let raw = br#"
         {
             trans: opaque,
             model: {
                 type: "block",
-                t: "tex1:up",
-                bottom: "tex1:up",
-                east: "tex2:down",
-                w: "tex3:left",
+                faces: {
+                    up: "tex1:0",
+                    down: "tex1:0",
+                    left: "tex1:0",
+                    right: "tex1:0",
+                    front: "tex1:0",
+                    back: "tex1:0",
+                },
+                rotation: {
+                    north: {
+                        north: "self:up",
+                        south: "self:down",
+                        east: "self:right",
+                        west: "self:left",
+                        top: "tex1:-1",
+                        bottom: "tex2",
+                    }
+                }
             }
         }
         "#;
+
+        todo!();
 
         // let textures = {
         //     let mut map = FaceMap::<RotatedTextureDescriptor>::new();

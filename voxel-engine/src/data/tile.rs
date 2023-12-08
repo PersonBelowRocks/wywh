@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 use crate::util::Axis3D;
 
+use super::error::FaceParseError;
+
 #[derive(
     Copy,
     Clone,
@@ -76,6 +78,22 @@ pub enum Face {
     #[serde(alias = "west")]
     #[serde(alias = "w")]
     West = 5,
+}
+
+impl std::str::FromStr for Face {
+    type Err = FaceParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "t" | "top" => Self::Top,
+            "b" | "bottom" => Self::Bottom,
+            "n" | "north" => Self::North,
+            "e" | "east" => Self::East,
+            "s" | "south" => Self::South,
+            "w" | "west" => Self::West,
+
+            _ => return Err(Self::Err::new(s.to_string())),
+        })
+    }
 }
 
 impl Face {

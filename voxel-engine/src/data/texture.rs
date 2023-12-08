@@ -5,6 +5,8 @@ use ordered_float::NotNan;
 
 use crate::util::notnan_arr;
 
+use super::error::FaceTextureRotationParseError;
+
 #[derive(
     Default, Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize,
 )]
@@ -23,14 +25,20 @@ impl ops::AddAssign<Self> for FaceTextureRotation {
     }
 }
 
+impl std::str::FromStr for FaceTextureRotation {
+    type Err = FaceTextureRotationParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        i32::from_str(s)
+            .map(Self::new)
+            .map_err(|_| Self::Err::new(s.to_string()))
+    }
+}
+
 impl FaceTextureRotation {
     pub const TOTAL_ROTATIONS: i32 = 4;
     pub const ONE_TURN_DEG: i32 = 90;
     pub const ONE_TURN_RAD: f32 = 1.57079633;
-
-    pub fn from_str(string: &str) -> Option<Self> {
-        todo!()
-    }
 
     pub fn new(value: i32) -> Self {
         let value: u32 = value.rem_euclid(Self::TOTAL_ROTATIONS) as _;
