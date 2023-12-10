@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use super::{tile::Face, voxel::rotations::BlockModelFace};
+
 #[derive(te::Error, Debug)]
 #[error("TODO")]
 pub struct TileDataConversionError;
@@ -35,7 +37,15 @@ impl From<FaceTextureRotationParseError> for FaceTextureDescriptorParseError {
 }
 
 #[derive(te::Error, Debug)]
-pub enum BlockModelDescriptorParseError {}
+pub enum BlockModelDescriptorParseError {
+    #[error(
+        "Couldn't find face texture information for face '{face:?}' in direction '{direction:?}'"
+    )]
+    MissingFaceInDirection { direction: Face, face: Face },
+
+    #[error("Block model didn't have texture information for face '{0:?}'")]
+    MissingBlockModelFace(BlockModelFace),
+}
 
 #[derive(te::Error, Debug, dm::Constructor)]
 #[error("Couldn't parse '{0}' into a face texture rotation")]

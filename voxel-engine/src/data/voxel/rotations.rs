@@ -73,6 +73,28 @@ impl BlockModelFace {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlockModelFaceMap<T>([Option<T>; 6]);
 
+#[derive(Clone)]
+pub struct BlockModelFaceMapIterator<'a, T> {
+    map: &'a BlockModelFaceMap<T>,
+    face_iter: std::slice::Iter<'static, BlockModelFace>,
+}
+
+impl<'a, T> Iterator for BlockModelFaceMapIterator<'a, T> {
+    type Item = (BlockModelFace, Option<&'a T>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let face = *self.face_iter.next()?;
+        Some((face, self.map.get(face)))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (
+            BlockModelFace::FACES.len(),
+            Some(BlockModelFace::FACES.len()),
+        )
+    }
+}
+
 impl<T> BlockModelFaceMap<T> {
     pub fn new() -> Self {
         Self(array::from_fn(|_| None))
@@ -83,6 +105,13 @@ impl<T> BlockModelFaceMap<T> {
         T: Copy,
     {
         Self([Some(value); 6])
+    }
+
+    pub fn iter(&self) -> BlockModelFaceMapIterator<'_, T> {
+        BlockModelFaceMapIterator {
+            map: self,
+            face_iter: BlockModelFace::FACES.iter(),
+        }
     }
 
     pub fn from_fn<F: FnMut(BlockModelFace) -> Option<T>>(f: F) -> Self {

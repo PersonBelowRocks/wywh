@@ -85,6 +85,76 @@ impl AxisMagnitude {
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct FaceMap<T>([Option<T>; 6]);
 
+#[derive(Clone)]
+pub struct FaceMapIterator<'a, T> {
+    map: &'a FaceMap<T>,
+    face_iter: std::slice::Iter<'static, Face>,
+}
+
+impl<'a, T> Iterator for FaceMapIterator<'a, T> {
+    type Item = (Face, Option<&'a T>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let face = *self.face_iter.next()?;
+        Some((face, self.map.get(face)))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (Face::FACES.len(), Some(Face::FACES.len()))
+    }
+}
+
+impl<T> FaceMap<T> {
+    pub fn new() -> Self {
+        Self(array::from_fn(|_| None))
+    }
+
+    pub fn from_fn<F: FnMut(Face) -> Option<T>>(f: F) -> Self {
+        Self(Face::FACES.map(f))
+    }
+
+    pub fn iter(&self) -> FaceMapIterator<'_, T> {
+        FaceMapIterator {
+            map: self,
+            face_iter: Face::FACES.iter(),
+        }
+    }
+
+    pub fn get(&self, face: Face) -> Option<&T> {
+        use num_traits::ToPrimitive;
+
+        self.0[face.to_usize().unwrap()].as_ref()
+    }
+
+    pub fn set(&mut self, face: Face, data: T) -> Option<T> {
+        use num_traits::ToPrimitive;
+
+        self.0[face.to_usize().unwrap()].replace(data)
+    }
+
+    pub fn remove(&mut self, face: Face) -> Option<T> {
+        use num_traits::ToPrimitive;
+
+        self.0[face.to_usize().unwrap()].take()
+    }
+
+    pub fn map<U, F: FnMut(Face, &T) -> U>(&self, mut f: F) -> FaceMap<U> {
+        let mut mapped = FaceMap::<U>::new();
+
+        for face in Face::FACES {
+            if let Some(data) = self.get(face) {
+                mapped.set(face, f(face, data));
+            }
+        }
+
+        mapped
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.iter().filter(|&v| v.is_some()).count()
+    }
+}
+
 impl<T: serde::Serialize> serde::Serialize for FaceMap<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -129,46 +199,6 @@ impl<'de, T: serde::Deserialize<'de>> serde::de::Visitor<'de> for FaceMapVisitor
         }
 
         Ok(out)
-    }
-}
-
-impl<T> FaceMap<T> {
-    pub fn new() -> Self {
-        Self(array::from_fn(|_| None))
-    }
-
-    pub fn get(&self, face: Face) -> Option<&T> {
-        use num_traits::ToPrimitive;
-
-        self.0[face.to_usize().unwrap()].as_ref()
-    }
-
-    pub fn set(&mut self, face: Face, data: T) {
-        use num_traits::ToPrimitive;
-
-        self.0[face.to_usize().unwrap()] = Some(data)
-    }
-
-    pub fn remove(&mut self, face: Face) -> Option<T> {
-        use num_traits::ToPrimitive;
-
-        self.0[face.to_usize().unwrap()].take()
-    }
-
-    pub fn map<U, F: FnMut(Face, &T) -> U>(&self, mut f: F) -> FaceMap<U> {
-        let mut mapped = FaceMap::<U>::new();
-
-        for face in Face::FACES {
-            if let Some(data) = self.get(face) {
-                mapped.set(face, f(face, data))
-            }
-        }
-
-        mapped
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.iter().filter(|&v| v.is_some()).count()
     }
 }
 
