@@ -10,7 +10,7 @@ use super::{
         Registries,
     },
     tile::Transparency,
-    voxel::descriptor::{self, BlockModelDescriptor, VariantDescriptor, VoxelModelDescriptor},
+    voxel::descriptor::{self, BlockDescriptor, VariantDescriptor, VoxelModelDescriptor},
 };
 
 #[derive(Resource, Default)]
@@ -100,7 +100,7 @@ pub fn build_registries(world: &mut World) {
             "debug",
             VariantDescriptor {
                 transparency: Transparency::Opaque,
-                model: Some(VoxelModelDescriptor::Block(BlockModelDescriptor::filled(
+                model: Some(VoxelModelDescriptor::Block(BlockDescriptor::filled(
                     "debug_texture".into(),
                 ))),
             },

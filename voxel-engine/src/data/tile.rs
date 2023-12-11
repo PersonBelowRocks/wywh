@@ -118,6 +118,11 @@ impl Face {
     }
 
     #[inline]
+    pub fn as_usize(self) -> usize {
+        num_traits::ToPrimitive::to_usize(&self).unwrap()
+    }
+
+    #[inline]
     pub const fn opposite(self) -> Self {
         match self {
             Self::Top => Self::Bottom,

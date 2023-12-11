@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use super::{tile::Face, voxel::rotations::BlockModelFace};
+use super::{registries::error::TextureNotFound, tile::Face, voxel::rotations::BlockModelFace};
 
 #[derive(te::Error, Debug)]
 #[error("TODO")]
@@ -67,4 +67,18 @@ pub enum RotatedTextureDescriptorParseError {
     BlockModelFace(#[from] BlockModelFaceParseError),
     #[error("{0}")]
     Face(#[from] FaceParseError),
+}
+
+#[derive(te::Error, Debug)]
+pub enum SubmodelFromDescriptorError {
+    #[error("'{0}'")]
+    TextureNotFound(#[from] TextureNotFound),
+    #[error("Missing texture for face: {0:?}")]
+    MissingFace(Face),
+}
+
+#[derive(te::Error, Debug)]
+pub enum VoxelModelCreationError {
+    #[error("'{0}'")]
+    BlockModelError(#[from] SubmodelFromDescriptorError),
 }

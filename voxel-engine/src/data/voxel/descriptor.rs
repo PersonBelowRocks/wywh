@@ -5,17 +5,17 @@ use crate::{
         error::{
             BlockModelDescriptorParseError, FaceTextureDescriptorParseError,
             FaceTextureRotationParseError, RotatedTextureDescriptorParseError,
+            SubmodelFromDescriptorError, VoxelModelCreationError,
         },
         registries::{error::TextureNotFound, texture::TextureRegistry, Registry},
         texture::{FaceTexture, FaceTextureRotation},
         tile::{Face, Transparency},
-        voxel::rotations::BlockModelFace,
+        voxel::{rotations::BlockModelFace, BlockSubmodel},
     },
     util::FaceMap,
 };
 
 use super::{
-    rotations::{BlockModelFaceMap, BlockModelRotation},
     serialization::{UnparsedBlockModelDescriptor, UnparsedRotatedTextureDescriptor},
     BlockModel, VoxelModel,
 };
@@ -32,33 +32,17 @@ pub struct VariantDescriptor {
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum VoxelModelDescriptor {
-    Block(BlockModelDescriptor),
+    Block(BlockDescriptor),
 }
 
 impl VoxelModelDescriptor {
     pub fn create_voxel_model(
         &self,
-        texture_registry: &TextureRegistry,
-    ) -> Result<VoxelModel, TextureNotFound> {
+        registry: &TextureRegistry,
+    ) -> Result<VoxelModel, VoxelModelCreationError> {
         match self {
-            VoxelModelDescriptor::Block(model) => {
-                todo!()
-                // let mut textures = BlockModelFaceMap::new();
-
-                // for face in BlockModelFace::FACES {
-                //     if let Some(tex_desc) = model.textures.get(face) {
-                //         let Some(texture) = texture_registry.get_by_label(&tex_desc.label) else {
-                //             return Err(TextureNotFound(tex_desc.label.clone()));
-                //         };
-
-                //         textures.set(
-                //             face,
-                //             FaceTexture::new_rotated(texture.texture_pos, tex_desc.rotation),
-                //         );
-                //     }
-                // }
-
-                // Ok(VoxelModel::Block(BlockModel { textures }))
+            VoxelModelDescriptor::Block(descriptor) => {
+                Ok(BlockModel::from_descriptor(descriptor, registry).map(VoxelModel::Block)?)
             }
 
             _ => todo!(),
@@ -68,7 +52,7 @@ impl VoxelModelDescriptor {
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 #[serde(try_from = "UnparsedBlockModelDescriptor")]
-pub struct BlockModelDescriptor {
+pub struct BlockDescriptor {
     pub directions: FaceMap<FaceMap<FaceTextureDescriptor>>,
     pub default: FaceMap<FaceTextureDescriptor>,
 }
@@ -80,7 +64,7 @@ pub struct FaceTextureDescriptor {
     pub rotation: FaceTextureRotation,
 }
 
-impl BlockModelDescriptor {
+impl BlockDescriptor {
     pub fn filled(label: String) -> Self {
         Self {
             directions: FaceMap::new(),
@@ -103,8 +87,7 @@ mod tests {
             texture::FaceTextureRotation,
             tile::{Face, Transparency},
             voxel::descriptor::{
-                BlockModelDescriptor, FaceTextureDescriptor, VariantDescriptor,
-                VoxelModelDescriptor,
+                BlockDescriptor, FaceTextureDescriptor, VariantDescriptor, VoxelModelDescriptor,
             },
         },
         util::FaceMap,

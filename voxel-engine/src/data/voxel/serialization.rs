@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    descriptor::{BlockModelDescriptor, FaceTextureDescriptor},
+    descriptor::{BlockDescriptor, FaceTextureDescriptor},
     rotations::{BlockModelFace, BlockModelFaceMap, BlockModelRotation},
 };
 
@@ -64,13 +64,13 @@ impl<'de, T: serde::Deserialize<'de>> serde::de::Visitor<'de> for BlockModelFace
     }
 }
 
-impl TryFrom<UnparsedBlockModelDescriptor> for BlockModelDescriptor {
+impl TryFrom<UnparsedBlockModelDescriptor> for BlockDescriptor {
     type Error = BlockModelDescriptorParseError;
 
     fn try_from(unparsed: UnparsedBlockModelDescriptor) -> Result<Self, Self::Error> {
         let default_direction = BlockModelRotation::new(Face::North, Face::Top).unwrap();
 
-        let mut out = BlockModelDescriptor {
+        let mut out = BlockDescriptor {
             directions: FaceMap::new(),
             default: FaceMap::new(),
         };

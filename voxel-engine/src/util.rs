@@ -120,6 +120,30 @@ impl<T> FaceMap<T> {
         }
     }
 
+    pub fn all<F: FnMut(Face, &T) -> bool>(&self, mut f: F) -> bool {
+        for face in Face::FACES {
+            if let Some(value) = self.get(face) {
+                if !f(face, value) {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    pub fn any<F: FnMut(Face, &T) -> bool>(&self, mut f: F) -> bool {
+        for face in Face::FACES {
+            if let Some(value) = self.get(face) {
+                if f(face, value) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
     pub fn get(&self, face: Face) -> Option<&T> {
         use num_traits::ToPrimitive;
 
@@ -152,6 +176,10 @@ impl<T> FaceMap<T> {
 
     pub fn len(&self) -> usize {
         self.0.iter().filter(|&v| v.is_some()).count()
+    }
+
+    pub fn is_filled(&self) -> bool {
+        self.len() == 6
     }
 }
 

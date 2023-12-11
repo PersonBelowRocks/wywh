@@ -6,7 +6,7 @@ use bevy::{
     sprite::TextureAtlasBuilderError,
 };
 
-use crate::data::systems::VoxelTextureFolder;
+use crate::data::{error::VoxelModelCreationError, systems::VoxelTextureFolder};
 
 #[derive(te::Error, Debug)]
 pub enum TextureRegistryError {
@@ -33,7 +33,7 @@ pub enum TextureRegistryError {
 #[derive(Debug, te::Error)]
 pub enum VariantRegistryError {
     #[error("{0}")]
-    TextureNotFound(#[from] TextureNotFound),
+    VoxelModelCreationError(#[from] VoxelModelCreationError),
 }
 
 #[derive(Debug, te::Error)]

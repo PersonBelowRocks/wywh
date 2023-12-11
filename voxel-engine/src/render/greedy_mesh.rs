@@ -116,7 +116,7 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
         Ok(variant
             .model
             .and_then(|vm| vm.as_block_model())
-            .and_then(|bm| bm.faces_for_rotation(rotation).get(self.face).copied())
+            .map(|bm| bm.submodel(rotation.front()).get_texture(self.face))
             .map(|mut tex| {
                 tex.rotation += if self.face.is_vertical() {
                     FaceTextureRotation::new(2)
