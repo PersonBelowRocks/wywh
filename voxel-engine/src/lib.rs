@@ -7,6 +7,8 @@ extern crate thiserror as te;
 #[macro_use]
 extern crate num_derive;
 
+use std::{path::PathBuf, sync::Arc};
+
 use bevy::{pbr::ExtendedMaterial, prelude::*};
 use data::registries::Registries;
 use render::meshing_algos::SimplePbrMesher;
@@ -21,7 +23,7 @@ pub mod topo;
 pub mod util;
 
 use crate::{
-    data::systems::{build_registries, check_textures, load_textures},
+    data::systems::{build_registries, check_textures, load_textures, VariantFolders},
     render::{
         greedy_mesh_material::GreedyMeshMaterial,
         meshing_algos::GreedyMesher,
@@ -30,7 +32,17 @@ use crate::{
     topo::systems::generate_chunks_from_events,
 };
 
-pub struct VoxelPlugin;
+pub struct VoxelPlugin {
+    variant_folders: Arc<Vec<PathBuf>>,
+}
+
+impl VoxelPlugin {
+    pub fn new(variant_folders: Vec<PathBuf>) -> Self {
+        VoxelPlugin {
+            variant_folders: Arc::new(variant_folders),
+        }
+    }
+}
 
 #[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct VoxelSystemSet;
@@ -80,6 +92,8 @@ impl Plugin for VoxelPlugin {
         >::default());
         app.add_event::<GenerateChunk>();
         app.add_state::<AppState>();
+
+        app.insert_resource(VariantFolders::new(self.variant_folders.clone()));
 
         // app.add_systems(Startup, setup);
         app.add_systems(OnEnter(AppState::Setup), load_textures);

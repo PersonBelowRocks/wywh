@@ -27,7 +27,7 @@ fn main() {
                 .into(),
             }),
             WireframePlugin,
-            ve::VoxelPlugin,
+            ve::VoxelPlugin::new(vec!["test-app\\assets\\variants".into()]),
         ))
         .add_systems(Startup, setup)
         .add_systems(

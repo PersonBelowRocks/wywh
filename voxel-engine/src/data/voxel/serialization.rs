@@ -75,6 +75,14 @@ impl TryFrom<UnparsedBlockModelDescriptor> for BlockDescriptor {
             default: FaceMap::new(),
         };
 
+        for face in BlockModelFace::FACES {
+            let cardinal = default_direction.get_cardinal_face(face);
+
+            // TODO: this might be fallible? check if it is and fix it accordingly!
+            out.default
+                .set(cardinal, unparsed.faces.get(face).unwrap().clone());
+        }
+
         for pair in unparsed.rotations.iter() {
             let (direction, Some(model)) = pair else {
                 continue;
@@ -127,6 +135,7 @@ impl TryFrom<UnparsedBlockModelDescriptor> for BlockDescriptor {
 pub(super) struct UnparsedBlockModelDescriptor {
     faces: BlockModelFaceMap<FaceTextureDescriptor>,
     #[serde(alias = "rotation")]
+    #[serde(default)]
     rotations: FaceMap<FaceMap<RotatedTextureDescriptor>>,
 }
 

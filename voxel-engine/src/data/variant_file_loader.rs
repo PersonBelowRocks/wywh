@@ -19,6 +19,7 @@ fn path_to_label(path: &Path) -> Option<&str> {
         .filter(|&s| !s.contains(':'))
 }
 
+#[derive(Clone)]
 pub struct VariantFileLoader {
     raw_descriptors: hb::HashMap<String, Vec<u8>>,
 }
@@ -28,6 +29,10 @@ impl VariantFileLoader {
         Self {
             raw_descriptors: hb::HashMap::new(),
         }
+    }
+
+    pub fn labels(&self) -> impl Iterator<Item = &str> {
+        self.raw_descriptors.keys().map(AsRef::as_ref)
     }
 
     pub fn load_folder(&mut self, path: impl AsRef<Path>) -> Result<(), VariantFileLoaderError> {

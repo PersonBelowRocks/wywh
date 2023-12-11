@@ -104,6 +104,12 @@ impl<'a, T> Iterator for FaceMapIterator<'a, T> {
     }
 }
 
+impl<T> Default for FaceMap<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> FaceMap<T> {
     pub fn new() -> Self {
         Self(array::from_fn(|_| None))

@@ -1,4 +1,4 @@
-use std::ffi::OsStr;
+use std::{ffi::OsStr, path::PathBuf, sync::Arc};
 
 use bevy::{asset::LoadedFolder, prelude::*};
 
@@ -10,6 +10,7 @@ use super::{
         Registries,
     },
     tile::Transparency,
+    variant_file_loader::VariantFileLoader,
     voxel::descriptor::{self, BlockDescriptor, VariantDescriptor, VoxelModelDescriptor},
 };
 
@@ -18,6 +19,9 @@ pub struct VoxelTextureFolder(pub Handle<LoadedFolder>);
 
 #[derive(Resource, Default)]
 pub struct VoxelTextureAtlas(pub Handle<Image>);
+
+#[derive(Resource, Deref, dm::Constructor)]
+pub struct VariantFolders(Arc<Vec<PathBuf>>);
 
 pub(crate) fn load_textures(mut cmds: Commands, server: Res<AssetServer>) {
     cmds.insert_resource(VoxelTextureFolder(server.load_folder("textures")));
@@ -87,33 +91,38 @@ pub fn build_registries(world: &mut World) {
     };
 
     world.insert_resource(VoxelTextureAtlas(textures.atlas_texture().clone()));
+    let variant_folders = world.get_resource::<VariantFolders>().unwrap();
 
-    let builtin_variants = [
-        (
-            "void",
-            VariantDescriptor {
-                transparency: Transparency::Transparent,
-                model: None,
-            },
-        ),
-        (
-            "debug",
-            VariantDescriptor {
-                transparency: Transparency::Opaque,
-                model: Some(VoxelModelDescriptor::Block(BlockDescriptor::filled(
-                    "debug_texture".into(),
-                ))),
-            },
-        ),
-    ];
+    let mut file_loader = VariantFileLoader::new();
+    let mut registry_loader = VariantRegistryLoader::new();
 
-    let mut loader = VariantRegistryLoader::new();
+    registry_loader.register(
+        "void",
+        VariantDescriptor {
+            transparency: Transparency::Transparent,
+            model: None,
+        },
+    );
 
-    for (label, descriptor) in builtin_variants {
-        loader.register(label, descriptor);
+    for folder in variant_folders.iter() {
+        if let Err(err) = file_loader.load_folder(folder) {
+            let path = folder.as_path().to_string_lossy();
+            error!("Error while loading variant folder at path '{path}': '{err}'");
+        }
     }
 
-    let variants = loader.build_registry(&textures);
+    for label in file_loader.labels() {
+        match file_loader.parse(label) {
+            Ok(descriptor) => {
+                info!("Registering variant with label '{label}'");
+                registry_loader.register(label, descriptor);
+            }
+            Err(error) => error!("Couldn't parse variant descriptor with label '{label}': {error}"),
+        }
+    }
+
+    let variants = registry_loader.build_registry(&textures);
+
     if let Err(error) = variants {
         error!("Error building variant registry: '{error}'");
         panic!();

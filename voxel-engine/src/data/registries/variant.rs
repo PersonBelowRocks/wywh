@@ -2,6 +2,7 @@ use indexmap::IndexMap;
 
 use crate::data::{
     tile::Transparency,
+    variant_file_loader::VariantFileLoader,
     voxel::{descriptor::VariantDescriptor, VoxelModel},
 };
 
@@ -22,6 +23,10 @@ impl VariantRegistryLoader {
         Self {
             descriptors: hb::HashMap::new(),
         }
+    }
+
+    pub fn register_from_file_loader(&mut self, loader: &VariantFileLoader) -> Result<(), ()> {
+        Ok(())
     }
 
     pub fn register(&mut self, label: impl Into<String>, descriptor: VariantDescriptor) {

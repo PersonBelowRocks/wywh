@@ -2,11 +2,13 @@
     trans: "opaque",
     model: {
         type: "block",
-        top: "debug_texture",
-        bottom: "debug_texture",
-        north: "debug_texture",
-        east: "debug_texture",
-        south: "debug_texture",
-        west: "debug_texture",
+        faces: {
+            up: "debug_texture",
+            down: "debug_texture",
+            left: "debug_texture",
+            right: "debug_texture",
+            front: "debug_texture",
+            back: "debug_texture",
+        }
     }
 }
