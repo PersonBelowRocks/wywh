@@ -4,6 +4,6 @@ use std::error::Error;
 pub enum MesherError<AE: Error> {
     #[error("Access returned an error during meshing: {0}")]
     AccessError(#[from] AE),
-    #[error("Meshes ran into an internal error: {0}")]
+    #[error("Mesher ran into an internal error: '{0}'")]
     InternalError(String),
 }

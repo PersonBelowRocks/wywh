@@ -10,7 +10,7 @@ use crate::data::{error::VoxelModelCreationError, systems::VoxelTextureFolder};
 
 #[derive(te::Error, Debug)]
 pub enum TextureRegistryError {
-    #[error("Could not get path for handle {0:?}")]
+    #[error("Could not get path for handle '{0:?}'")]
     CannotMakePath(UntypedHandle),
     #[error("Bad file name for texture: '{0}'")]
     BadFileName(AssetPath<'static>),
@@ -22,9 +22,9 @@ pub enum TextureRegistryError {
     AtlasBuilderError(#[from] TextureAtlasBuilderError),
     #[error("Unexpected asset ID type: {0}")]
     UnexpectedAssetIdType(#[from] UntypedAssetIdConversionError),
-    #[error("{0:?} was not a square image")]
+    #[error("'{0:?}' was not a square image")]
     InvalidImageDimensions(AssetPath<'static>),
-    #[error("Texture does not exist: {0:?}")]
+    #[error("Texture does not exist: '{0:?}'")]
     TextureDoesntExist(AssetPath<'static>),
     #[error("Texture not loaded: '{0}'")]
     TextureNotLoaded(AssetId<Image>),

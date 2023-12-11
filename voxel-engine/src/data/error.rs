@@ -8,7 +8,7 @@ pub struct TileDataConversionError;
 
 #[derive(te::Error, Debug)]
 pub enum TextureLoadingError {
-    #[error("Error loading texture to registry. Path: {0}")]
+    #[error("Error loading texture to registry. Path: '{0}'")]
     FileNotFound(PathBuf),
     #[error("Texture was either not square or not 2D")]
     InvalidTextureDimensions,
@@ -22,7 +22,7 @@ pub enum VariantFileLoaderError {
     ParseError(#[from] deser_hjson::Error),
     #[error("Variant not found: '{0}'")]
     VariantNotFound(String),
-    #[error("Invalid variant file name: {0}")]
+    #[error("Invalid variant file name: '{0}'")]
     InvalidFileName(PathBuf),
 }
 
@@ -71,7 +71,7 @@ pub enum RotatedTextureDescriptorParseError {
 
 #[derive(te::Error, Debug)]
 pub enum SubmodelFromDescriptorError {
-    #[error("'{0}'")]
+    #[error("{0}")]
     TextureNotFound(#[from] TextureNotFound),
     #[error("Missing texture for face: {0:?}")]
     MissingFace(Face),
@@ -79,6 +79,6 @@ pub enum SubmodelFromDescriptorError {
 
 #[derive(te::Error, Debug)]
 pub enum VoxelModelCreationError {
-    #[error("'{0}'")]
+    #[error("{0}")]
     BlockModelError(#[from] SubmodelFromDescriptorError),
 }
