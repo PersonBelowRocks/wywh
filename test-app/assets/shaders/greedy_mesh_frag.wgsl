@@ -54,7 +54,7 @@ fn fragment(
     let offset = vec2(0.5, 0.5);
     uv = (M * (uv - offset)) + offset;
 
-    in.uv = ((uv / texture_scale) + texture);
+    in.uv = ((uv / texture_scale) + ((texture / texture_scale) / texture_scale));
 
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     in.instance_index = raw_in.instance_index;

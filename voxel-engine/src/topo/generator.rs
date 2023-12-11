@@ -94,6 +94,7 @@ pub struct GenerateChunk {
 struct GeneratorPalette {
     void: RegistryId<VariantRegistry>,
     debug: RegistryId<VariantRegistry>,
+    stone: RegistryId<VariantRegistry>,
 }
 
 #[derive(Clone)]
@@ -113,6 +114,7 @@ impl Generator {
         let palette = GeneratorPalette {
             void: variants.get_id("void").unwrap(),
             debug: variants.get_id("debug").unwrap(),
+            stone: variants.get_id("stone").unwrap(),
         };
 
         let positions = [
@@ -120,7 +122,7 @@ impl Generator {
                 ivec3(0, 0, 0),
                 ChunkVoxelInput {
                     transparency: Transparency::Opaque,
-                    variant: palette.debug,
+                    variant: palette.stone,
                     rotation: Some(BlockModelRotation::new(Face::North, Face::Top).unwrap()),
                 },
             ),
@@ -128,7 +130,7 @@ impl Generator {
                 ivec3(2, 0, 0),
                 ChunkVoxelInput {
                     transparency: Transparency::Opaque,
-                    variant: palette.debug,
+                    variant: palette.stone,
                     rotation: Some(BlockModelRotation::new(Face::East, Face::Top).unwrap()),
                 },
             ),
@@ -136,7 +138,7 @@ impl Generator {
                 ivec3(4, 0, 0),
                 ChunkVoxelInput {
                     transparency: Transparency::Opaque,
-                    variant: palette.debug,
+                    variant: palette.stone,
                     rotation: Some(BlockModelRotation::new(Face::South, Face::Top).unwrap()),
                 },
             ),
@@ -144,7 +146,7 @@ impl Generator {
                 ivec3(6, 0, 0),
                 ChunkVoxelInput {
                     transparency: Transparency::Opaque,
-                    variant: palette.debug,
+                    variant: palette.stone,
                     rotation: Some(BlockModelRotation::new(Face::West, Face::Top).unwrap()),
                 },
             ),
@@ -169,7 +171,7 @@ impl Generator {
                 ivec3(4, 8, 0),
                 ChunkVoxelInput {
                     transparency: Transparency::Opaque,
-                    variant: palette.debug,
+                    variant: palette.stone,
                     rotation: Some(BlockModelRotation::new(Face::Bottom, Face::North).unwrap()),
                 },
             ),

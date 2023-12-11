@@ -1,0 +1,14 @@
+{
+    trans: "opaque",
+    model: {
+        type: "block",
+        faces: {
+            up: "stone",
+            down: "stone",
+            left: "stone",
+            right: "stone",
+            front: "stone",
+            back: "stone",
+        }
+    }
+}

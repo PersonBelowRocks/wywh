@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use bevy::{
     asset::{AssetId, Assets, Handle},
+    log::info,
     math::Vec2,
     render::texture::Image,
     sprite::{TextureAtlas, TextureAtlasBuilder},
@@ -43,6 +44,15 @@ impl TextureRegistryLoader {
         }
 
         let atlas = builder.finish(textures)?;
+
+        for (label, id) in self.map.iter() {
+            let idx = atlas.get_texture_index(id.clone()).unwrap();
+            let rect = atlas.textures[idx];
+            info!(
+                "Texture registry contains texture '{label}' at {}",
+                rect.min
+            );
+        }
 
         registry_map.extend(
             self.map

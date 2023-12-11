@@ -110,7 +110,7 @@ pub fn cursor_grab(
     if btn.just_pressed(MouseButton::Left) {
         // if you want to use the cursor, but not let it leave the window,
         // use `Confined` mode:
-        println!("Locking cursor");
+        info!("Locking cursor");
         window.cursor.grab_mode = CursorGrabMode::Locked;
         window.cursor.visible = false;
         controller.controlled = true;
@@ -124,7 +124,7 @@ pub fn cursor_grab(
     }
 
     if key.just_pressed(KeyCode::Escape) {
-        println!("Unlocking cursor");
+        info!("Unlocking cursor");
         window.cursor.grab_mode = CursorGrabMode::None;
         window.cursor.visible = true;
         controller.controlled = false;
