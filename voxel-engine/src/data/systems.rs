@@ -11,7 +11,7 @@ use super::{
     },
     tile::Transparency,
     variant_file_loader::VariantFileLoader,
-    voxel::descriptor::{self, BlockDescriptor, VariantDescriptor, VoxelModelDescriptor},
+    voxel::descriptor::VariantDescriptor,
 };
 
 #[derive(Resource, Default)]

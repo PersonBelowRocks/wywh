@@ -1,16 +1,7 @@
-use std::str::FromStr;
-
 use crate::{
     data::{
-        error::{
-            BlockModelDescriptorParseError, FaceTextureDescriptorParseError,
-            FaceTextureRotationParseError, RotatedTextureDescriptorParseError,
-            SubmodelFromDescriptorError, VoxelModelCreationError,
-        },
-        registries::{error::TextureNotFound, texture::TextureRegistry, Registry},
-        texture::{FaceTexture, FaceTextureRotation},
-        tile::{Face, Transparency},
-        voxel::{rotations::BlockModelFace, BlockSubmodel},
+        error::VoxelModelCreationError, registries::texture::TextureRegistry,
+        texture::FaceTextureRotation, tile::Transparency,
     },
     util::FaceMap,
 };

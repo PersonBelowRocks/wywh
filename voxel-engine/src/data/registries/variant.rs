@@ -25,7 +25,7 @@ impl VariantRegistryLoader {
         }
     }
 
-    pub fn register_from_file_loader(&mut self, loader: &VariantFileLoader) -> Result<(), ()> {
+    pub fn register_from_file_loader(&mut self, _loader: &VariantFileLoader) -> Result<(), ()> {
         Ok(())
     }
 

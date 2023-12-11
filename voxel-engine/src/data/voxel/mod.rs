@@ -1,20 +1,13 @@
-use std::iter::from_fn;
-
-use bevy::math::Vec2;
-
 use crate::{
     data::{error::SubmodelFromDescriptorError, registries::Registry},
     util::FaceMap,
 };
 
-use self::{
-    descriptor::{BlockDescriptor, FaceTextureDescriptor},
-    rotations::{BlockModelFace, BlockModelFaceMap, BlockModelRotation},
-};
+use self::descriptor::{BlockDescriptor, FaceTextureDescriptor};
 
 use super::{
     registries::{error::TextureNotFound, texture::TextureRegistry},
-    texture::{FaceTexture, FaceTextureRotation},
+    texture::FaceTexture,
     tile::{Face, Transparency},
 };
 
@@ -60,7 +53,7 @@ pub struct BlockSubmodel([FaceTexture; 6]);
 
 impl BlockSubmodel {
     pub fn from_face_map(map: FaceMap<FaceTexture>) -> Option<Self> {
-        let mut arr: [Option<FaceTexture>; 6] = std::array::from_fn(|i| None);
+        let mut arr: [Option<FaceTexture>; 6] = std::array::from_fn(|_i| None);
 
         for (face, tex) in map.iter() {
             arr[face.as_usize()] = Some(tex.copied()?);

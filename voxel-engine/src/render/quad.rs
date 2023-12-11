@@ -8,7 +8,6 @@ use bevy::prelude::Vec3;
 use crate::data::tile::Face;
 
 use crate::data::texture::FaceTextureRotation;
-use crate::util;
 
 use super::mesh_builder::ChunkMeshAttributes;
 

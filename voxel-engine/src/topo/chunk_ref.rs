@@ -16,7 +16,7 @@ use crate::data::{
 
 use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
-    chunk::{Chunk, ChunkPos, VariantType, VoxelVariantData},
+    chunk::{Chunk, ChunkPos, VoxelVariantData},
     error::{ChunkAccessError, ChunkRefAccessError},
     storage::containers::{
         data_storage::{SiccAccess, SiccReadAccess},

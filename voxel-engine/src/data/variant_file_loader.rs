@@ -1,9 +1,4 @@
-use std::{
-    ffi::OsStr,
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::{ffi::OsStr, fs::File, io::Read, path::Path};
 
 use super::{error::VariantFileLoaderError, voxel::descriptor::VariantDescriptor};
 

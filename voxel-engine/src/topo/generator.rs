@@ -15,7 +15,7 @@ use crate::data::{
 
 use super::{
     access::{ChunkBounds, HasBounds, WriteAccess},
-    chunk::{Chunk, ChunkPos, VariantType, VoxelVariantData},
+    chunk::{Chunk, ChunkPos, VoxelVariantData},
     chunk_ref::ChunkVoxelInput,
     error::{ChunkAccessError, GeneratorError},
     storage::{
@@ -212,7 +212,7 @@ impl Generator {
         for (ls_x, ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
             for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
                 for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
-                    let noise_pos = ivec3(ws_x, ws_y, ws_z).as_dvec3() * self.scale;
+                    let _noise_pos = ivec3(ws_x, ws_y, ws_z).as_dvec3() * self.scale;
                     let ls_pos = ivec3(ls_x, ls_y, ls_z);
                     let ws_pos = ivec3(ws_x, ws_y, ws_z);
 
