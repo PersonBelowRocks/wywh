@@ -1,0 +1,14 @@
+{
+    trans: "opaque",
+    model: {
+        type: "block",
+        faces: {
+            up: "water",
+            down: "water",
+            left: "water",
+            right: "water",
+            front: "water",
+            back: "water",
+        }
+    }
+}
