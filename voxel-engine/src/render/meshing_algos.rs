@@ -153,8 +153,7 @@ impl GreedyMesher {
                         pos: tex.tex_pos(),
                         rotation: tex.rotation,
                         flip_uv_x: matches!(slice.face, Face::South | Face::East | Face::Bottom),
-                        flip_uv_y: slice.get(pos)?.rotation.is_some_and(|r| r.pitch() > 0)
-                            && slice.face.is_vertical(),
+                        flip_uv_y: false,
                     },
                 })
             }
