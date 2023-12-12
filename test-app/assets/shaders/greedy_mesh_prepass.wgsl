@@ -20,9 +20,7 @@ struct GreedyVertexOutput {
 
 #ifdef NORMAL_PREPASS_OR_DEFERRED_PREPASS
     @location(1) world_normal: vec3<f32>,
-#ifdef VERTEX_TANGENTS
     @location(2) world_tangent: vec4<f32>,
-#endif
 #endif // NORMAL_PREPASS_OR_DEFERRED_PREPASS
 
     @location(3) world_position: vec4<f32>,
@@ -50,15 +48,12 @@ struct Vertex {
 
 #ifdef NORMAL_PREPASS_OR_DEFERRED_PREPASS
     @location(1) normal: vec3<f32>,
-#ifdef VERTEX_TANGENTS
-    @location(4) tangent: vec4<f32>,
-#endif
 #endif // NORMAL_PREPASS_OR_DEFERRED_PREPASS
-
-#ifdef VERTEX_COLORS
-    @location(5) color: vec4<f32>,
-#endif
 }
+
+const ROTATION_MASK: u32 = #{ROTATION_MASK}u;
+const FLIP_UV_X: u32 = #{FLIP_UV_X}u;
+const FLIP_UV_Y: u32 = #{FLIP_UV_Y}u;
 
 @vertex
 fn vertex(
@@ -71,41 +66,67 @@ fn vertex(
     var vertex = vertex_no_morph;
     out.texture_id = texture_id;
 
-    var texture_rot: f32;
-    switch misc {
-        case 0u: {
-            texture_rot = radians(0.0);
-            break;
-        } // up
-            
-        case 1u: {
-            texture_rot = radians(180.0);
-            break;
-        } // down
+    let rotation = misc ^ ROTATION_MASK;
 
-        case 2u: {
-            texture_rot = radians(90.0);
-            break;
-        } // left
-
-        case 3u: {
-            texture_rot = radians(270.0);
-            break;
-        } // right
-            
-        default: {
-            texture_rot = radians(0.0);
-            break;
-        }
-    }
-
-    out.texture_rot = texture_rot;
+    out.texture_rot = radians(90.0 * f32(rotation));
 
     // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
     // See https://github.com/gfx-rs/naga/issues/2416
     var model = mesh_functions::get_model_matrix(vertex_no_morph.instance_index);
 
     out.position = mesh_functions::mesh_position_local_to_clip(model, vec4(vertex.position, 1.0));
+
+#ifdef NORMAL_PREPASS_OR_DEFERRED_PREPASS
+    var tangent: vec3<f32>;
+    if vertex.normal.y != 0.0 {
+        tangent = vec3(1.0, 0.0, 0.0);
+    }
+    if vertex.normal.x != 0.0 {
+        tangent = vec3(0.0, 0.0, 1.0);
+    }
+    if vertex.normal.z != 0.0 {
+        tangent = vec3(1.0, 0.0 ,0.0);
+    }
+
+    if  (misc & FLIP_UV_X) != 0u {
+        tangent = -tangent;
+    }
+
+    let a = out.texture_rot;
+    var M: mat3x3<f32>;
+    if vertex.normal.y != 0.0 {
+        M = mat3x3(
+            cos(a), 0.0, -sin(a),
+            0.0,    1.0,     0.0,
+            sin(a), 0.0,  cos(a),
+        );
+    }
+    if vertex.normal.x != 0.0 {
+        M = mat3x3(
+            1.0,    0.0,     0.0,
+            0.0, cos(a), -sin(a),
+            0.0, sin(a),  cos(a),
+        );
+    }
+    if vertex.normal.z != 0.0 {
+        M = mat3x3(
+            cos(a), -sin(a), 0.0,
+            sin(a),  cos(a), 0.0,
+            0.0,        0.0, 1.0,
+        );
+    }
+
+    tangent = M * tangent;
+
+    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(
+        model,
+        vec4(tangent.xyz, 0.0),
+        // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
+        // See https://github.com/gfx-rs/naga/issues/2416
+        get_instance_index(vertex_no_morph.instance_index)
+    );
+#endif
+
 #ifdef DEPTH_CLAMP_ORTHO
     out.clip_position_unclamped = out.position;
     out.position.z = min(out.position.z, 1.0);
@@ -119,16 +140,6 @@ fn vertex(
         // See https://github.com/gfx-rs/naga/issues/2416
         get_instance_index(vertex_no_morph.instance_index)
     );
-
-#ifdef VERTEX_TANGENTS
-    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(
-        model,
-        vertex.tangent,
-        // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
-        // See https://github.com/gfx-rs/naga/issues/2416
-        get_instance_index(vertex_no_morph.instance_index)
-    );
-#endif // VERTEX_TANGENTS
 #endif // NORMAL_PREPASS_OR_DEFERRED_PREPASS
 
 #ifdef VERTEX_COLORS

@@ -6,6 +6,7 @@ use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
 pub mod error;
 pub mod model;
+pub mod normals;
 pub mod texture;
 pub mod variant;
 

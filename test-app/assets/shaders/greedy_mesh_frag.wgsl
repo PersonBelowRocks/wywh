@@ -39,6 +39,7 @@ fn fragment(
     in.position = raw_in.position;
     in.world_position = raw_in.world_position;
     in.world_normal = raw_in.world_normal;
+    in.world_tangent = raw_in.world_tangent;
 
     let fract_uv = fract(raw_in.uv);
     var uv: vec2<f32> = fract_uv;

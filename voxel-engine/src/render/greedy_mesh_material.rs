@@ -1,4 +1,5 @@
 use bevy::{
+    log::info,
     math::Vec2,
     pbr::{MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
     prelude::{debug, Asset, Mesh},
@@ -45,6 +46,8 @@ impl MaterialExtension for GreedyMeshMaterial {
     ) -> Result<(), SpecializedMeshPipelineError> {
         use crate::render::quad::consts::*;
 
+        info!("Specializing pipeline '{:?}'", descriptor.label);
+
         let shader_defs = [
             uint_shader_def!(ROTATION_MASK),
             uint_shader_def!(FLIP_UV_X),
@@ -68,6 +71,9 @@ impl MaterialExtension for GreedyMeshMaterial {
             .extend_from_slice(&shader_defs);
         if let Some(fragment) = descriptor.fragment.as_mut() {
             fragment.shader_defs.extend_from_slice(&shader_defs);
+            fragment
+                .shader_defs
+                .extend_from_slice(&["VERTEX_TANGENTS".into()])
         }
 
         Ok(())
