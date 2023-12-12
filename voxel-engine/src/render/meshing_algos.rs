@@ -85,6 +85,9 @@ impl GreedyMesher {
                 },
                 extension: GreedyMeshMaterial {
                     texture_scale: texture_registry.texture_scale(),
+
+                    base_texture_positions: Vec::new(),
+                    roughness_texture_positions: Vec::new(),
                 },
             },
 

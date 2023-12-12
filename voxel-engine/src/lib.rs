@@ -147,7 +147,6 @@ fn generate_debug_chunks(mut events: EventWriter<GenerateChunk>) {
 }
 
 fn setup(mut cmds: Commands, registries: Res<Registries>) {
-    println!("running setup");
     let available_parallelism = std::thread::available_parallelism().unwrap();
     // let mut texture_reg_builder = VoxelTextureRegistryBuilder::new(server.as_ref());
 

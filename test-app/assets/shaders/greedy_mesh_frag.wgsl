@@ -19,6 +19,12 @@
 @group(2) @binding(100)
 var<uniform> texture_scale: f32;
 
+@group(2) @binding(101)
+var<storage> textures: array<vec2<f32>>;
+
+@group(2) @binding(102)
+var<storage> roughness: array<vec2<f32>>;
+
 @fragment
 fn fragment(
     raw_in: VertexOutput,

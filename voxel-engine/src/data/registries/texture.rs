@@ -82,6 +82,24 @@ impl TextureRegistry {
         // TODO: this should be configurable without recompiling so we can support textures of different resolutions
         16.0
     }
+
+    pub fn texture_position_buffer(&self) -> Vec<Vec2> {
+        let mut buffer = vec![None::<Vec2>; self.map.len()];
+
+        for idx in self
+            .map
+            .values()
+            .copied()
+            .map(RegistryId::inner)
+            .map(|i| i as usize)
+        {
+            let tex_pos = self.atlas.textures[idx].min;
+
+            buffer[idx] = Some(tex_pos)
+        }
+
+        buffer.into_iter().collect::<Option<Vec<_>>>().unwrap()
+    }
 }
 
 #[derive(Copy, Clone, Debug, dm::Constructor)]
