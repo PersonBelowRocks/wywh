@@ -2,10 +2,26 @@
     mesh_functions,
     skinning,
     morph::morph,
-    forward_io::{Vertex, VertexOutput},
+    forward_io::{VertexOutput},
     view_transformations::position_world_to_clip,
 }
 #import bevy_render::instance_index::get_instance_index
+
+struct Vertex {
+    @builtin(instance_index) instance_index: u32,
+#ifdef VERTEX_POSITIONS
+    @location(0) position: vec3<f32>,
+#endif
+#ifdef VERTEX_NORMALS
+    @location(1) normal: vec3<f32>,
+#endif
+#ifdef VERTEX_TANGENTS
+    @location(4) tangent: vec4<f32>,
+#endif
+#ifdef VERTEX_COLORS
+    @location(5) color: vec4<f32>,
+#endif
+};
 
 struct GreedyVertexOutput {
     // This is `clip position` when the struct is used as a vertex stage output
@@ -23,7 +39,7 @@ struct GreedyVertexOutput {
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     @location(5) @interpolate(flat) instance_index: u32,
 #endif
-    @location(10) @interpolate(flat) texture: vec2<f32>,
+    @location(10) @interpolate(flat) texture_id: u32,
     @location(11) @interpolate(flat) texture_rot: f32,
 
     @location(12) @interpolate(flat) flip_uv_x: u32,
@@ -37,13 +53,13 @@ const FLIP_UV_Y: u32 = #{FLIP_UV_Y}u;
 @vertex
 fn vertex(
     vertex_no_morph: Vertex, 
-    @location(10) texture: vec2<f32>,
+    @location(10) texture_id: u32,
     @location(11) misc: u32,
 ) -> GreedyVertexOutput {
     var out: GreedyVertexOutput;
 
     var vertex = vertex_no_morph;
-    out.texture = texture;
+    out.texture_id = texture_id;
 
     let rotation = misc ^ ROTATION_MASK;
 

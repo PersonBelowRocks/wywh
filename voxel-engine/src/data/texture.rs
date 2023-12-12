@@ -5,7 +5,10 @@ use ordered_float::NotNan;
 
 use crate::util::notnan_arr;
 
-use super::error::FaceTextureRotationParseError;
+use super::{
+    error::FaceTextureRotationParseError,
+    registries::{texture::TextureRegistry, Registry, RegistryId},
+};
 
 #[derive(
     Default, Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize,
@@ -70,31 +73,25 @@ impl FaceTextureRotation {
 #[repr(packed)]
 pub struct FaceTexture {
     pub rotation: FaceTextureRotation,
-    tex_pos_x: NotNan<f32>,
-    tex_pos_y: NotNan<f32>,
+    pub texture: RegistryId<TextureRegistry>,
 }
 
 impl FaceTexture {
-    pub fn tex_pos(&self) -> Vec2 {
-        vec2(self.tex_pos_x.into_inner(), self.tex_pos_y.into_inner())
+    pub fn tex_pos(&self, registry: &TextureRegistry) -> Vec2 {
+        registry.get_by_id(self.texture).texture_pos
     }
 
-    pub fn new(tex_pos: Vec2) -> Self {
-        let [tex_pos_x, tex_pos_y] = notnan_arr(tex_pos.into()).unwrap();
-
+    pub fn new(texture: RegistryId<TextureRegistry>) -> Self {
         Self {
-            tex_pos_x,
-            tex_pos_y,
             rotation: Default::default(),
+            texture,
         }
     }
 
-    pub fn new_rotated(tex_pos: Vec2, rotation: FaceTextureRotation) -> Self {
-        let [tex_pos_x, tex_pos_y] = notnan_arr(tex_pos.into()).unwrap();
-        Self {
-            tex_pos_x,
-            tex_pos_y,
-            rotation,
-        }
+    pub fn new_rotated(
+        texture: RegistryId<TextureRegistry>,
+        rotation: FaceTextureRotation,
+    ) -> Self {
+        Self { rotation, texture }
     }
 }

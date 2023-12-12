@@ -73,13 +73,10 @@ impl BlockSubmodel {
                 .get(face)
                 .ok_or(SubmodelFromDescriptorError::MissingFace(face))?;
             let texture = registry
-                .get_by_label(&desc.label)
+                .get_id(&desc.label)
                 .ok_or_else(|| TextureNotFound(desc.label.clone()))?;
 
-            textures.set(
-                face,
-                FaceTexture::new_rotated(texture.texture_pos, desc.rotation),
-            );
+            textures.set(face, FaceTexture::new_rotated(texture, desc.rotation));
         }
 
         Ok(Self::from_face_map(textures).unwrap())

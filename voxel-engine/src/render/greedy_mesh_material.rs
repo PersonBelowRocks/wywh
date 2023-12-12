@@ -24,7 +24,7 @@ pub struct GreedyMeshMaterial {
 
 impl GreedyMeshMaterial {
     pub const TEXTURE_MESH_ATTR: MeshVertexAttribute =
-        MeshVertexAttribute::new("Greedy_Texture", 4099_1, VertexFormat::Float32x2);
+        MeshVertexAttribute::new("Greedy_Texture", 4099_1, VertexFormat::Uint32);
 
     pub const MISC_DATA_ATTR: MeshVertexAttribute =
         MeshVertexAttribute::new("Misc_Data", 4099_2, VertexFormat::Uint32);
@@ -49,12 +49,12 @@ impl MaterialExtension for GreedyMeshMaterial {
             uint_shader_def!(ROTATION_MASK),
             uint_shader_def!(FLIP_UV_X),
             uint_shader_def!(FLIP_UV_Y),
+            "VERTEX_UVS".into(),
         ];
 
         let buffer = layout.get_layout(&[
             Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
             Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
-            Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
             Self::TEXTURE_MESH_ATTR.at_shader_location(10),
             Self::MISC_DATA_ATTR.at_shader_location(11),
         ])?;

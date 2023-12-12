@@ -28,7 +28,7 @@ var<storage> roughness: array<vec2<f32>>;
 @fragment
 fn fragment(
     raw_in: VertexOutput,
-    @location(10) @interpolate(flat) texture: vec2<f32>,
+    @location(10) @interpolate(flat) texture_id: u32,
     @location(11) @interpolate(flat) texture_rot: f32,
     @location(12) @interpolate(flat) flip_uv_x: u32,
     @location(13) @interpolate(flat) flip_uv_y: u32,
@@ -59,6 +59,8 @@ fn fragment(
 
     let offset = vec2(0.5, 0.5);
     uv = (M * (uv - offset)) + offset;
+
+    let texture = textures[texture_id];
 
     in.uv = ((uv / texture_scale) + ((texture / texture_scale) / texture_scale));
 

@@ -18,10 +18,6 @@ struct GreedyVertexOutput {
     // and `frag coord` when used as a fragment stage input
     @builtin(position) position: vec4<f32>,
 
-#ifdef VERTEX_UVS
-    @location(0) uv: vec2<f32>,
-#endif
-
 #ifdef NORMAL_PREPASS_OR_DEFERRED_PREPASS
     @location(1) world_normal: vec3<f32>,
 #ifdef VERTEX_TANGENTS
@@ -44,17 +40,13 @@ struct GreedyVertexOutput {
 #ifdef VERTEX_COLORS
     @location(7) color: vec4<f32>,
 #endif
-    @location(10) @interpolate(flat) texture: vec2<f32>,
+    @location(10) @interpolate(flat) texture_id: u32,
     @location(11) @interpolate(flat) texture_rot: f32,
 }
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
     @location(0) position: vec3<f32>,
-
-#ifdef VERTEX_UVS
-    @location(2) uv: vec2<f32>,
-#endif
 
 #ifdef NORMAL_PREPASS_OR_DEFERRED_PREPASS
     @location(1) normal: vec3<f32>,
@@ -71,13 +63,13 @@ struct Vertex {
 @vertex
 fn vertex(
     vertex_no_morph: Vertex, 
-    @location(10) texture: vec2<f32>,
+    @location(10) texture_id: u32,
     @location(11) misc: u32
 ) -> GreedyVertexOutput {
     var out: GreedyVertexOutput;
     
     var vertex = vertex_no_morph;
-    out.texture = texture;
+    out.texture_id = texture_id;
 
     var texture_rot: f32;
     switch misc {
@@ -119,9 +111,6 @@ fn vertex(
     out.position.z = min(out.position.z, 1.0);
 #endif // DEPTH_CLAMP_ORTHO
 
-#ifdef VERTEX_UVS
-    out.uv = vertex.uv;
-#endif // VERTEX_UVS
 
 #ifdef NORMAL_PREPASS_OR_DEFERRED_PREPASS
     out.world_normal = mesh_functions::mesh_normal_local_to_world(
@@ -171,9 +160,7 @@ fn vertex(
 #ifdef PREPASS_FRAGMENT
 @fragment
 fn fragment(
-    in: VertexOutput, 
-    @location(10) @interpolate(flat) texture: vec2<f32>,
-    @location(11) @interpolate(flat) texture_rot: f32,
+    in: GreedyVertexOutput
 ) -> FragmentOutput {
     var out: FragmentOutput;
 

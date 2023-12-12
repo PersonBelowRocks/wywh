@@ -86,7 +86,7 @@ impl GreedyMesher {
                 extension: GreedyMeshMaterial {
                     texture_scale: texture_registry.texture_scale(),
 
-                    base_texture_positions: Vec::new(),
+                    base_texture_positions: texture_registry.texture_position_buffer(),
                     roughness_texture_positions: Vec::new(),
                 },
             },
@@ -153,7 +153,7 @@ impl GreedyMesher {
                     face: slice.face,
                     quad: heightened,
                     quad_tex: QuadTextureData {
-                        pos: tex.tex_pos(),
+                        texture: tex.texture,
                         rotation: tex.rotation,
                         flip_uv_x: matches!(slice.face, Face::South | Face::East | Face::Bottom),
                         flip_uv_y: false,
