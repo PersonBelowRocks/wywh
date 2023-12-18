@@ -1,6 +1,10 @@
 use std::ops;
 
-use bevy::math::{vec2, Vec2};
+use bevy::{
+    math::{vec2, Vec2},
+    render::render_resource::{ShaderSize, ShaderType},
+};
+use bitflags::bitflags;
 use ordered_float::NotNan;
 
 use crate::util::notnan_arr;
@@ -93,5 +97,30 @@ impl FaceTexture {
         rotation: FaceTextureRotation,
     ) -> Self {
         Self { rotation, texture }
+    }
+}
+
+#[derive(Copy, Clone, Debug, ShaderType)]
+pub struct GpuFaceTexture {
+    pub flags: u32,
+    pub color_tex_pos: Vec2,
+    pub normal_tex_pos: Vec2,
+}
+
+impl GpuFaceTexture {
+    pub const NORMAL_FLAG: u32 = 0b1;
+
+    pub fn new(color: Vec2, normal: Option<Vec2>) -> Self {
+        let mut flags = 0u32;
+
+        if normal.is_some() {
+            flags |= Self::NORMAL_FLAG;
+        }
+
+        Self {
+            flags,
+            color_tex_pos: color,
+            normal_tex_pos: normal.unwrap_or(Vec2::ZERO),
+        }
     }
 }

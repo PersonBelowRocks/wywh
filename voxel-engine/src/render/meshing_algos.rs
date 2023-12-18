@@ -79,7 +79,7 @@ impl GreedyMesher {
         Self {
             material: ExtendedMaterial {
                 base: StandardMaterial {
-                    base_color_texture: Some(texture_registry.atlas_texture().clone()),
+                    base_color_texture: Some(texture_registry.color_texture().clone()),
                     perceptual_roughness: 1.0,
                     reflectance: 0.2,
                     // base_color: Color::rgb(0.5, 0.5, 0.65),
@@ -88,8 +88,7 @@ impl GreedyMesher {
                 extension: GreedyMeshMaterial {
                     texture_scale: texture_registry.texture_scale(),
 
-                    base_texture_positions: texture_registry.texture_position_buffer(),
-                    roughness_texture_positions: Vec::new(),
+                    faces: texture_registry.face_texture_buffer(),
                 },
             },
 

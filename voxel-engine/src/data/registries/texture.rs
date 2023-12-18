@@ -7,75 +7,130 @@ use bevy::{
     render::texture::Image,
     sprite::{TextureAtlas, TextureAtlasBuilder},
 };
+use indexmap::IndexMap;
+
+use crate::data::texture::GpuFaceTexture;
 
 use super::{error::TextureRegistryError, Registry, RegistryId};
 
+pub type TexId = AssetId<Image>;
+
 pub struct TextureRegistryLoader {
-    map: indexmap::IndexMap<String, AssetId<Image>, ahash::RandomState>,
+    textures: indexmap::IndexMap<String, TexIdBundle, ahash::RandomState>,
+}
+
+#[derive(Clone)]
+pub(crate) struct TexIdBundle {
+    pub color: TexId,
+    pub normal: Option<TexId>,
 }
 
 impl TextureRegistryLoader {
     pub fn new() -> Self {
         Self {
-            map: indexmap::IndexMap::with_hasher(ahash::RandomState::new()),
+            textures: indexmap::IndexMap::with_hasher(ahash::RandomState::new()),
         }
     }
 
-    pub fn register(&mut self, label: impl Into<String>, id: AssetId<Image>) {
-        self.map.insert(label.into(), id);
+    pub fn register(&mut self, label: impl Into<String>, texture: TexId, normal: Option<TexId>) {
+        self.textures.insert(
+            label.into(),
+            TexIdBundle {
+                color: texture,
+                normal,
+            },
+        );
     }
 
     pub fn build_registry(
         self,
         textures: &mut Assets<Image>,
     ) -> Result<TextureRegistry, TextureRegistryError> {
-        let mut registry_map =
-            hb::HashMap::<String, RegistryId<TextureRegistry>, ahash::RandomState>::with_capacity_and_hasher(
-                self.map.len(),
-                ahash::RandomState::new(),
-            );
+        let color_atlas = {
+            let mut builder = TextureAtlasBuilder::default();
+            for id in self.textures.values().cloned() {
+                let tex = textures
+                    .get(id.color)
+                    .ok_or(TextureRegistryError::TextureNotLoaded(id.color))?;
+                builder.add_texture(id.color, tex);
+            }
 
-        let mut builder = TextureAtlasBuilder::default();
-        for id in self.map.values().cloned() {
-            let tex = textures
-                .get(id)
-                .ok_or(TextureRegistryError::TextureNotLoaded(id))?;
-            builder.add_texture(id, tex);
-        }
+            builder.finish(textures)?
+        };
 
-        let atlas = builder.finish(textures)?;
+        let normal_atlas = {
+            let mut builder = TextureAtlasBuilder::default();
+            for id in self.textures.values().cloned() {
+                let Some(normal_map) = id.normal else {
+                    continue;
+                };
 
-        for (label, id) in self.map.iter() {
-            let idx = atlas.get_texture_index(id.clone()).unwrap();
-            let rect = atlas.textures[idx];
+                let tex = textures
+                    .get(normal_map)
+                    .ok_or(TextureRegistryError::TextureNotLoaded(normal_map))?;
+                builder.add_texture(normal_map, tex);
+            }
+
+            builder.finish(textures)?
+        };
+
+        for (label, id) in self.textures.iter() {
+            let idx = color_atlas.get_texture_index(id.color.clone()).unwrap();
+            let rect = color_atlas.textures[idx];
             info!(
                 "Texture registry contains texture '{label}' at {}",
                 rect.min
             );
         }
 
-        registry_map.extend(
-            self.map
-                .into_iter()
-                .map(|(lbl, id)| (lbl, atlas.get_texture_index(id).unwrap()))
-                .map(|(lbl, index)| (lbl, RegistryId::<TextureRegistry>::new(index as _))),
-        );
+        let registry_map = {
+            let mut map =
+                IndexMap::<String, AtlasIdxBundle, ahash::RandomState>::with_capacity_and_hasher(
+                    self.textures.len(),
+                    ahash::RandomState::new(),
+                );
+
+            map.reserve(self.textures.len());
+            for (label, ids) in self.textures.into_iter() {
+                let indices = AtlasIdxBundle {
+                    color: color_atlas.get_texture_index(ids.color).unwrap(),
+                    normal: ids
+                        .normal
+                        .map(|id| normal_atlas.get_texture_index(id).unwrap()),
+                };
+
+                map.insert(label, indices);
+            }
+
+            map
+        };
 
         Ok(TextureRegistry {
             map: registry_map,
-            atlas,
+            color_atlas,
+            normal_atlas,
         })
     }
 }
 
 pub struct TextureRegistry {
-    map: hb::HashMap<String, RegistryId<Self>, ahash::RandomState>,
-    atlas: TextureAtlas,
+    map: IndexMap<String, AtlasIdxBundle, ahash::RandomState>,
+    color_atlas: TextureAtlas,
+    normal_atlas: TextureAtlas,
+}
+
+pub(crate) struct AtlasIdxBundle {
+    pub color: usize,
+    pub normal: Option<usize>,
 }
 
 impl TextureRegistry {
-    pub fn atlas_texture(&self) -> &Handle<Image> {
-        &self.atlas.texture
+    pub fn color_texture(&self) -> &Handle<Image> {
+        &self.color_atlas.texture
+    }
+
+    pub fn normal_texture(&self) -> &Handle<Image> {
+        &self.normal_atlas.texture
     }
 
     pub fn texture_scale(&self) -> f32 {
@@ -83,31 +138,34 @@ impl TextureRegistry {
         16.0
     }
 
-    pub fn texture_position_buffer(&self) -> Vec<Vec2> {
-        let mut buffer = vec![None::<Vec2>; self.map.len()];
-
-        for idx in self
-            .map
+    pub fn face_texture_buffer(&self) -> Vec<GpuFaceTexture> {
+        self.map
             .values()
-            .copied()
-            .map(RegistryId::inner)
-            .map(|i| i as usize)
-        {
-            let tex_pos = self.atlas.textures[idx].min;
+            .map(|indices| {
+                let color_pos = self.color_atlas.textures[indices.color].min;
+                let normal_pos = indices
+                    .normal
+                    .map(|idx| self.normal_atlas.textures[idx].min);
 
-            buffer[idx] = Some(tex_pos)
-        }
-
-        buffer.into_iter().collect::<Option<Vec<_>>>().unwrap()
+                GpuFaceTexture::new(color_pos, normal_pos)
+            })
+            .collect::<Vec<_>>()
     }
 }
 
 #[derive(Copy, Clone, Debug, dm::Constructor)]
 pub struct TextureRegistryEntry<'a> {
     pub texture_pos: Vec2,
+    pub normal_pos: Option<Vec2>,
 
     // Placeholder in case we wanna store some other funny stuff in here
     _data: PhantomData<&'a ()>,
+}
+
+impl<'a> TextureRegistryEntry<'a> {
+    pub fn gpu_representation(&self) -> GpuFaceTexture {
+        GpuFaceTexture::new(self.texture_pos, self.normal_pos)
+    }
 }
 
 impl Registry for TextureRegistry {
@@ -119,15 +177,22 @@ impl Registry for TextureRegistry {
     }
 
     fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_> {
-        let idx = id.inner() as usize;
+        let map_idx = id.inner() as usize;
+        let indices = self.map.get_index(map_idx).unwrap().1;
+
         TextureRegistryEntry {
-            texture_pos: self.atlas.textures[idx].min,
+            texture_pos: self.color_atlas.textures[indices.color].min,
+            normal_pos: indices
+                .normal
+                .map(|idx| self.normal_atlas.textures[idx].min),
             _data: PhantomData,
         }
     }
 
     fn get_id(&self, label: &str) -> Option<RegistryId<Self>> {
-        self.map.get(label).copied()
+        self.map
+            .get_index_of(label)
+            .map(|idx| RegistryId::new(idx as _))
     }
 }
 

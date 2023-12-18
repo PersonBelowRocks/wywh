@@ -13,14 +13,14 @@ use bevy::{
     },
 };
 
+use crate::data::texture::GpuFaceTexture;
+
 #[derive(AsBindGroup, Asset, TypePath, Clone, Debug)]
 pub struct GreedyMeshMaterial {
     #[uniform(100)]
     pub texture_scale: f32,
     #[storage(101)]
-    pub base_texture_positions: Vec<Vec2>,
-    #[storage(102)]
-    pub roughness_texture_positions: Vec<Vec2>,
+    pub faces: Vec<GpuFaceTexture>,
 }
 
 impl GreedyMeshMaterial {

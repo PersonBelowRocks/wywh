@@ -16,14 +16,13 @@
 }
 #endif
 
+#import "shaders/greedy_mesh_utils.wgsl"::FaceTexture
+
 @group(2) @binding(100)
 var<uniform> texture_scale: f32;
 
 @group(2) @binding(101)
-var<storage> textures: array<vec2<f32>>;
-
-@group(2) @binding(102)
-var<storage> roughness: array<vec2<f32>>;
+var<storage> faces: array<FaceTexture>;
 
 @fragment
 fn fragment(
@@ -61,9 +60,9 @@ fn fragment(
     let offset = vec2(0.5, 0.5);
     uv = (M * (uv - offset)) + offset;
 
-    let texture = textures[texture_id];
+    let face_texture = faces[texture_id];
 
-    in.uv = ((uv / texture_scale) + ((texture / texture_scale) / texture_scale));
+    in.uv = ((uv / texture_scale) + ((face_texture.color_tex_pos / texture_scale) / texture_scale));
 
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     in.instance_index = raw_in.instance_index;

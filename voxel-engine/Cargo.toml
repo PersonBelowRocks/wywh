@@ -8,9 +8,12 @@ ahash = "0.8.3"
 anyhow = "1.0.75"
 anymap = "0.12.1"
 bevy = {workspace = true}
+bevy_crevice = "0.7.0"
 bevy_rapier3d = "0.23.0"
 bimap = "0.6.3"
+bitflags = "2.4.1"
 bracket-noise = "0.8.7"
+crevice = { version = "0.14.0", features = ["glam"] }
 crossbeam = "0.8.2"
 dashmap = "5.5.3"
 derive_more = "0.99.17"

@@ -29,11 +29,13 @@ impl NormalMapRegistryLoader {
         self,
         textures: &mut Assets<Image>,
     ) -> Result<NormalMapRegistry, TextureRegistryError> {
-        let mut registry_map =
-            hb::HashMap::<String, RegistryId<NormalMapRegistry>, ahash::RandomState>::with_capacity_and_hasher(
-                self.map.len(),
-                ahash::RandomState::new(),
-            );
+        let mut registry_map = hb::HashMap::<
+            String,
+            RegistryId<NormalMapRegistry>,
+            ahash::RandomState,
+        >::with_capacity_and_hasher(
+            self.map.len(), ahash::RandomState::new()
+        );
 
         let mut builder = TextureAtlasBuilder::default();
         for id in self.map.values().cloned() {
@@ -150,6 +152,3 @@ mod tests {
         todo!()
     }
 }
-
-
-

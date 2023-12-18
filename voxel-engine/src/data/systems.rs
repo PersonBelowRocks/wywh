@@ -18,7 +18,7 @@ use super::{
 pub struct VoxelTextureFolder(pub Handle<LoadedFolder>);
 
 #[derive(Resource, Default)]
-pub struct VoxelTextureAtlas(pub Handle<Image>);
+pub struct VoxelColorTextureAtlas(pub Handle<Image>);
 
 #[derive(Resource, Deref, dm::Constructor)]
 pub struct VariantFolders(Arc<Vec<PathBuf>>);
@@ -70,7 +70,7 @@ fn create_texture_registry(
             .file_stem()
             .and_then(OsStr::to_str)
             .ok_or(TextureRegistryError::BadFileName(path.clone()))?;
-        registry_loader.register(label.to_string(), id);
+        registry_loader.register(label.to_string(), id, None);
     }
 
     Ok(registry_loader.build_registry(images.as_mut())?)
@@ -90,7 +90,7 @@ pub fn build_registries(world: &mut World) {
         }
     };
 
-    world.insert_resource(VoxelTextureAtlas(textures.atlas_texture().clone()));
+    world.insert_resource(VoxelColorTextureAtlas(textures.color_texture().clone()));
     let variant_folders = world.get_resource::<VariantFolders>().unwrap();
 
     let mut file_loader = VariantFileLoader::new();
