@@ -108,13 +108,13 @@ pub struct GpuFaceTexture {
 }
 
 impl GpuFaceTexture {
-    pub const NORMAL_FLAG: u32 = 0b1;
+    pub const HAS_NORMAL_MAP_BIT: u32 = 0b1;
 
     pub fn new(color: Vec2, normal: Option<Vec2>) -> Self {
         let mut flags = 0u32;
 
         if normal.is_some() {
-            flags |= Self::NORMAL_FLAG;
+            flags |= Self::HAS_NORMAL_MAP_BIT;
         }
 
         Self {

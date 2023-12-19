@@ -17,59 +17,25 @@
 #endif
 
 #import "shaders/greedy_mesh_utils.wgsl"::FaceTexture
+#import "shaders/greedy_mesh_utils.wgsl"::GreedyVertexOutput
+#import "shaders/greedy_mesh_utils.wgsl"::preprocess_greedy_vertex_output
+#import "shaders/greedy_mesh_utils.wgsl"::greedy_mesh_pbr_input
 
 @group(2) @binding(100)
 var<uniform> texture_scale: f32;
-
 @group(2) @binding(101)
 var<storage> faces: array<FaceTexture>;
 
 @fragment
 fn fragment(
-    raw_in: VertexOutput,
-    @location(10) @interpolate(flat) texture_id: u32,
-    @location(11) @interpolate(flat) texture_rot: f32,
-    @location(12) @interpolate(flat) flip_uv_x: u32,
-    @location(13) @interpolate(flat) flip_uv_y: u32,
+    raw_in: GreedyVertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    var in: VertexOutput;
 
-    in.position = raw_in.position;
-    in.world_position = raw_in.world_position;
-    in.world_normal = raw_in.world_normal;
-    in.world_tangent = raw_in.world_tangent;
-
-    let fract_uv = fract(raw_in.uv);
-    var uv: vec2<f32> = fract_uv;
-
-    if flip_uv_x != 0u {
-        uv.x = (1.0 - uv.x);
-    }
-
-    if flip_uv_y != 0u {
-        uv.y = (1.0 - uv.y);
-    }
-
-    let a = texture_rot;
-    let M = mat2x2(
-        cos(a), -sin(a),
-        sin(a),  cos(a)
-    );
-
-    let offset = vec2(0.5, 0.5);
-    uv = (M * (uv - offset)) + offset;
-
-    let face_texture = faces[texture_id];
-
-    in.uv = ((uv / texture_scale) + ((face_texture.color_tex_pos / texture_scale) / texture_scale));
-
-#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
-    in.instance_index = raw_in.instance_index;
-#endif
+    let in: GreedyVertexOutput = preprocess_greedy_vertex_output(raw_in);
 
     // generate a PbrInput struct from the StandardMaterial bindings
-    var pbr_input = pbr_input_from_standard_material(in, is_front);
+    var pbr_input = greedy_mesh_pbr_input(in, is_front, faces[in.texture_id], texture_scale);
 
     // alpha discard
     pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);

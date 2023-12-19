@@ -52,6 +52,10 @@ impl MaterialExtension for GreedyMeshMaterial {
             uint_shader_def!(ROTATION_MASK),
             uint_shader_def!(FLIP_UV_X),
             uint_shader_def!(FLIP_UV_Y),
+            ShaderDefVal::UInt(
+                "HAS_NORMAL_MAP_BIT".into(),
+                GpuFaceTexture::HAS_NORMAL_MAP_BIT,
+            ),
             "VERTEX_UVS".into(),
         ];
 

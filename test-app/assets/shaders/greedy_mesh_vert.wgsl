@@ -15,24 +15,7 @@ struct Vertex {
 #endif
 };
 
-struct GreedyVertexOutput {
-    // This is `clip position` when the struct is used as a vertex stage output
-    // and `frag coord` when used as a fragment stage input
-    @builtin(position) position: vec4<f32>,
-    @location(0) world_position: vec4<f32>,
-    @location(1) world_normal: vec3<f32>,
-    @location(2) uv: vec2<f32>,
-    @location(3) world_tangent: vec4<f32>,
-
-#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
-    @location(5) @interpolate(flat) instance_index: u32,
-#endif
-    @location(10) @interpolate(flat) texture_id: u32,
-    @location(11) @interpolate(flat) texture_rot: f32,
-
-    @location(12) @interpolate(flat) flip_uv_x: u32,
-    @location(13) @interpolate(flat) flip_uv_y: u32,
-}
+#import "shaders/greedy_mesh_utils.wgsl"::GreedyVertexOutput
 
 const ROTATION_MASK: u32 = #{ROTATION_MASK}u;
 const FLIP_UV_X: u32 = #{FLIP_UV_X}u;
