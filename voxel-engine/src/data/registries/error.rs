@@ -6,7 +6,11 @@ use bevy::{
     sprite::TextureAtlasBuilderError,
 };
 
-use crate::data::{error::VoxelModelCreationError, systems::VoxelTextureFolder};
+use crate::data::{
+    error::VoxelModelCreationError,
+    resourcepath::{error::FromPathError, ResourcePath},
+    systems::{VoxelNormalMapFolder, VoxelTextureFolder},
+};
 
 #[derive(te::Error, Debug)]
 pub enum TextureRegistryError {
@@ -18,6 +22,10 @@ pub enum TextureRegistryError {
     VoxelTextureFolderNotFound,
     #[error("Voxel texture folder asset is not loaded")]
     VoxelTextureFolderNotLoaded,
+    #[error("World does not contain resource '{}'", type_name::<VoxelNormalMapFolder>())]
+    VoxelNormalMapFolderNotFound,
+    #[error("Voxel normal map folder asset is not loaded")]
+    VoxelNormalMapFolderNotLoaded,
     #[error("Atlas builder error: {0}")]
     AtlasBuilderError(#[from] TextureAtlasBuilderError),
     #[error("Unexpected asset ID type: {0}")]
@@ -28,6 +36,8 @@ pub enum TextureRegistryError {
     TextureDoesntExist(AssetPath<'static>),
     #[error("Texture not loaded: '{0}'")]
     TextureNotLoaded(AssetId<Image>),
+    #[error("Error constructing resource path: {0}")]
+    ResourcePathError(#[from] FromPathError),
 }
 
 #[derive(Debug, te::Error)]
@@ -38,4 +48,4 @@ pub enum VariantRegistryError {
 
 #[derive(Debug, te::Error)]
 #[error("Texture with label '{0}' not found")]
-pub struct TextureNotFound(pub String);
+pub struct TextureNotFound(pub ResourcePath);

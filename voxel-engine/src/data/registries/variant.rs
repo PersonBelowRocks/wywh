@@ -1,6 +1,7 @@
 use indexmap::IndexMap;
 
 use crate::data::{
+    resourcepath::ResourcePath,
     tile::Transparency,
     variant_file_loader::VariantFileLoader,
     voxel::{descriptor::VariantDescriptor, VoxelModel},
@@ -15,7 +16,7 @@ pub struct VariantRegistryEntry<'a> {
 }
 
 pub struct VariantRegistryLoader {
-    descriptors: hb::HashMap<String, VariantDescriptor>,
+    descriptors: hb::HashMap<ResourcePath, VariantDescriptor>,
 }
 
 impl VariantRegistryLoader {
@@ -29,7 +30,7 @@ impl VariantRegistryLoader {
         Ok(())
     }
 
-    pub fn register(&mut self, label: impl Into<String>, descriptor: VariantDescriptor) {
+    pub fn register(&mut self, label: ResourcePath, descriptor: VariantDescriptor) {
         self.descriptors.insert(label.into(), descriptor);
     }
 
@@ -37,10 +38,11 @@ impl VariantRegistryLoader {
         self,
         texture_registry: &TextureRegistry,
     ) -> Result<VariantRegistry, VariantRegistryError> {
-        let mut map = IndexMap::<String, Variant, ahash::RandomState>::with_capacity_and_hasher(
-            self.descriptors.len(),
-            ahash::RandomState::new(),
-        );
+        let mut map =
+            IndexMap::<ResourcePath, Variant, ahash::RandomState>::with_capacity_and_hasher(
+                self.descriptors.len(),
+                ahash::RandomState::new(),
+            );
 
         for (label, descriptor) in self.descriptors.into_iter() {
             let model = descriptor
@@ -68,13 +70,13 @@ pub struct Variant {
 }
 
 pub struct VariantRegistry {
-    map: IndexMap<String, Variant, ahash::RandomState>,
+    map: IndexMap<ResourcePath, Variant, ahash::RandomState>,
 }
 
 impl Registry for VariantRegistry {
     type Item<'a> = VariantRegistryEntry<'a>;
 
-    fn get_by_label(&self, label: &str) -> Option<Self::Item<'_>> {
+    fn get_by_label(&self, label: &ResourcePath) -> Option<Self::Item<'_>> {
         let variant = self.map.get(label)?;
 
         Some(VariantRegistryEntry {
@@ -93,7 +95,7 @@ impl Registry for VariantRegistry {
         }
     }
 
-    fn get_id(&self, label: &str) -> Option<RegistryId<Self>> {
+    fn get_id(&self, label: &ResourcePath) -> Option<RegistryId<Self>> {
         self.map
             .get_index_of(label)
             .map(|i| RegistryId::new(i as _))

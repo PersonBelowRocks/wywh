@@ -1,6 +1,8 @@
 use std::{ffi::OsStr, fs::File, io::Read, path::Path};
 
-use super::{error::VariantFileLoaderError, voxel::descriptor::VariantDescriptor};
+use super::{
+    error::VariantFileLoaderError, resourcepath::ResourcePath, voxel::descriptor::VariantDescriptor,
+};
 
 pub static VARIANT_FILE_EXTENSION: &'static str = "variant";
 
@@ -16,7 +18,7 @@ fn path_to_label(path: &Path) -> Option<&str> {
 
 #[derive(Clone)]
 pub struct VariantFileLoader {
-    raw_descriptors: hb::HashMap<String, Vec<u8>>,
+    raw_descriptors: hb::HashMap<ResourcePath, Vec<u8>>,
 }
 
 impl VariantFileLoader {
@@ -26,8 +28,8 @@ impl VariantFileLoader {
         }
     }
 
-    pub fn labels(&self) -> impl Iterator<Item = &str> {
-        self.raw_descriptors.keys().map(AsRef::as_ref)
+    pub fn labels(&self) -> impl Iterator<Item = &ResourcePath> {
+        self.raw_descriptors.keys()
     }
 
     pub fn load_folder(&mut self, path: impl AsRef<Path>) -> Result<(), VariantFileLoaderError> {
@@ -45,9 +47,7 @@ impl VariantFileLoader {
     pub fn load_file(&mut self, path: impl AsRef<Path>) -> Result<(), VariantFileLoaderError> {
         let path = path.as_ref();
 
-        let Some(label) = path_to_label(&path) else {
-            return Err(VariantFileLoaderError::InvalidFileName(path.to_path_buf()));
-        };
+        let label = ResourcePath::try_from(path)?;
 
         let mut file = File::open(&path)?;
 
@@ -58,15 +58,15 @@ impl VariantFileLoader {
         Ok(())
     }
 
-    pub fn add_raw_buffer(&mut self, label: String, buffer: Vec<u8>) {
+    pub fn add_raw_buffer(&mut self, label: ResourcePath, buffer: Vec<u8>) {
         self.raw_descriptors.insert(label, buffer);
     }
 
-    pub fn parse(&self, label: &str) -> Result<VariantDescriptor, VariantFileLoaderError> {
+    pub fn parse(&self, label: &ResourcePath) -> Result<VariantDescriptor, VariantFileLoaderError> {
         let buffer = self
             .raw_descriptors
             .get(label)
-            .ok_or(VariantFileLoaderError::VariantNotFound(label.into()))?;
+            .ok_or(VariantFileLoaderError::VariantNotFound)?;
 
         let descriptor = deser_hjson::from_slice::<VariantDescriptor>(buffer)?;
         Ok(descriptor)

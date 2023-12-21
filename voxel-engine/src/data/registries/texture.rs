@@ -9,14 +9,14 @@ use bevy::{
 };
 use indexmap::IndexMap;
 
-use crate::data::texture::GpuFaceTexture;
+use crate::data::{resourcepath::ResourcePath, texture::GpuFaceTexture};
 
 use super::{error::TextureRegistryError, Registry, RegistryId};
 
 pub type TexId = AssetId<Image>;
 
 pub struct TextureRegistryLoader {
-    textures: indexmap::IndexMap<String, TexIdBundle, ahash::RandomState>,
+    textures: indexmap::IndexMap<ResourcePath, TexIdBundle, ahash::RandomState>,
 }
 
 #[derive(Clone)]
@@ -32,7 +32,7 @@ impl TextureRegistryLoader {
         }
     }
 
-    pub fn register(&mut self, label: impl Into<String>, texture: TexId, normal: Option<TexId>) {
+    pub fn register(&mut self, label: ResourcePath, texture: TexId, normal: Option<TexId>) {
         self.textures.insert(
             label.into(),
             TexIdBundle {
@@ -81,11 +81,20 @@ impl TextureRegistryLoader {
                 "Texture registry contains texture '{label}' at {}",
                 rect.min
             );
+
+            if let Some(normal_id) = id.normal {
+                let idx = normal_atlas.get_texture_index(normal_id).unwrap();
+                let pos = normal_atlas.textures[idx].min;
+
+                info!(
+                    "Texture '{label}' has a normal map at position {pos} in the normal map atlas."
+                )
+            }
         }
 
         let registry_map = {
             let mut map =
-                IndexMap::<String, AtlasIdxBundle, ahash::RandomState>::with_capacity_and_hasher(
+                IndexMap::<ResourcePath, AtlasIdxBundle, ahash::RandomState>::with_capacity_and_hasher(
                     self.textures.len(),
                     ahash::RandomState::new(),
                 );
@@ -114,7 +123,7 @@ impl TextureRegistryLoader {
 }
 
 pub struct TextureRegistry {
-    map: IndexMap<String, AtlasIdxBundle, ahash::RandomState>,
+    map: IndexMap<ResourcePath, AtlasIdxBundle, ahash::RandomState>,
     color_atlas: TextureAtlas,
     normal_atlas: TextureAtlas,
 }
@@ -172,7 +181,7 @@ impl Registry for TextureRegistry {
     // GATs my beloved
     type Item<'a> = TextureRegistryEntry<'a>;
 
-    fn get_by_label(&self, label: &str) -> Option<Self::Item<'_>> {
+    fn get_by_label(&self, label: &ResourcePath) -> Option<Self::Item<'_>> {
         Some(self.get_by_id(self.get_id(label)?))
     }
 
@@ -189,7 +198,7 @@ impl Registry for TextureRegistry {
         }
     }
 
-    fn get_id(&self, label: &str) -> Option<RegistryId<Self>> {
+    fn get_id(&self, label: &ResourcePath) -> Option<RegistryId<Self>> {
         self.map
             .get_index_of(label)
             .map(|idx| RegistryId::new(idx as _))
@@ -206,7 +215,9 @@ mod tests {
     fn texture_registry_loading() {
         let loader = TextureRegistryLoader::new();
         let registry = loader.build_registry(todo!()).unwrap();
-        let tex = registry.get_by_label("wowza!").unwrap();
+        let tex = registry
+            .get_by_label(&ResourcePath::try_from("wowza!").unwrap())
+            .unwrap();
     }
 
     #[test]

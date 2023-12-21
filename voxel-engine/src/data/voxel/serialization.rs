@@ -6,6 +6,7 @@ use crate::{
             BlockModelDescriptorParseError, FaceTextureDescriptorParseError,
             RotatedTextureDescriptorParseError,
         },
+        resourcepath::ResourcePath,
         texture::FaceTextureRotation,
         tile::Face,
     },
@@ -147,7 +148,7 @@ enum RotatedTextureDescriptor {
         rotation: FaceTextureRotation,
     },
     OtherTexture {
-        label: String,
+        label: ResourcePath,
         rotation: FaceTextureRotation,
     },
 }
@@ -189,7 +190,10 @@ impl TryFrom<UnparsedRotatedTextureDescriptor> for RotatedTextureDescriptor {
 
             let rotation = rotation?;
 
-            Ok(Self::OtherTexture { label, rotation })
+            Ok(Self::OtherTexture {
+                label: ResourcePath::try_from(label.as_str())?,
+                rotation,
+            })
         }
     }
 }
@@ -207,13 +211,13 @@ impl TryFrom<UnparsedRotatedTextureDescriptor> for FaceTextureDescriptor {
             Some((texture, rotation)) => {
                 let rotation = FaceTextureRotation::from_str(rotation)?;
                 Ok(Self {
-                    label: texture.to_string(),
+                    label: ResourcePath::try_from(texture)?,
                     rotation,
                 })
             }
             None => {
                 return Ok(Self {
-                    label: string,
+                    label: ResourcePath::try_from(string.as_str())?,
                     rotation: Default::default(),
                 })
             }
