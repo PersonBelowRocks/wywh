@@ -211,25 +211,27 @@ fn greedy_mesh_pbr_input(
         pbr_input.occlusion = occlusion;
 
         // N (normal vector)
-#ifndef LOAD_PREPASS_NORMALS
+//#ifndef LOAD_PREPASS_NORMALS
         var normal_map_uv = uv;
 
-        if (face.flags & HAS_NORMAL_MAP_BIT) != 0 {
+        if (face.flags & HAS_NORMAL_MAP_BIT) != 0u {
             normal_map_uv = ((uv / scale) + (face.normal_tex_pos / scale) / scale);
+
+            pbr_input.N = pbr_functions::apply_normal_mapping(
+                pbr_bindings::material.flags,
+                pbr_input.world_normal,
+                double_sided,
+                is_front,
+                in.world_tangent,
+                normal_map_uv,
+                view.mip_bias,
+            );
+        } else {
+            pbr_input.N = pbr_input.world_normal;
         }
 
-        pbr_input.N = pbr_functions::apply_normal_mapping(
-            pbr_bindings::material.flags,
-            pbr_input.world_normal,
-            double_sided,
-            is_front,
-#ifdef STANDARDMATERIAL_NORMAL_MAP
-            in.world_tangent,
-#endif
-            normal_map_uv,
-            view.mip_bias,
-        );
-#endif
+        
+//#endif
     }
 
     return pbr_input;

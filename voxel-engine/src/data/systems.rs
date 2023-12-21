@@ -149,6 +149,8 @@ pub fn build_registries(world: &mut World) {
     };
 
     world.insert_resource(VoxelColorTextureAtlas(textures.color_texture().clone()));
+    world.insert_resource(VoxelNormalTextureAtlas(textures.normal_texture().clone()));
+
     let variant_folders = world.get_resource::<VariantFolders>().unwrap();
 
     let mut file_loader = VariantFileLoader::new();

@@ -1,7 +1,10 @@
 use bevy::{pbr::ExtendedMaterial, prelude::*, render::texture::ImageSampler};
 
 use crate::{
-    data::{registries::Registries, systems::VoxelColorTextureAtlas},
+    data::{
+        registries::Registries,
+        systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
+    },
     render::adjacency::AdjacentTransparency,
     topo::{chunk::Chunk, realm::VoxelRealm},
     ChunkEntity, HqMaterial, LqMaterial,
@@ -72,9 +75,13 @@ pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
 }
 
 pub(crate) fn configure_sampling(
-    atlas_handle: Res<VoxelColorTextureAtlas>,
+    color_atlas_handle: Res<VoxelColorTextureAtlas>,
+    normal_atlas_handle: Res<VoxelNormalTextureAtlas>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    let texture = images.get_mut(&atlas_handle.0).unwrap();
+    let texture = images.get_mut(&color_atlas_handle.0).unwrap();
+    texture.sampler = ImageSampler::nearest();
+
+    let texture = images.get_mut(&normal_atlas_handle.0).unwrap();
     texture.sampler = ImageSampler::nearest();
 }

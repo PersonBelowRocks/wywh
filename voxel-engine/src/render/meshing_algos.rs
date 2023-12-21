@@ -82,7 +82,7 @@ impl GreedyMesher {
                     base_color_texture: Some(texture_registry.color_texture().clone()),
                     normal_map_texture: Some(texture_registry.normal_texture().clone()),
                     perceptual_roughness: 1.0,
-                    reflectance: 0.2,
+                    reflectance: 0.0,
                     // base_color: Color::rgb(0.5, 0.5, 0.65),
                     ..default()
                 },

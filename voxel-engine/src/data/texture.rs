@@ -1,6 +1,7 @@
 use std::ops;
 
 use bevy::{
+    log::info,
     math::{vec2, Vec2},
     render::render_resource::{ShaderSize, ShaderType},
 };
@@ -115,6 +116,7 @@ impl GpuFaceTexture {
 
         if normal.is_some() {
             flags |= Self::HAS_NORMAL_MAP_BIT;
+            info!("flags are now: {flags}");
         }
 
         Self {

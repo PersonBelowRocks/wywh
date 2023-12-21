@@ -139,22 +139,22 @@ fn setup(
     });
 
     // light
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            color: Color::WHITE,
-            illuminance: 100000.0,
-            shadows_enabled: true,
+    // commands.spawn(DirectionalLightBundle {
+    //     directional_light: DirectionalLight {
+    //         color: Color::WHITE,
+    //         illuminance: 100000.0,
+    //         shadows_enabled: true,
 
-            ..default()
-        },
-        transform: Transform::from_rotation(Quat::from_euler(
-            EulerRot::ZYX,
-            0.0,
-            PI * -0.15,
-            PI * -0.15,
-        )),
-        ..default()
-    });
+    //         ..default()
+    //     },
+    //     transform: Transform::from_rotation(Quat::from_euler(
+    //         EulerRot::ZYX,
+    //         0.0,
+    //         PI * -0.15,
+    //         PI * -0.15,
+    //     )),
+    //     ..default()
+    // });
 
     commands.insert_resource(Msaa::Off);
     commands.insert_resource(AmbientLight {
@@ -173,23 +173,23 @@ fn setup(
         .insert(ScreenSpaceAmbientOcclusionBundle::default())
         // .insert(DepthPrepass)
         // .insert(NormalPrepass)
-        .with_children(|_builder| {
-            // builder.spawn((
-            //     SpotLightBundle {
-            //         spot_light: SpotLight {
-            //             color: Color::WHITE,
-            //             intensity: 300000.0,
-            //             shadows_enabled: true,
-            //             inner_angle: PI / 8.0 * 0.85,
-            //             outer_angle: PI / 8.0,
-            //             range: 10000.0,
+        .with_children(|builder| {
+            builder.spawn((
+                SpotLightBundle {
+                    spot_light: SpotLight {
+                        color: Color::WHITE,
+                        intensity: 3000.0,
+                        shadows_enabled: true,
+                        inner_angle: PI / 8.0 * 0.85,
+                        outer_angle: PI / 8.0,
+                        range: 10000.0,
 
-            //             ..default()
-            //         },
+                        ..default()
+                    },
 
-            //         ..default()
-            //     },
-            //     camera::PlayerHeadlight,
-            // ));
+                    ..default()
+                },
+                camera::PlayerHeadlight,
+            ));
         });
 }
