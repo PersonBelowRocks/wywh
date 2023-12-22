@@ -21,6 +21,9 @@ use super::{
     voxel::descriptor::VariantDescriptor,
 };
 
+pub static TEXTURE_FOLDER_NAME: &'static str = "textures";
+pub static NORMALMAPS_FOLDER_NAME: &'static str = "normalmaps";
+
 #[derive(Resource, Default)]
 pub struct VoxelTextureFolder {
     pub handle: Handle<LoadedFolder>,
@@ -44,11 +47,11 @@ pub struct VariantFolders(Arc<Vec<PathBuf>>);
 
 pub(crate) fn load_textures(mut cmds: Commands, server: Res<AssetServer>) {
     cmds.insert_resource(VoxelTextureFolder {
-        handle: server.load_folder("textures"),
+        handle: server.load_folder(TEXTURE_FOLDER_NAME),
         loaded: false,
     });
     cmds.insert_resource(VoxelNormalMapFolder {
-        handle: server.load_folder("normalmaps"),
+        handle: server.load_folder(NORMALMAPS_FOLDER_NAME),
         loaded: false,
     });
 }
@@ -99,7 +102,7 @@ fn create_texture_registry(
 
             let id = handle.id().try_typed::<Image>()?;
 
-            let path = asset_path.path().strip_prefix("textures").unwrap();
+            let path = asset_path.path().strip_prefix(TEXTURE_FOLDER_NAME).unwrap();
             map.insert(ResourcePath::try_from(path)?, id);
         }
 
@@ -116,7 +119,10 @@ fn create_texture_registry(
 
             let id = handle.id().try_typed::<Image>()?;
 
-            let path = asset_path.path().strip_prefix("normalmaps").unwrap();
+            let path = asset_path
+                .path()
+                .strip_prefix(NORMALMAPS_FOLDER_NAME)
+                .unwrap();
             map.insert(ResourcePath::try_from(path)?, id);
         }
 

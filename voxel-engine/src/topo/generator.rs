@@ -117,13 +117,13 @@ impl Generator {
                 .get_id(&ResourcePath::try_from("void").unwrap())
                 .unwrap(),
             debug: variants
-                .get_id(&ResourcePath::try_from("test-app/assets/variants/debug").unwrap())
+                .get_id(&ResourcePath::try_from("debug").unwrap())
                 .unwrap(),
             stone: variants
-                .get_id(&ResourcePath::try_from("test-app/assets/variants/stone").unwrap())
+                .get_id(&ResourcePath::try_from("stone").unwrap())
                 .unwrap(),
             water: variants
-                .get_id(&ResourcePath::try_from("test-app/assets/variants/water").unwrap())
+                .get_id(&ResourcePath::try_from("water").unwrap())
                 .unwrap(),
         };
 

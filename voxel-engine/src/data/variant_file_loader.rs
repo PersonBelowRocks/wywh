@@ -32,22 +32,41 @@ impl VariantFileLoader {
         self.raw_descriptors.keys()
     }
 
+    // TODO: this should recurse through the folder loading all variants
     pub fn load_folder(&mut self, path: impl AsRef<Path>) -> Result<(), VariantFileLoaderError> {
+        let path = path.as_ref();
+
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
 
-            if entry.file_type()?.is_file() {
-                self.load_file(entry.path())?;
+            if entry.file_type()?.is_file()
+                && entry.path().extension().is_some_and(|ext| ext == "variant")
+            {
+                let label = ResourcePath::try_from(
+                    entry
+                        .path()
+                        .strip_prefix(path)
+                        .map_err(|_| VariantFileLoaderError::InvalidFileName(entry.path()))?,
+                )?;
+
+                self.load_file(entry.path(), Some(label))?;
             }
         }
 
         Ok(())
     }
 
-    pub fn load_file(&mut self, path: impl AsRef<Path>) -> Result<(), VariantFileLoaderError> {
+    pub fn load_file(
+        &mut self,
+        path: impl AsRef<Path>,
+        label: Option<ResourcePath>,
+    ) -> Result<(), VariantFileLoaderError> {
         let path = path.as_ref();
 
-        let label = ResourcePath::try_from(path)?;
+        let label = match label {
+            Some(label) => label,
+            None => ResourcePath::try_from(path)?,
+        };
 
         let mut file = File::open(&path)?;
 
