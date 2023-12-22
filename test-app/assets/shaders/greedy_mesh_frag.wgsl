@@ -24,7 +24,7 @@
 @group(2) @binding(100)
 var<uniform> texture_scale: f32;
 @group(2) @binding(101)
-var<storage> faces: array<FaceTexture>;
+var<storage, read> faces: array<FaceTexture>;
 
 @fragment
 fn fragment(

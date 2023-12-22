@@ -19,7 +19,7 @@ use crate::data::texture::GpuFaceTexture;
 pub struct GreedyMeshMaterial {
     #[uniform(100)]
     pub texture_scale: f32,
-    #[storage(101)]
+    #[storage(101, read_only)]
     pub faces: Vec<GpuFaceTexture>,
 }
 
