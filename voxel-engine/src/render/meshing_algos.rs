@@ -79,12 +79,17 @@ impl GreedyMesher {
         Self {
             material: ExtendedMaterial {
                 base: StandardMaterial {
-                    base_color_texture: Some(texture_registry.atlas_texture().clone()),
+                    base_color_texture: Some(texture_registry.color_texture().clone()),
+                    normal_map_texture: Some(texture_registry.normal_texture().clone()),
+                    perceptual_roughness: 1.0,
+                    reflectance: 0.0,
                     // base_color: Color::rgb(0.5, 0.5, 0.65),
                     ..default()
                 },
                 extension: GreedyMeshMaterial {
                     texture_scale: texture_registry.texture_scale(),
+
+                    faces: texture_registry.face_texture_buffer(),
                 },
             },
 
@@ -150,7 +155,7 @@ impl GreedyMesher {
                     face: slice.face,
                     quad: heightened,
                     quad_tex: QuadTextureData {
-                        pos: tex.tex_pos(),
+                        texture: tex.texture,
                         rotation: tex.rotation,
                         flip_uv_x: matches!(slice.face, Face::South | Face::East | Face::Bottom),
                         flip_uv_y: false,

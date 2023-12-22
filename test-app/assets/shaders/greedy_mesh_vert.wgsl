@@ -2,33 +2,20 @@
     mesh_functions,
     skinning,
     morph::morph,
-    forward_io::{Vertex, VertexOutput},
+    forward_io::{VertexOutput},
     view_transformations::position_world_to_clip,
 }
 #import bevy_render::instance_index::get_instance_index
 
-struct GreedyVertexOutput {
-    // This is `clip position` when the struct is used as a vertex stage output
-    // and `frag coord` when used as a fragment stage input
-    @builtin(position) position: vec4<f32>,
-    @location(0) world_position: vec4<f32>,
-    @location(1) world_normal: vec3<f32>,
-    @location(2) uv: vec2<f32>,
-#ifdef VERTEX_TANGENTS
-    @location(3) world_tangent: vec4<f32>,
+struct Vertex {
+    @builtin(instance_index) instance_index: u32,
+    @location(0) position: vec3<f32>,
+#ifdef VERTEX_NORMALS
+    @location(1) normal: vec3<f32>,
 #endif
-#ifdef VERTEX_COLORS
-    @location(4) color: vec4<f32>,
-#endif
-#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
-    @location(5) @interpolate(flat) instance_index: u32,
-#endif
-    @location(10) @interpolate(flat) texture: vec2<f32>,
-    @location(11) @interpolate(flat) texture_rot: f32,
+};
 
-    @location(12) @interpolate(flat) flip_uv_x: u32,
-    @location(13) @interpolate(flat) flip_uv_y: u32,
-}
+#import "shaders/greedy_mesh_utils.wgsl"::GreedyVertexOutput
 
 const ROTATION_MASK: u32 = #{ROTATION_MASK}u;
 const FLIP_UV_X: u32 = #{FLIP_UV_X}u;
@@ -36,14 +23,14 @@ const FLIP_UV_Y: u32 = #{FLIP_UV_Y}u;
 
 @vertex
 fn vertex(
-    vertex_no_morph: Vertex, 
-    @location(10) texture: vec2<f32>,
+    vertex_no_morph: Vertex,
+    @location(10) texture_id: u32,
     @location(11) misc: u32,
 ) -> GreedyVertexOutput {
     var out: GreedyVertexOutput;
 
     var vertex = vertex_no_morph;
-    out.texture = texture;
+    out.texture_id = texture_id;
 
     let rotation = misc ^ ROTATION_MASK;
 
@@ -70,28 +57,58 @@ fn vertex(
     out.position = position_world_to_clip(out.world_position.xyz);
 #endif
 
+#ifdef VERTEX_NORMALS
+    var tangent: vec3<f32>;
     if vertex.normal.y != 0.0 {
         out.uv = vertex.position.xz;
+        tangent = vec3(1.0, 0.0, 0.0);
     }
     if vertex.normal.x != 0.0 {
         out.uv = vertex.position.zy;
+        tangent = vec3(0.0, 0.0, 1.0);
     }
     if vertex.normal.z != 0.0 {
         out.uv = vertex.position.xy;
+        tangent = vec3(1.0, 0.0 ,0.0);
     }
 
-#ifdef VERTEX_TANGENTS
+    if out.flip_uv_x != 0u {
+        tangent = -tangent;
+    }
+
+    let a = out.texture_rot;
+    var M: mat3x3<f32>;
+    if vertex.normal.y != 0.0 {
+        M = mat3x3(
+            cos(a), 0.0, -sin(a),
+            0.0,    1.0,     0.0,
+            sin(a), 0.0,  cos(a),
+        );
+    }
+    if vertex.normal.x != 0.0 {
+        M = mat3x3(
+            1.0,    0.0,     0.0,
+            0.0, cos(a), -sin(a),
+            0.0, sin(a),  cos(a),
+        );
+    }
+    if vertex.normal.z != 0.0 {
+        M = mat3x3(
+            cos(a), -sin(a), 0.0,
+            sin(a),  cos(a), 0.0,
+            0.0,        0.0, 1.0,
+        );
+    }
+
+    tangent = M * tangent;
+
     out.world_tangent = mesh_functions::mesh_tangent_local_to_world(
         model,
-        vertex.tangent,
+        vec4(tangent.xyz, 0.0),
         // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
         // See https://github.com/gfx-rs/naga/issues/2416
         get_instance_index(vertex_no_morph.instance_index)
     );
-#endif
-
-#ifdef VERTEX_COLORS
-    out.color = vertex.color;
 #endif
 
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX

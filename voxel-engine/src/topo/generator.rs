@@ -9,6 +9,7 @@ use parking_lot::RwLock;
 
 use crate::data::{
     registries::{variant::VariantRegistry, Registries, Registry, RegistryId},
+    resourcepath::ResourcePath,
     tile::{Face, Transparency},
     voxel::rotations::BlockModelRotation,
 };
@@ -112,10 +113,18 @@ impl Generator {
         let variants = registries.get_registry::<VariantRegistry>().unwrap();
 
         let palette = GeneratorPalette {
-            void: variants.get_id("void").unwrap(),
-            debug: variants.get_id("debug").unwrap(),
-            stone: variants.get_id("stone").unwrap(),
-            water: variants.get_id("water").unwrap(),
+            void: variants
+                .get_id(&ResourcePath::try_from("void").unwrap())
+                .unwrap(),
+            debug: variants
+                .get_id(&ResourcePath::try_from("debug").unwrap())
+                .unwrap(),
+            stone: variants
+                .get_id(&ResourcePath::try_from("stone").unwrap())
+                .unwrap(),
+            water: variants
+                .get_id(&ResourcePath::try_from("water").unwrap())
+                .unwrap(),
         };
 
         Self {

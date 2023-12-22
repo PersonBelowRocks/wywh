@@ -271,8 +271,7 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
 pub struct ChunkMeshAttributes {
     pub positions: Vec<Vec3>,
     pub normals: Vec<Vec3>,
-    pub uvs: Vec<Vec2>,
-    pub textures: Vec<Vec2>,
+    pub textures: Vec<u32>,
     pub misc_data: Vec<u32>,
     pub indices: Vec<u32>,
 }
@@ -285,7 +284,6 @@ impl ChunkMeshAttributes {
 
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, self.positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs);
         mesh.insert_attribute(GreedyMeshMaterial::TEXTURE_MESH_ATTR, self.textures);
         mesh.insert_attribute(GreedyMeshMaterial::MISC_DATA_ATTR, self.misc_data);
 

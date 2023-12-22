@@ -4,6 +4,8 @@ use anymap::any::Any;
 use bevy::ecs::system::Resource;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
+use super::resourcepath::ResourcePath;
+
 pub mod error;
 pub mod model;
 pub mod texture;
@@ -66,9 +68,9 @@ pub trait Registry: Send + Sync {
     where
         Self: 'a;
 
-    fn get_by_label(&self, label: &str) -> Option<Self::Item<'_>>;
+    fn get_by_label(&self, label: &ResourcePath) -> Option<Self::Item<'_>>;
     fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_>;
-    fn get_id(&self, label: &str) -> Option<RegistryId<Self>>;
+    fn get_id(&self, label: &ResourcePath) -> Option<RegistryId<Self>>;
 }
 
 #[derive(Clone, Debug)]

@@ -5,6 +5,8 @@ use bevy::math::vec2;
 use bevy::prelude::Vec2;
 use bevy::prelude::Vec3;
 
+use crate::data::registries::texture::TextureRegistry;
+use crate::data::registries::RegistryId;
 use crate::data::tile::Face;
 
 use crate::data::texture::FaceTextureRotation;
@@ -133,7 +135,7 @@ pub mod consts {
 
 #[derive(Debug, Copy, Clone)]
 pub struct QuadTextureData {
-    pub pos: Vec2,
+    pub texture: RegistryId<TextureRegistry>,
     pub rotation: FaceTextureRotation,
     pub flip_uv_x: bool,
     pub flip_uv_y: bool,
@@ -197,8 +199,6 @@ impl MeshableQuad {
             2---3
         */
 
-        let uvs = self.unswapped_uvs();
-
         let indices = match self.face {
             Face::Bottom | Face::East => [0, 2, 1, 1, 2, 3],
             Face::North => [0, 3, 1, 0, 2, 3],
@@ -210,8 +210,8 @@ impl MeshableQuad {
         mesh.indices.extend(indices);
         mesh.normals.extend([normal; 4]);
         mesh.positions.extend(positions);
-        mesh.uvs.extend(uvs);
         mesh.misc_data.extend([self.quad_tex.bitfield(); 4]);
-        mesh.textures.extend([self.quad_tex.pos; 4]);
+        mesh.textures
+            .extend([self.quad_tex.texture.inner() as u32; 4]);
     }
 }

@@ -1,11 +1,19 @@
 use std::ops;
 
-use bevy::math::{vec2, Vec2};
+use bevy::{
+    log::info,
+    math::{vec2, Vec2},
+    render::render_resource::{ShaderSize, ShaderType},
+};
+use bitflags::bitflags;
 use ordered_float::NotNan;
 
 use crate::util::notnan_arr;
 
-use super::error::FaceTextureRotationParseError;
+use super::{
+    error::FaceTextureRotationParseError,
+    registries::{texture::TextureRegistry, Registry, RegistryId},
+};
 
 #[derive(
     Default, Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize,
@@ -70,31 +78,51 @@ impl FaceTextureRotation {
 #[repr(packed)]
 pub struct FaceTexture {
     pub rotation: FaceTextureRotation,
-    tex_pos_x: NotNan<f32>,
-    tex_pos_y: NotNan<f32>,
+    pub texture: RegistryId<TextureRegistry>,
 }
 
 impl FaceTexture {
-    pub fn tex_pos(&self) -> Vec2 {
-        vec2(self.tex_pos_x.into_inner(), self.tex_pos_y.into_inner())
+    pub fn tex_pos(&self, registry: &TextureRegistry) -> Vec2 {
+        registry.get_by_id(self.texture).texture_pos
     }
 
-    pub fn new(tex_pos: Vec2) -> Self {
-        let [tex_pos_x, tex_pos_y] = notnan_arr(tex_pos.into()).unwrap();
-
+    pub fn new(texture: RegistryId<TextureRegistry>) -> Self {
         Self {
-            tex_pos_x,
-            tex_pos_y,
             rotation: Default::default(),
+            texture,
         }
     }
 
-    pub fn new_rotated(tex_pos: Vec2, rotation: FaceTextureRotation) -> Self {
-        let [tex_pos_x, tex_pos_y] = notnan_arr(tex_pos.into()).unwrap();
+    pub fn new_rotated(
+        texture: RegistryId<TextureRegistry>,
+        rotation: FaceTextureRotation,
+    ) -> Self {
+        Self { rotation, texture }
+    }
+}
+
+#[derive(Copy, Clone, Debug, ShaderType)]
+pub struct GpuFaceTexture {
+    pub flags: u32,
+    pub color_tex_pos: Vec2,
+    pub normal_tex_pos: Vec2,
+}
+
+impl GpuFaceTexture {
+    pub const HAS_NORMAL_MAP_BIT: u32 = 0b1;
+
+    pub fn new(color: Vec2, normal: Option<Vec2>) -> Self {
+        let mut flags = 0u32;
+
+        if normal.is_some() {
+            flags |= Self::HAS_NORMAL_MAP_BIT;
+            info!("flags are now: {flags}");
+        }
+
         Self {
-            tex_pos_x,
-            tex_pos_y,
-            rotation,
+            flags,
+            color_tex_pos: color,
+            normal_tex_pos: normal.unwrap_or(Vec2::ZERO),
         }
     }
 }

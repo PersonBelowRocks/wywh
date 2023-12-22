@@ -1,6 +1,11 @@
 use std::path::PathBuf;
 
-use super::{registries::error::TextureNotFound, tile::Face, voxel::rotations::BlockModelFace};
+use super::{
+    registries::error::TextureNotFound,
+    resourcepath::error::{FromPathError, FromStrError},
+    tile::Face,
+    voxel::rotations::BlockModelFace,
+};
 
 #[derive(te::Error, Debug)]
 #[error("TODO")]
@@ -20,20 +25,20 @@ pub enum VariantFileLoaderError {
     IoError(#[from] std::io::Error),
     #[error("{0}")]
     ParseError(#[from] deser_hjson::Error),
-    #[error("Variant not found: '{0}'")]
-    VariantNotFound(String),
+    #[error("Requested variant was not found")]
+    VariantNotFound,
     #[error("Invalid variant file name: '{0}'")]
     InvalidFileName(PathBuf),
+    #[error("Error parsing file path to ResourcePath")]
+    ResourcePathError(#[from] FromPathError),
 }
 
-#[derive(te::Error, Debug, dm::Constructor)]
-#[error("Couldn't parse '{0}' into a rotated texture descriptor")]
-pub struct FaceTextureDescriptorParseError(String);
-
-impl From<FaceTextureRotationParseError> for FaceTextureDescriptorParseError {
-    fn from(value: FaceTextureRotationParseError) -> Self {
-        Self(value.0)
-    }
+#[derive(te::Error, Debug)]
+pub enum FaceTextureDescriptorParseError {
+    #[error("Couldn't parse resource path: {0}")]
+    ResourcePathError(#[from] FromStrError),
+    #[error("Couldn't parse texture rotation: {0}")]
+    TexRotParseError(#[from] FaceTextureRotationParseError),
 }
 
 #[derive(te::Error, Debug)]
@@ -67,6 +72,8 @@ pub enum RotatedTextureDescriptorParseError {
     BlockModelFace(#[from] BlockModelFaceParseError),
     #[error("{0}")]
     Face(#[from] FaceParseError),
+    #[error("Error parsing resource path: {0}")]
+    ResourcePathError(#[from] FromStrError),
 }
 
 #[derive(te::Error, Debug)]
