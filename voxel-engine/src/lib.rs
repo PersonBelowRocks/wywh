@@ -11,7 +11,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use bevy::{pbr::ExtendedMaterial, prelude::*};
 use data::registries::Registries;
-use render::meshing_algos::SimplePbrMesher;
+use render::meshing::greedy::algorithm::SimplePbrMesher;
 use topo::{
     generator::{GenerateChunk, Generator, GeneratorChoice},
     realm::VoxelRealm,
@@ -25,8 +25,8 @@ pub mod util;
 use crate::{
     data::systems::{build_registries, check_textures, load_textures, VariantFolders},
     render::{
-        greedy_mesh_material::GreedyMeshMaterial,
-        meshing_algos::GreedyMesher,
+        meshing::greedy::algorithm::GreedyMesher,
+        meshing::greedy::material::GreedyMeshMaterial,
         systems::{build_meshes, configure_sampling, insert_meshes, setup_mesh_builder},
     },
     topo::systems::generate_chunks_from_events,

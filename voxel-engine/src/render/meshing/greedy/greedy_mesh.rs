@@ -7,14 +7,13 @@ use crate::{
         tile::{Face, Transparency},
         voxel::rotations::BlockModelRotation,
     },
+    render::adjacency::AdjacentTransparency,
     topo::{
         access::{ChunkBounds, ReadAccess},
         chunk::Chunk,
         chunk_ref::ChunkVoxelOutput,
     },
 };
-
-use super::adjacency::AdjacentTransparency;
 
 pub(crate) trait ChunkAccess: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
 impl<T> ChunkAccess for T where T: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}

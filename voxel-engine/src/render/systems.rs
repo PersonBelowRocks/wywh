@@ -15,9 +15,11 @@ use crate::{
 };
 
 use super::{
-    greedy_mesh_material::GreedyMeshMaterial,
     mesh_builder::{Mesher, ParallelMeshBuilder},
-    meshing_algos::{GreedyMesher, SimplePbrMesher},
+    meshing::greedy::{
+        algorithm::{GreedyMesher, SimplePbrMesher},
+        material::GreedyMeshMaterial,
+    },
 };
 
 pub(crate) fn setup_mesh_builder<Hqm: Mesher, Lqm: Mesher>(

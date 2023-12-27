@@ -14,22 +14,23 @@ use crate::data::registries::variant::VariantRegistry;
 use crate::data::registries::Registries;
 use crate::data::tile::Face;
 
-use crate::render::greedy_mesh::VoxelChunkSlice;
 use crate::render::quad::Quad;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;
 use crate::topo::chunk::Chunk;
 use crate::topo::chunk_ref::ChunkVoxelOutput;
 
-use super::error::MesherError;
+use crate::render::error::MesherError;
+use crate::render::mesh_builder::ChunkMeshAttributes;
+use crate::render::mesh_builder::Context;
+use crate::render::mesh_builder::Mesher;
+use crate::render::mesh_builder::MesherOutput;
+use crate::render::quad::MeshableQuad;
+use crate::render::quad::QuadTextureData;
+
 use super::greedy_mesh::ChunkSliceMask;
-use super::greedy_mesh_material::GreedyMeshMaterial;
-use super::mesh_builder::ChunkMeshAttributes;
-use super::mesh_builder::Context;
-use super::mesh_builder::Mesher;
-use super::mesh_builder::MesherOutput;
-use super::quad::MeshableQuad;
-use super::quad::QuadTextureData;
+use super::greedy_mesh::VoxelChunkSlice;
+use super::material::GreedyMeshMaterial;
 
 #[derive(Clone)]
 pub struct SimplePbrMesher {
