@@ -1,3 +1,5 @@
+pub mod notnan;
+
 use bevy::prelude::*;
 use dashmap::DashMap;
 use ordered_float::NotNan;
