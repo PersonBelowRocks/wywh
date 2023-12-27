@@ -131,6 +131,7 @@ pub mod consts {
     pub const ROTATION_MASK: u32 = 0b00000000_00000000_00000000_00000011;
     pub const FLIP_UV_X: u32     = 0b00000000_00000000_00000000_00000100;
     pub const FLIP_UV_Y: u32     = 0b00000000_00000000_00000000_00001000;
+    pub const OCCLUSION: u32     = 0b00000000_00000000_00000000_00010000;
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -207,10 +208,17 @@ impl MeshableQuad {
         }
         .map(|i| i + idx);
 
+        let bitfields = [
+            self.quad_tex.bitfield(),
+            self.quad_tex.bitfield(),
+            self.quad_tex.bitfield() | consts::OCCLUSION,
+            self.quad_tex.bitfield(),
+        ];
+
         mesh.indices.extend(indices);
         mesh.normals.extend([normal; 4]);
         mesh.positions.extend(positions);
-        mesh.misc_data.extend([self.quad_tex.bitfield(); 4]);
+        mesh.misc_data.extend(bitfields);
         mesh.textures
             .extend([self.quad_tex.texture.inner() as u32; 4]);
     }

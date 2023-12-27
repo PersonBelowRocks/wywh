@@ -1,4 +1,8 @@
-use bevy::{pbr::ExtendedMaterial, prelude::*, render::texture::ImageSampler};
+use bevy::{
+    pbr::{wireframe::Wireframe, ExtendedMaterial},
+    prelude::*,
+    render::texture::ImageSampler,
+};
 
 use crate::{
     data::{
@@ -70,7 +74,7 @@ pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
 
             ..default()
         })
-        .insert((ChunkEntity, Chunk::BOUNDING_BOX.to_aabb()));
+        .insert((Wireframe, ChunkEntity, Chunk::BOUNDING_BOX.to_aabb()));
     }
 }
 

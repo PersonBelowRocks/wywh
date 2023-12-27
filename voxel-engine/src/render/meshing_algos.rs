@@ -1,5 +1,6 @@
 use bevy::math::ivec2;
 
+use bevy::math::vec2;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::default;
 use bevy::prelude::Color;
@@ -115,38 +116,40 @@ impl GreedyMesher {
                     continue;
                 };
 
-                let quad = Quad::from_points(pos.as_vec2(), pos.as_vec2());
+                let quad = Quad::from_points(pos.as_vec2(), pos.as_vec2() + vec2(1.0, 1.0));
 
                 let mut quad_end = pos;
 
-                let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
-                    let candidate_pos = ivec2(pos.x + n as i32, pos.y);
-                    if !slice.is_meshable(candidate_pos).unwrap()
-                        || mask.is_masked(candidate_pos).unwrap()
-                        || slice.get_texture(candidate_pos).unwrap() != Some(tex)
-                    {
-                        quad_end.x = (pos.x + n as i32) - 1;
-                        true
-                    } else {
-                        false
-                    }
-                });
+                // let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
+                //     let candidate_pos = ivec2(pos.x + n as i32, pos.y);
+                //     if !slice.is_meshable(candidate_pos).unwrap()
+                //         || mask.is_masked(candidate_pos).unwrap()
+                //         || slice.get_texture(candidate_pos).unwrap() != Some(tex)
+                //     {
+                //         quad_end.x = (pos.x + n as i32) - 1;
+                //         true
+                //     } else {
+                //         false
+                //     }
+                // });
 
-                let heightened = widened.heighten_until(1.0, Chunk::SIZE as u32, |n| {
-                    let mut abort = false;
-                    for q_x in pos.x..=quad_end.x {
-                        let candidate_pos = ivec2(q_x, pos.y + n as i32);
-                        if !slice.is_meshable(candidate_pos).unwrap()
-                            || mask.is_masked(candidate_pos).unwrap()
-                            || slice.get_texture(candidate_pos).unwrap() != Some(tex)
-                        {
-                            quad_end.y = (pos.y + n as i32) - 1;
-                            abort = true;
-                            break;
-                        }
-                    }
-                    abort
-                });
+                // let heightened = widened.heighten_until(1.0, Chunk::SIZE as u32, |n| {
+                //     let mut abort = false;
+                //     for q_x in pos.x..=quad_end.x {
+                //         let candidate_pos = ivec2(q_x, pos.y + n as i32);
+                //         if !slice.is_meshable(candidate_pos).unwrap()
+                //             || mask.is_masked(candidate_pos).unwrap()
+                //             || slice.get_texture(candidate_pos).unwrap() != Some(tex)
+                //         {
+                //             quad_end.y = (pos.y + n as i32) - 1;
+                //             abort = true;
+                //             break;
+                //         }
+                //     }
+                //     abort
+                // });
+
+                let heightened = quad;
 
                 mask.mask_region(pos, quad_end);
 

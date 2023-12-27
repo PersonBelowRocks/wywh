@@ -53,6 +53,8 @@ struct GreedyVertexOutput {
 
     @location(12) @interpolate(flat) flip_uv_x: u32,
     @location(13) @interpolate(flat) flip_uv_y: u32,
+
+    @location(14) occlusion: f32,
 }
 
 fn preprocess_greedy_vertex_output(raw_in: GreedyVertexOutput) -> GreedyVertexOutput {
@@ -77,6 +79,8 @@ fn preprocess_greedy_vertex_output(raw_in: GreedyVertexOutput) -> GreedyVertexOu
 
     let offset = vec2(0.5, 0.5);
     in.uv = (M * (uv - offset)) + offset;
+
+    in.occlusion = raw_in.occlusion;
 
     return in;
 }
@@ -235,4 +239,9 @@ fn greedy_mesh_pbr_input(
     }
 
     return pbr_input;
+}
+
+fn occlusion_curve(o: f32) -> f32 {
+    let unclamped = (0.1 / (-o + 1.11)) - 0.25;
+    return clamp(unclamped, 0.0, 1.0);
 }

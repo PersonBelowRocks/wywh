@@ -20,6 +20,7 @@
 #import "shaders/greedy_mesh_utils.wgsl"::GreedyVertexOutput
 #import "shaders/greedy_mesh_utils.wgsl"::preprocess_greedy_vertex_output
 #import "shaders/greedy_mesh_utils.wgsl"::greedy_mesh_pbr_input
+#import "shaders/greedy_mesh_utils.wgsl"::occlusion_curve
 
 @group(2) @binding(100)
 var<uniform> texture_scale: f32;
@@ -57,6 +58,9 @@ fn fragment(
     // note this does not include fullscreen postprocessing effects like bloom.
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
+
+    let occlusion = occlusion_curve(in.occlusion);
+    out.color = vec4(occlusion, 0.0, 0.0, 1.0);
 
     return out;
 }
