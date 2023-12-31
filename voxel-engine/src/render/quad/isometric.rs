@@ -1,4 +1,4 @@
-use bevy::math::{vec2, IVec3, Vec2, Vec3};
+use bevy::math::{vec2, vec3, IVec3, Vec2, Vec3};
 use ordered_float::{FloatIsNan, NotNan};
 
 use crate::{
@@ -93,6 +93,16 @@ impl<Data: Copy> PositionedQuad<Data> {
     }
 
     #[inline]
+    pub fn widen(&mut self, by: f32) {
+        self.quad = self.quad.widened(by);
+    }
+
+    #[inline]
+    pub fn heighten(&mut self, by: f32) {
+        self.quad = self.quad.heightened(by);
+    }
+
+    #[inline]
     pub fn pos(&self) -> Vec2 {
         self.pos.vec()
     }
@@ -135,8 +145,21 @@ impl<Data: Copy> PositionedQuad<Data> {
 }
 
 #[inline]
-pub fn project_to_3d(pos_2d: Vec2, face: Face, mag: f32) -> Vec3 {
-    todo!()
+pub fn project_to_3d(pos: Vec2, face: Face, mag: f32) -> Vec3 {
+    match face.axis() {
+        Axis3D::X => vec3(mag, pos.y, pos.x),
+        Axis3D::Y => vec3(pos.x, mag, pos.y),
+        Axis3D::Z => vec3(pos.x, pos.y, mag),
+    }
+}
+
+#[inline]
+pub fn project_to_2d(pos: Vec3, face: Face) -> Vec2 {
+    match face.axis() {
+        Axis3D::X => vec2(pos.z, pos.y),
+        Axis3D::Y => vec2(pos.x, pos.z),
+        Axis3D::Z => vec2(pos.x, pos.y),
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -151,6 +174,14 @@ impl<Data: Copy> IsometrizedQuad<Data> {
         project_to_3d(pos_2d, self.isometry.face, self.isometry.magnitude.into())
     }
 
+    pub fn data(&self) -> &[Data; 4] {
+        self.quad.data.inner()
+    }
+
+    pub fn topology(&self) -> [u32; 6] {
+        todo!()
+    }
+
     pub fn get_vertex(&self, vertex: QuadVertex) -> (Vec3, &Data) {
         todo!()
     }
@@ -161,7 +192,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_quad_projection() {
-        todo!()
+    fn test_projection() {
+        let pos = vec2(1.0, 2.0);
+
+        assert_eq!(vec3(10.0, 2.0, 1.0), project_to_3d(pos, Face::North, 10.0));
+        assert_eq!(
+            vec2(1.0, 2.0),
+            project_to_2d(vec3(10.0, 2.0, 1.0), Face::North)
+        );
     }
 }

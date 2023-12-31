@@ -17,6 +17,22 @@ impl Quad {
     }
 
     #[inline]
+    pub fn widened(self, by: f32) -> Self {
+        let mut v = self.dims.vec();
+        v.x += by;
+
+        Self::new(v.max(Vec2::ZERO)).unwrap()
+    }
+
+    #[inline]
+    pub fn heightened(self, by: f32) -> Self {
+        let mut v = self.dims.vec();
+        v.y += by;
+
+        Self::new(v.max(Vec2::ZERO)).unwrap()
+    }
+
+    #[inline]
     pub fn dims(self) -> Vec2 {
         self.dims.vec()
     }
