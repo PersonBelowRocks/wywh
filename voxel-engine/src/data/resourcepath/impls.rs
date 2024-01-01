@@ -31,7 +31,7 @@ impl<'a> TryFrom<&'a str> for ResourcePath {
         let mut parts = Vec::<ResourcePathPart>::new();
 
         for (i, part) in value
-            .split(|ch| ch == std::path::MAIN_SEPARATOR || ch == '/')
+            .split(|ch| ch == std::path::MAIN_SEPARATOR || ch == '/' || ch == '\\')
             .enumerate()
         {
             if part.is_empty() || part.contains('.') {

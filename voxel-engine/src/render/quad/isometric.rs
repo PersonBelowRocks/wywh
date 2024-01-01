@@ -93,6 +93,32 @@ impl<Data: Copy> PositionedQuad<Data> {
     }
 
     #[inline]
+    pub fn merge_right(mut self, rhs: Self) -> Option<Self> {
+        if self.pos().y == rhs.pos().y
+            && (self.pos().x + 1.0) == rhs.pos().x
+            && self.height() == rhs.height()
+        {
+            self.widen(rhs.width());
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn merge_top(mut self, rhs: Self) -> Option<Self> {
+        if self.pos().x == rhs.pos().x
+            && (self.pos().y + 1.0) == rhs.pos().y
+            && self.width() == rhs.width()
+        {
+            self.heighten(rhs.height());
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     pub fn widen(&mut self, by: f32) {
         self.quad = self.quad.widened(by);
     }
@@ -200,5 +226,23 @@ mod tests {
             vec2(1.0, 2.0),
             project_to_2d(vec3(10.0, 2.0, 1.0), Face::North)
         );
+    }
+
+    #[test]
+    fn test_merge() {
+        let quad1 = PositionedQuad {
+            pos: vec2(0.0, 0.0).try_into().unwrap(),
+            quad: Quad::new(vec2(1.0, 1.0)).unwrap(),
+            data: QData::filled(()),
+        };
+
+        let quad2 = PositionedQuad {
+            pos: vec2(1.0, 0.0).try_into().unwrap(),
+            quad: Quad::new(vec2(1.0, 1.0)).unwrap(),
+            data: QData::filled(()),
+        };
+
+        let merged = quad1.merge_right(quad2).unwrap();
+        assert_eq!(2.0, merged.width());
     }
 }
