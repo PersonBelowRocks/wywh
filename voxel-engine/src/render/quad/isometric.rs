@@ -31,7 +31,12 @@ impl QuadIsometry {
 
     #[inline]
     pub fn pos_3d(self) -> Vec3 {
-        todo!()
+        project_to_3d(self.pos.vec(), self.face, self.magnitude.into())
+    }
+
+    #[inline]
+    pub fn pos_2d(self) -> Vec2 {
+        self.pos.vec()
     }
 }
 
@@ -50,25 +55,25 @@ pub enum QuadVertex {
 }
 
 impl QuadVertex {
-    pub const VERTICES: [Self; 4] = [Self::Two, Self::Three, Self::Zero, Self::One];
+    pub const VERTICES: [Self; 4] = [Self::Zero, Self::One, Self::Two, Self::Three];
 
     #[inline]
     pub fn as_usize(self) -> usize {
         match self {
-            Self::Two => 2,
-            Self::Three => 3,
             Self::Zero => 0,
             Self::One => 1,
+            Self::Two => 2,
+            Self::Three => 3,
         }
     }
 
     #[inline]
     pub fn from_usize(v: usize) -> Option<Self> {
         match v {
-            2 => Some(Self::Two),
-            3 => Some(Self::Three),
             0 => Some(Self::Zero),
             1 => Some(Self::One),
+            2 => Some(Self::Two),
+            3 => Some(Self::Three),
             _ => None,
         }
     }
