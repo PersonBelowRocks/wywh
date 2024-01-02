@@ -15,8 +15,7 @@ use crate::{
     },
 };
 
-pub(crate) trait ChunkAccess: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
-impl<T> ChunkAccess for T where T: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
+use super::ChunkAccess;
 
 #[derive(Default)]
 pub(crate) struct ChunkSliceMask([[bool; Chunk::USIZE]; Chunk::USIZE]);

@@ -9,6 +9,7 @@ use crate::topo::error::ChunkAccessError;
 use crate::topo::realm::ChunkManager;
 use crate::util::SquareArray;
 
+#[derive(Clone)]
 struct ChunkFace<T> {
     data: SquareArray<{ Chunk::USIZE }, T>,
     face: Face,
@@ -94,6 +95,7 @@ fn transparency_for_adjacent_chunk_face(
     Some(chunk_face_transparency)
 }
 
+#[derive(Clone)]
 pub struct AdjacentTransparency([Option<ChunkFace<Transparency>>; 6]);
 
 impl AdjacentTransparency {
