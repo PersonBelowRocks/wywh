@@ -5,11 +5,12 @@ use std::sync::{
 
 use bevy::prelude::Resource;
 
-use crate::util::SyncHashMap;
+use crate::{render::meshing::Neighbors, util::SyncHashMap};
 
 use super::{
+    access::{ChunkBounds, ReadAccess},
     chunk::{Chunk, ChunkPos},
-    chunk_ref::ChunkRef,
+    chunk_ref::{ChunkRef, ChunkRefVxlReadAccess, ChunkVoxelOutput},
     error::ChunkManagerGetChunkError,
 };
 
@@ -136,6 +137,14 @@ impl ChunkManager {
             changed,
             pos,
         })
+    }
+
+    pub fn with_neighbors<A, F>(&self, pos: ChunkPos, f: F)
+    where
+        A: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds,
+        F: for<'a, 'b> FnMut(Neighbors<'a, ChunkRefVxlReadAccess<'b, ahash::RandomState>>),
+    {
+        todo!()
     }
 
     pub fn set_loaded_chunk(&self, pos: ChunkPos, chunk: Chunk) {
