@@ -1,5 +1,6 @@
 pub mod anon;
 pub mod data;
+pub mod error;
 pub mod isometric;
 
 use std::array;

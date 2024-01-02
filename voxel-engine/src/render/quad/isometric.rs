@@ -6,7 +6,11 @@ use crate::{
     util::{notnan::NotNanVec2, Axis3D},
 };
 
-use super::{anon::Quad, data::QData};
+use super::{
+    anon::Quad,
+    data::{DataQuad, QData},
+    error::QuadError,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QuadIsometry {
@@ -39,93 +43,92 @@ impl QuadIsometry {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum QuadVertex {
-    BottomLeft = 2,
-    BottomRight = 3,
-    TopLeft = 0,
-    TopRight = 1,
+    Zero = 0,
+    One = 1,
+    Two = 2,
+    Three = 3,
 }
 
 impl QuadVertex {
-    pub const VERTICES: [Self; 4] = [
-        Self::BottomLeft,
-        Self::BottomRight,
-        Self::TopLeft,
-        Self::TopRight,
-    ];
+    pub const VERTICES: [Self; 4] = [Self::Two, Self::Three, Self::Zero, Self::One];
 
     #[inline]
     pub fn as_usize(self) -> usize {
         match self {
-            Self::BottomLeft => 2,
-            Self::BottomRight => 3,
-            Self::TopLeft => 0,
-            Self::TopRight => 1,
+            Self::Two => 2,
+            Self::Three => 3,
+            Self::Zero => 0,
+            Self::One => 1,
         }
     }
 
     #[inline]
     pub fn from_usize(v: usize) -> Option<Self> {
         match v {
-            2 => Some(Self::BottomLeft),
-            3 => Some(Self::BottomRight),
-            0 => Some(Self::TopLeft),
-            1 => Some(Self::TopRight),
+            2 => Some(Self::Two),
+            3 => Some(Self::Three),
+            0 => Some(Self::Zero),
+            1 => Some(Self::One),
             _ => None,
         }
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct PositionedQuad<Data: Copy> {
+pub struct PositionedQuad<Data> {
     pos: NotNanVec2,
-    pub quad: Quad,
-    pub data: QData<Data>,
+    dataquad: DataQuad<Data>,
 }
 
-impl<Data: Copy> PositionedQuad<Data> {
+impl<Data> PositionedQuad<Data> {
     #[inline]
-    pub fn new(pos: Vec2, quad: Quad, data: QData<Data>) -> Result<Self, FloatIsNan> {
+    pub fn new(pos: Vec2, dataquad: DataQuad<Data>) -> Result<Self, FloatIsNan> {
         Ok(Self {
             pos: pos.try_into()?,
-            quad,
-            data,
+            dataquad,
         })
     }
 
     #[inline]
-    pub fn merge_right(mut self, rhs: Self) -> Option<Self> {
-        if self.pos().y == rhs.pos().y
-            && (self.pos().x + 1.0) == rhs.pos().x
-            && self.height() == rhs.height()
-        {
-            self.widen(rhs.width());
-            Some(self)
-        } else {
-            None
+    pub fn min(&self) -> Vec2 {
+        self.pos() - (self.dataquad.quad.dims() / 2.0)
+    }
+
+    #[inline]
+    pub fn max(&self) -> Vec2 {
+        self.pos() + (self.dataquad.quad.dims() / 2.0)
+    }
+
+    #[inline]
+    pub fn widen(&mut self, by: f32) -> Result<(), QuadError> {
+        if by < 0.0 {
+            // TODO: negative numbers in resizing functions should expand in the other direction, rather than shrink the quad
+            todo!()
         }
+
+        let widened = self.dataquad.quad.widened(by)?;
+        let delta = widened.dims() - self.dataquad.quad.dims();
+
+        self.dataquad.quad = widened;
+
+        self.pos = (self.pos() + delta / 2.0).try_into()?;
+        Ok(())
     }
 
     #[inline]
-    pub fn merge_top(mut self, rhs: Self) -> Option<Self> {
-        if self.pos().x == rhs.pos().x
-            && (self.pos().y + 1.0) == rhs.pos().y
-            && self.width() == rhs.width()
-        {
-            self.heighten(rhs.height());
-            Some(self)
-        } else {
-            None
+    pub fn heighten(&mut self, by: f32) -> Result<(), QuadError> {
+        if by < 0.0 {
+            // TODO: negative numbers in resizing functions should expand in the other direction, rather than shrink the quad
+            todo!()
         }
-    }
 
-    #[inline]
-    pub fn widen(&mut self, by: f32) {
-        self.quad = self.quad.widened(by);
-    }
+        let heightened = self.dataquad.quad.heightened(by)?;
+        let delta = heightened.dims() - self.dataquad.quad.dims();
 
-    #[inline]
-    pub fn heighten(&mut self, by: f32) {
-        self.quad = self.quad.heightened(by);
+        self.dataquad.quad = heightened;
+
+        self.pos = (self.pos() + delta / 2.0).try_into()?;
+        Ok(())
     }
 
     #[inline]
@@ -134,11 +137,11 @@ impl<Data: Copy> PositionedQuad<Data> {
     }
 
     pub fn width(&self) -> f32 {
-        self.quad.x()
+        self.dataquad.quad.x()
     }
 
     pub fn height(&self) -> f32 {
-        self.quad.y()
+        self.dataquad.quad.y()
     }
 
     #[inline]
@@ -146,17 +149,17 @@ impl<Data: Copy> PositionedQuad<Data> {
         let pos = self.pos();
 
         match vertex {
-            QuadVertex::BottomLeft => pos,
-            QuadVertex::BottomRight => vec2(pos.x + self.width(), pos.y),
-            QuadVertex::TopLeft => vec2(pos.x, pos.y + self.height()),
-            QuadVertex::TopRight => vec2(pos.x + self.width(), pos.y + self.height()),
+            QuadVertex::Two => pos,
+            QuadVertex::Three => vec2(pos.x + self.width(), pos.y),
+            QuadVertex::Zero => vec2(pos.x, pos.y + self.height()),
+            QuadVertex::One => vec2(pos.x + self.width(), pos.y + self.height()),
         }
     }
 
     #[inline]
     pub fn get_vertex(&self, vertex: QuadVertex) -> (Vec2, &Data) {
         let pos = self.vertex_pos(vertex);
-        let data = self.data.get(vertex);
+        let data = self.dataquad.data.get(vertex);
 
         (pos, data)
     }
@@ -164,7 +167,7 @@ impl<Data: Copy> PositionedQuad<Data> {
     #[inline]
     pub fn get_vertex_mut(&mut self, vertex: QuadVertex) -> (Vec2, &mut Data) {
         let pos = self.vertex_pos(vertex);
-        let data = self.data.get_mut(vertex);
+        let data = self.dataquad.data.get_mut(vertex);
 
         (pos, data)
     }
@@ -201,7 +204,7 @@ impl<Data: Copy> IsometrizedQuad<Data> {
     }
 
     pub fn data(&self) -> &[Data; 4] {
-        self.quad.data.inner()
+        self.quad.dataquad.data.inner()
     }
 
     pub fn topology(&self) -> [u32; 6] {
@@ -229,20 +232,27 @@ mod tests {
     }
 
     #[test]
-    fn test_merge() {
-        let quad1 = PositionedQuad {
-            pos: vec2(0.0, 0.0).try_into().unwrap(),
-            quad: Quad::new(vec2(1.0, 1.0)).unwrap(),
-            data: QData::filled(()),
-        };
+    fn test_resizing() {
+        let mut quad = PositionedQuad::new(
+            vec2(0.5, 0.5),
+            DataQuad::filled(Quad::new(vec2(1.0, 1.0)).unwrap(), ()),
+        )
+        .unwrap();
 
-        let quad2 = PositionedQuad {
-            pos: vec2(1.0, 0.0).try_into().unwrap(),
-            quad: Quad::new(vec2(1.0, 1.0)).unwrap(),
-            data: QData::filled(()),
-        };
+        assert_eq!(vec2(0.0, 0.0), quad.min());
+        assert_eq!(vec2(1.0, 1.0), quad.max());
+        assert_eq!(vec2(0.5, 0.5), quad.pos());
 
-        let merged = quad1.merge_right(quad2).unwrap();
-        assert_eq!(2.0, merged.width());
+        quad.widen(1.0).unwrap();
+
+        assert_eq!(vec2(0.0, 0.0), quad.min());
+        assert_eq!(vec2(2.0, 1.0), quad.max());
+        assert_eq!(vec2(1.0, 0.5), quad.pos());
+
+        quad.heighten(2.0).unwrap();
+
+        assert_eq!(vec2(0.0, 0.0), quad.min());
+        assert_eq!(vec2(2.0, 3.0), quad.max());
+        assert_eq!(vec2(1.0, 1.5), quad.pos());
     }
 }
