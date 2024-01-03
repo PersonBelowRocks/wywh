@@ -1,18 +1,18 @@
 use std::array;
 
-use bevy::math::{BVec3, IVec3};
+use bevy::math::{ivec3, BVec3, IVec2, IVec3};
 use itertools::Itertools;
 
 use crate::{
     data::tile::Face,
     topo::{
         access::{ChunkBounds, ReadAccess},
-        chunk::ChunkPos,
+        chunk::{Chunk, ChunkPos},
         chunk_ref::ChunkVoxelOutput,
         realm::ChunkManager,
         storage::error::OutOfBounds,
     },
-    util::FaceMap,
+    util::{CubicArray, FaceMap},
 };
 
 pub mod greedy;
@@ -21,76 +21,48 @@ pub mod immediate;
 pub trait ChunkAccess: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
 impl<T> ChunkAccess for T where T: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
 
-// TODO: neighbors living on the corners
 #[derive(Clone)]
 pub struct Neighbors<C: ChunkAccess> {
     pos: ChunkPos,
-    faces: FaceMap<C>,
-    edges: [Option<C>; 12],
-    corners: [Option<C>; 8],
+    chunks: [Option<C>; 3 * 3 * 3],
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum ExceedAt {
-    Face,
-    Edge,
-    Corner,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct EdgeNeighbor {
-    a: Face,
-    b: Face,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum CornerNeighbor {
-    NTE = 0,
-    NTW = 1,
-    NBE = 2,
-    NBW = 3,
-    STE = 4,
-    STW = 5,
-    SBE = 6,
-    SBW = 7,
-}
-
-impl CornerNeighbor {
-    #[inline]
-    pub fn from_faces(a: Face, b: Face, c: Face) -> Option<Self> {
-        /*
-        the following must be true:
-        a != b &&
-        b != c &&
-        a != c
-        (they must be unique)
-        */
-        if a.axis() == b.axis() || a.axis() == c.axis() || a.axis() == c.axis() {
-            return None;
-        }
-
-        let mut arr = [a, b, c];
-        arr.sort_by(|q, p| q.axis().as_usize().cmp(&p.axis().as_usize()));
-
-        Some(match arr {
-            [Face::North, Face::Top, Face::East] => Self::NTE,
-            [Face::North, Face::Top, Face::West] => Self::NTW,
-
-            [Face::North, Face::Bottom, Face::East] => Self::NBE,
-            [Face::North, Face::Bottom, Face::West] => Self::NBW,
-
-            [Face::South, Face::Top, Face::East] => Self::STE,
-            [Face::South, Face::Top, Face::West] => Self::STW,
-
-            [Face::South, Face::Bottom, Face::East] => Self::SBE,
-            [Face::South, Face::Bottom, Face::West] => Self::SBW,
-
-            _ => unreachable!("all other conditions should have been eliminated by previous conditions and operations"),
-        })
+impl<C: ChunkAccess> Neighbors<C> {
+    fn to_1d(x: usize, y: usize, z: usize) -> usize {
+        const MAX: usize = 3;
+        return (z * MAX * MAX) + (y * MAX) + x;
     }
 
-    pub fn as_usize(self) -> usize {
-        self as usize
+    fn chkspace_pos_to_chk_pos(pos: IVec3) -> IVec3 {
+        ivec3(
+            pos.x.div_euclid(Chunk::SIZE),
+            pos.y.div_euclid(Chunk::SIZE),
+            pos.z.div_euclid(Chunk::SIZE),
+        )
+    }
+
+    fn place_chkspace_pos_origin_on_neighbor_origin(pos: IVec3) -> IVec3 {
+        ivec3(
+            pos.x.rem_euclid(Chunk::SIZE),
+            pos.y.rem_euclid(Chunk::SIZE),
+            pos.z.rem_euclid(Chunk::SIZE),
+        )
+    }
+
+    /// `pos` is in chunkspace
+    fn internal_get(&self, pos: IVec3) -> Result<(), OutOfBounds> {
+        let chk_pos = Self::chkspace_pos_to_chk_pos(pos);
+
+        if chk_pos == IVec3::ZERO {
+            // tried to access center chunk (aka. the chunk for which we represent the neighbors)
+            return Err(OutOfBounds);
+        }
+
+        todo!()
+    }
+
+    pub fn get(&self, face: Face, pos: IVec2) -> Result<(), OutOfBounds> {
+        todo!()
     }
 }
 
@@ -101,29 +73,58 @@ impl<C: ChunkAccess> NeighborsBuilder<C> {
     pub fn new(pos: ChunkPos) -> Self {
         Self(Neighbors {
             pos,
-            faces: FaceMap::new(),
-            edges: array::from_fn(|_| None),
-            corners: array::from_fn(|_| None),
+            chunks: Default::default(),
         })
-    }
-
-    pub fn what_neighbor(&self, pos: IVec3) -> Result<ExceedAt, OutOfBounds> {
-        let cntr = IVec3::from(self.0.pos);
-
-        let bv = cntr.cmplt(pos) & cntr.cmpgt(pos);
-        let axes_exceeded: u32 = [bv.x, bv.y, bv.z].map(|b| b as u32).iter().sum();
-
-        match axes_exceeded {
-            0 => Err(OutOfBounds),
-            1 => Ok(ExceedAt::Face),
-            2 => Ok(ExceedAt::Edge),
-            3 => Ok(ExceedAt::Corner),
-
-            _ => unreachable!("we sum a 3d bool vector, so the max result is 3"),
-        }
     }
 
     pub fn set_neighbor(&mut self, pos: IVec3, access: C) -> Result<(), OutOfBounds> {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::topo::access;
+
+    use super::*;
+
+    struct DummyAccess;
+
+    impl ChunkBounds for DummyAccess {}
+    impl access::ReadAccess for DummyAccess {
+        type ReadErr = OutOfBounds;
+        type ReadType = ChunkVoxelOutput;
+
+        fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+            panic!()
+        }
+    }
+
+    #[test]
+    fn test_chunkspace_to_chunk_pos() {
+        // for readability's sake
+        fn f(x: i32, y: i32, z: i32) -> IVec3 {
+            Neighbors::<DummyAccess>::chkspace_pos_to_chk_pos(ivec3(x, y, z))
+        }
+
+        assert_eq!(ivec3(0, 0, 0), f(8, 5, 6));
+        assert_eq!(ivec3(0, 0, 0), f(0, 0, 0));
+        assert_eq!(ivec3(0, 0, 0), f(15, 15, 15));
+        assert_eq!(ivec3(0, 0, 1), f(15, 15, 16));
+        assert_eq!(ivec3(0, -1, 0), f(0, -1, 0));
+        assert_eq!(ivec3(0, -1, 1), f(0, -1, 16));
+    }
+
+    #[test]
+    fn test_move_pos_origin() {
+        // for readability's sake
+        fn f(x: i32, y: i32, z: i32) -> IVec3 {
+            Neighbors::<DummyAccess>::place_chkspace_pos_origin_on_neighbor_origin(ivec3(x, y, z))
+        }
+
+        assert_eq!(ivec3(5, 5, 5), f(5, 5, 5));
+        assert_eq!(ivec3(0, 0, 0), f(0, 0, 0));
+        assert_eq!(ivec3(0, 15, 0), f(0, -1, 0));
+        assert_eq!(ivec3(0, 0, 5), f(0, 16, 5));
     }
 }

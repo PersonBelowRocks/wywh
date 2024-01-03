@@ -9,8 +9,6 @@ use crate::data::registries::RegistryId;
 use crate::data::tile::Transparency;
 use crate::data::voxel::rotations::BlockModelRotation;
 
-const CHUNK_SIZE: usize = 16;
-
 #[derive(
     dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Deref, DerefMut,
 )]
@@ -39,10 +37,13 @@ pub struct Chunk {
     pub variants: SyncIndexedChunkContainer<VoxelVariantData>,
 }
 
+const CHUNK_SIZE: usize = 16;
+
 #[allow(dead_code)]
 impl Chunk {
     pub const USIZE: usize = CHUNK_SIZE;
     pub const SIZE: i32 = Self::USIZE as i32;
+    pub const VEC: IVec3 = IVec3::splat(Self::SIZE);
 
     pub const BOUNDING_BOX: BoundingBox = BoundingBox {
         min: IVec3::splat(0),
