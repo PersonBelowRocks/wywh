@@ -41,13 +41,21 @@ pub enum Axis2D {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Axis3D {
-    X,
-    Y,
-    Z,
+    X = 0,
+    Y = 1,
+    Z = 2,
 }
 
 impl Axis3D {
     pub const XYZ: [Self; 3] = [Self::X, Self::Y, Self::Z];
+
+    pub fn as_usize(self) -> usize {
+        match self {
+            Self::X => 0,
+            Self::Y => 1,
+            Self::Z => 2,
+        }
+    }
 
     pub fn choose(self, vec: Vec3) -> f32 {
         match self {

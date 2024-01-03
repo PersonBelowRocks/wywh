@@ -81,9 +81,9 @@ impl ChunkRef {
     }
 }
 
-pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher> {
-    transparency: SyncDenseContainerReadAccess<'a, Transparency>,
-    variants: SiccReadAccess<'a, VoxelVariantData, S>,
+pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher = ahash::RandomState> {
+    pub(crate) transparency: SyncDenseContainerReadAccess<'a, Transparency>,
+    pub(crate) variants: SiccReadAccess<'a, VoxelVariantData, S>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -100,7 +100,7 @@ pub struct ChunkVoxelInput {
     pub rotation: Option<BlockModelRotation>,
 }
 
-pub struct ChunkRefVxlAccess<'a, S: BuildHasher> {
+pub struct ChunkRefVxlAccess<'a, S: BuildHasher = ahash::RandomState> {
     transparency: SyncDenseContainerAccess<'a, Transparency>,
     variants: SiccAccess<'a, VoxelVariantData, S>,
 }

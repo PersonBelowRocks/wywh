@@ -3,9 +3,13 @@ use std::sync::{
     Arc, Weak,
 };
 
-use bevy::prelude::Resource;
+use bevy::{math::IVec3, prelude::Resource};
 
-use crate::{render::meshing::Neighbors, util::SyncHashMap};
+use crate::{
+    data::tile::Face,
+    render::meshing::Neighbors,
+    util::{FaceMap, SyncHashMap},
+};
 
 use super::{
     access::{ChunkBounds, ReadAccess},
@@ -19,9 +23,16 @@ pub struct LoadedChunkContainer(pub(crate) SyncHashMap<ChunkPos, Arc<Chunk>>);
 
 pub struct LoadedChunkIterator<'a>(pub(crate) hb::hash_map::Iter<'a, ChunkPos, Arc<Chunk>>);
 
+pub type StrongChunkRef<'a> =
+    dashmap::mapref::one::Ref<'a, ChunkPos, Arc<Chunk>, ahash::RandomState>;
+
 impl LoadedChunkContainer {
     pub fn get(&self, pos: ChunkPos) -> Option<Weak<Chunk>> {
         self.0.get(&pos).as_deref().map(Arc::downgrade)
+    }
+
+    pub fn get_strong(&self, pos: ChunkPos) -> Option<StrongChunkRef<'_>> {
+        self.0.get(&pos)
     }
 
     pub fn set(&self, pos: ChunkPos, chunk: Arc<Chunk>) {
@@ -139,11 +150,46 @@ impl ChunkManager {
         })
     }
 
-    pub fn with_neighbors<A, F>(&self, pos: ChunkPos, f: F)
+    pub(crate) fn get_chunk(
+        &self,
+        pos: ChunkPos,
+    ) -> Result<StrongChunkRef<'_>, ChunkManagerGetChunkError> {
+        self.loaded_chunks
+            .get_strong(pos)
+            .ok_or(ChunkManagerGetChunkError::Unloaded)
+    }
+
+    // TODO: test
+    pub fn with_neighbors<A, F, R>(
+        &self,
+        pos: ChunkPos,
+        mut f: F,
+    ) -> Result<R, ChunkManagerGetChunkError>
     where
         A: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds,
-        F: for<'a, 'b> FnMut(Neighbors<'a, ChunkRefVxlReadAccess<'b, ahash::RandomState>>),
+        F: for<'a> FnMut(Neighbors<ChunkRefVxlReadAccess<'a, ahash::RandomState>>) -> R,
     {
+        // we need to make a map of the neighboring chunks so that the references are owned by the function scope
+        let chunks = FaceMap::from_fn(|face| {
+            let nb_pos = ChunkPos::from(IVec3::from(pos) + face.normal());
+            self.get_chunk(nb_pos).ok()
+        });
+
+        let mut map = FaceMap::<ChunkRefVxlReadAccess>::new();
+
+        for face in Face::FACES {
+            let Some(cref) = chunks.get(face) else {
+                continue;
+            };
+
+            let access = ChunkRefVxlReadAccess {
+                transparency: cref.transparency.read_access(),
+                variants: cref.variants.read_access(),
+            };
+
+            map.set(face, access);
+        }
+
         todo!()
     }
 

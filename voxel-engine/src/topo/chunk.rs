@@ -29,7 +29,7 @@ impl ChunkPos {
 pub type VariantType = RegistryId<VariantRegistry>;
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, dm::Constructor)]
-pub(crate) struct VoxelVariantData {
+pub struct VoxelVariantData {
     pub variant: RegistryId<VariantRegistry>,
     pub rotation: Option<BlockModelRotation>,
 }
