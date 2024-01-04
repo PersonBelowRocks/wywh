@@ -314,6 +314,88 @@ mod tests {
         );
 
         assert!(neighbors.get(Face::Bottom, ivec2(16, 17)).is_err());
+        assert!(neighbors.get(Face::Bottom, ivec2(-2, 5)).is_err());
+
+        assert_eq!(
+            5,
+            neighbors
+                .get(Face::Top, ivec2(0, 0))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            20,
+            neighbors
+                .get(Face::Top, ivec2(16, 5))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            22,
+            neighbors
+                .get(Face::Top, ivec2(-1, 5))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            24,
+            neighbors
+                .get(Face::Top, ivec2(5, 16))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            26,
+            neighbors
+                .get(Face::Top, ivec2(5, -1))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            30,
+            neighbors
+                .get(Face::Top, ivec2(16, 16))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            32,
+            neighbors
+                .get(Face::Top, ivec2(-1, 16))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            34,
+            neighbors
+                .get(Face::Top, ivec2(16, -1))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            36,
+            neighbors
+                .get(Face::Top, ivec2(-1, -1))
+                .unwrap()
+                .variant
+                .inner()
+        );
 
         // TODO: TEST EVERYTHING!!!!
     }
