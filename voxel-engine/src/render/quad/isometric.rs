@@ -1,4 +1,4 @@
-use bevy::math::{vec2, vec3, IVec3, Vec2, Vec3};
+use bevy::math::{vec2, vec3, Vec2, Vec3};
 use ordered_float::{FloatIsNan, NotNan};
 
 use crate::{
@@ -6,11 +6,7 @@ use crate::{
     util::{notnan::NotNanVec2, Axis3D},
 };
 
-use super::{
-    anon::Quad,
-    data::{DataQuad, QData},
-    error::QuadError,
-};
+use super::{data::DataQuad, error::QuadError};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QuadIsometry {
@@ -216,13 +212,15 @@ impl<Data: Copy> IsometrizedQuad<Data> {
         todo!()
     }
 
-    pub fn get_vertex(&self, vertex: QuadVertex) -> (Vec3, &Data) {
+    pub fn get_vertex(&self, _vertex: QuadVertex) -> (Vec3, &Data) {
         todo!()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::render::quad::anon::Quad;
+
     use super::*;
 
     #[test]

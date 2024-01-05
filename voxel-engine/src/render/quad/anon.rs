@@ -1,5 +1,4 @@
 use bevy::math::Vec2;
-use ordered_float::FloatIsNan;
 
 use crate::util::notnan::NotNanVec2;
 

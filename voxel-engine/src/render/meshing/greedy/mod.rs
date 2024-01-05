@@ -2,19 +2,11 @@ use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 
 use crate::{
     data::{
-        registries::{
-            texture::TextureRegistry,
-            variant::{VariantRegistry, VariantRegistryEntry},
-            RegistryId, RegistryRef,
-        },
+        registries::{texture::TextureRegistry, variant::VariantRegistry, RegistryId, RegistryRef},
         tile::{Face, Transparency},
     },
     render::{adjacency::AdjacentTransparency, quad::data::DataQuad},
-    topo::{
-        access::{ChunkBounds, ReadAccess},
-        chunk::Chunk,
-        chunk_ref::ChunkVoxelOutput,
-    },
+    topo::chunk::Chunk,
     util::Axis3D,
 };
 
@@ -75,11 +67,11 @@ impl<'a, C: ChunkAccess> ChunkQuadSlice<'a, C> {
         ivec_project_to_2d(pos, self.face)
     }
 
-    pub fn get_transparency_above(&self, pos: IVec2) -> Transparency {
+    pub fn get_transparency_above(&self, _pos: IVec2) -> Transparency {
         todo!()
     }
 
-    pub fn get_quad(&self, pos: IVec2) -> DataQuad<GreedyQuadData> {
+    pub fn get_quad(&self, _pos: IVec2) -> DataQuad<GreedyQuadData> {
         todo!()
     }
 }

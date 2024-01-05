@@ -163,7 +163,7 @@ impl ChunkManager {
     pub fn with_neighbors<A, F, R>(
         &self,
         pos: ChunkPos,
-        mut f: F,
+        _f: F,
     ) -> Result<R, ChunkManagerGetChunkError>
     where
         A: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds,

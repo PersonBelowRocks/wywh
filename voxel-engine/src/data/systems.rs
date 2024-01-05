@@ -1,8 +1,4 @@
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use bevy::{asset::LoadedFolder, prelude::*};
 

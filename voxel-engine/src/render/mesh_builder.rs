@@ -5,7 +5,7 @@ use bevy::prelude::Asset;
 use bevy::prelude::Material;
 use bevy::prelude::Mesh;
 use bevy::prelude::Resource;
-use bevy::prelude::Vec2;
+
 use bevy::prelude::Vec3;
 use bevy::render::mesh::Indices;
 

@@ -8,11 +8,7 @@ use crate::{
         voxel::rotations::BlockModelRotation,
     },
     render::adjacency::AdjacentTransparency,
-    topo::{
-        access::{ChunkBounds, ReadAccess},
-        chunk::Chunk,
-        chunk_ref::ChunkVoxelOutput,
-    },
+    topo::{access::ReadAccess, chunk::Chunk, chunk_ref::ChunkVoxelOutput},
 };
 
 use super::ChunkAccess;

@@ -1,6 +1,5 @@
 use bevy::{
     log::info,
-    math::Vec2,
     pbr::{MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
     prelude::{debug, Asset, Mesh},
     reflect::TypePath,

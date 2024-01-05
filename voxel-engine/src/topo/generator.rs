@@ -160,9 +160,9 @@ impl Generator {
         let ws_min = cs_pos.worldspace_min();
         let ws_max = cs_pos.worldspace_max();
 
-        for (ls_x, ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
-            for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
-                for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
+        for (ls_x, _ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
+            for (ls_y, _ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
+                for (ls_z, _ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
                     let ls_pos = ivec3(ls_x, ls_y, ls_z);
 
                     access.set(
@@ -180,7 +180,7 @@ impl Generator {
         for (ls_x, ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
             for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
                 if cs_pos.y < 0 {
-                    for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
+                    for (ls_y, _ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
                         let ls_pos = ivec3(ls_x, ls_y, ls_z);
 
                         access.set(
@@ -221,10 +221,10 @@ impl Generator {
             for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
                 for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
                     let noise_pos = ivec3(ws_x, ws_y, ws_z).as_dvec3() * self.scale;
-                    let ls_pos = ivec3(ls_x, ls_y, ls_z);
-                    let ws_pos = ivec3(ws_x, ws_y, ws_z);
+                    let _ls_pos = ivec3(ls_x, ls_y, ls_z);
+                    let _ws_pos = ivec3(ws_x, ws_y, ws_z);
 
-                    let noise = self.noise.get([noise_pos.x, noise_pos.z]);
+                    let _noise = self.noise.get([noise_pos.x, noise_pos.z]);
                 }
             }
         }

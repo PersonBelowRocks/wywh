@@ -1,8 +1,3 @@
-use std::{fmt::Write, path::Path, str::FromStr};
-
-use ascii::{AsciiChar, AsciiStr, AsciiString};
-use itertools::Itertools;
-
 pub mod error;
 pub mod impls;
 pub mod serde;

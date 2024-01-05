@@ -1,14 +1,6 @@
 use std::ops;
 
-use bevy::{
-    log::info,
-    math::{vec2, Vec2},
-    render::render_resource::{ShaderSize, ShaderType},
-};
-use bitflags::bitflags;
-use ordered_float::NotNan;
-
-use crate::util::notnan_arr;
+use bevy::{log::info, math::Vec2, render::render_resource::ShaderType};
 
 use super::{
     error::FaceTextureRotationParseError,

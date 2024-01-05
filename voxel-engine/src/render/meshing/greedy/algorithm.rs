@@ -1,5 +1,3 @@
-use bevy::math::ivec2;
-
 use bevy::math::vec2;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::default;
@@ -119,7 +117,7 @@ impl GreedyMesher {
 
                 let quad = Quad::from_points(pos.as_vec2(), pos.as_vec2() + vec2(1.0, 1.0));
 
-                let mut quad_end = pos;
+                let quad_end = pos;
 
                 // let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
                 //     let candidate_pos = ivec2(pos.x + n as i32, pos.y);
