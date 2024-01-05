@@ -1,20 +1,16 @@
-use std::array;
-
-use bevy::math::{ivec3, BVec3, IVec2, IVec3};
-use itertools::Itertools;
+use bevy::math::{ivec3, IVec2, IVec3};
 
 use crate::{
     data::tile::Face,
-    render::{meshing::greedy::ivec_project_to_3d, quad::isometric::project_to_3d},
+    render::meshing::greedy::ivec_project_to_3d,
     topo::{
         access::{ChunkBounds, ReadAccess},
         bounding_box::BoundingBox,
-        chunk::{Chunk, ChunkPos},
+        chunk::Chunk,
         chunk_ref::ChunkVoxelOutput,
-        realm::ChunkManager,
         storage::error::OutOfBounds,
     },
-    util::{self, ConversionError, CubicArray, FaceMap},
+    util::{self, ConversionError},
 };
 
 use self::error::NeighborsAccessError;
