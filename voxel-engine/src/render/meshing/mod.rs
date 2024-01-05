@@ -8,6 +8,7 @@ use crate::{
     render::{meshing::greedy::ivec_project_to_3d, quad::isometric::project_to_3d},
     topo::{
         access::{ChunkBounds, ReadAccess},
+        bounding_box::BoundingBox,
         chunk::{Chunk, ChunkPos},
         chunk_ref::ChunkVoxelOutput,
         realm::ChunkManager,
@@ -35,7 +36,7 @@ fn to_1d(x: usize, y: usize, z: usize) -> usize {
     return (z * MAX * MAX) + (y * MAX) + x;
 }
 
-fn chkspace_pos_to_chk_pos(pos: IVec3) -> IVec3 {
+fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
     ivec3(
         pos.x.div_euclid(Chunk::SIZE),
         pos.y.div_euclid(Chunk::SIZE),
@@ -43,7 +44,7 @@ fn chkspace_pos_to_chk_pos(pos: IVec3) -> IVec3 {
     )
 }
 
-fn place_chkspace_pos_origin_on_neighbor_origin(pos: IVec3) -> IVec3 {
+fn localspace_to_neighbor_localspace(pos: IVec3) -> IVec3 {
     ivec3(
         pos.x.rem_euclid(Chunk::SIZE),
         pos.y.rem_euclid(Chunk::SIZE),
@@ -51,13 +52,14 @@ fn place_chkspace_pos_origin_on_neighbor_origin(pos: IVec3) -> IVec3 {
     )
 }
 
+// TODO: document what localspace, worldspace, chunkspace, and facespace are
 #[derive(Clone)]
 pub struct Neighbors<C: ChunkAccess> {
-    pos: ChunkPos,
     chunks: [Option<C>; 3 * 3 * 3],
     default: ChunkVoxelOutput,
 }
 
+/// Test if the provided facespace vector is in bounds
 pub fn is_in_bounds(pos: IVec2) -> bool {
     let min: IVec2 = -IVec2::ONE;
     let max: IVec2 = IVec2::splat(Chunk::SIZE) + IVec2::ONE;
@@ -65,12 +67,20 @@ pub fn is_in_bounds(pos: IVec2) -> bool {
     pos.cmpge(min).all() && pos.cmplt(max).all()
 }
 
+/// Test if the provided localspace vector is in bounds
+pub fn is_in_bounds_3d(pos: IVec3) -> bool {
+    let min: IVec3 = -IVec3::ONE;
+    let max: IVec3 = IVec3::splat(Chunk::SIZE) + IVec3::ONE;
+
+    pos.cmpge(min).all() && pos.cmplt(max).all()
+}
+
 pub type NbResult<T, E> = Result<T, NeighborsAccessError<E>>;
 
 impl<C: ChunkAccess> Neighbors<C> {
-    /// `pos` is in chunkspace
+    /// `pos` is in localspace
     fn internal_get(&self, pos: IVec3) -> NbResult<C::ReadType, C::ReadErr> {
-        let chk_pos = chkspace_pos_to_chk_pos(pos);
+        let chk_pos = localspace_to_chunk_pos(pos);
 
         if chk_pos == IVec3::ZERO {
             // tried to access center chunk (aka. the chunk for which we represent the neighbors)
@@ -86,14 +96,14 @@ impl<C: ChunkAccess> Neighbors<C> {
 
         match chk {
             Some(access) => {
-                let neighbor_local = place_chkspace_pos_origin_on_neighbor_origin(pos);
-                dbg!(neighbor_local);
+                let neighbor_local = localspace_to_neighbor_localspace(pos);
                 Ok(access.get(neighbor_local)?)
             }
             None => Ok(self.default),
         }
     }
 
+    /// `pos` in facespace
     pub fn get(&self, face: Face, pos: IVec2) -> NbResult<C::ReadType, C::ReadErr> {
         if !is_in_bounds(pos) {
             return Err(NeighborsAccessError::OutOfBounds);
@@ -108,27 +118,41 @@ impl<C: ChunkAccess> Neighbors<C> {
             ivec_project_to_3d(pos, face, mag)
         };
 
-        dbg!(pos);
-        dbg!(pos_3d);
-
         self.internal_get(pos_3d)
     }
+
+    /// `pos` in localspace
+    pub fn get_3d(&self, pos: IVec3) -> NbResult<C::ReadType, C::ReadErr> {
+        if !is_in_bounds_3d(pos) {
+            return Err(NeighborsAccessError::OutOfBounds);
+        }
+
+        self.internal_get(pos)
+    }
+}
+
+fn is_valid_neighbor_chunk_pos(pos: IVec3) -> bool {
+    const BB: BoundingBox = BoundingBox {
+        min: IVec3::splat(-1),
+        max: IVec3::ONE,
+    };
+
+    pos != IVec3::ZERO && BB.contains_inclusive(pos)
 }
 
 #[derive(Clone)]
 pub struct NeighborsBuilder<C: ChunkAccess>(Neighbors<C>);
 
 impl<C: ChunkAccess> NeighborsBuilder<C> {
-    pub fn new(pos: ChunkPos, default: ChunkVoxelOutput) -> Self {
+    pub fn new(default: ChunkVoxelOutput) -> Self {
         Self(Neighbors {
-            pos,
             chunks: Default::default(),
             default,
         })
     }
 
     pub fn set_neighbor(&mut self, pos: IVec3, access: C) -> Result<(), OutOfBounds> {
-        if ChunkPos::from(pos) == self.0.pos {
+        if !is_valid_neighbor_chunk_pos(pos) {
             return Err(OutOfBounds);
         }
 
@@ -188,7 +212,7 @@ mod tests {
     }
 
     fn make_test_neighbors() -> Neighbors<TestAccess> {
-        let mut builder = NeighborsBuilder::<TestAccess>::new(ivec3(-1, 2, -5).into(), make_cvo(0));
+        let mut builder = NeighborsBuilder::<TestAccess>::new(make_cvo(0));
 
         // FACES
 
@@ -256,6 +280,18 @@ mod tests {
     }
 
     #[test]
+    fn test_builder() {
+        const DUMMY: TestAccess = TestAccess { even: 0, odd: 0 };
+
+        let mut builder = NeighborsBuilder::<TestAccess>::new(make_cvo(0));
+
+        assert!(builder.set_neighbor(ivec3(0, 0, 0), DUMMY).is_err());
+        assert!(builder.set_neighbor(ivec3(1, 1, 1), DUMMY).is_ok());
+        assert!(builder.set_neighbor(ivec3(-1, -1, -1), DUMMY).is_ok());
+        assert!(builder.set_neighbor(ivec3(-1, -2, -1), DUMMY).is_err());
+    }
+
+    #[test]
     fn test_neighbors() {
         let neighbors = make_test_neighbors();
 
@@ -316,6 +352,8 @@ mod tests {
         assert!(neighbors.get(Face::Bottom, ivec2(16, 17)).is_err());
         assert!(neighbors.get(Face::Bottom, ivec2(-2, 5)).is_err());
 
+        // EDGES
+
         assert_eq!(
             5,
             neighbors
@@ -329,6 +367,24 @@ mod tests {
             20,
             neighbors
                 .get(Face::Top, ivec2(16, 5))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            20,
+            neighbors
+                .get(Face::North, ivec2(6, 16))
+                .unwrap()
+                .variant
+                .inner()
+        );
+
+        assert_eq!(
+            1,
+            neighbors
+                .get(Face::North, ivec2(6, 6))
                 .unwrap()
                 .variant
                 .inner()
@@ -360,6 +416,8 @@ mod tests {
                 .variant
                 .inner()
         );
+
+        // CORNERS
 
         assert_eq!(
             30,
@@ -396,15 +454,30 @@ mod tests {
                 .variant
                 .inner()
         );
+    }
 
-        // TODO: TEST EVERYTHING!!!!
+    #[test]
+    fn test_neighbors_3d() {
+        let neighbors = make_test_neighbors();
+
+        assert_eq!(
+            1,
+            neighbors.get_3d(ivec3(16, 5, 5)).unwrap().variant.inner()
+        );
+        assert!(neighbors.get_3d(ivec3(17, 5, 5)).is_err());
+        assert!(neighbors.get_3d(ivec3(5, 5, 5)).is_err());
+
+        assert_eq!(
+            4,
+            neighbors.get_3d(ivec3(-1, 5, 5)).unwrap().variant.inner()
+        );
     }
 
     #[test]
     fn test_chunkspace_to_chunk_pos() {
         // for readability's sake
         fn f(x: i32, y: i32, z: i32) -> IVec3 {
-            chkspace_pos_to_chk_pos(ivec3(x, y, z))
+            localspace_to_chunk_pos(ivec3(x, y, z))
         }
 
         assert_eq!(ivec3(0, 0, 0), f(8, 5, 6));
@@ -419,7 +492,7 @@ mod tests {
     fn test_move_pos_origin() {
         // for readability's sake
         fn f(x: i32, y: i32, z: i32) -> IVec3 {
-            place_chkspace_pos_origin_on_neighbor_origin(ivec3(x, y, z))
+            localspace_to_neighbor_localspace(ivec3(x, y, z))
         }
 
         assert_eq!(ivec3(5, 5, 5), f(5, 5, 5));
