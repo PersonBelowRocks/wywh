@@ -1,47 +1,53 @@
+use crate::data::{
+    registries::{texture::TextureRegistry, RegistryId},
+    texture::FaceTexture,
+};
+
 use super::{anon::Quad, isometric::QuadVertex};
 
-#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
-pub struct QData<T>([T; 4]);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct QVertexData {
+    pub occluded: bool,
+}
 
-impl<T> QData<T> {
+#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
+pub struct QData([QVertexData; 4]);
+
+impl QData {
     #[inline]
-    pub fn filled(vertex: T) -> Self
-    where
-        T: Copy,
-    {
-        Self([vertex; 4])
+    pub fn new() -> Self {
+        Self([QVertexData::default(); 4])
     }
 
     #[inline]
-    pub fn get(&self, vertex: QuadVertex) -> &T {
+    pub fn get(&self, vertex: QuadVertex) -> &QVertexData {
         &self.0[vertex.as_usize()]
     }
 
     #[inline]
-    pub fn get_mut(&mut self, vertex: QuadVertex) -> &mut T {
+    pub fn get_mut(&mut self, vertex: QuadVertex) -> &mut QVertexData {
         &mut self.0[vertex.as_usize()]
     }
 
     #[inline]
-    pub fn inner(&self) -> &[T; 4] {
+    pub fn inner(&self) -> &[QVertexData; 4] {
         &self.0
     }
 }
 
 #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
-pub struct DataQuad<T> {
+pub struct DataQuad {
     pub quad: Quad,
-    pub data: QData<T>,
+    pub texture: FaceTexture,
+    pub data: QData,
 }
 
-impl<T> DataQuad<T> {
-    pub fn filled(quad: Quad, data: T) -> Self
-    where
-        T: Copy,
-    {
+impl DataQuad {
+    pub fn new(quad: Quad, texture: FaceTexture) -> Self {
         Self {
             quad,
-            data: QData::filled(data),
+            texture,
+            data: QData::new(),
         }
     }
 }

@@ -4,6 +4,7 @@ pub mod chunk;
 pub mod chunk_ref;
 pub mod error;
 pub mod generator;
+pub mod neighbors;
 pub mod realm;
 pub mod storage;
 pub mod systems;

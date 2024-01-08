@@ -10,6 +10,10 @@ pub struct Quad {
 }
 
 impl Quad {
+    pub const ONE: Self = Self {
+        dims: NotNanVec2::ONE,
+    };
+
     #[inline]
     pub fn new(dims: Vec2) -> Result<Self, QuadError> {
         if dims.x <= 0.0 || dims.y <= 0.0 {

@@ -11,6 +11,12 @@ pub struct NotNanVec2 {
 }
 
 impl NotNanVec2 {
+    pub const ONE: Self = Self {
+        // SAFETY: the float literal is not NaN
+        x: unsafe { NotNan::new_unchecked(1.0) },
+        y: unsafe { NotNan::new_unchecked(1.0) },
+    };
+
     pub fn new(vec: Vec2) -> Result<Self, FloatIsNan> {
         Ok(Self {
             x: NotNan::new(vec.x)?,

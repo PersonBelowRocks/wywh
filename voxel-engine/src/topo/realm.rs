@@ -7,7 +7,6 @@ use bevy::{math::IVec3, prelude::Resource};
 
 use crate::{
     data::tile::Face,
-    render::meshing::Neighbors,
     util::{FaceMap, SyncHashMap},
 };
 
@@ -16,6 +15,7 @@ use super::{
     chunk::{Chunk, ChunkPos},
     chunk_ref::{ChunkRef, ChunkRefVxlReadAccess, ChunkVoxelOutput},
     error::ChunkManagerGetChunkError,
+    neighbors::Neighbors,
 };
 
 #[derive(Default)]

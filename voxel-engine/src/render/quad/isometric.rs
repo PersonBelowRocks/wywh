@@ -6,7 +6,10 @@ use crate::{
     util::{notnan::NotNanVec2, Axis3D},
 };
 
-use super::{data::DataQuad, error::QuadError};
+use super::{
+    data::{DataQuad, QVertexData},
+    error::QuadError,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QuadIsometry {
@@ -76,14 +79,14 @@ impl QuadVertex {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct PositionedQuad<Data> {
+pub struct PositionedQuad {
     pos: NotNanVec2,
-    dataquad: DataQuad<Data>,
+    dataquad: DataQuad,
 }
 
-impl<Data> PositionedQuad<Data> {
+impl PositionedQuad {
     #[inline]
-    pub fn new(pos: Vec2, dataquad: DataQuad<Data>) -> Result<Self, FloatIsNan> {
+    pub fn new(pos: Vec2, dataquad: DataQuad) -> Result<Self, FloatIsNan> {
         Ok(Self {
             pos: pos.try_into()?,
             dataquad,
@@ -158,7 +161,7 @@ impl<Data> PositionedQuad<Data> {
     }
 
     #[inline]
-    pub fn get_vertex(&self, vertex: QuadVertex) -> (Vec2, &Data) {
+    pub fn get_vertex(&self, vertex: QuadVertex) -> (Vec2, &QVertexData) {
         let pos = self.vertex_pos(vertex);
         let data = self.dataquad.data.get(vertex);
 
@@ -166,7 +169,7 @@ impl<Data> PositionedQuad<Data> {
     }
 
     #[inline]
-    pub fn get_vertex_mut(&mut self, vertex: QuadVertex) -> (Vec2, &mut Data) {
+    pub fn get_vertex_mut(&mut self, vertex: QuadVertex) -> (Vec2, &mut QVertexData) {
         let pos = self.vertex_pos(vertex);
         let data = self.dataquad.data.get_mut(vertex);
 
@@ -193,33 +196,36 @@ pub fn project_to_2d(pos: Vec3, face: Face) -> Vec2 {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct IsometrizedQuad<Data: Copy> {
+pub struct IsometrizedQuad {
     pub isometry: QuadIsometry,
-    pub quad: PositionedQuad<Data>,
+    pub quad: PositionedQuad,
 }
 
-impl<Data: Copy> IsometrizedQuad<Data> {
+impl IsometrizedQuad {
     pub fn pos_3d(&self, vertex: QuadVertex) -> Vec3 {
         let pos_2d = self.quad.vertex_pos(vertex);
         project_to_3d(pos_2d, self.isometry.face, self.isometry.magnitude.into())
     }
 
-    pub fn data(&self) -> &[Data; 4] {
+    pub fn data(&self) -> &[QVertexData; 4] {
         self.quad.dataquad.data.inner()
     }
 
-    pub fn topology(&self) -> [u32; 6] {
+    pub fn topology(&self) -> [QuadVertex; 6] {
         todo!()
     }
 
-    pub fn get_vertex(&self, _vertex: QuadVertex) -> (Vec3, &Data) {
+    pub fn get_vertex(&self, _vertex: QuadVertex) -> (Vec3, &QVertexData) {
         todo!()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::render::quad::anon::Quad;
+    use crate::{
+        data::{registries::RegistryId, texture::FaceTexture},
+        render::quad::anon::Quad,
+    };
 
     use super::*;
 
@@ -238,7 +244,10 @@ mod tests {
     fn test_resizing() {
         let mut quad = PositionedQuad::new(
             vec2(0.5, 0.5),
-            DataQuad::filled(Quad::new(vec2(1.0, 1.0)).unwrap(), ()),
+            DataQuad::new(
+                Quad::new(vec2(1.0, 1.0)).unwrap(),
+                FaceTexture::new(RegistryId::new(0)),
+            ),
         )
         .unwrap();
 

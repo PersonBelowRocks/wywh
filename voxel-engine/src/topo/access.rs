@@ -3,6 +3,10 @@ use std::error::Error;
 
 use super::bounding_box::BoundingBox;
 use super::chunk::Chunk;
+use super::chunk_ref::ChunkVoxelOutput;
+
+pub trait ChunkAccess: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
+impl<T> ChunkAccess for T where T: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
 
 pub trait ReadAccess {
     type ReadType;
