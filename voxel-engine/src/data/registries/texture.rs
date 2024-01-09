@@ -118,14 +118,70 @@ impl TextureRegistryLoader {
             map: registry_map,
             color_atlas,
             normal_atlas,
+
+            #[cfg(test)]
+            colors: Vec::new(),
+            #[cfg(test)]
+            normals: Vec::new(),
         })
+    }
+}
+
+#[cfg(test)]
+pub struct TestTextureRegistryLoader {
+    map: IndexMap<ResourcePath, AtlasIdxBundle, ahash::RandomState>,
+
+    colors: Vec<Vec2>,
+    normals: Vec<Vec2>,
+}
+
+#[cfg(test)]
+impl TestTextureRegistryLoader {
+    pub fn new() -> Self {
+        Self {
+            map: Default::default(),
+            colors: Vec::new(),
+            normals: Vec::new(),
+        }
+    }
+
+    pub fn add(&mut self, rpath: ResourcePath, color: Vec2, normal: Option<Vec2>) {
+        let bundle = AtlasIdxBundle {
+            color: self.colors.len(),
+            normal: normal.map(|_| self.normals.len()),
+        };
+
+        self.colors.push(color);
+        if let Some(normal) = normal {
+            self.normals.push(normal);
+        }
+
+        self.map.insert(rpath, bundle);
+    }
+
+    pub fn build(self) -> TextureRegistry {
+        TextureRegistry {
+            map: self.map,
+
+            color_atlas: TextureAtlas::new_empty(Handle::weak_from_u128(0), Vec2::ONE),
+            normal_atlas: TextureAtlas::new_empty(Handle::weak_from_u128(1), Vec2::ONE),
+
+            colors: self.colors,
+            normals: self.normals,
+        }
     }
 }
 
 pub struct TextureRegistry {
     map: IndexMap<ResourcePath, AtlasIdxBundle, ahash::RandomState>,
+
     color_atlas: TextureAtlas,
     normal_atlas: TextureAtlas,
+
+    #[cfg(test)]
+    colors: Vec<Vec2>,
+    #[cfg(test)]
+    normals: Vec<Vec2>,
 }
 
 pub(crate) struct AtlasIdxBundle {
@@ -185,6 +241,7 @@ impl Registry for TextureRegistry {
         Some(self.get_by_id(self.get_id(label)?))
     }
 
+    #[cfg(not(test))]
     fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_> {
         let map_idx = id.inner() as usize;
         let indices = self.map.get_index(map_idx).unwrap().1;
@@ -198,6 +255,18 @@ impl Registry for TextureRegistry {
         }
     }
 
+    #[cfg(test)]
+    fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_> {
+        let map_idx = id.inner() as usize;
+        let indices = self.map.get_index(map_idx).unwrap().1;
+
+        TextureRegistryEntry {
+            texture_pos: self.colors[indices.color],
+            normal_pos: indices.normal.map(|idx| self.normals[idx]),
+            _data: PhantomData,
+        }
+    }
+
     fn get_id(&self, label: &ResourcePath) -> Option<RegistryId<Self>> {
         self.map
             .get_index_of(label)
@@ -205,20 +274,20 @@ impl Registry for TextureRegistry {
     }
 }
 
+// this is just a compile time test to make sure lifetimes and everything work out
+fn texture_registry_loading() {
+    let loader = TextureRegistryLoader::new();
+    let registry = loader.build_registry(todo!()).unwrap();
+    let tex = registry
+        .get_by_label(&ResourcePath::try_from("wowza!").unwrap())
+        .unwrap();
+}
+
 #[cfg(test)]
 mod tests {
     use bevy::utils::Uuid;
 
     use super::*;
-
-    // this is just a compile time test to make sure lifetimes and everything work out
-    fn texture_registry_loading() {
-        let loader = TextureRegistryLoader::new();
-        let registry = loader.build_registry(todo!()).unwrap();
-        let tex = registry
-            .get_by_label(&ResourcePath::try_from("wowza!").unwrap())
-            .unwrap();
-    }
 
     #[test]
     #[ignore]

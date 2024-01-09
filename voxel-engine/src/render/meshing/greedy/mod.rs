@@ -224,9 +224,23 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
 
 #[cfg(test)]
 mod tests {
-    use crate::topo::{
-        access::{ChunkBounds, HasBounds, ReadAccess},
-        storage::{data_structures::HashmapChunkStorage, error::OutOfBounds},
+    use bevy::math::vec2;
+
+    use crate::{
+        data::{
+            registries::{texture::TestTextureRegistryLoader, variant::VariantRegistryLoader},
+            resourcepath::{rpath, ResourcePath},
+            texture::FaceTextureRotation,
+            voxel::descriptor::{
+                BlockDescriptor, FaceTextureDescriptor, VariantDescriptor, VoxelModelDescriptor,
+            },
+        },
+        topo::{
+            access::{ChunkBounds, HasBounds, ReadAccess},
+            neighbors::NeighborsBuilder,
+            storage::{data_structures::HashmapChunkStorage, error::OutOfBounds},
+        },
+        util::FaceMap,
     };
 
     use super::*;
@@ -253,12 +267,123 @@ mod tests {
         }
     }
 
+    fn testing_registry() -> VariantRegistry {
+        let mut textures = {
+            let mut loader = TestTextureRegistryLoader::new();
+            loader.add(rpath("test1"), vec2(0.0, 0.0), None);
+            loader.add(rpath("test2"), vec2(0.0, 1.0), None);
+
+            loader.build()
+        };
+
+        let mut vloader = VariantRegistryLoader::new();
+        vloader.register(
+            rpath("var1"),
+            VariantDescriptor {
+                transparency: Transparency::Opaque,
+                model: Some(VoxelModelDescriptor::Block(BlockDescriptor {
+                    directions: FaceMap::new(),
+                    default: {
+                        let mut map = FaceMap::from_fn(|_| {
+                            Some(FaceTextureDescriptor::new(
+                                rpath("test1"),
+                                FaceTextureRotation::new(0),
+                            ))
+                        });
+                        map.set(
+                            Face::East,
+                            FaceTextureDescriptor::new(rpath("test2"), FaceTextureRotation::new(0)),
+                        );
+                        map
+                    },
+                })),
+            },
+        );
+
+        vloader.register(
+            rpath("void"),
+            VariantDescriptor {
+                transparency: Transparency::Transparent,
+                model: None,
+            },
+        );
+
+        vloader.register(
+            rpath("filled"),
+            VariantDescriptor {
+                transparency: Transparency::Opaque,
+                model: None,
+            },
+        );
+
+        vloader.build_registry(&textures).unwrap()
+    }
+
     #[test]
+    #[ignore = "todo"]
     fn test_reading() {
+        let variants = testing_registry();
+
+        let void_cvo = ChunkVoxelOutput {
+            transparency: Transparency::Transparent,
+            variant: variants.get_id(&rpath("void")).unwrap(),
+            rotation: None,
+        };
+
+        let neighbors = {
+            let mut builder = NeighborsBuilder::<TestAccess>::new(ChunkVoxelOutput {
+                transparency: Transparency::Opaque,
+                variant: variants.get_id(&rpath("filled")).unwrap(),
+                rotation: None,
+            });
+
+            builder
+                .set_neighbor(
+                    ivec3(0, -1, 0),
+                    TestAccess {
+                        map: HashmapChunkStorage::new(),
+                        default: void_cvo,
+                    },
+                )
+                .unwrap();
+
+            builder
+                .set_neighbor(
+                    ivec3(1, 1, 1),
+                    TestAccess {
+                        map: HashmapChunkStorage::new(),
+                        default: void_cvo,
+                    },
+                )
+                .unwrap();
+
+            builder
+                .set_neighbor(
+                    ivec3(-1, -1, -1),
+                    TestAccess {
+                        map: HashmapChunkStorage::new(),
+                        default: void_cvo,
+                    },
+                )
+                .unwrap();
+
+            builder.build()
+        };
+
+        let access = TestAccess {
+            map: {
+                let mut storage = HashmapChunkStorage::<ChunkVoxelOutput>::new();
+
+                todo!()
+            },
+            default: void_cvo,
+        };
+
         todo!()
     }
 
     #[test]
+    #[ignore = "todo"]
     fn test_occlusion() {
         todo!()
     }

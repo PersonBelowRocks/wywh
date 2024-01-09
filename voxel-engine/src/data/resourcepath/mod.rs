@@ -4,6 +4,10 @@ pub mod serde;
 
 pub type ResourcePathPart = String;
 
+pub fn rpath(s: &str) -> ResourcePath {
+    ResourcePath::try_from(s).unwrap()
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ResourcePath {
     parts: Vec<ResourcePathPart>,
