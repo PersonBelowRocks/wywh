@@ -1,3 +1,5 @@
+use std::array;
+
 use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 
 use crate::{
@@ -10,7 +12,7 @@ use crate::{
     },
     render::{
         adjacency::AdjacentTransparency,
-        quad::{anon::Quad, data::DataQuad},
+        quad::{anon::Quad, data::DataQuad, isometric::QuadVertex},
     },
     topo::{
         access::ChunkAccess,
@@ -122,6 +124,74 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
         self.auto_neighboring_get(pos_above)
     }
 
+    fn corner_occlusions(&self, pos: IVec2, quad: &mut DataQuad) -> CqsResult<(), C, Nb> {
+        let corners = [
+            pos + ivec2(-1, 1),
+            pos + ivec2(1, 1),
+            pos + ivec2(-1, -1),
+            pos + ivec2(1, -1),
+        ];
+
+        let is_corner_occluded = |i: usize| {
+            let corner_pos = self.pos_3d(corners[i]) + self.face.normal();
+            self.auto_neighboring_get(corner_pos)
+                .map(|cvo| cvo.transparency.is_opaque())
+        };
+
+        let occlusions: [bool; 4] = [
+            is_corner_occluded(0)?,
+            is_corner_occluded(1)?,
+            is_corner_occluded(2)?,
+            is_corner_occluded(3)?,
+        ];
+
+        for vertex in QuadVertex::VERTICES {
+            quad.data.get_mut(vertex).occluded = occlusions[vertex.as_usize()];
+        }
+
+        Ok(())
+    }
+
+    fn edge_occlusions(&self, pos: IVec2, quad: &mut DataQuad) -> CqsResult<(), C, Nb> {
+        let edge_voxel = |offset: IVec2| self.pos_3d(pos + offset) + self.face.normal();
+
+        let mut edge_occlusion = |offset: IVec2, pair: [QuadVertex; 2]| -> CqsResult<(), C, Nb> {
+            let edge_vox_pos = edge_voxel(offset);
+            let cvo = self.auto_neighboring_get(edge_vox_pos)?;
+
+            for v in pair {
+                quad.data.get_mut(v).occluded = cvo.transparency.is_opaque();
+            }
+
+            Ok(())
+        };
+
+        /*
+            0---1
+            |   |
+            2---3
+        */
+
+        edge_occlusion(ivec2(0, 1), [QuadVertex::Zero, QuadVertex::One])?;
+        edge_occlusion(ivec2(1, 0), [QuadVertex::One, QuadVertex::Three])?;
+        edge_occlusion(ivec2(0, -1), [QuadVertex::Three, QuadVertex::Two])?;
+        edge_occlusion(ivec2(-1, 0), [QuadVertex::Two, QuadVertex::Zero])?;
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn calculate_occlusion(&self, pos: IVec2, quad: &mut DataQuad) -> CqsResult<(), C, Nb> {
+        if !Self::contains(pos) {
+            return Err(CqsError::OutOfBounds);
+        }
+
+        self.corner_occlusions(pos, quad)?;
+        self.edge_occlusions(pos, quad)?;
+
+        Ok(())
+    }
+
     #[inline(always)]
     pub fn get_quad(&self, pos: IVec2) -> CqsResult<Option<DataQuad>, C, Nb> {
         let cvo = self.get(pos)?;
@@ -142,11 +212,54 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
             let mut quad = DataQuad::new(Quad::ONE, texture);
 
             // TODO: calculate occlusion
+            self.calculate_occlusion(pos, &mut quad)?;
 
             Ok(Some(quad))
         } else {
             // can only get quads from a block model
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::topo::{
+        access::{ChunkBounds, HasBounds, ReadAccess},
+        storage::{data_structures::HashmapChunkStorage, error::OutOfBounds},
+    };
+
+    use super::*;
+
+    struct TestAccess
+    where
+        Self: ChunkAccess,
+    {
+        map: HashmapChunkStorage<ChunkVoxelOutput>,
+        default: ChunkVoxelOutput,
+    }
+
+    impl ChunkBounds for TestAccess {}
+    impl ReadAccess for TestAccess {
+        type ReadErr = OutOfBounds;
+        type ReadType = ChunkVoxelOutput;
+
+        fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+            if !self.bounds().contains(pos) {
+                return Err(OutOfBounds);
+            }
+
+            Ok(self.map.get(pos).unwrap_or(self.default))
+        }
+    }
+
+    #[test]
+    fn test_reading() {
+        todo!()
+    }
+
+    #[test]
+    fn test_occlusion() {
+        todo!()
     }
 }

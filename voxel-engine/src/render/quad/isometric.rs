@@ -150,13 +150,20 @@ impl PositionedQuad {
 
     #[inline]
     pub fn vertex_pos(&self, vertex: QuadVertex) -> Vec2 {
-        let pos = self.pos();
+        /*
+            0---1
+            |   |
+            2---3
+        */
+
+        let min = self.min();
+        let max = self.max();
 
         match vertex {
-            QuadVertex::Two => pos,
-            QuadVertex::Three => vec2(pos.x + self.width(), pos.y),
-            QuadVertex::Zero => vec2(pos.x, pos.y + self.height()),
-            QuadVertex::One => vec2(pos.x + self.width(), pos.y + self.height()),
+            QuadVertex::Zero => vec2(min.x, max.y),
+            QuadVertex::One => max,
+            QuadVertex::Two => min,
+            QuadVertex::Three => vec2(max.x, min.y),
         }
     }
 
@@ -202,7 +209,7 @@ pub struct IsometrizedQuad {
 }
 
 impl IsometrizedQuad {
-    pub fn pos_3d(&self, vertex: QuadVertex) -> Vec3 {
+    pub fn vertex_position_3d(&self, vertex: QuadVertex) -> Vec3 {
         let pos_2d = self.quad.vertex_pos(vertex);
         project_to_3d(pos_2d, self.isometry.face, self.isometry.magnitude.into())
     }
@@ -212,11 +219,20 @@ impl IsometrizedQuad {
     }
 
     pub fn topology(&self) -> [QuadVertex; 6] {
-        todo!()
+        match self.isometry.face {
+            Face::Bottom | Face::East | Face::North => [0, 2, 1, 1, 2, 3],
+            _ => [0, 1, 2, 1, 3, 2],
+        }
+        .map(QuadVertex::from_usize)
+        .map(Option::unwrap)
     }
 
-    pub fn get_vertex(&self, _vertex: QuadVertex) -> (Vec3, &QVertexData) {
-        todo!()
+    #[inline]
+    pub fn get_vertex(&self, vertex: QuadVertex) -> (Vec3, &QVertexData) {
+        (
+            self.vertex_position_3d(vertex),
+            self.quad.dataquad.data.get(vertex),
+        )
     }
 }
 
