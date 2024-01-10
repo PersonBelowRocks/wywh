@@ -6,9 +6,7 @@ use crate::data::{
 use super::{anon::Quad, isometric::QuadVertex};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
-pub struct QVertexData {
-    pub occluded: bool,
-}
+pub struct QVertexData;
 
 #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
 pub struct QData([QVertexData; 4]);

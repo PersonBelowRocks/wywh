@@ -19,6 +19,7 @@ use crate::{
         chunk::Chunk,
         chunk_ref::ChunkVoxelOutput,
         neighbors::{self, Neighbors},
+        storage::error::OutOfBounds,
     },
     util::Axis3D,
 };
@@ -49,7 +50,6 @@ pub fn ivec_project_to_2d(pos: IVec3, face: Face) -> IVec2 {
 }
 
 #[derive(Clone)]
-#[allow(private_bounds)]
 pub struct ChunkQuadSlice<'a, C: ChunkAccess, Nb: ChunkAccess> {
     face: Face,
     mag: i32,
@@ -66,6 +66,38 @@ pub type CqsResult<T, C: ChunkAccess, Nb: ChunkAccess> =
     Result<T, CqsError<C::ReadErr, Nb::ReadErr>>;
 
 impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
+    #[inline]
+    pub fn new(
+        face: Face,
+        magnitude: i32,
+        access: C,
+        neighbors: Neighbors<Nb>,
+        registry: &'a RegistryRef<'a, VariantRegistry>,
+    ) -> Result<Self, OutOfBounds> {
+        if 0 > magnitude && magnitude > Chunk::SIZE {
+            return Err(OutOfBounds);
+        }
+
+        Ok(Self {
+            face,
+            mag: magnitude,
+            access,
+            neighbors,
+            registry,
+        })
+    }
+
+    pub fn reposition(&mut self, face: Face, magnitude: i32) -> Result<(), OutOfBounds> {
+        if 0 > magnitude && magnitude > Chunk::SIZE {
+            return Err(OutOfBounds);
+        }
+
+        self.face = face;
+        self.mag = magnitude;
+
+        Ok(())
+    }
+
     pub fn contains(pos: IVec2) -> bool {
         pos.cmplt(MAX).all() && pos.cmpge(IVec2::ZERO).all()
     }
@@ -124,74 +156,6 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
         self.auto_neighboring_get(pos_above)
     }
 
-    fn corner_occlusions(&self, pos: IVec2, quad: &mut DataQuad) -> CqsResult<(), C, Nb> {
-        let corners = [
-            pos + ivec2(-1, 1),
-            pos + ivec2(1, 1),
-            pos + ivec2(-1, -1),
-            pos + ivec2(1, -1),
-        ];
-
-        let is_corner_occluded = |i: usize| {
-            let corner_pos = self.pos_3d(corners[i]) + self.face.normal();
-            self.auto_neighboring_get(corner_pos)
-                .map(|cvo| cvo.transparency.is_opaque())
-        };
-
-        let occlusions: [bool; 4] = [
-            is_corner_occluded(0)?,
-            is_corner_occluded(1)?,
-            is_corner_occluded(2)?,
-            is_corner_occluded(3)?,
-        ];
-
-        for vertex in QuadVertex::VERTICES {
-            quad.data.get_mut(vertex).occluded = occlusions[vertex.as_usize()];
-        }
-
-        Ok(())
-    }
-
-    fn edge_occlusions(&self, pos: IVec2, quad: &mut DataQuad) -> CqsResult<(), C, Nb> {
-        let edge_voxel = |offset: IVec2| self.pos_3d(pos + offset) + self.face.normal();
-
-        let mut edge_occlusion = |offset: IVec2, pair: [QuadVertex; 2]| -> CqsResult<(), C, Nb> {
-            let edge_vox_pos = edge_voxel(offset);
-            let cvo = self.auto_neighboring_get(edge_vox_pos)?;
-
-            for v in pair {
-                quad.data.get_mut(v).occluded = cvo.transparency.is_opaque();
-            }
-
-            Ok(())
-        };
-
-        /*
-            0---1
-            |   |
-            2---3
-        */
-
-        edge_occlusion(ivec2(0, 1), [QuadVertex::Zero, QuadVertex::One])?;
-        edge_occlusion(ivec2(1, 0), [QuadVertex::One, QuadVertex::Three])?;
-        edge_occlusion(ivec2(0, -1), [QuadVertex::Three, QuadVertex::Two])?;
-        edge_occlusion(ivec2(-1, 0), [QuadVertex::Two, QuadVertex::Zero])?;
-
-        Ok(())
-    }
-
-    #[inline]
-    pub fn calculate_occlusion(&self, pos: IVec2, quad: &mut DataQuad) -> CqsResult<(), C, Nb> {
-        if !Self::contains(pos) {
-            return Err(CqsError::OutOfBounds);
-        }
-
-        self.corner_occlusions(pos, quad)?;
-        self.edge_occlusions(pos, quad)?;
-
-        Ok(())
-    }
-
     #[inline(always)]
     pub fn get_quad(&self, pos: IVec2) -> CqsResult<Option<DataQuad>, C, Nb> {
         let cvo = self.get(pos)?;
@@ -209,10 +173,7 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
             };
 
             let texture = submodel.get_texture(self.face);
-            let mut quad = DataQuad::new(Quad::ONE, texture);
-
-            // TODO: calculate occlusion
-            self.calculate_occlusion(pos, &mut quad)?;
+            let quad = DataQuad::new(Quad::ONE, texture);
 
             Ok(Some(quad))
         } else {
@@ -225,6 +186,7 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
 #[cfg(test)]
 mod tests {
     use bevy::math::vec2;
+    use parking_lot::{RwLock, RwLockReadGuard};
 
     use crate::{
         data::{
@@ -267,8 +229,8 @@ mod tests {
         }
     }
 
-    fn testing_registry() -> VariantRegistry {
-        let mut textures = {
+    fn testing_registries() -> (VariantRegistry, TextureRegistry) {
+        let textures = {
             let mut loader = TestTextureRegistryLoader::new();
             loader.add(rpath("test1"), vec2(0.0, 0.0), None);
             loader.add(rpath("test2"), vec2(0.0, 1.0), None);
@@ -316,17 +278,26 @@ mod tests {
             },
         );
 
-        vloader.build_registry(&textures).unwrap()
+        (vloader.build_registry(&textures).unwrap(), textures)
     }
 
     #[test]
-    #[ignore = "todo"]
     fn test_reading() {
-        let variants = testing_registry();
+        let (varreg, texreg) = testing_registries();
+
+        let variants_lock = RwLock::new(varreg);
+        let variants: RegistryRef<VariantRegistry> =
+            RwLockReadGuard::map(variants_lock.read(), |g| g);
 
         let void_cvo = ChunkVoxelOutput {
             transparency: Transparency::Transparent,
             variant: variants.get_id(&rpath("void")).unwrap(),
+            rotation: None,
+        };
+
+        let test_cvo = ChunkVoxelOutput {
+            transparency: Transparency::Opaque,
+            variant: variants.get_id(&rpath("var1")).unwrap(),
             rotation: None,
         };
 
@@ -374,17 +345,34 @@ mod tests {
             map: {
                 let mut storage = HashmapChunkStorage::<ChunkVoxelOutput>::new();
 
-                todo!()
+                storage.set(ivec3(8, 0, 8), test_cvo).unwrap();
+                storage.set(ivec3(8, 1, 8), test_cvo).unwrap();
+                storage.set(ivec3(8, 15, 8), test_cvo).unwrap();
+                storage.set(ivec3(0, 0, 0), test_cvo).unwrap();
+
+                storage
             },
             default: void_cvo,
         };
 
-        todo!()
-    }
+        let mut cqs = ChunkQuadSlice::new(Face::Bottom, 0, access, neighbors, &variants).unwrap();
 
-    #[test]
-    #[ignore = "todo"]
-    fn test_occlusion() {
-        todo!()
+        assert_eq!(None, cqs.get_quad(ivec2(4, 4)).unwrap());
+
+        let expected_texture = texreg.get_id(&rpath("test1")).unwrap();
+
+        assert_eq!(
+            expected_texture,
+            cqs.get_quad(ivec2(8, 8)).unwrap().unwrap().texture.texture
+        );
+
+        cqs.reposition(Face::East, 8).unwrap();
+
+        let expected_texture = texreg.get_id(&rpath("test2")).unwrap();
+
+        assert_eq!(
+            expected_texture,
+            cqs.get_quad(ivec2(8, 1)).unwrap().unwrap().texture.texture
+        );
     }
 }

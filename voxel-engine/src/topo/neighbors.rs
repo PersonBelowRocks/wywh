@@ -61,7 +61,7 @@ pub fn is_in_bounds_3d(pos: IVec3) -> bool {
     let min: IVec3 = -IVec3::ONE;
     let max: IVec3 = IVec3::splat(Chunk::SIZE) + IVec3::ONE;
 
-    pos.cmpge(min).all() && pos.cmplt(max).all()
+    pos.cmpge(min).all() && pos.cmplt(max).all() && localspace_to_chunk_pos(pos) != IVec3::ZERO
 }
 
 pub type NbResult<T, E> = Result<T, NeighborsAccessError<E>>;

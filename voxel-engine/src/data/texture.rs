@@ -66,8 +66,6 @@ impl FaceTextureRotation {
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-// TODO: is this worth it? it cuts the size of BlockModel down a lot...
-#[repr(packed)]
 pub struct FaceTexture {
     pub rotation: FaceTextureRotation,
     pub texture: RegistryId<TextureRegistry>,
