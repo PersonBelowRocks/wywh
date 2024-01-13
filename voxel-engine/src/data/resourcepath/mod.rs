@@ -3,11 +3,17 @@ use std::{fmt::Write, path::Path, str::FromStr};
 use ascii::{AsciiChar, AsciiStr, AsciiString};
 use itertools::Itertools;
 
+use self::error::FromStrError;
+
 pub mod error;
 pub mod impls;
 pub mod serde;
 
 pub type ResourcePathPart = String;
+
+pub fn rpath(s: &str) -> ResourcePath {
+    ResourcePath::parse(s).unwrap()
+}
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ResourcePath {
@@ -17,6 +23,19 @@ pub struct ResourcePath {
 impl ResourcePath {
     pub(self) fn from_parts(parts: Vec<ResourcePathPart>) -> Self {
         Self { parts }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, FromStrError> {
+        let mut parts = Vec::new();
+
+        for (i, part) in s.split('.').enumerate() {
+            if part.is_empty() {
+                return Err(FromStrError::InvalidElement(i));
+            }
+            parts.push(part.to_string());
+        }
+
+        Ok(Self::from_parts(parts))
     }
 
     pub fn len(&self) -> usize {
@@ -44,8 +63,8 @@ mod tests {
 
     #[test]
     fn formatting() {
-        let rpath = ResourcePath::try_from("should\\format\\correctly").unwrap();
+        let rpath = ResourcePath::parse("should.format.correctly").unwrap();
 
-        assert_eq!("[should/format/correctly]", format!("{rpath}"));
+        assert_eq!("[should.format.correctly]", format!("{rpath}"));
     }
 }

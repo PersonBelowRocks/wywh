@@ -1,4 +1,7 @@
-use std::{fmt::Write, path::Path};
+use std::{
+    fmt::Write,
+    path::{Path, MAIN_SEPARATOR},
+};
 
 use super::{
     error::{FromPathError, FromStrError},
@@ -20,31 +23,9 @@ impl<'a> TryFrom<&'a Path> for ResourcePath {
             }
         }
 
-        Ok(Self::try_from(buffer)?)
-    }
-}
-
-impl<'a> TryFrom<&'a str> for ResourcePath {
-    type Error = FromStrError;
-
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        let mut parts = Vec::<ResourcePathPart>::new();
-
-        for (i, part) in value
-            .split(|ch| ch == std::path::MAIN_SEPARATOR || ch == '/')
-            .enumerate()
-        {
-            if part.is_empty() || part.contains('.') {
-                return Err(FromStrError::InvalidElement(i));
-            }
-
-            parts.push(part.to_string());
-        }
-
-        // optimize our memory footprint a little
-        parts.shrink_to_fit();
-
-        Ok(Self::from_parts(parts))
+        Ok(Self::parse(
+            &buffer.replace(|c| c == '\\' || c == '/', "."),
+        )?)
     }
 }
 
@@ -57,7 +38,7 @@ impl std::fmt::Display for ResourcePath {
             f.write_str(part)?;
 
             if parts.peek().is_some() {
-                f.write_char('/')?;
+                f.write_char('.')?;
             }
         }
 
@@ -73,7 +54,7 @@ impl From<ResourcePath> for String {
             string.push_str(part);
 
             if parts.peek().is_some() {
-                string.write_char('/');
+                string.write_char('.').unwrap();
             }
         }
 

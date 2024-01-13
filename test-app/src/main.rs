@@ -4,6 +4,7 @@ mod camera;
 mod debug_info;
 
 use std::f32::consts::PI;
+use std::path::PathBuf;
 
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::pbr::ScreenSpaceAmbientOcclusionBundle;
@@ -27,7 +28,7 @@ fn main() {
                 .into(),
             }),
             WireframePlugin,
-            ve::VoxelPlugin::new(vec!["test-app\\assets\\variants".into()]),
+            ve::VoxelPlugin::new(vec![PathBuf::from_iter(["test-app", "assets", "variants"])]),
         ))
         .add_systems(Startup, setup)
         .add_systems(

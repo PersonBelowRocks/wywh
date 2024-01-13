@@ -32,7 +32,7 @@ impl<'de> serde::de::Visitor<'de> for ResourcePathVisitor {
     where
         E: serde::de::Error,
     {
-        Self::Value::try_from(v).map_err(|err| serde::de::Error::custom(err))
+        Self::Value::parse(v).map_err(|e| E::custom(e))
     }
 }
 
@@ -56,24 +56,21 @@ mod tests {
 
     #[test]
     fn json_serialize() {
-        let rpath = ResourcePath::try_from("i/love/serde/owo").unwrap();
+        let rpath = ResourcePath::parse("i.love.serde.owo").unwrap();
 
         let string = serde_json::to_string(&Test::new(rpath)).unwrap();
 
         assert_eq!(
-            TestDe::new("i/love/serde/owo".into()),
+            TestDe::new("i.love.serde.owo".into()),
             serde_json::from_str::<TestDe>(string.as_str()).unwrap()
         )
     }
 
     #[test]
     fn json_deserialize() {
-        let json = r#"{"path": "silly/little/path"}"#;
+        let json = r#"{"path": "silly.little.path"}"#;
 
         let test = serde_json::from_str::<Test>(json).unwrap();
-        assert_eq!(
-            ResourcePath::try_from("silly/little/path").unwrap(),
-            test.path
-        )
+        assert_eq!(ResourcePath::parse("silly.little.path").unwrap(), test.path)
     }
 }

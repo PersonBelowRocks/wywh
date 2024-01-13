@@ -75,7 +75,7 @@ mod tests {
 
     use crate::{
         data::{
-            resourcepath::ResourcePath,
+            resourcepath::{rpath, ResourcePath},
             texture::FaceTextureRotation,
             tile::{Face, Transparency},
             voxel::descriptor::{
@@ -94,8 +94,8 @@ mod tests {
                 type: "block",
                 faces: {
                     up: "tex1:1",
-                    down: "stupid_textures/tex1:1",
-                    left: "stupid_textures/tex2:-1",
+                    down: "stupid_textures.tex1:1",
+                    left: "stupid_textures.tex2:-1",
                     right: "tex2:0",
                     front: "tex2:2",
                     back: "tex1:0",
@@ -127,17 +127,14 @@ mod tests {
             FaceTextureRotation::new(1),
             direction.get(Face::North).unwrap().rotation
         );
-        assert_eq!(
-            ResourcePath::try_from("tex1").unwrap(),
-            direction.get(Face::North).unwrap().label
-        );
+        assert_eq!(rpath("tex1"), direction.get(Face::North).unwrap().label);
 
         assert_eq!(
             FaceTextureRotation::new(1),
             direction.get(Face::South).unwrap().rotation
         );
         assert_eq!(
-            ResourcePath::try_from("stupid_textures/tex1").unwrap(),
+            rpath("stupid_textures.tex1"),
             direction.get(Face::South).unwrap().label
         );
 
@@ -145,17 +142,14 @@ mod tests {
             FaceTextureRotation::new(0),
             direction.get(Face::East).unwrap().rotation
         );
-        assert_eq!(
-            ResourcePath::try_from("tex2").unwrap(),
-            direction.get(Face::East).unwrap().label
-        );
+        assert_eq!(rpath("tex2"), direction.get(Face::East).unwrap().label);
 
         assert_eq!(
             FaceTextureRotation::new(-1),
             direction.get(Face::West).unwrap().rotation
         );
         assert_eq!(
-            ResourcePath::try_from("stupid_textures/tex2").unwrap(),
+            rpath("stupid_textures.tex2"),
             direction.get(Face::West).unwrap().label
         );
 
@@ -163,19 +157,13 @@ mod tests {
             FaceTextureRotation::new(-1),
             direction.get(Face::Top).unwrap().rotation
         );
-        assert_eq!(
-            ResourcePath::try_from("tex4").unwrap(),
-            direction.get(Face::Top).unwrap().label
-        );
+        assert_eq!(rpath("tex4"), direction.get(Face::Top).unwrap().label);
 
         assert_eq!(
             FaceTextureRotation::default(),
             direction.get(Face::Bottom).unwrap().rotation
         );
-        assert_eq!(
-            ResourcePath::try_from("tex3").unwrap(),
-            direction.get(Face::Bottom).unwrap().label
-        );
+        assert_eq!(rpath("tex3"), direction.get(Face::Bottom).unwrap().label);
 
         // let textures = {
         //     let mut map = FaceMap::<RotatedTextureDescriptor>::new();

@@ -16,6 +16,7 @@ use super::{
         error::TextureRegistryError, texture::TextureRegistry, variant::VariantRegistryLoader,
         Registries,
     },
+    resourcepath::rpath,
     tile::Transparency,
     variant_file_loader::VariantFileLoader,
     voxel::descriptor::VariantDescriptor,
@@ -163,7 +164,7 @@ pub fn build_registries(world: &mut World) {
     let mut registry_loader = VariantRegistryLoader::new();
 
     registry_loader.register(
-        ResourcePath::try_from("void").unwrap(),
+        rpath("void"),
         VariantDescriptor {
             transparency: Transparency::Transparent,
             model: None,
