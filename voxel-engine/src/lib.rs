@@ -87,9 +87,6 @@ impl Plugin for VoxelPlugin {
 
         // app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
         // app.add_plugins(MaterialPlugin::<GreedyMeshMaterial>::default());
-        app.add_plugins(MaterialPlugin::<
-            ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>,
-        >::default());
         app.add_event::<GenerateChunk>();
         app.add_state::<AppState>();
 
