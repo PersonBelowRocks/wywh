@@ -10,20 +10,10 @@ use crate::{
         chunk_ref::ChunkVoxelOutput,
         storage::error::OutOfBounds,
     },
-    util::{self, ConversionError},
+    util::{self, ivec3_to_1d, ConversionError},
 };
 
 use super::{access::ChunkAccess, error::NeighborsAccessError};
-
-fn ivec3_to_1d(v: IVec3) -> Result<usize, ConversionError> {
-    let [x, y, z] = util::try_ivec3_to_usize_arr(v)?;
-    Ok(to_1d(x, y, z))
-}
-
-fn to_1d(x: usize, y: usize, z: usize) -> usize {
-    const MAX: usize = 3;
-    return (z * MAX * MAX) + (y * MAX) + x;
-}
 
 fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
     ivec3(

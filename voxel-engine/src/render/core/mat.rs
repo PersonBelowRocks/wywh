@@ -9,7 +9,7 @@ use bevy::{
             AsBindGroup, AsBindGroupError, BindGroupLayout, BindGroupLayoutEntry, BindingType,
             Buffer, BufferBindingType, BufferInitDescriptor, BufferUsages, OwnedBindingResource,
             RenderPipelineDescriptor, ShaderDefVal, ShaderRef, ShaderStages,
-            SpecializedMeshPipelineError, UnpreparedBindGroup, VertexFormat,
+            SpecializedMeshPipelineError, StorageBuffer, UnpreparedBindGroup, VertexFormat,
         },
         renderer::RenderDevice,
         texture::{FallbackImage, Image},
@@ -21,10 +21,7 @@ use crate::data::texture::GpuFaceTexture;
 #[derive(Debug, Clone, Asset, TypePath)]
 pub struct VxlChunkMaterial {
     faces: Buffer,
-    face_count: usize,
-
-    occlusion: Vec<u8>,
-    occlusion_count: usize,
+    occlusion: Buffer,
 }
 
 impl AsBindGroup for VxlChunkMaterial {
@@ -37,13 +34,8 @@ impl AsBindGroup for VxlChunkMaterial {
         images: &RenderAssets<Image>,
         fallback_image: &FallbackImage,
     ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
-        let occlusion_buffer = gpu.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("occlusion_buffer"),
-            contents: &self.occlusion[..],
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-        });
-
         let face_buffer = self.faces.clone();
+        let occlusion_buffer = self.occlusion.clone();
 
         let bg = UnpreparedBindGroup {
             data: (),

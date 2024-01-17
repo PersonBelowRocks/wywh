@@ -23,6 +23,16 @@ pub fn notnan_arr<const SIZE: usize>(arr: [f32; SIZE]) -> Option<[NotNan<f32>; S
     Some(arr.map(|f| NotNan::new(f).unwrap()))
 }
 
+pub fn ivec3_to_1d(v: IVec3) -> Result<usize, ConversionError> {
+    let [x, y, z] = try_ivec3_to_usize_arr(v)?;
+    Ok(to_1d(x, y, z))
+}
+
+pub fn to_1d(x: usize, y: usize, z: usize) -> usize {
+    const MAX: usize = 3;
+    return (z * MAX * MAX) + (y * MAX) + x;
+}
+
 pub fn try_ivec3_to_usize_arr(ivec: IVec3) -> Result<[usize; 3], ConversionError> {
     let [x, y, z] = ivec.to_array();
 
