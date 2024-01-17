@@ -12,6 +12,7 @@ use crate::data::registries::variant::VariantRegistry;
 use crate::data::registries::Registries;
 use crate::data::tile::Face;
 
+use crate::render::occlusion::ChunkOcclusionMap;
 use crate::render::quad::Quad;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;
@@ -221,6 +222,7 @@ impl Mesher for GreedyMesher {
 
         Ok(MesherOutput {
             mesh: attrs.to_mesh(),
+            occlusion: ChunkOcclusionMap::new(),
         })
     }
 

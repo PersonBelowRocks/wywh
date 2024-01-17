@@ -27,9 +27,11 @@ use crate::topo::chunk_ref::ChunkVoxelOutput;
 use super::adjacency::AdjacentTransparency;
 use super::error::MesherError;
 use super::mesh::ChunkMesh;
+use super::occlusion::ChunkOcclusionMap;
 
 pub struct MesherOutput {
     pub mesh: Mesh,
+    pub occlusion: ChunkOcclusionMap,
 }
 
 pub struct Context<'a> {
