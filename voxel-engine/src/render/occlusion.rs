@@ -47,9 +47,11 @@ impl BlockOcclusion {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChunkOcclusionMap([BlockOcclusion; Self::BUFFER_SIZE]);
 
+// we need to be able to reinterperet the whole buffer as a buffer of u32s
+static_assertions::const_assert_eq!(0, ChunkOcclusionMap::BUFFER_SIZE % size_of::<u32>());
 impl ChunkOcclusionMap {
     pub const USIZE: usize = Chunk::USIZE + 2;
     pub const SIZE: i32 = Self::USIZE as i32;

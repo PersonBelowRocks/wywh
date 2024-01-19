@@ -29,6 +29,7 @@ use super::error::MesherError;
 use super::mesh::ChunkMesh;
 use super::occlusion::ChunkOcclusionMap;
 
+#[derive(Clone, Debug)]
 pub struct MesherOutput {
     pub mesh: Mesh,
     pub occlusion: ChunkOcclusionMap,
@@ -67,10 +68,11 @@ pub(crate) enum MesherWorkerCommand {
     Shutdown,
 }
 
-pub(crate) struct MesherWorkerOutput {
-    pos: ChunkPos,
-    id: MeshingTaskId,
-    output: MesherOutput,
+#[derive(Debug, Clone)]
+pub struct MesherWorkerOutput {
+    pub pos: ChunkPos,
+    pub id: MeshingTaskId,
+    pub output: MesherOutput,
 }
 
 pub(crate) struct MesherWorker {
@@ -233,21 +235,11 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
     }
 
     // TODO: make this return an iterator instead
-    pub fn finished_meshes(&mut self) -> Vec<ChunkMesh> {
-        let mut meshes = Vec::<ChunkMesh>::new();
-
-        while let Ok(worker_response) = self.mesh_receiver.try_recv() {
-            self.remove_pending_task(worker_response.id);
-
-            let mesh = ChunkMesh {
-                pos: worker_response.pos,
-                mesh: worker_response.output.mesh,
-            };
-
-            meshes.push(mesh);
+    pub fn finished_meshes(&mut self) -> MesherResults<'_> {
+        MesherResults {
+            pending_tasks: &mut self.pending_tasks,
+            recv: &mut self.mesh_receiver,
         }
-
-        meshes
     }
 
     pub fn shutdown(self) {
@@ -266,6 +258,22 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
 
     pub fn hq_material(&self) -> HQM::Material {
         self.hq_mesher.material()
+    }
+}
+
+pub struct MesherResults<'a> {
+    pending_tasks: &'a mut hb::HashSet<MeshingTaskId>,
+    recv: &'a mut Receiver<MesherWorkerOutput>,
+}
+
+impl<'a> Iterator for MesherResults<'a> {
+    type Item = MesherWorkerOutput;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.recv.try_recv().ok().map(|output| {
+            self.pending_tasks.remove(&output.id);
+            output
+        })
     }
 }
 

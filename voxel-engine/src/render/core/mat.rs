@@ -20,8 +20,8 @@ use crate::data::texture::GpuFaceTexture;
 
 #[derive(Debug, Clone, Asset, TypePath)]
 pub struct VxlChunkMaterial {
-    faces: Buffer,
-    occlusion: Buffer,
+    pub faces: Buffer,
+    pub occlusion: Buffer,
 }
 
 impl AsBindGroup for VxlChunkMaterial {

@@ -1,7 +1,11 @@
 use bevy::{
     pbr::{wireframe::Wireframe, ExtendedMaterial},
     prelude::*,
-    render::texture::ImageSampler,
+    render::{
+        render_resource::{BufferInitDescriptor, BufferUsages},
+        renderer::RenderDevice,
+        texture::ImageSampler,
+    },
 };
 
 use crate::{
@@ -9,12 +13,13 @@ use crate::{
         registries::Registries,
         systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
     },
-    render::adjacency::AdjacentTransparency,
+    render::{adjacency::AdjacentTransparency, core::mat::VxlChunkMaterial},
     topo::{chunk::Chunk, realm::VoxelRealm},
     ChunkEntity, HqMaterial, LqMaterial,
 };
 
 use super::{
+    core::FaceBuffer,
     mesh_builder::{Mesher, ParallelMeshBuilder},
     meshing::greedy::{
         algorithm::{GreedyMesher, SimplePbrMesher},
@@ -63,15 +68,44 @@ pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
     mut cmds: Commands,
     mut mesh_builder: ResMut<ParallelMeshBuilder<HQM, LQM>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    hq_material: Res<HqMaterial<HQM::Material>>,
+    mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, VxlChunkMaterial>>>,
+    gpu: Res<RenderDevice>,
+    faces: Res<FaceBuffer>,
+    texture_atlas: Res<VoxelColorTextureAtlas>,
+    normal_atlas: Res<VoxelNormalTextureAtlas>,
 ) {
-    for finished_mesh in mesh_builder.finished_meshes().into_iter() {
-        debug!("Inserting mesh at {:?}", finished_mesh.pos());
-        let pos = (*finished_mesh.pos() * Chunk::SIZE).as_vec3() + Vec3::splat(0.5);
+    use slice_of_array::prelude::*;
+
+    for finished_mesh in mesh_builder.finished_meshes() {
+        debug!("Inserting mesh at {:?}", finished_mesh.pos);
+        let pos = (*finished_mesh.pos * Chunk::SIZE).as_vec3() + Vec3::splat(0.5);
+
+        let material = {
+            let occlusion_map = gpu.create_buffer_with_data(&BufferInitDescriptor {
+                label: Some("occlusion_buffer"),
+                contents: finished_mesh.output.occlusion.as_buffer().flat(),
+                usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            });
+
+            VxlChunkMaterial {
+                faces: faces.0.as_ref().unwrap().clone(),
+                occlusion: occlusion_map,
+            }
+        };
 
         cmds.spawn(MaterialMeshBundle {
-            mesh: meshes.add(finished_mesh.into()),
-            material: hq_material.clone(),
+            mesh: meshes.add(finished_mesh.output.mesh),
+            material: materials.add(ExtendedMaterial {
+                base: StandardMaterial {
+                    base_color_texture: Some(texture_atlas.0.clone()),
+                    normal_map_texture: Some(normal_atlas.0.clone()),
+                    perceptual_roughness: 1.0,
+                    reflectance: 0.0,
+                    // base_color: Color::rgb(0.5, 0.5, 0.65),
+                    ..default()
+                },
+                extension: material,
+            }),
             transform: Transform::from_translation(pos),
 
             ..default()
