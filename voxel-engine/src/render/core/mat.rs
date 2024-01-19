@@ -17,7 +17,7 @@ use bevy::{
     },
 };
 
-use crate::data::texture::GpuFaceTexture;
+use crate::{data::texture::GpuFaceTexture, render::occlusion::ChunkOcclusionMap};
 
 #[derive(Debug, Clone, Asset, TypePath)]
 pub struct VxlChunkMaterial {
@@ -129,9 +129,13 @@ impl MaterialExtension for VxlChunkMaterial {
 
         if let Some(fragment) = descriptor.fragment.as_mut() {
             fragment.shader_defs.extend_from_slice(&shader_defs);
-            fragment
-                .shader_defs
-                .extend_from_slice(&["VERTEX_TANGENTS".into()]);
+            fragment.shader_defs.extend_from_slice(&[
+                "VERTEX_TANGENTS".into(),
+                ShaderDefVal::UInt(
+                    "OCCLUSION_BUFFER_SIZE".into(),
+                    ChunkOcclusionMap::BUFFER_SIZE as _,
+                ),
+            ]);
         } else {
             warn!(
                 "Couldn't specialize fragment state for pipeline '{:?}' because it didn't exist.",

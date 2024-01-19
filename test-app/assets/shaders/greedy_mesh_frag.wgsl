@@ -23,9 +23,9 @@
 #import "shaders/greedy_mesh_utils.wgsl"::occlusion_curve
 
 @group(2) @binding(100)
-var<uniform> texture_scale: f32;
-@group(2) @binding(101)
 var<storage, read> faces: array<FaceTexture>;
+@group(2) @binding(101)
+var<storage, read> occlusion: array<u32, #{OCCLUSION_BUFFER_SIZE}>;
 
 @fragment
 fn fragment(
@@ -36,7 +36,7 @@ fn fragment(
     let in: GreedyVertexOutput = preprocess_greedy_vertex_output(raw_in);
 
     // generate a PbrInput struct from the StandardMaterial bindings
-    var pbr_input = greedy_mesh_pbr_input(in, is_front, faces[in.texture_id], texture_scale);
+    var pbr_input = greedy_mesh_pbr_input(in, is_front, faces[in.texture_id], 16.0);
 
     // alpha discard
     pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
