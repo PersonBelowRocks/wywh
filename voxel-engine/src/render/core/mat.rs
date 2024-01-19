@@ -1,5 +1,6 @@
 use bevy::{
     asset::Asset,
+    log::warn,
     pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
     reflect::TypePath,
     render::{
@@ -126,14 +127,17 @@ impl MaterialExtension for VxlChunkMaterial {
             .shader_defs
             .extend_from_slice(&shader_defs);
 
-        let Some(fragment) = descriptor.fragment.as_mut() else {
-            panic!("Pipeline descriptor doesn't have fragment state");
+        if let Some(fragment) = descriptor.fragment.as_mut() {
+            fragment.shader_defs.extend_from_slice(&shader_defs);
+            fragment
+                .shader_defs
+                .extend_from_slice(&["VERTEX_TANGENTS".into()]);
+        } else {
+            warn!(
+                "Couldn't specialize fragment state for pipeline '{:?}' because it didn't exist.",
+                descriptor.label
+            )
         };
-
-        fragment.shader_defs.extend_from_slice(&shader_defs);
-        fragment
-            .shader_defs
-            .extend_from_slice(&["VERTEX_TANGENTS".into()]);
 
         Ok(())
     }

@@ -25,6 +25,7 @@ pub mod util;
 use crate::{
     data::systems::{build_registries, check_textures, load_textures, VariantFolders},
     render::{
+        core::RenderCore,
         meshing::greedy::algorithm::GreedyMesher,
         meshing::greedy::material::GreedyMeshMaterial,
         systems::{build_meshes, configure_sampling, insert_meshes, setup_mesh_builder},
@@ -49,12 +50,6 @@ pub struct VoxelSystemSet;
 
 #[derive(Resource, Deref)]
 pub struct EngineThreadPool(rayon::ThreadPool);
-
-#[derive(Resource, Deref)]
-pub struct HqMaterial<M: Material>(Handle<M>);
-
-#[derive(Resource, Deref)]
-pub struct LqMaterial<M: Material>(Handle<M>);
 
 #[derive(Resource, Deref)]
 pub struct DefaultGenerator(Generator);
@@ -87,6 +82,8 @@ impl Plugin for VoxelPlugin {
 
         // app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
         // app.add_plugins(MaterialPlugin::<GreedyMeshMaterial>::default());
+        app.add_plugins(RenderCore);
+
         app.add_event::<GenerateChunk>();
         app.add_state::<AppState>();
 
