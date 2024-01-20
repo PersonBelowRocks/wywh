@@ -16,6 +16,7 @@ use cb::channel::Sender;
 
 use crate::data::registries::Registries;
 use crate::render::meshing::greedy::material::GreedyMeshMaterial;
+use crate::topo::access::ChunkAccess;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;
 
@@ -23,9 +24,11 @@ use crate::topo::chunk::ChunkPos;
 use crate::topo::chunk_ref::ChunkRef;
 
 use crate::topo::chunk_ref::ChunkVoxelOutput;
+use crate::topo::neighbors::Neighbors;
 
 use super::adjacency::AdjacentTransparency;
 use super::error::MesherError;
+use super::error::MesherResult;
 use super::mesh::ChunkMesh;
 use super::occlusion::ChunkOcclusionMap;
 
@@ -35,21 +38,22 @@ pub struct MesherOutput {
     pub occlusion: ChunkOcclusionMap,
 }
 
-pub struct Context<'a> {
-    pub adjacency: &'a AdjacentTransparency,
+pub struct Context<'a, A: ChunkAccess> {
+    pub neighbors: Neighbors<A>,
     pub registries: &'a Registries,
 }
 
 pub trait Mesher: Clone + Send + Sync + 'static {
     type Material: Material + Asset;
 
-    fn build<Acc>(
+    fn build<A, Nb>(
         &self,
-        access: &Acc,
-        adjacency: Context,
-    ) -> Result<MesherOutput, MesherError<Acc::ReadErr>>
+        access: A,
+        adjacency: Context<Nb>,
+    ) -> MesherResult<A::ReadErr, Nb::ReadErr>
     where
-        Acc: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds;
+        A: ChunkAccess,
+        Nb: ChunkAccess;
 
     fn material(&self) -> Self::Material;
 }
@@ -103,17 +107,7 @@ impl MesherWorker {
                     MesherWorkerCommand::Shutdown => interrupt = true,
                     MesherWorkerCommand::Build(data) => {
                         // TODO: error handling
-                        let mesh = data
-                            .chunk_ref
-                            .with_read_access(|access| {
-                                let cx = Context {
-                                    adjacency: &data.adjacency,
-                                    registries: &registries,
-                                };
-
-                                mesher.build(&access, cx).unwrap()
-                            })
-                            .unwrap();
+                        let mesh = data.chunk_ref.with_read_access(|access| todo!()).unwrap();
 
                         mesh_sender
                             .send(MesherWorkerOutput {

@@ -19,6 +19,8 @@ pub struct BlockOcclusion(Option<NonZeroU8>);
 static_assertions::assert_eq_size!(u8, BlockOcclusion);
 
 impl BlockOcclusion {
+    pub(crate) const MASK: u8 = 0b00111111;
+
     pub fn new(faces: &[Face]) -> Self {
         let mut value: u8 = 0;
 
@@ -28,6 +30,14 @@ impl BlockOcclusion {
         }
 
         Self(NonZeroU8::new(value))
+    }
+
+    pub fn empty() -> Self {
+        Self(None)
+    }
+
+    pub fn filled() -> Self {
+        Self(NonZeroU8::new(Self::MASK))
     }
 
     pub fn is_occluded(&self, face: Face) -> bool {

@@ -1,9 +1,13 @@
 use crate::{
     data::{error::SubmodelFromDescriptorError, registries::Registry},
+    render::occlusion::BlockOcclusion,
     util::FaceMap,
 };
 
-use self::descriptor::{BlockDescriptor, FaceTextureDescriptor};
+use self::{
+    descriptor::{BlockDescriptor, FaceTextureDescriptor},
+    rotations::BlockModelRotation,
+};
 
 use super::{
     registries::{error::TextureNotFound, texture::TextureRegistry},
@@ -104,10 +108,18 @@ pub enum VoxelModel {
 }
 
 impl VoxelModel {
-    pub fn as_block_model(self) -> Option<BlockModel> {
+    pub fn into_block_model(self) -> Option<BlockModel> {
         match self {
             Self::Block(model) => Some(model),
             _ => None,
+        }
+    }
+
+    pub fn occlusion(&self, rotation: Option<BlockModelRotation>) -> BlockOcclusion {
+        if matches!(self, Self::Block(_)) {
+            BlockOcclusion::filled()
+        } else {
+            BlockOcclusion::empty()
         }
     }
 }

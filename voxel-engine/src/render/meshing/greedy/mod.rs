@@ -18,6 +18,7 @@ use crate::{
         access::ChunkAccess,
         chunk::Chunk,
         chunk_ref::ChunkVoxelOutput,
+        ivec_project_to_2d, ivec_project_to_3d,
         neighbors::{self, Neighbors},
         storage::error::OutOfBounds,
     },
@@ -30,24 +31,6 @@ pub mod algorithm;
 pub mod error;
 pub mod greedy_mesh;
 pub mod material;
-
-#[inline]
-pub fn ivec_project_to_3d(pos: IVec2, face: Face, mag: i32) -> IVec3 {
-    match face.axis() {
-        Axis3D::X => ivec3(mag, pos.y, pos.x),
-        Axis3D::Y => ivec3(pos.x, mag, pos.y),
-        Axis3D::Z => ivec3(pos.x, pos.y, mag),
-    }
-}
-
-#[inline]
-pub fn ivec_project_to_2d(pos: IVec3, face: Face) -> IVec2 {
-    match face.axis() {
-        Axis3D::X => ivec2(pos.z, pos.y),
-        Axis3D::Y => ivec2(pos.x, pos.z),
-        Axis3D::Z => ivec2(pos.x, pos.y),
-    }
-}
 
 #[derive(Clone)]
 pub struct ChunkQuadSlice<'a, C: ChunkAccess, Nb: ChunkAccess> {

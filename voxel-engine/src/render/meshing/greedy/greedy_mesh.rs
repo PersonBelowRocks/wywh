@@ -109,7 +109,7 @@ impl<'a, 'b, A: ChunkAccess> VoxelChunkSlice<'a, 'b, A> {
 
         Ok(variant
             .model
-            .and_then(|vm| vm.as_block_model())
+            .and_then(|vm| vm.into_block_model())
             .map(|bm| bm.submodel(rotation.front()).get_texture(self.face))
             .map(|mut tex| {
                 tex.rotation += if self.face.is_vertical() {

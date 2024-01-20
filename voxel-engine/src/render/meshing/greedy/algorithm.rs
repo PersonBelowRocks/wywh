@@ -1,4 +1,7 @@
+use bevy::math::ivec2;
+use bevy::math::ivec3;
 use bevy::math::vec2;
+use bevy::math::Vec2;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::default;
 use bevy::prelude::Color;
@@ -10,12 +13,18 @@ use bevy::prelude::StandardMaterial;
 use crate::data::registries::texture::TextureRegistry;
 use crate::data::registries::variant::VariantRegistry;
 use crate::data::registries::Registries;
+use crate::data::registries::Registry;
 use crate::data::tile::Face;
 
+use crate::data::voxel::VoxelModel;
+use crate::render::error::MesherResult;
 use crate::render::occlusion::ChunkOcclusionMap;
+use crate::render::quad::isometric::PositionedQuad;
 use crate::render::quad::Quad;
+use crate::topo::access::ChunkAccess;
 use crate::topo::access::ChunkBounds;
 use crate::topo::access::ReadAccess;
+use crate::topo::access::WriteAccess;
 use crate::topo::chunk::Chunk;
 use crate::topo::chunk_ref::ChunkVoxelOutput;
 
@@ -26,10 +35,14 @@ use crate::render::mesh_builder::Mesher;
 use crate::render::mesh_builder::MesherOutput;
 use crate::render::quad::MeshableQuad;
 use crate::render::quad::QuadTextureData;
+use crate::topo::ivec_project_to_3d;
+use crate::topo::neighbors::Neighbors;
 
+use super::error::CqsError;
 use super::greedy_mesh::ChunkSliceMask;
 use super::greedy_mesh::VoxelChunkSlice;
 use super::material::GreedyMeshMaterial;
+use super::ChunkQuadSlice;
 
 #[derive(Clone)]
 pub struct SimplePbrMesher {
@@ -51,13 +64,10 @@ impl SimplePbrMesher {
 impl Mesher for SimplePbrMesher {
     type Material = StandardMaterial;
 
-    fn build<Acc>(
-        &self,
-        _access: &Acc,
-        _cx: Context,
-    ) -> Result<MesherOutput, MesherError<Acc::ReadErr>>
+    fn build<A, Nb>(&self, _access: A, _cx: Context<Nb>) -> MesherResult<A::ReadErr, Nb::ReadErr>
     where
-        Acc: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds,
+        A: ChunkAccess,
+        Nb: ChunkAccess,
     {
         todo!()
     }
@@ -98,76 +108,91 @@ impl GreedyMesher {
         }
     }
 
-    fn calculate_slice_quads<A: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds>(
+    fn calculate_occlusion<A, Nb>(
         &self,
-        slice: &VoxelChunkSlice<A>,
-        buffer: &mut Vec<MeshableQuad>,
-    ) -> Result<(), MesherError<A::ReadErr>> {
-        let mut mask = ChunkSliceMask::default();
+        access: &A,
+        neighbors: &Neighbors<Nb>,
+    ) -> Result<ChunkOcclusionMap, MesherError<A::ReadErr, Nb::ReadErr>>
+    where
+        A: ChunkAccess,
+        Nb: ChunkAccess,
+    {
+        let mut occlusion = ChunkOcclusionMap::new();
+        let varreg = self.registries.get_registry::<VariantRegistry>().unwrap();
 
-        for k in 0..Chunk::SIZE {
-            for j in 0..Chunk::SIZE {
-                let pos = IVec2::new(k, j);
-                if !slice.is_meshable(pos).unwrap() || mask.is_masked(pos).unwrap() {
-                    continue;
+        // occlusion for the actual chunk
+        for x in 0..Chunk::SIZE {
+            for y in 0..Chunk::SIZE {
+                for z in 0..Chunk::SIZE {
+                    let ls_pos = ivec3(x, y, z);
+
+                    let cvo = access
+                        .get(ls_pos)
+                        .map_err(|e| MesherError::AccessError(e))?;
+
+                    let variant = varreg.get_by_id(cvo.variant);
+                    if let Some(model) = variant.model {
+                        let bo = model.occlusion(cvo.rotation);
+                        occlusion.set(ls_pos, bo).map_err(MesherError::custom)?;
+                    }
                 }
-
-                let Some(tex) = slice.get_texture(pos)? else {
-                    continue;
-                };
-
-                let quad = Quad::from_points(pos.as_vec2(), pos.as_vec2() + vec2(1.0, 1.0));
-
-                let quad_end = pos;
-
-                // let widened = quad.widen_until(1.0, Chunk::SIZE as u32, |n| {
-                //     let candidate_pos = ivec2(pos.x + n as i32, pos.y);
-                //     if !slice.is_meshable(candidate_pos).unwrap()
-                //         || mask.is_masked(candidate_pos).unwrap()
-                //         || slice.get_texture(candidate_pos).unwrap() != Some(tex)
-                //     {
-                //         quad_end.x = (pos.x + n as i32) - 1;
-                //         true
-                //     } else {
-                //         false
-                //     }
-                // });
-
-                // let heightened = widened.heighten_until(1.0, Chunk::SIZE as u32, |n| {
-                //     let mut abort = false;
-                //     for q_x in pos.x..=quad_end.x {
-                //         let candidate_pos = ivec2(q_x, pos.y + n as i32);
-                //         if !slice.is_meshable(candidate_pos).unwrap()
-                //             || mask.is_masked(candidate_pos).unwrap()
-                //             || slice.get_texture(candidate_pos).unwrap() != Some(tex)
-                //         {
-                //             quad_end.y = (pos.y + n as i32) - 1;
-                //             abort = true;
-                //             break;
-                //         }
-                //     }
-                //     abort
-                // });
-
-                let heightened = quad;
-
-                mask.mask_region(pos, quad_end);
-
-                buffer.push(MeshableQuad {
-                    magnitude: slice.layer as _,
-                    face: slice.face,
-                    quad: heightened,
-                    quad_tex: QuadTextureData {
-                        texture: tex.texture,
-                        rotation: tex.rotation,
-                        flip_uv_x: matches!(slice.face, Face::South | Face::East | Face::Bottom),
-                        flip_uv_y: false,
-                    },
-                })
             }
         }
 
-        Ok(())
+        // occlusion for the neighbor chunks
+        for face in Face::FACES {
+            for x in 0..Chunk::SIZE {
+                for y in 0..Chunk::SIZE {
+                    let pos_on_face = ivec2(x, y);
+
+                    let cvo = neighbors
+                        .get(face, pos_on_face)
+                        .map_err(MesherError::NeighborAccessError)?;
+
+                    let variant = varreg.get_by_id(cvo.variant);
+                    if let Some(model) = variant.model {
+                        let ls_pos = {
+                            let mut mag = face.axis_direction();
+                            if mag > 0 {
+                                mag = Chunk::SIZE;
+                            }
+                
+                            ivec_project_to_3d(pos_on_face, face, mag)
+                        };
+
+                        let bo = model.occlusion(cvo.rotation);
+                        occlusion.set(ls_pos, bo).map_err(MesherError::custom)?;
+                    }
+                }
+            }
+        }
+
+        Ok(occlusion)
+    }
+
+    fn calculate_slice_quads<A, Nb>(
+        &self,
+        cqs: &ChunkQuadSlice<A, Nb>,
+        buffer: &mut Vec<MeshableQuad>,
+    ) -> Result<(), CqsError<A::ReadErr, Nb::ReadErr>>
+    where
+        A: ChunkAccess,
+        Nb: ChunkAccess,
+    {
+        let mut mask = ChunkSliceMask::default();
+
+        for x in 0..Chunk::SIZE {
+            for y in 0..Chunk::SIZE {
+                let face_pos = ivec2(x, y);
+                let Some(dataquad) = cqs.get_quad(face_pos)? else {
+                    continue;
+                };
+
+                let mut current = PositionedQuad::new(face_pos.as_vec2() + Vec2::splat(0.5), dataquad).unwrap();
+            }
+        }
+
+        todo!()
     }
 }
 
@@ -175,55 +200,12 @@ impl Mesher for GreedyMesher {
     // TODO: greedy meshing mat
     type Material = ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>;
 
-    fn build<Acc>(
-        &self,
-        access: &Acc,
-        cx: Context,
-    ) -> Result<MesherOutput, MesherError<Acc::ReadErr>>
+    fn build<A, Nb>(&self, access: A, cx: Context<Nb>) -> MesherResult<A::ReadErr, Nb::ReadErr>
     where
-        Acc: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds,
+        A: ChunkAccess,
+        Nb: ChunkAccess,
     {
-        // we separate the meshing process into 3 sweeps across each of the 3D axes.
-        // this lets us convert the 3D problem into a 2D one, by building planes
-        // of geometry at a time instead of the whole cubic volume at once.
-
-        // TODO: this is horribly inefficient when it comes to allocations, we should preserve a vec with a high capacity between meshing passes
-        let mut quads = Vec::<MeshableQuad>::new();
-        let variants = self.registries.get_registry::<VariantRegistry>().unwrap();
-
-        for face in [Face::Top, Face::Bottom] {
-            for y in 0..Chunk::SIZE {
-                let slice = VoxelChunkSlice::new(face, y, access, cx.adjacency, &variants);
-                self.calculate_slice_quads(&slice, &mut quads)?;
-            }
-        }
-
-        for face in [Face::North, Face::South] {
-            for x in 0..Chunk::SIZE {
-                let slice = VoxelChunkSlice::new(face, x, access, cx.adjacency, &variants);
-                self.calculate_slice_quads(&slice, &mut quads)?;
-            }
-        }
-
-        for face in [Face::East, Face::West] {
-            for z in 0..Chunk::SIZE {
-                let slice = VoxelChunkSlice::new(face, z, access, cx.adjacency, &variants);
-                self.calculate_slice_quads(&slice, &mut quads)?;
-            }
-        }
-
-        let mut attrs = ChunkMeshAttributes::default();
-        let mut current_index = 0;
-
-        for quad in quads.into_iter() {
-            quad.add_to_mesh(current_index, &mut attrs);
-            current_index += 4;
-        }
-
-        Ok(MesherOutput {
-            mesh: attrs.to_mesh(),
-            occlusion: ChunkOcclusionMap::new(),
-        })
+        todo!()
     }
 
     fn material(&self) -> Self::Material {

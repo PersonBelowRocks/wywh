@@ -2,18 +2,18 @@ use bevy::math::{ivec3, IVec2, IVec3};
 
 use crate::{
     data::tile::Face,
-    render::meshing::greedy::ivec_project_to_3d,
     topo::{
         access::{ChunkBounds, ReadAccess},
         bounding_box::BoundingBox,
         chunk::Chunk,
         chunk_ref::ChunkVoxelOutput,
+        ivec_project_to_3d,
         storage::error::OutOfBounds,
     },
     util::{self, ivec3_to_1d, ConversionError},
 };
 
-use super::{access::ChunkAccess, error::NeighborsAccessError};
+use super::{access::ChunkAccess, error::NeighborAccessError};
 
 fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
     ivec3(
@@ -54,7 +54,7 @@ pub fn is_in_bounds_3d(pos: IVec3) -> bool {
     pos.cmpge(min).all() && pos.cmplt(max).all() && localspace_to_chunk_pos(pos) != IVec3::ZERO
 }
 
-pub type NbResult<T, E> = Result<T, NeighborsAccessError<E>>;
+pub type NbResult<T, E> = Result<T, NeighborAccessError<E>>;
 
 impl<C: ChunkAccess> Neighbors<C> {
     /// `pos` is in localspace
@@ -63,15 +63,15 @@ impl<C: ChunkAccess> Neighbors<C> {
 
         if chk_pos == IVec3::ZERO {
             // tried to access center chunk (aka. the chunk for which we represent the neighbors)
-            return Err(NeighborsAccessError::OutOfBounds);
+            return Err(NeighborAccessError::OutOfBounds);
         }
 
         let chk_index =
-            ivec3_to_1d(chk_pos + IVec3::ONE).map_err(|_| NeighborsAccessError::OutOfBounds)?;
+            ivec3_to_1d(chk_pos + IVec3::ONE).map_err(|_| NeighborAccessError::OutOfBounds)?;
         let chk = self
             .chunks
             .get(chk_index)
-            .ok_or(NeighborsAccessError::OutOfBounds)?;
+            .ok_or(NeighborAccessError::OutOfBounds)?;
 
         match chk {
             Some(access) => {
@@ -85,7 +85,7 @@ impl<C: ChunkAccess> Neighbors<C> {
     /// `pos` in facespace
     pub fn get(&self, face: Face, pos: IVec2) -> NbResult<C::ReadType, C::ReadErr> {
         if !is_in_bounds(pos) {
-            return Err(NeighborsAccessError::OutOfBounds);
+            return Err(NeighborAccessError::OutOfBounds);
         }
 
         let pos_3d = {
@@ -103,7 +103,7 @@ impl<C: ChunkAccess> Neighbors<C> {
     /// `pos` in localspace
     pub fn get_3d(&self, pos: IVec3) -> NbResult<C::ReadType, C::ReadErr> {
         if !is_in_bounds_3d(pos) {
-            return Err(NeighborsAccessError::OutOfBounds);
+            return Err(NeighborAccessError::OutOfBounds);
         }
 
         self.internal_get(pos)
