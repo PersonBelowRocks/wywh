@@ -156,7 +156,7 @@ impl GreedyMesher {
                             if mag > 0 {
                                 mag = Chunk::SIZE;
                             }
-                
+
                             ivec_project_to_3d(pos_on_face, face, mag)
                         };
 
@@ -188,7 +188,8 @@ impl GreedyMesher {
                     continue;
                 };
 
-                let mut current = PositionedQuad::new(face_pos.as_vec2() + Vec2::splat(0.5), dataquad).unwrap();
+                let mut current =
+                    PositionedQuad::new(face_pos.as_vec2() + Vec2::splat(0.5), dataquad).unwrap();
             }
         }
 
