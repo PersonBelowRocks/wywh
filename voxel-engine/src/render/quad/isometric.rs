@@ -85,11 +85,11 @@ pub struct PositionedQuad {
 
 impl PositionedQuad {
     #[inline]
-    pub fn new(pos: IVec2, dataquad: DataQuad) -> Result<Self, FloatIsNan> {
-        Ok(Self {
+    pub fn new(pos: IVec2, dataquad: DataQuad) -> Self {
+        Self {
             pos,
             dataquad,
-        })
+        }
     }
 
     #[inline]
@@ -253,8 +253,7 @@ mod tests {
                 Quad::ONE,
                 FaceTexture::new(RegistryId::new(0)),
             ),
-        )
-        .unwrap();
+        );
 
         assert_eq!(ivec2(0, 0), quad.min());
         assert_eq!(ivec2(1, 1), quad.max());
