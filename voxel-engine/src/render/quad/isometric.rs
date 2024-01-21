@@ -1,9 +1,8 @@
-use bevy::math::{vec2, vec3, Vec2, Vec3};
+use bevy::math::{ivec2, vec2, vec3, IVec2, IVec3, Vec2, Vec3};
 use ordered_float::{FloatIsNan, NotNan};
 
 use crate::{
-    data::tile::Face,
-    util::{notnan::NotNanVec2, Axis3D},
+    data::tile::Face, topo::ivec_project_to_3d, util::{notnan::NotNanVec2, Axis3D}
 };
 
 use super::{
@@ -14,28 +13,28 @@ use super::{
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QuadIsometry {
     pub face: Face,
-    magnitude: NotNan<f32>,
-    pos: NotNanVec2,
+    magnitude: i32,
+    pos: IVec2,
 }
 
 impl QuadIsometry {
     #[inline]
-    pub fn new(pos: Vec2, magnitude: f32, face: Face) -> Result<Self, FloatIsNan> {
-        Ok(Self {
+    pub fn new(pos: IVec2, magnitude: i32, face: Face) -> Self {
+        Self {
             face,
-            magnitude: NotNan::new(magnitude)?,
-            pos: pos.try_into()?,
-        })
+            magnitude,
+            pos,
+        }
     }
 
     #[inline]
-    pub fn pos_3d(self) -> Vec3 {
-        project_to_3d(self.pos.vec(), self.face, self.magnitude.into())
+    pub fn pos_3d(self) -> IVec3 {
+        ivec_project_to_3d(self.pos, self.face, self.magnitude)
     }
 
     #[inline]
-    pub fn pos_2d(self) -> Vec2 {
-        self.pos.vec()
+    pub fn pos_2d(self) -> IVec2 {
+        self.pos
     }
 }
 
@@ -80,76 +79,66 @@ impl QuadVertex {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PositionedQuad {
-    pos: NotNanVec2,
+    pos: IVec2,
     dataquad: DataQuad,
 }
 
 impl PositionedQuad {
     #[inline]
-    pub fn new(pos: Vec2, dataquad: DataQuad) -> Result<Self, FloatIsNan> {
+    pub fn new(pos: IVec2, dataquad: DataQuad) -> Result<Self, FloatIsNan> {
         Ok(Self {
-            pos: pos.try_into()?,
+            pos,
             dataquad,
         })
     }
 
     #[inline]
-    pub fn min(&self) -> Vec2 {
-        self.pos() - (self.dataquad.quad.dims() / 2.0)
+    pub fn min(&self) -> IVec2 {
+        self.pos()
     }
 
     #[inline]
-    pub fn max(&self) -> Vec2 {
-        self.pos() + (self.dataquad.quad.dims() / 2.0)
+    pub fn max(&self) -> IVec2 {
+        self.pos() + self.dataquad.quad.dims()
     }
 
     #[inline]
-    pub fn widen(&mut self, by: f32) -> Result<(), QuadError> {
-        if by < 0.0 {
+    pub fn widen(&mut self, by: i32) -> Result<(), QuadError> {
+        if by < 0 {
             // TODO: negative numbers in resizing functions should expand in the other direction, rather than shrink the quad
             todo!()
         }
 
-        let widened = self.dataquad.quad.widened(by)?;
-        let delta = widened.dims() - self.dataquad.quad.dims();
-
-        self.dataquad.quad = widened;
-
-        self.pos = (self.pos() + delta / 2.0).try_into()?;
+        self.dataquad.quad = self.dataquad.quad.widened(by)?;
         Ok(())
     }
 
     #[inline]
-    pub fn heighten(&mut self, by: f32) -> Result<(), QuadError> {
-        if by < 0.0 {
+    pub fn heighten(&mut self, by: i32) -> Result<(), QuadError> {
+        if by < 0 {
             // TODO: negative numbers in resizing functions should expand in the other direction, rather than shrink the quad
             todo!()
         }
 
-        let heightened = self.dataquad.quad.heightened(by)?;
-        let delta = heightened.dims() - self.dataquad.quad.dims();
-
-        self.dataquad.quad = heightened;
-
-        self.pos = (self.pos() + delta / 2.0).try_into()?;
+        self.dataquad.quad = self.dataquad.quad.heightened(by)?;
         Ok(())
     }
 
     #[inline]
-    pub fn pos(&self) -> Vec2 {
-        self.pos.vec()
+    pub fn pos(&self) -> IVec2 {
+        self.pos
     }
 
-    pub fn width(&self) -> f32 {
+    pub fn width(&self) -> i32 {
         self.dataquad.quad.x()
     }
 
-    pub fn height(&self) -> f32 {
+    pub fn height(&self) -> i32 {
         self.dataquad.quad.y()
     }
 
     #[inline]
-    pub fn vertex_pos(&self, vertex: QuadVertex) -> Vec2 {
+    pub fn vertex_pos(&self, vertex: QuadVertex) -> IVec2 {
         /*
             0---1
             |   |
@@ -160,15 +149,15 @@ impl PositionedQuad {
         let max = self.max();
 
         match vertex {
-            QuadVertex::Zero => vec2(min.x, max.y),
+            QuadVertex::Zero => ivec2(min.x, max.y),
             QuadVertex::One => max,
             QuadVertex::Two => min,
-            QuadVertex::Three => vec2(max.x, min.y),
+            QuadVertex::Three => ivec2(max.x, min.y),
         }
     }
 
     #[inline]
-    pub fn get_vertex(&self, vertex: QuadVertex) -> (Vec2, &QVertexData) {
+    pub fn get_vertex(&self, vertex: QuadVertex) -> (IVec2, &QVertexData) {
         let pos = self.vertex_pos(vertex);
         let data = self.dataquad.data.get(vertex);
 
@@ -176,7 +165,7 @@ impl PositionedQuad {
     }
 
     #[inline]
-    pub fn get_vertex_mut(&mut self, vertex: QuadVertex) -> (Vec2, &mut QVertexData) {
+    pub fn get_vertex_mut(&mut self, vertex: QuadVertex) -> (IVec2, &mut QVertexData) {
         let pos = self.vertex_pos(vertex);
         let data = self.dataquad.data.get_mut(vertex);
 
@@ -209,9 +198,9 @@ pub struct IsometrizedQuad {
 }
 
 impl IsometrizedQuad {
-    pub fn vertex_position_3d(&self, vertex: QuadVertex) -> Vec3 {
+    pub fn vertex_position_3d(&self, vertex: QuadVertex) -> IVec3 {
         let pos_2d = self.quad.vertex_pos(vertex);
-        project_to_3d(pos_2d, self.isometry.face, self.isometry.magnitude.into())
+        ivec_project_to_3d(pos_2d, self.isometry.face, self.isometry.magnitude)
     }
 
     pub fn data(&self) -> &[QVertexData; 4] {
@@ -228,7 +217,7 @@ impl IsometrizedQuad {
     }
 
     #[inline]
-    pub fn get_vertex(&self, vertex: QuadVertex) -> (Vec3, &QVertexData) {
+    pub fn get_vertex(&self, vertex: QuadVertex) -> (IVec3, &QVertexData) {
         (
             self.vertex_position_3d(vertex),
             self.quad.dataquad.data.get(vertex),
@@ -259,28 +248,28 @@ mod tests {
     #[test]
     fn test_resizing() {
         let mut quad = PositionedQuad::new(
-            vec2(0.5, 0.5),
+            ivec2(0, 0),
             DataQuad::new(
-                Quad::new(vec2(1.0, 1.0)).unwrap(),
+                Quad::ONE,
                 FaceTexture::new(RegistryId::new(0)),
             ),
         )
         .unwrap();
 
-        assert_eq!(vec2(0.0, 0.0), quad.min());
-        assert_eq!(vec2(1.0, 1.0), quad.max());
-        assert_eq!(vec2(0.5, 0.5), quad.pos());
+        assert_eq!(ivec2(0, 0), quad.min());
+        assert_eq!(ivec2(1, 1), quad.max());
+        assert_eq!(ivec2(0, 0), quad.pos());
 
-        quad.widen(1.0).unwrap();
+        quad.widen(1).unwrap();
 
-        assert_eq!(vec2(0.0, 0.0), quad.min());
-        assert_eq!(vec2(2.0, 1.0), quad.max());
-        assert_eq!(vec2(1.0, 0.5), quad.pos());
+        assert_eq!(ivec2(0, 0), quad.min());
+        assert_eq!(ivec2(2, 1), quad.max());
+        assert_eq!(ivec2(0, 0), quad.pos());
 
-        quad.heighten(2.0).unwrap();
+        quad.heighten(2).unwrap();
 
-        assert_eq!(vec2(0.0, 0.0), quad.min());
-        assert_eq!(vec2(2.0, 3.0), quad.max());
-        assert_eq!(vec2(1.0, 1.5), quad.pos());
+        assert_eq!(ivec2(0, 0), quad.min());
+        assert_eq!(ivec2(2, 3), quad.max());
+        assert_eq!(ivec2(0, 0), quad.pos());
     }
 }

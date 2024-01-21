@@ -1,12 +1,9 @@
 use bevy::math::ivec2;
 use bevy::math::ivec3;
-use bevy::math::vec2;
-use bevy::math::Vec2;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::default;
 use bevy::prelude::Color;
 
-use bevy::prelude::IVec2;
 
 use bevy::prelude::StandardMaterial;
 
@@ -16,31 +13,21 @@ use crate::data::registries::Registries;
 use crate::data::registries::Registry;
 use crate::data::tile::Face;
 
-use crate::data::voxel::VoxelModel;
 use crate::render::error::MesherResult;
 use crate::render::occlusion::ChunkOcclusionMap;
-use crate::render::quad::isometric::PositionedQuad;
-use crate::render::quad::Quad;
 use crate::topo::access::ChunkAccess;
-use crate::topo::access::ChunkBounds;
-use crate::topo::access::ReadAccess;
 use crate::topo::access::WriteAccess;
 use crate::topo::chunk::Chunk;
-use crate::topo::chunk_ref::ChunkVoxelOutput;
 
 use crate::render::error::MesherError;
-use crate::render::mesh_builder::ChunkMeshAttributes;
 use crate::render::mesh_builder::Context;
 use crate::render::mesh_builder::Mesher;
-use crate::render::mesh_builder::MesherOutput;
 use crate::render::quad::MeshableQuad;
-use crate::render::quad::QuadTextureData;
 use crate::topo::ivec_project_to_3d;
 use crate::topo::neighbors::Neighbors;
 
 use super::error::CqsError;
 use super::greedy_mesh::ChunkSliceMask;
-use super::greedy_mesh::VoxelChunkSlice;
 use super::material::GreedyMeshMaterial;
 use super::ChunkQuadSlice;
 
@@ -188,8 +175,7 @@ impl GreedyMesher {
                     continue;
                 };
 
-                let mut current =
-                    PositionedQuad::new(face_pos.as_vec2() + Vec2::splat(0.5), dataquad).unwrap();
+                let mut current = todo!();
             }
         }
 

@@ -1,58 +1,72 @@
-use bevy::math::Vec2;
+use std::num::NonZeroU32;
 
-use crate::util::notnan::NotNanVec2;
+use bevy::math::{ivec2, IVec2, UVec2};
 
 use super::error::QuadError;
 
 #[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
 pub struct Quad {
-    dims: NotNanVec2,
+    x: NonZeroU32,
+    y: NonZeroU32
 }
 
 impl Quad {
     pub const ONE: Self = Self {
-        dims: NotNanVec2::ONE,
+        // SAFETY: the u32 literal is not zero
+        x: unsafe { NonZeroU32::new_unchecked(1) },
+        y: unsafe { NonZeroU32::new_unchecked(1) },
     };
 
     #[inline]
-    pub fn new(dims: Vec2) -> Result<Self, QuadError> {
-        if dims.x <= 0.0 || dims.y <= 0.0 {
+    pub fn new(dims: UVec2) -> Result<Self, QuadError> {
+        if dims.x <= 0 || dims.y <= 0 {
             return Err(QuadError::InvalidDimensions);
         }
 
         Ok(Self {
-            dims: dims.try_into()?,
+            x: dims.x.try_into().unwrap(),
+            y: dims.y.try_into().unwrap(),
         })
     }
 
     #[inline]
-    pub fn widened(self, by: f32) -> Result<Self, QuadError> {
-        let mut v = self.dims.vec();
-        v.x += by;
+    pub fn widened(self, by: i32) -> Result<Self, QuadError> {
+        let new_x = u32::from(self.x) as i32 + by;
+        if new_x <= 0 {
+            return Err(QuadError::InvalidDimensions)
+        }
 
-        Self::new(v.max(Vec2::ZERO))
+        Ok(Self {
+            x: NonZeroU32::new(new_x as u32).unwrap(),
+            y: self.y
+        })
     }
 
     #[inline]
-    pub fn heightened(self, by: f32) -> Result<Self, QuadError> {
-        let mut v = self.dims.vec();
-        v.y += by;
+    pub fn heightened(self, by: i32) -> Result<Self, QuadError> {
+        let new_y = u32::from(self.y) as i32 + by;
+        if new_y <= 0 {
+            return Err(QuadError::InvalidDimensions)
+        }
 
-        Self::new(v.max(Vec2::ZERO))
+        Ok(Self {
+            x: self.x,
+            y: NonZeroU32::new(new_y as u32).unwrap(),
+        })
     }
 
     #[inline]
-    pub fn dims(self) -> Vec2 {
-        self.dims.vec()
+    pub fn dims(self) -> IVec2 {
+        ivec2(self.x(), self.y())
     }
 
     #[inline]
-    pub fn x(self) -> f32 {
-        self.dims().x
+    pub fn x(self) -> i32 {
+        u32::from(self.x) as i32
     }
 
     #[inline]
-    pub fn y(self) -> f32 {
-        self.dims().y
+    pub fn y(self) -> i32 {
+        u32::from(self.y) as i32
     }
 }
