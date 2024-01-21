@@ -128,8 +128,8 @@ impl GreedyMesher {
 
         // occlusion for the neighbor chunks
         for face in Face::FACES {
-            for x in 0..Chunk::SIZE {
-                for y in 0..Chunk::SIZE {
+            for x in -1..=Chunk::SIZE {
+                for y in -1..=Chunk::SIZE {
                     let pos_on_face = ivec2(x, y);
 
                     let cvo = neighbors
