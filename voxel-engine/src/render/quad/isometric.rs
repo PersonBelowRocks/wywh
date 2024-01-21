@@ -2,7 +2,9 @@ use bevy::math::{ivec2, vec2, vec3, IVec2, IVec3, Vec2, Vec3};
 use ordered_float::{FloatIsNan, NotNan};
 
 use crate::{
-    data::tile::Face, topo::ivec_project_to_3d, util::{notnan::NotNanVec2, Axis3D}
+    data::tile::Face,
+    topo::ivec_project_to_3d,
+    util::{notnan::NotNanVec2, Axis3D},
 };
 
 use super::{
@@ -79,17 +81,14 @@ impl QuadVertex {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PositionedQuad {
-    pos: IVec2,
-    dataquad: DataQuad,
+    pub pos: IVec2,
+    pub dataquad: DataQuad,
 }
 
 impl PositionedQuad {
     #[inline]
     pub fn new(pos: IVec2, dataquad: DataQuad) -> Self {
-        Self {
-            pos,
-            dataquad,
-        }
+        Self { pos, dataquad }
     }
 
     #[inline]
@@ -249,10 +248,7 @@ mod tests {
     fn test_resizing() {
         let mut quad = PositionedQuad::new(
             ivec2(0, 0),
-            DataQuad::new(
-                Quad::ONE,
-                FaceTexture::new(RegistryId::new(0)),
-            ),
+            DataQuad::new(Quad::ONE, FaceTexture::new(RegistryId::new(0))),
         );
 
         assert_eq!(ivec2(0, 0), quad.min());

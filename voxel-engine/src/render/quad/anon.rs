@@ -7,7 +7,7 @@ use super::error::QuadError;
 #[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
 pub struct Quad {
     x: NonZeroU32,
-    y: NonZeroU32
+    y: NonZeroU32,
 }
 
 impl Quad {
@@ -33,12 +33,12 @@ impl Quad {
     pub fn widened(self, by: i32) -> Result<Self, QuadError> {
         let new_x = u32::from(self.x) as i32 + by;
         if new_x <= 0 {
-            return Err(QuadError::InvalidDimensions)
+            return Err(QuadError::InvalidDimensions);
         }
 
         Ok(Self {
             x: NonZeroU32::new(new_x as u32).unwrap(),
-            y: self.y
+            y: self.y,
         })
     }
 
@@ -46,7 +46,7 @@ impl Quad {
     pub fn heightened(self, by: i32) -> Result<Self, QuadError> {
         let new_y = u32::from(self.y) as i32 + by;
         if new_y <= 0 {
-            return Err(QuadError::InvalidDimensions)
+            return Err(QuadError::InvalidDimensions);
         }
 
         Ok(Self {

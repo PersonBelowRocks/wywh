@@ -4,7 +4,6 @@ use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::default;
 use bevy::prelude::Color;
 
-
 use bevy::prelude::StandardMaterial;
 
 use crate::data::registries::texture::TextureRegistry;
@@ -15,6 +14,7 @@ use crate::data::tile::Face;
 
 use crate::render::error::MesherResult;
 use crate::render::occlusion::ChunkOcclusionMap;
+use crate::render::quad::isometric::PositionedQuad;
 use crate::topo::access::ChunkAccess;
 use crate::topo::access::WriteAccess;
 use crate::topo::chunk::Chunk;
@@ -170,12 +170,28 @@ impl GreedyMesher {
 
         for x in 0..Chunk::SIZE {
             for y in 0..Chunk::SIZE {
-                let face_pos = ivec2(x, y);
-                let Some(dataquad) = cqs.get_quad(face_pos)? else {
+                let fpos = ivec2(x, y);
+                let Some(dataquad) = cqs.get_quad(fpos)? else {
                     continue;
                 };
 
-                let mut current = todo!();
+                let mut current = PositionedQuad::new(fpos, dataquad);
+
+                // widen
+                let mut widen_by = 0;
+                for dx in 1..(Chunk::SIZE - x) {
+                    match cqs.get_quad(fpos + ivec2(dx, 0))? {
+                        Some(merge_candidate) if merge_candidate == current.dataquad => {
+                            widen_by = dx
+                        }
+                        _ => break,
+                    }
+                }
+
+                current.widen(widen_by).unwrap();
+
+                // heighten
+                todo!();
             }
         }
 
