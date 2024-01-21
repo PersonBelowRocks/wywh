@@ -14,6 +14,7 @@ use crate::data::tile::Face;
 
 use crate::render::error::MesherResult;
 use crate::render::occlusion::ChunkOcclusionMap;
+use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
 use crate::topo::access::ChunkAccess;
 use crate::topo::access::WriteAccess;
@@ -160,7 +161,7 @@ impl GreedyMesher {
     fn calculate_slice_quads<A, Nb>(
         &self,
         cqs: &ChunkQuadSlice<A, Nb>,
-        buffer: &mut Vec<MeshableQuad>,
+        buffer: &mut Vec<IsometrizedQuad>,
     ) -> Result<(), CqsError<A::ReadErr, Nb::ReadErr>>
     where
         A: ChunkAccess,
@@ -171,6 +172,10 @@ impl GreedyMesher {
         for x in 0..Chunk::SIZE {
             for y in 0..Chunk::SIZE {
                 let fpos = ivec2(x, y);
+                if mask.is_masked(fpos).unwrap() {
+                    continue;
+                }
+
                 let Some(dataquad) = cqs.get_quad(fpos)? else {
                     continue;
                 };
@@ -191,11 +196,30 @@ impl GreedyMesher {
                 current.widen(widen_by).unwrap();
 
                 // heighten
-                todo!();
+                let mut heighten_by = 0;
+                'heighten: for dy in 1..(Chunk::SIZE - y) {
+                    for hx in (current.min().x)..(current.max().x) {
+                        match cqs.get_quad(fpos + ivec2(hx, dy))? {
+                            Some(merge_candidate) if merge_candidate == current.dataquad => {
+                                heighten_by = dy
+                            }
+                            _ => break 'heighten,
+                        }
+                    }
+                }
+
+                current.heighten(heighten_by).unwrap();
+
+                // mask_region will return false if any of the positions provided are outside of the
+                // chunk bounds, so we do a little debug mode sanity check here to make sure thats
+                // not the case, and catch the error early
+                debug_assert!(mask.mask_region(current.min(), current.max()));
+                let isoquad = cqs.isometrize(current);
+                buffer.push(isoquad);
             }
         }
 
-        todo!()
+        Ok(())
     }
 }
 

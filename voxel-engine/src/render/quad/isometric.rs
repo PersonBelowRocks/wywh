@@ -197,6 +197,10 @@ pub struct IsometrizedQuad {
 }
 
 impl IsometrizedQuad {
+    pub fn new(isometry: QuadIsometry, quad: PositionedQuad) -> Self {
+        Self { isometry, quad }
+    }
+
     pub fn vertex_position_3d(&self, vertex: QuadVertex) -> IVec3 {
         let pos_2d = self.quad.vertex_pos(vertex);
         ivec_project_to_3d(pos_2d, self.isometry.face, self.isometry.magnitude)

@@ -12,7 +12,11 @@ use crate::{
     },
     render::{
         adjacency::AdjacentTransparency,
-        quad::{anon::Quad, data::DataQuad, isometric::QuadVertex},
+        quad::{
+            anon::Quad,
+            data::DataQuad,
+            isometric::{IsometrizedQuad, PositionedQuad, QuadIsometry, QuadVertex},
+        },
     },
     topo::{
         access::ChunkAccess,
@@ -87,6 +91,11 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
 
     pub fn contains_3d(pos: IVec3) -> bool {
         pos.cmplt(Chunk::VEC).all() && pos.cmpge(IVec3::ZERO).all()
+    }
+
+    pub fn isometrize(&self, quad: PositionedQuad) -> IsometrizedQuad {
+        let iso = QuadIsometry::new(quad.pos(), self.mag, self.face);
+        IsometrizedQuad::new(iso, quad)
     }
 
     /// Transforms a position from facespace to localspace
