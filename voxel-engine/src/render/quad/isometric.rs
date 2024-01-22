@@ -98,7 +98,7 @@ impl PositionedQuad {
 
     #[inline]
     pub fn max(&self) -> IVec2 {
-        self.pos() + self.dataquad.quad.dims()
+        self.pos() + (self.dataquad.quad.dims() - IVec2::ONE)
     }
 
     #[inline]
@@ -256,19 +256,19 @@ mod tests {
         );
 
         assert_eq!(ivec2(0, 0), quad.min());
-        assert_eq!(ivec2(1, 1), quad.max());
+        assert_eq!(ivec2(0, 0), quad.max());
         assert_eq!(ivec2(0, 0), quad.pos());
 
         quad.widen(1).unwrap();
 
         assert_eq!(ivec2(0, 0), quad.min());
-        assert_eq!(ivec2(2, 1), quad.max());
+        assert_eq!(ivec2(1, 0), quad.max());
         assert_eq!(ivec2(0, 0), quad.pos());
 
         quad.heighten(2).unwrap();
 
         assert_eq!(ivec2(0, 0), quad.min());
-        assert_eq!(ivec2(2, 3), quad.max());
+        assert_eq!(ivec2(1, 2), quad.max());
         assert_eq!(ivec2(0, 0), quad.pos());
     }
 }

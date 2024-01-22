@@ -41,8 +41,8 @@ pub struct ChunkQuadSlice<'a, C: ChunkAccess, Nb: ChunkAccess> {
     face: Face,
     mag: i32,
 
-    access: C,
-    neighbors: Neighbors<Nb>,
+    access: &'a C,
+    neighbors: &'a Neighbors<Nb>,
     registry: &'a RegistryRef<'a, VariantRegistry>,
 }
 
@@ -57,8 +57,8 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
     pub fn new(
         face: Face,
         magnitude: i32,
-        access: C,
-        neighbors: Neighbors<Nb>,
+        access: &'a C,
+        neighbors: &'a Neighbors<Nb>,
         registry: &'a RegistryRef<'a, VariantRegistry>,
     ) -> Result<Self, OutOfBounds> {
         if 0 > magnitude && magnitude > Chunk::SIZE {
@@ -176,7 +176,7 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use bevy::math::vec2;
     use parking_lot::{RwLock, RwLockReadGuard};
 
@@ -199,12 +199,12 @@ mod tests {
 
     use super::*;
 
-    struct TestAccess
+    pub struct TestAccess
     where
         Self: ChunkAccess,
     {
-        map: HashmapChunkStorage<ChunkVoxelOutput>,
-        default: ChunkVoxelOutput,
+        pub map: HashmapChunkStorage<ChunkVoxelOutput>,
+        pub default: ChunkVoxelOutput,
     }
 
     impl ChunkBounds for TestAccess {}
@@ -221,7 +221,7 @@ mod tests {
         }
     }
 
-    fn testing_registries() -> (VariantRegistry, TextureRegistry) {
+    pub fn testing_registries() -> (VariantRegistry, TextureRegistry) {
         let textures = {
             let mut loader = TestTextureRegistryLoader::new();
             loader.add(rpath("test1"), vec2(0.0, 0.0), None);
@@ -347,7 +347,7 @@ mod tests {
             default: void_cvo,
         };
 
-        let mut cqs = ChunkQuadSlice::new(Face::Bottom, 0, access, neighbors, &variants).unwrap();
+        let mut cqs = ChunkQuadSlice::new(Face::Bottom, 0, &access, &neighbors, &variants).unwrap();
 
         assert_eq!(None, cqs.get_quad(ivec2(4, 4)).unwrap());
 
