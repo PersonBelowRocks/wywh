@@ -21,7 +21,9 @@ use crate::{
 
 use super::{
     registries::{
-        error::TextureRegistryError, texture::TextureRegistry, variant::VariantRegistryLoader,
+        error::TextureRegistryError,
+        texture::{TexregFaces, TextureRegistry},
+        variant::VariantRegistryLoader,
         Registries,
     },
     tile::Transparency,
@@ -189,6 +191,7 @@ pub fn build_registries(world: &mut World) {
     faces.0 = Some(buffer);
 
     world.insert_resource(VoxelColorTextureAtlas(textures.color_texture().clone()));
+    world.insert_resource(TexregFaces(textures.face_texture_buffer()));
     world.insert_resource(VoxelNormalTextureAtlas(textures.normal_texture().clone()));
 
     let variant_folders = world.get_resource::<VariantFolders>().unwrap();

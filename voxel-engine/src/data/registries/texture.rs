@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use bevy::{
     asset::{AssetId, Assets, Handle},
+    ecs::system::Resource,
     log::info,
     math::Vec2,
     render::texture::Image,
@@ -171,6 +172,9 @@ impl TestTextureRegistryLoader {
         }
     }
 }
+
+#[derive(Clone, Resource)]
+pub struct TexregFaces(pub Vec<GpuFaceTexture>);
 
 pub struct TextureRegistry {
     map: IndexMap<ResourcePath, AtlasIdxBundle, ahash::RandomState>,

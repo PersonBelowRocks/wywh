@@ -91,7 +91,7 @@ impl FaceTexture {
     }
 }
 
-#[derive(Copy, Clone, Debug, ShaderType)]
+#[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct GpuFaceTexture {
     pub flags: u32,
     pub color_tex_pos: Vec2,
