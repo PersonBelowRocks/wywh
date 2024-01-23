@@ -248,7 +248,19 @@ impl Mesher for GreedyMesher {
         Nb: ChunkAccess,
     {
         let varreg = self.registries.get_registry::<VariantRegistry>().unwrap();
+
         let mut cqs = ChunkQuadSlice::new(Face::North, 0, &access, &cx.neighbors, &varreg).unwrap();
+        let mut buffer = Vec::<IsometrizedQuad>::new();
+
+        for face in Face::FACES {
+            for layer in 0..Chunk::SIZE {
+                cqs.reposition(face, layer).unwrap();
+
+                self.calculate_slice_quads(&cqs, &mut buffer)?;
+            }
+        }
+
+        let occlusion = self.calculate_occlusion(&access, &cx.neighbors)?;
 
         todo!()
     }
