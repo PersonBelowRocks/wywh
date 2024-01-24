@@ -23,7 +23,6 @@ use crate::topo::chunk::Chunk;
 use crate::render::error::MesherError;
 use crate::render::mesh_builder::Context;
 use crate::render::mesh_builder::Mesher;
-use crate::render::quad::MeshableQuad;
 use crate::topo::ivec_project_to_3d;
 use crate::topo::neighbors::Neighbors;
 

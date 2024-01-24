@@ -1,6 +1,6 @@
 use std::{mem::size_of, num::NonZeroU8};
 
-use bevy::math::IVec3;
+use bevy::{ecs::component::Component, math::IVec3};
 
 use crate::{
     data::tile::Face,
@@ -57,11 +57,12 @@ impl BlockOcclusion {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Component)]
 pub struct ChunkOcclusionMap([BlockOcclusion; Self::BUFFER_SIZE]);
 
 // we need to be able to reinterperet the whole buffer as a buffer of u32s
 static_assertions::const_assert_eq!(0, ChunkOcclusionMap::BUFFER_SIZE % size_of::<u32>());
+
 impl ChunkOcclusionMap {
     pub const USIZE: usize = Chunk::USIZE + 2;
     pub const SIZE: i32 = Self::USIZE as i32;

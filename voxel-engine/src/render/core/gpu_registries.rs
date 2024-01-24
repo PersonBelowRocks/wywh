@@ -6,23 +6,31 @@ use bevy::{
     },
     render::{
         extract_resource::ExtractResource,
+        render_asset::RenderAssets,
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
             BindGroup, BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Buffer,
             BufferBinding, BufferBindingType, BufferInitDescriptor, ShaderStages, StorageBuffer,
+            TextureSampleType, TextureView, TextureViewDimension,
         },
         renderer::{RenderDevice, RenderQueue},
+        texture::Image,
         Extract,
     },
 };
 
-use crate::data::{registries::texture::TexregFaces, texture::GpuFaceTexture};
+use crate::data::{
+    registries::texture::TexregFaces,
+    systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
+    texture::GpuFaceTexture,
+};
 
 #[derive(Clone, Resource)]
 pub struct RegistryBindGroup {
     pub bind_group: BindGroup,
 }
 
+// TODO: texture bindings
 impl FromWorld for RegistryBindGroup {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
