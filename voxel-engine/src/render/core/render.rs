@@ -29,7 +29,10 @@ use bevy::{
     },
 };
 
-use super::{gpu_chunk::SetChunkBindGroup, gpu_registries::SetRegistryBindGroup};
+use super::{
+    gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
+    gpu_registries::SetRegistryBindGroup,
+};
 
 #[derive(Resource)]
 pub struct VoxelChunkPipeline {
@@ -94,6 +97,7 @@ pub fn queue_chunks(
     pipeline_cache: Res<PipelineCache>,
     mut render_mesh_instances: ResMut<RenderMeshInstances>,
     render_meshes: Res<RenderAssets<Mesh>>,
+    chunk_data_store: Res<ChunkRenderDataStore>,
     mut views: Query<(
         &ExtractedView,
         &VisibleEntities,
@@ -184,6 +188,15 @@ pub fn queue_chunks(
 
         let rangefinder = view.rangefinder3d();
         for entity in &visible_entities.entities {
+            // skip all entities that dont have chunk render data
+            if !chunk_data_store
+                .map
+                .get(entity)
+                .is_some_and(|data| matches!(data, ChunkRenderData::BindGroup(_)))
+            {
+                continue;
+            }
+
             let Some(mesh_instance) = render_mesh_instances.get_mut(entity) else {
                 continue;
             };
