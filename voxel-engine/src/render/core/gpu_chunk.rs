@@ -28,6 +28,8 @@ use crate::render::{
     quad::{ChunkQuads, GpuQuad},
 };
 
+use super::render::VoxelChunkPipeline;
+
 pub fn extract_chunk_render_data(
     mut render_data: ResMut<ChunkRenderDataStore>,
     q_chunks: Extract<Query<(Entity, &ChunkQuads, &ChunkOcclusionMap)>>,
@@ -45,13 +47,12 @@ pub fn extract_chunk_render_data(
 
 pub fn prepare_chunk_render_data(
     mut chunk_data_store: ResMut<ChunkRenderDataStore>,
+    pipeline: Res<VoxelChunkPipeline>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
-    let layout = chunk_data_store.layout.clone();
-
     for data in chunk_data_store.map.values_mut() {
-        data.move_to_gpu(gpu.as_ref(), queue.as_ref(), &layout)
+        data.move_to_gpu(gpu.as_ref(), queue.as_ref(), &pipeline.chunk_layout)
     }
 }
 

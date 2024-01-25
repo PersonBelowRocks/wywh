@@ -22,21 +22,28 @@ use bevy::{
         render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
-            PipelineCache, RenderPipelineDescriptor, Shader, SpecializedMeshPipeline,
-            SpecializedMeshPipelineError, SpecializedMeshPipelines,
+            binding_types::{storage_buffer, storage_buffer_read_only},
+            BindGroupLayout, BindGroupLayoutEntries, PipelineCache, RenderPipelineDescriptor,
+            Shader, ShaderStages, SpecializedMeshPipeline, SpecializedMeshPipelineError,
+            SpecializedMeshPipelines,
         },
+        renderer::RenderDevice,
         view::{ExtractedView, VisibleEntities},
     },
 };
+
+use crate::{data::texture::GpuFaceTexture, render::quad::GpuQuad};
 
 use super::{
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
 };
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct VoxelChunkPipeline {
     pub mesh_pipeline: MeshPipeline,
+    pub registry_layout: BindGroupLayout,
+    pub chunk_layout: BindGroupLayout,
     pub vert: Handle<Shader>,
     pub frag: Handle<Shader>,
 }
@@ -49,9 +56,31 @@ pub struct VoxelChunkPipelineKey {
 impl FromWorld for VoxelChunkPipeline {
     fn from_world(world: &mut World) -> Self {
         let server = world.resource::<AssetServer>();
+        let gpu = world.resource::<RenderDevice>();
+
+        let registry_layout = gpu.create_bind_group_layout(
+            Some("registry_bind_group_layout"),
+            &BindGroupLayoutEntries::with_indices(
+                ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                ((0, storage_buffer_read_only::<GpuFaceTexture>(false)),),
+            ),
+        );
+
+        let chunk_layout = gpu.create_bind_group_layout(
+            Some("registry_bind_group_layout"),
+            &BindGroupLayoutEntries::with_indices(
+                ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                (
+                    (0, storage_buffer_read_only::<GpuQuad>(false)),
+                    (1, storage_buffer_read_only::<u32>(false)),
+                ),
+            ),
+        );
 
         Self {
             mesh_pipeline: world.resource::<MeshPipeline>().clone(),
+            registry_layout,
+            chunk_layout,
             vert: server.load("shaders/greedy_mesh_vert.wgsl"),
             frag: server.load("shaders/greedy_mesh_frag.wgsl"),
         }

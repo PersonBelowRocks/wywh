@@ -25,6 +25,8 @@ use crate::data::{
     texture::GpuFaceTexture,
 };
 
+use super::render::VoxelChunkPipeline;
+
 #[derive(Clone, Resource)]
 pub struct RegistryBindGroup {
     pub bind_group: BindGroup,
@@ -35,6 +37,7 @@ impl FromWorld for RegistryBindGroup {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
         let queue = world.resource::<RenderQueue>();
+        let pipeline = world.resource::<VoxelChunkPipeline>();
 
         let extracted_faces = world.resource::<ExtractedTexregFaces>();
 
@@ -44,23 +47,9 @@ impl FromWorld for RegistryBindGroup {
 
         let gpu_buffer = buffer.buffer().unwrap();
 
-        let layout = gpu.create_bind_group_layout(
-            Some("registry_bind_group_layout"),
-            &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        );
-
         let bind_group = gpu.create_bind_group(
             Some("registry_bind_group"),
-            &layout,
+            &pipeline.registry_layout,
             &[BindGroupEntry {
                 binding: 0,
                 resource: BindingResource::Buffer(BufferBinding {
