@@ -57,8 +57,6 @@ impl SpecializedMeshPipeline for VoxelChunkPipeline {
     }
 }
 
-pub fn prepare_voxel_chunks() {}
-
 pub type DrawVoxelChunk = (
     SetItemPipeline,
     SetMeshViewBindGroup<0>,

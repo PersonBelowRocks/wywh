@@ -26,8 +26,8 @@ use bevy::{
 use mat::VxlChunkMaterial;
 
 use self::{
-    gpu_chunk::{ExtractedChunkOcclusion, ExtractedChunkQuads},
-    gpu_registries::ExtractedTexregFaces,
+    gpu_chunk::{extract_chunk_render_data, prepare_chunk_render_data, ChunkRenderDataStore},
+    gpu_registries::{extract_texreg_faces, prepare_gpu_face_texture_buffer, ExtractedTexregFaces},
     prepass::DrawVoxelChunkPrepass,
     render::{DrawVoxelChunk, VoxelChunkPipeline},
 };
@@ -44,9 +44,6 @@ impl Plugin for RenderCore {
         >::default());
         app.insert_resource(FaceBuffer(None));
 
-        app.add_plugins(ExtractComponentPlugin::<ExtractedChunkQuads>::extract_visible());
-        app.add_plugins(ExtractComponentPlugin::<ExtractedChunkOcclusion>::extract_visible());
-
         // Render app logic
         let render_app = app.sub_app_mut(RenderApp);
 
@@ -54,14 +51,19 @@ impl Plugin for RenderCore {
         render_app.add_render_command::<Opaque3dPrepass, DrawVoxelChunkPrepass>();
 
         render_app.init_resource::<SpecializedMeshPipelines<VoxelChunkPipeline>>();
+        render_app.init_resource::<ChunkRenderDataStore>();
 
         render_app.add_systems(
             ExtractSchedule,
-            gpureg::extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>())),
+            (
+                extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>())),
+                extract_chunk_render_data,
+            ),
         );
         render_app.add_systems(
             Render,
-            ((gpureg::prepare_gpu_face_texture_buffer).in_set(RenderSet::PrepareResources)),
+            ((prepare_gpu_face_texture_buffer, prepare_chunk_render_data)
+                .in_set(RenderSet::PrepareResources)),
         );
     }
 
