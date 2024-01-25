@@ -29,7 +29,7 @@ use self::{
     gpu_chunk::{extract_chunk_render_data, prepare_chunk_render_data, ChunkRenderDataStore},
     gpu_registries::{extract_texreg_faces, prepare_gpu_face_texture_buffer, ExtractedTexregFaces},
     prepass::DrawVoxelChunkPrepass,
-    render::{DrawVoxelChunk, VoxelChunkPipeline},
+    render::{queue_chunks, DrawVoxelChunk, VoxelChunkPipeline},
 };
 
 pub struct RenderCore;
@@ -62,8 +62,13 @@ impl Plugin for RenderCore {
         );
         render_app.add_systems(
             Render,
-            ((prepare_gpu_face_texture_buffer, prepare_chunk_render_data)
-                .in_set(RenderSet::PrepareResources)),
+            (
+                (prepare_gpu_face_texture_buffer, prepare_chunk_render_data)
+                    .in_set(RenderSet::PrepareResources),
+                (queue_chunks)
+                    .in_set(RenderSet::QueueMeshes)
+                    .after(RenderSet::Prepare),
+            ),
         );
     }
 
