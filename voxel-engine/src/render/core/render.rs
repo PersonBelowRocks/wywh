@@ -97,6 +97,8 @@ impl SpecializedMeshPipeline for VoxelChunkPipeline {
     ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
         let mut descriptor = self.mesh_pipeline.specialize(key.mesh_key, layout)?;
 
+        // TODO: add bind group layouts to the descriptor
+
         descriptor.vertex.shader = self.vert.clone();
         descriptor.fragment.as_mut().unwrap().shader = self.frag.clone();
 
