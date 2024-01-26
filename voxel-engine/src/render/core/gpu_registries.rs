@@ -69,10 +69,12 @@ pub struct ExtractedTexregFaces {
     pub faces: Vec<GpuFaceTexture>,
 }
 
-pub fn extract_texreg_faces(mut cmds: Commands, texreg_faces: Extract<Res<TexregFaces>>) {
-    cmds.insert_resource(ExtractedTexregFaces {
-        faces: texreg_faces.0.clone(),
-    })
+pub fn extract_texreg_faces(mut cmds: Commands, texreg_faces: Extract<Option<Res<TexregFaces>>>) {
+    if let Some(texreg_faces) = texreg_faces.as_ref() {
+        cmds.insert_resource(ExtractedTexregFaces {
+            faces: texreg_faces.0.clone(),
+        })
+    }
 }
 
 pub fn prepare_gpu_face_texture_buffer(

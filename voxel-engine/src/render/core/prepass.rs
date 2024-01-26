@@ -93,8 +93,8 @@ impl FromWorld for ChunkPrepassPipeline {
             view_layout_no_motion_vectors,
             mesh_layouts: mesh_pipeline.mesh_pipeline.mesh_layouts.clone(),
             pipeline: mesh_pipeline.clone(),
-            vert: server.load("shaders/vxl_chunk_vert.wgsl"),
-            frag: server.load("shaders/vxl_chunk_frag.wgsl"),
+            vert: server.load("shaders/vxl_chunk_vert_prepass.wgsl"),
+            frag: server.load("shaders/vxl_chunk_frag_prepass.wgsl"),
         }
     }
 }
@@ -282,8 +282,6 @@ pub fn queue_prepass_chunks(
             });
         }
     }
-
-    todo!()
 }
 
 pub type DrawVoxelChunkPrepass = (

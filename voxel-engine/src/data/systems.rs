@@ -150,20 +150,6 @@ fn create_texture_registry(
     Ok(registry_loader.build_registry(images.as_mut())?)
 }
 
-fn setup_gpu_face_buffer(
-    gpu: &RenderDevice,
-    queue: &RenderQueue,
-    texreg: &TextureRegistry,
-) -> Buffer {
-    let faces = texreg.face_texture_buffer();
-
-    let mut buffer = StorageBuffer::from(faces);
-
-    buffer.write_buffer(gpu, queue);
-
-    buffer.buffer().unwrap().clone()
-}
-
 pub fn build_registries(world: &mut World) {
     let create_texreg_sysid = world.register_system(create_texture_registry);
 
@@ -179,16 +165,6 @@ pub fn build_registries(world: &mut World) {
             panic!("Cannot build registries");
         }
     };
-
-    let buffer = {
-        let gpu = world.get_resource::<RenderDevice>().unwrap();
-        let queue = world.get_resource::<RenderQueue>().unwrap();
-
-        setup_gpu_face_buffer(gpu, queue, &textures)
-    };
-
-    let mut faces = world.get_resource_mut::<FaceBuffer>().unwrap();
-    faces.0 = Some(buffer);
 
     world.insert_resource(VoxelColorTextureAtlas(textures.color_texture().clone()));
     world.insert_resource(TexregFaces(textures.face_texture_buffer()));

@@ -39,11 +39,6 @@ pub struct FaceBuffer(pub(crate) Option<Buffer>);
 
 impl Plugin for RenderCore {
     fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<
-            ExtendedMaterial<StandardMaterial, VxlChunkMaterial>,
-        >::default());
-        app.insert_resource(FaceBuffer(None));
-
         // Render app logic
         let render_app = app.sub_app_mut(RenderApp);
 
@@ -51,7 +46,7 @@ impl Plugin for RenderCore {
         render_app.add_render_command::<Opaque3dPrepass, DrawVoxelChunkPrepass>();
 
         render_app.init_resource::<SpecializedMeshPipelines<VoxelChunkPipeline>>();
-        render_app.init_resource::<ChunkRenderDataStore>();
+        render_app.init_resource::<SpecializedMeshPipelines<ChunkPrepassPipeline>>();
 
         render_app.add_systems(
             ExtractSchedule,
@@ -65,15 +60,15 @@ impl Plugin for RenderCore {
             (
                 (prepare_gpu_face_texture_buffer, prepare_chunk_render_data)
                     .in_set(RenderSet::PrepareResources),
-                (queue_chunks, queue_prepass_chunks)
-                    .in_set(RenderSet::QueueMeshes)
-                    .after(RenderSet::Prepare),
+                (queue_chunks, queue_prepass_chunks).in_set(RenderSet::QueueMeshes),
             ),
         );
     }
 
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
+
+        render_app.init_resource::<ChunkRenderDataStore>();
 
         render_app.init_resource::<VoxelChunkPipeline>();
         render_app.init_resource::<ChunkPrepassPipeline>();

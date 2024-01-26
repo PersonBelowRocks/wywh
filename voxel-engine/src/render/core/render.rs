@@ -81,8 +81,8 @@ impl FromWorld for VoxelChunkPipeline {
             mesh_pipeline: world.resource::<MeshPipeline>().clone(),
             registry_layout,
             chunk_layout,
-            vert: server.load("shaders/greedy_mesh_vert.wgsl"),
-            frag: server.load("shaders/greedy_mesh_frag.wgsl"),
+            vert: server.load("shaders/vxl_chunk_vert.wgsl"),
+            frag: server.load("shaders/vxl_chunk_frag.wgsl"),
         }
     }
 }
