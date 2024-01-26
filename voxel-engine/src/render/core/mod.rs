@@ -16,8 +16,9 @@ use bevy::{
     render::{
         extract_component::ExtractComponentPlugin,
         extract_resource::ExtractResourcePlugin,
+        mesh::MeshVertexAttribute,
         render_phase::{AddRenderCommand, RenderPhase},
-        render_resource::{Buffer, BufferDescriptor, SpecializedMeshPipelines},
+        render_resource::{Buffer, BufferDescriptor, SpecializedMeshPipelines, VertexFormat},
         renderer::RenderDevice,
         Extract, Render, RenderApp, RenderSet,
     },
@@ -34,8 +35,10 @@ use self::{
 
 pub struct RenderCore;
 
-#[derive(Resource)]
-pub struct FaceBuffer(pub(crate) Option<Buffer>);
+impl RenderCore {
+    pub const QUAD_INDEX_ATTR: MeshVertexAttribute =
+        MeshVertexAttribute::new("quad_index_attr", 5099_0, VertexFormat::Uint32);
+}
 
 impl Plugin for RenderCore {
     fn build(&self, app: &mut App) {

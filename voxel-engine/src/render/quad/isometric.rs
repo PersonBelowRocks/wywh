@@ -206,6 +206,14 @@ impl IsometrizedQuad {
         ivec_project_to_3d(pos_2d, self.isometry.face, self.isometry.magnitude)
     }
 
+    pub fn min(&self) -> IVec3 {
+        ivec_project_to_3d(self.quad.min(), self.isometry.face, self.isometry.magnitude)
+    }
+
+    pub fn max(&self) -> IVec3 {
+        ivec_project_to_3d(self.quad.max(), self.isometry.face, self.isometry.magnitude)
+    }
+
     pub fn data(&self) -> &[QVertexData; 4] {
         self.quad.dataquad.data.inner()
     }

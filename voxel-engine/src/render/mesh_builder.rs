@@ -31,11 +31,13 @@ use super::error::MesherError;
 use super::error::MesherResult;
 use super::mesh::ChunkMesh;
 use super::occlusion::ChunkOcclusionMap;
+use super::quad::GpuQuad;
 
 #[derive(Clone, Debug)]
 pub struct MesherOutput {
     pub mesh: Mesh,
     pub occlusion: ChunkOcclusionMap,
+    pub quads: Vec<GpuQuad>,
 }
 
 pub struct Context<'a, A: ChunkAccess> {
@@ -49,7 +51,7 @@ pub trait Mesher: Clone + Send + Sync + 'static {
     fn build<A, Nb>(
         &self,
         access: A,
-        adjacency: Context<Nb>,
+        context: Context<Nb>,
     ) -> MesherResult<A::ReadErr, Nb::ReadErr>
     where
         A: ChunkAccess,

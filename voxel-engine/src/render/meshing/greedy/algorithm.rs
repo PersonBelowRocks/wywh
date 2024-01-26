@@ -5,6 +5,9 @@ use bevy::prelude::default;
 use bevy::prelude::Color;
 
 use bevy::prelude::StandardMaterial;
+use bevy::render::mesh::Indices;
+use bevy::render::mesh::Mesh;
+use bevy::render::render_resource::PrimitiveTopology;
 
 use crate::data::registries::texture::TextureRegistry;
 use crate::data::registries::variant::VariantRegistry;
@@ -12,10 +15,13 @@ use crate::data::registries::Registries;
 use crate::data::registries::Registry;
 use crate::data::tile::Face;
 
+use crate::render::core::RenderCore;
 use crate::render::error::MesherResult;
+use crate::render::mesh_builder::MesherOutput;
 use crate::render::occlusion::ChunkOcclusionMap;
 use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
+use crate::render::quad::GpuQuad;
 use crate::topo::access::ChunkAccess;
 use crate::topo::access::WriteAccess;
 use crate::topo::chunk::Chunk;
@@ -249,19 +255,52 @@ impl Mesher for GreedyMesher {
         let varreg = self.registries.get_registry::<VariantRegistry>().unwrap();
 
         let mut cqs = ChunkQuadSlice::new(Face::North, 0, &access, &cx.neighbors, &varreg).unwrap();
-        let mut buffer = Vec::<IsometrizedQuad>::new();
+        let mut quads = Vec::<IsometrizedQuad>::new();
 
         for face in Face::FACES {
             for layer in 0..Chunk::SIZE {
                 cqs.reposition(face, layer).unwrap();
 
-                self.calculate_slice_quads(&cqs, &mut buffer)?;
+                self.calculate_slice_quads(&cqs, &mut quads)?;
             }
         }
 
         let occlusion = self.calculate_occlusion(&access, &cx.neighbors)?;
 
-        todo!()
+        let mut gpu_quads = Vec::<GpuQuad>::with_capacity(quads.len());
+        for i in 0..quads.len() {
+            let quad = quads[i];
+
+            let gpu_quad = GpuQuad {
+                min: quad.min().as_vec3(),
+                max: quad.max().as_vec3(),
+                texture_id: quad.quad.dataquad.texture.texture.inner() as u32,
+                rotation: quad.quad.dataquad.texture.rotation.inner() as u32,
+            };
+
+            gpu_quads.push(gpu_quad);
+        }
+
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+
+        // The index buffer
+        let mut vertex_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 6);
+        // Vertex attribute for what quad the vertex is a part of
+        let mut quad_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 6);
+
+        for (i, quad) in gpu_quads.iter().enumerate() {
+            vertex_indices.extend_from_slice(&[0, 1, 2, 3, 2, 1]);
+            quad_indices.extend_from_slice(&[i as u32; 6]);
+        }
+
+        mesh.set_indices(Some(Indices::U32(vertex_indices)));
+        mesh.insert_attribute(RenderCore::QUAD_INDEX_ATTR, quad_indices);
+
+        Ok(MesherOutput {
+            mesh,
+            quads: gpu_quads,
+            occlusion,
+        })
     }
 
     fn material(&self) -> Self::Material {

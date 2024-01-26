@@ -15,7 +15,6 @@ use bevy::{
 
 use crate::{
     data::{registries::texture::TextureRegistryLoader, resourcepath::ResourcePath},
-    render::core::FaceBuffer,
     AppState,
 };
 

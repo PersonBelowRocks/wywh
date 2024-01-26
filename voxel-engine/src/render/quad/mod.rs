@@ -17,7 +17,7 @@ pub mod consts {
     pub const OCCLUSION: u32     = 0b00000000_00000000_00000000_00010000;
 }
 
-#[derive(Copy, Clone, Debug, ShaderType)]
+#[derive(Copy, Clone, Debug, ShaderType, PartialEq)]
 pub struct GpuQuad {
     pub texture_id: u32,
     pub rotation: u32,
