@@ -28,7 +28,7 @@ use mat::VxlChunkMaterial;
 use self::{
     gpu_chunk::{extract_chunk_render_data, prepare_chunk_render_data, ChunkRenderDataStore},
     gpu_registries::{extract_texreg_faces, prepare_gpu_face_texture_buffer, ExtractedTexregFaces},
-    prepass::{queue_prepass_chunks, DrawVoxelChunkPrepass},
+    prepass::{queue_prepass_chunks, ChunkPrepassPipeline, DrawVoxelChunkPrepass},
     render::{queue_chunks, DrawVoxelChunk, VoxelChunkPipeline},
 };
 
@@ -76,5 +76,6 @@ impl Plugin for RenderCore {
         let render_app = app.sub_app_mut(RenderApp);
 
         render_app.init_resource::<VoxelChunkPipeline>();
+        render_app.init_resource::<ChunkPrepassPipeline>();
     }
 }

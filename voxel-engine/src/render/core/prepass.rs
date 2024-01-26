@@ -8,34 +8,38 @@ use bevy::{
         },
     },
     ecs::{
-        query::{Or, With},
-        system::{Query, Res, Resource},
+        query::{Has, Or, With},
+        system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
+    log::error,
     pbr::{
         DrawMesh, MeshLayouts, MeshPipeline, MeshPipelineKey, PreviousViewProjection,
-        SetMeshBindGroup, SetPrepassViewBindGroup,
+        RenderMeshInstances, SetMeshBindGroup, SetPrepassViewBindGroup,
     },
     render::{
         globals::GlobalsUniform,
-        mesh::{MeshVertexBufferLayout, VertexAttributeDescriptor},
+        mesh::{Mesh, MeshVertexBufferLayout, VertexAttributeDescriptor},
+        render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
             binding_types::uniform_buffer, BindGroupLayout, BindGroupLayoutEntries,
             ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-            FragmentState, FrontFace, MultisampleState, PolygonMode, PrimitiveState,
+            FragmentState, FrontFace, MultisampleState, PipelineCache, PolygonMode, PrimitiveState,
             RenderPipelineDescriptor, Shader, ShaderDefVal, ShaderStages, SpecializedMeshPipeline,
-            SpecializedMeshPipelineError, StencilFaceState, StencilState, VertexState,
+            SpecializedMeshPipelineError, SpecializedMeshPipelines, StencilFaceState, StencilState,
+            VertexState,
         },
         renderer::RenderDevice,
         view::{ExtractedView, ViewUniform, VisibleEntities},
     },
 };
 
-use crate::render::core::render::VoxelChunkPipeline;
+use crate::render::core::{gpu_chunk::ChunkRenderData, render::VoxelChunkPipeline};
 
 use super::{
-    gpu_chunk::SetChunkBindGroup, gpu_registries::SetRegistryBindGroup,
+    gpu_chunk::{ChunkRenderDataStore, SetChunkBindGroup},
+    gpu_registries::SetRegistryBindGroup,
     render::VoxelChunkPipelineKey,
 };
 
@@ -197,15 +201,88 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
 
 pub fn queue_prepass_chunks(
     functions: Res<DrawFunctions<Opaque3dPrepass>>,
+    chunk_data_store: Res<ChunkRenderDataStore>,
+    mut pipelines: ResMut<SpecializedMeshPipelines<ChunkPrepassPipeline>>,
+    pipeline_cache: Res<PipelineCache>,
+    prepass_pipeline: Res<ChunkPrepassPipeline>,
+    render_mesh_instances: ResMut<RenderMeshInstances>,
+    render_meshes: Res<RenderAssets<Mesh>>,
     mut views: Query<(
         &ExtractedView,
         &VisibleEntities,
         &mut RenderPhase<Opaque3dPrepass>,
-        Option<&DepthPrepass>,
-        Option<&NormalPrepass>,
-        Option<&MotionVectorPrepass>,
+        Has<DepthPrepass>,
+        Has<NormalPrepass>,
+        Has<MotionVectorPrepass>,
     )>,
 ) {
+    let draw_function = functions.read().get_id::<DrawVoxelChunkPrepass>().unwrap();
+
+    for (view, visible_entities, mut phase, depth_prepass, normal_prepass, motion_vector_prepass) in
+        &mut views
+    {
+        let mut view_key = MeshPipelineKey::empty();
+
+        if depth_prepass {
+            view_key |= MeshPipelineKey::DEPTH_PREPASS;
+        }
+        if normal_prepass {
+            view_key |= MeshPipelineKey::NORMAL_PREPASS;
+        }
+        if motion_vector_prepass {
+            view_key |= MeshPipelineKey::MOTION_VECTOR_PREPASS;
+        }
+
+        let rangefinder = view.rangefinder3d();
+
+        for entity in &visible_entities.entities {
+            // skip all entities that dont have chunk render data
+            if !chunk_data_store
+                .map
+                .get(entity)
+                .is_some_and(|data| matches!(data, ChunkRenderData::BindGroup(_)))
+            {
+                continue;
+            }
+
+            let Some(mesh_instance) = render_mesh_instances.get(entity) else {
+                continue;
+            };
+
+            let Some(mesh) = render_meshes.get(mesh_instance.mesh_asset_id) else {
+                continue;
+            };
+
+            let mesh_key =
+                MeshPipelineKey::from_primitive_topology(mesh.primitive_topology) | view_key;
+
+            let pipeline_id = match pipelines.specialize(
+                &pipeline_cache,
+                &prepass_pipeline,
+                VoxelChunkPipelineKey { mesh_key },
+                &mesh.layout,
+            ) {
+                Ok(id) => id,
+                Err(err) => {
+                    error!("{}", err);
+                    continue;
+                }
+            };
+
+            let distance =
+                rangefinder.distance_translation(&mesh_instance.transforms.transform.translation);
+
+            phase.add(Opaque3dPrepass {
+                entity: *entity,
+                draw_function: draw_function,
+                pipeline_id,
+                distance,
+                batch_range: 0..1,
+                dynamic_offset: None,
+            });
+        }
+    }
+
     todo!()
 }
 
