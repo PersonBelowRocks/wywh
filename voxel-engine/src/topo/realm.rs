@@ -186,16 +186,25 @@ impl ChunkManager {
             }
         }
 
-        let accesses = std::array::from_fn(|i| {
-            refs[i].map(|c| ChunkRefVxlReadAccess {
-                transparency: c.transparency.read_access(),
-                variants: c.variants.read_access(),
-            })
-        });
+        let mut accesses = std::array::from_fn(|_| None);
+
+        for i in 0..(3 * 3 * 3) {
+            let Some(cref) = refs[i].as_deref() else {
+                continue;
+            };
+
+            accesses[i] = Some(ChunkRefVxlReadAccess {
+                transparency: cref.transparency.read_access(),
+                variants: cref.variants.read_access()
+            });
+        }
 
         let neighbors = Neighbors::from_raw(accesses, self.default_cvo);
+        let result = f(neighbors);
 
-        Ok(f(neighbors))
+        drop(refs);
+
+        Ok(result)
     }
 
     pub fn set_loaded_chunk(&self, pos: ChunkPos, chunk: Chunk) {
