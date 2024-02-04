@@ -26,8 +26,7 @@ use crate::{
     data::systems::{build_registries, check_textures, load_textures, VariantFolders},
     render::{
         core::RenderCore,
-        meshing::greedy::algorithm::GreedyMesher,
-        meshing::greedy::material::GreedyMeshMaterial,
+        meshing::greedy::{algorithm::GreedyMesher, material::GreedyMeshMaterial},
         systems::{build_meshes, configure_sampling, insert_meshes, setup_mesh_builder},
     },
     topo::systems::generate_chunks_from_events,
@@ -159,7 +158,7 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
     // let registries = Registries::new(texture_registry, voxel_registry);
 
     // cmds.insert_resource(registries.clone());
-    cmds.insert_resource(VoxelRealm::new());
+    cmds.insert_resource(VoxelRealm::new(todo!()));
     cmds.insert_resource(EngineThreadPool::new(available_parallelism.into()));
     cmds.insert_resource(DefaultGenerator(Generator::new(
         112456754,

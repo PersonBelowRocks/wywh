@@ -24,7 +24,7 @@ impl From<OutOfBounds> for ChunkAccessError {
 }
 
 #[derive(te::Error, Debug, PartialEq, Eq)]
-pub enum ChunkManagerGetChunkError {
+pub enum ChunkManagerError {
     #[error("Chunk not loaded")]
     Unloaded,
     #[error("Chunk doesn't exist")]

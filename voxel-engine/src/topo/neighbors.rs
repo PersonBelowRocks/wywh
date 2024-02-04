@@ -57,6 +57,10 @@ pub fn is_in_bounds_3d(pos: IVec3) -> bool {
 pub type NbResult<T, E> = Result<T, NeighborAccessError<E>>;
 
 impl<C: ChunkAccess> Neighbors<C> {
+    pub fn from_raw(chunks: [Option<C>; 3 * 3 * 3], default: ChunkVoxelOutput) -> Self {
+        Self { chunks, default }
+    }
+
     /// `pos` is in localspace
     fn internal_get(&self, pos: IVec3) -> NbResult<C::ReadType, C::ReadErr> {
         let chk_pos = localspace_to_chunk_pos(pos);

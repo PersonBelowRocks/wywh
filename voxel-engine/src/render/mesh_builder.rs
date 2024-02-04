@@ -56,8 +56,6 @@ pub trait Mesher: Clone + Send + Sync + 'static {
     where
         A: ChunkAccess,
         Nb: ChunkAccess;
-
-    fn material(&self) -> Self::Material;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, dm::From, dm::Into)]
@@ -246,14 +244,6 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
         for worker in self.workers.into_iter() {
             worker.handle.join().unwrap();
         }
-    }
-
-    pub fn lq_material(&self) -> LQM::Material {
-        self.lq_mesher.material()
-    }
-
-    pub fn hq_material(&self) -> HQM::Material {
-        self.hq_mesher.material()
     }
 }
 

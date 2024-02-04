@@ -11,11 +11,11 @@ pub enum MesherError<A: Error, Nb: Error> {
     #[error("Neighbor access returned an error during meshing: {0}")]
     NeighborAccessError(NeighborAccessError<Nb>),
     #[error("Mesher ran into an internal error: '{0}'")]
-    CustomError(Box<dyn Error>),
+    CustomError(Box<dyn Error + Send>),
 }
 
 impl<A: Error, Nb: Error> MesherError<A, Nb> {
-    pub fn custom<E: Error + 'static>(error: E) -> Self {
+    pub fn custom<E: Error + Send + 'static>(error: E) -> Self {
         Self::CustomError(Box::new(error))
     }
 }

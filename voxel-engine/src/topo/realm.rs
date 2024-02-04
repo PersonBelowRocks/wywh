@@ -3,18 +3,23 @@ use std::sync::{
     Arc, Weak,
 };
 
-use bevy::{math::IVec3, prelude::Resource};
+use bevy::{
+    math::{ivec3, IVec3},
+    prelude::Resource,
+};
 
 use crate::{
     data::tile::Face,
-    util::{FaceMap, SyncHashMap},
+    render::occlusion::ivec3_to_cmo_idx,
+    topo::neighbors::NeighborsBuilder,
+    util::{ivec3_to_1d, FaceMap, SyncHashMap},
 };
 
 use super::{
     access::{ChunkBounds, ReadAccess},
     chunk::{Chunk, ChunkPos},
     chunk_ref::{ChunkRef, ChunkRefVxlReadAccess, ChunkVoxelOutput},
-    error::ChunkManagerGetChunkError,
+    error::ChunkManagerError,
     neighbors::Neighbors,
 };
 
@@ -119,29 +124,30 @@ impl<'a, 'b> Iterator for ChangedChunks<'a, 'b> {
     }
 }
 
-#[derive(Default)]
 pub struct ChunkManager {
     loaded_chunks: LoadedChunkContainer,
     pending_changes: PendingChunkChanges,
+    default_cvo: ChunkVoxelOutput,
 }
 
 impl ChunkManager {
-    pub fn new() -> Self {
+    pub fn new(default_cvo: ChunkVoxelOutput) -> Self {
         Self {
             loaded_chunks: LoadedChunkContainer::default(),
             pending_changes: PendingChunkChanges::default(),
+            default_cvo,
         }
     }
 
-    pub fn get_loaded_chunk(&self, pos: ChunkPos) -> Result<ChunkRef, ChunkManagerGetChunkError> {
+    pub fn get_loaded_chunk(&self, pos: ChunkPos) -> Result<ChunkRef, ChunkManagerError> {
         let chunk = self
             .loaded_chunks
             .get(pos)
-            .ok_or(ChunkManagerGetChunkError::Unloaded)?;
+            .ok_or(ChunkManagerError::Unloaded)?;
         let changed = self
             .pending_changes
             .get(pos)
-            .ok_or(ChunkManagerGetChunkError::Unloaded)?;
+            .ok_or(ChunkManagerError::Unloaded)?;
 
         Ok(ChunkRef {
             chunk,
@@ -150,47 +156,46 @@ impl ChunkManager {
         })
     }
 
-    pub(crate) fn get_chunk(
-        &self,
-        pos: ChunkPos,
-    ) -> Result<StrongChunkRef<'_>, ChunkManagerGetChunkError> {
+    pub(crate) fn get_chunk(&self, pos: ChunkPos) -> Result<StrongChunkRef<'_>, ChunkManagerError> {
         self.loaded_chunks
             .get_strong(pos)
-            .ok_or(ChunkManagerGetChunkError::Unloaded)
+            .ok_or(ChunkManagerError::Unloaded)
     }
 
     // TODO: test
-    pub fn with_neighbors<A, F, R>(
-        &self,
-        pos: ChunkPos,
-        _f: F,
-    ) -> Result<R, ChunkManagerGetChunkError>
+    pub fn with_neighbors<F, R>(&self, pos: ChunkPos, mut f: F) -> Result<R, ChunkManagerError>
     where
-        A: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds,
         F: for<'a> FnMut(Neighbors<ChunkRefVxlReadAccess<'a, ahash::RandomState>>) -> R,
     {
         // we need to make a map of the neighboring chunks so that the references are owned by the function scope
-        let chunks = FaceMap::from_fn(|face| {
-            let nb_pos = ChunkPos::from(IVec3::from(pos) + face.normal());
-            self.get_chunk(nb_pos).ok()
-        });
+        let mut refs = std::array::from_fn::<Option<StrongChunkRef>, { 3 * 3 * 3 }, _>(|_| None);
 
-        let mut map = FaceMap::<ChunkRefVxlReadAccess>::new();
+        for x in -1..=1 {
+            for y in -1..=1 {
+                for z in -1..=1 {
+                    let nbrpos = ivec3(x, y, z);
+                    if nbrpos == IVec3::ZERO {
+                        continue;
+                    }
 
-        for face in Face::FACES {
-            let Some(cref) = chunks.get(face) else {
-                continue;
-            };
-
-            let access = ChunkRefVxlReadAccess {
-                transparency: cref.transparency.read_access(),
-                variants: cref.variants.read_access(),
-            };
-
-            map.set(face, access);
+                    let nbrpos_ws = ChunkPos::from(nbrpos + IVec3::from(pos));
+                    if let Ok(chunk_ref) = self.get_chunk(nbrpos_ws) {
+                        refs[ivec3_to_1d(nbrpos).unwrap()] = Some(chunk_ref)
+                    }
+                }
+            }
         }
 
-        todo!()
+        let accesses = std::array::from_fn(|i| {
+            refs[i].map(|c| ChunkRefVxlReadAccess {
+                transparency: c.transparency.read_access(),
+                variants: c.variants.read_access(),
+            })
+        });
+
+        let neighbors = Neighbors::from_raw(accesses, self.default_cvo);
+
+        Ok(f(neighbors))
     }
 
     pub fn set_loaded_chunk(&self, pos: ChunkPos, chunk: Chunk) {
@@ -213,9 +218,9 @@ pub struct VoxelRealm {
 }
 
 impl VoxelRealm {
-    pub fn new() -> Self {
+    pub fn new(default_cvo: ChunkVoxelOutput) -> Self {
         Self {
-            chunk_manager: ChunkManager::new(),
+            chunk_manager: ChunkManager::new(default_cvo),
         }
     }
 }

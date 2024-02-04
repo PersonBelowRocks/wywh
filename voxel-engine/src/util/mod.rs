@@ -1,4 +1,5 @@
 pub mod notnan;
+pub mod result;
 
 use bevy::prelude::*;
 use dashmap::DashMap;

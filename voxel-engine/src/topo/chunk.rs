@@ -10,11 +10,27 @@ use crate::data::tile::Transparency;
 use crate::data::voxel::rotations::BlockModelRotation;
 
 #[derive(
-    dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Deref, DerefMut,
+    dm::From,
+    dm::Into,
+    dm::Display,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Copy,
+    Clone,
+    Deref,
+    DerefMut,
+    Component,
 )]
 pub struct ChunkPos(IVec3);
 
+#[derive(Copy, Clone, Debug, Component, PartialEq, Eq)]
+pub struct ChunkEntity;
+
 impl ChunkPos {
+    pub const ZERO: Self = Self(IVec3::ZERO);
+
     pub fn worldspace_max(self) -> IVec3 {
         (self.0 * Chunk::SIZE) + (Chunk::SIZE - 1)
     }

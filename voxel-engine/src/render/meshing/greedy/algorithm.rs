@@ -64,52 +64,28 @@ impl Mesher for SimplePbrMesher {
     {
         todo!()
     }
-
-    fn material(&self) -> Self::Material {
-        self.material.clone()
-    }
 }
 
 #[derive(Clone)]
-pub struct GreedyMesher {
-    material: ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>,
-    registries: Registries,
-}
+pub struct GreedyMesher {}
 
 impl GreedyMesher {
     pub fn new(registries: Registries) -> Self {
-        let texture_registry = registries.get_registry::<TextureRegistry>().unwrap();
-
-        Self {
-            material: ExtendedMaterial {
-                base: StandardMaterial {
-                    perceptual_roughness: 1.0,
-                    reflectance: 0.0,
-                    // base_color: Color::rgb(0.5, 0.5, 0.65),
-                    ..default()
-                },
-                extension: GreedyMeshMaterial {
-                    texture_scale: texture_registry.texture_scale(),
-
-                    faces: Vec::new(),
-                },
-            },
-
-            registries: registries.clone(),
-        }
+        Self {}
     }
 
     fn calculate_occlusion<A, Nb>(
         &self,
         access: &A,
         neighbors: &Neighbors<Nb>,
+        registries: &Registries,
     ) -> Result<ChunkOcclusionMap, MesherError<A::ReadErr, Nb::ReadErr>>
     where
         A: ChunkAccess,
         Nb: ChunkAccess,
     {
         let mut occlusion = ChunkOcclusionMap::new();
-        let varreg = self.registries.get_registry::<VariantRegistry>().unwrap();
+        let varreg = registries.get_registry::<VariantRegistry>().unwrap();
 
         // occlusion for the actual chunk
         for x in 0..Chunk::SIZE {
@@ -252,7 +228,7 @@ impl Mesher for GreedyMesher {
         A: ChunkAccess,
         Nb: ChunkAccess,
     {
-        let varreg = self.registries.get_registry::<VariantRegistry>().unwrap();
+        let varreg = cx.registries.get_registry::<VariantRegistry>().unwrap();
 
         let mut cqs = ChunkQuadSlice::new(Face::North, 0, &access, &cx.neighbors, &varreg).unwrap();
         let mut quads = Vec::<IsometrizedQuad>::new();
@@ -265,7 +241,7 @@ impl Mesher for GreedyMesher {
             }
         }
 
-        let occlusion = self.calculate_occlusion(&access, &cx.neighbors)?;
+        let occlusion = self.calculate_occlusion(&access, &cx.neighbors, &cx.registries)?;
 
         let mut gpu_quads = Vec::<GpuQuad>::with_capacity(quads.len());
         for i in 0..quads.len() {
@@ -301,10 +277,6 @@ impl Mesher for GreedyMesher {
             quads: gpu_quads,
             occlusion,
         })
-    }
-
-    fn material(&self) -> Self::Material {
-        self.material.clone()
     }
 }
 
