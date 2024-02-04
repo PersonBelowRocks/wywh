@@ -31,13 +31,14 @@ use super::error::MesherError;
 use super::error::MesherResult;
 use super::mesh::ChunkMesh;
 use super::occlusion::ChunkOcclusionMap;
+use super::quad::ChunkQuads;
 use super::quad::GpuQuad;
 
 #[derive(Clone, Debug)]
 pub struct MesherOutput {
     pub mesh: Mesh,
     pub occlusion: ChunkOcclusionMap,
-    pub quads: Vec<GpuQuad>,
+    pub quads: ChunkQuads,
 }
 
 pub struct Context<'a, A: ChunkAccess> {

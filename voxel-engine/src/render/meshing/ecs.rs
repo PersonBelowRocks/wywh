@@ -89,11 +89,8 @@ pub fn insert_chunks(
                 }
             }
 
-            let quads = ChunkQuads {
-                quads: mesher_output.quads,
-            };
-
-            cmds.entity(entity).insert((quads, mesher_output.occlusion));
+            cmds.entity(entity)
+                .insert((mesher_output.quads, mesher_output.occlusion));
         }
     }
 }

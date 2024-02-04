@@ -3,6 +3,8 @@ pub mod data;
 pub mod error;
 pub mod isometric;
 
+use std::{fmt::Debug, mem::size_of};
+
 pub use anon::*;
 use bevy::{ecs::component::Component, math::Vec3, render::render_resource::ShaderType};
 pub use data::*;
@@ -28,4 +30,17 @@ pub struct GpuQuad {
 #[derive(Clone, Component)]
 pub struct ChunkQuads {
     pub quads: Vec<GpuQuad>,
+}
+
+impl Debug for ChunkQuads {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GpuQuads")
+            .field("quad_count", &self.quads.len())
+            .field("capacity", &self.quads.capacity())
+            .field(
+                "bytes_used",
+                &(self.quads.capacity() * size_of::<GpuQuad>()),
+            )
+            .finish()
+    }
 }

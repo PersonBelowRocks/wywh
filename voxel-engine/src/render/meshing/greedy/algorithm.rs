@@ -21,6 +21,7 @@ use crate::render::mesh_builder::MesherOutput;
 use crate::render::occlusion::ChunkOcclusionMap;
 use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
+use crate::render::quad::ChunkQuads;
 use crate::render::quad::GpuQuad;
 use crate::topo::access::ChunkAccess;
 use crate::topo::access::WriteAccess;
@@ -274,7 +275,7 @@ impl Mesher for GreedyMesher {
 
         Ok(MesherOutput {
             mesh,
-            quads: gpu_quads,
+            quads: ChunkQuads { quads: gpu_quads },
             occlusion,
         })
     }
