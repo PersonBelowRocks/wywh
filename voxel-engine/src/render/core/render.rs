@@ -10,7 +10,7 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
-    log::error,
+    log::{error, info},
     pbr::{
         DrawMesh, MeshPipeline, MeshPipelineKey, RenderMeshInstances,
         ScreenSpaceAmbientOcclusionSettings, SetMeshBindGroup, SetMeshViewBindGroup,
@@ -236,6 +236,8 @@ pub fn queue_chunks(
                 continue;
             }
 
+            info!("Queuing chunk entity {:?} for rendering", entity);
+
             let Some(mesh_instance) = render_mesh_instances.get_mut(entity) else {
                 continue;
             };
@@ -264,6 +266,7 @@ pub fn queue_chunks(
                 rangefinder.distance_translation(&mesh_instance.transforms.transform.translation);
 
             // queue this entity for rendering
+            info!("Queuing chunk entity {:?}for rendering", entity);
             phase.add(Opaque3d {
                 entity: *entity,
                 draw_function: draw_chunk,

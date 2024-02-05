@@ -4,6 +4,7 @@ use bevy::{
         system::{lifetimeless::SRes, Commands, Res, Resource, SystemParamItem},
         world::{FromWorld, World},
     },
+    log::info,
     render::{
         extract_resource::ExtractResource,
         render_asset::RenderAssets,
@@ -60,6 +61,8 @@ impl FromWorld for RegistryBindGroup {
             }],
         );
 
+        info!("Queued texture registry data for the GPU");
+
         RegistryBindGroup { bind_group }
     }
 }
@@ -73,7 +76,8 @@ pub fn extract_texreg_faces(mut cmds: Commands, texreg_faces: Extract<Option<Res
     if let Some(texreg_faces) = texreg_faces.as_ref() {
         cmds.insert_resource(ExtractedTexregFaces {
             faces: texreg_faces.0.clone(),
-        })
+        });
+        info!("Extracted texture registry faces into render world.");
     }
 }
 

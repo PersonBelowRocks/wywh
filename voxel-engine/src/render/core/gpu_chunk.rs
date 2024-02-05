@@ -1,14 +1,17 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use bevy::{
     ecs::{
         component::Component,
         entity::Entity,
-        query::ROQueryItem,
+        query::{ROQueryItem, With},
         system::{
             lifetimeless::{Read, SRes},
-            Query, Res, ResMut, Resource, SystemParamItem,
+            Local, Query, Res, ResMut, Resource, SystemParamItem,
         },
         world::{FromWorld, World},
     },
+    log::info,
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
@@ -23,25 +26,42 @@ use bevy::{
 };
 use rayon::iter::ParallelBridge;
 
-use crate::render::{
-    occlusion::ChunkOcclusionMap,
-    quad::{ChunkQuads, GpuQuad},
+use crate::{
+    render::{
+        meshing::ecs::ShouldExtract,
+        occlusion::ChunkOcclusionMap,
+        quad::{ChunkQuads, GpuQuad},
+    },
+    ChunkEntity,
 };
 
 use super::render::VoxelChunkPipeline;
 
 pub fn extract_chunk_render_data(
+    mut last_count: Local<usize>,
     mut render_data: ResMut<ChunkRenderDataStore>,
-    q_chunks: Extract<Query<(Entity, &ChunkQuads, &ChunkOcclusionMap)>>,
+    q_chunks: Extract<
+        Query<(Entity, &ChunkQuads, &ChunkOcclusionMap, &ShouldExtract), With<ChunkEntity>>,
+    >,
 ) {
-    for (entity, quads, occlusion) in q_chunks.iter() {
-        render_data.map.insert(
-            entity,
-            ChunkRenderData::Cpu(CpuChunkRenderData {
-                quads: quads.quads.clone(),
-                occlusion: occlusion.clone(),
-            }),
-        );
+    for (entity, quads, occlusion, should_extract) in q_chunks.iter() {
+        if should_extract.get() {
+            render_data.map.insert(
+                entity,
+                ChunkRenderData::Cpu(CpuChunkRenderData {
+                    quads: quads.quads.clone(),
+                    occlusion: occlusion.clone(),
+                }),
+            );
+
+            // don't extract this entity again until it updates in the main world
+            should_extract.set(false);
+        }
+    }
+
+    if render_data.map.len() != *last_count {
+        *last_count = render_data.map.len();
+        info!("Render world has {} chunks", *last_count);
     }
 }
 
@@ -51,8 +71,16 @@ pub fn prepare_chunk_render_data(
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
+    let mut count = 0;
+
     for data in chunk_data_store.map.values_mut() {
-        data.move_to_gpu(gpu.as_ref(), queue.as_ref(), &pipeline.chunk_layout)
+        if data.move_to_gpu(gpu.as_ref(), queue.as_ref(), &pipeline.chunk_layout) {
+            count += 1;
+        }
+    }
+
+    if count > 0 {
+        info!("Queued {count} chunks to be written to GPU memory")
     }
 }
 
@@ -98,9 +126,9 @@ impl ChunkRenderData {
         gpu: &RenderDevice,
         queue: &RenderQueue,
         layout: &BindGroupLayout,
-    ) {
+    ) -> bool {
         let Self::Cpu(data) = self else {
-            return;
+            return false;
         };
 
         let quads = {
@@ -136,7 +164,9 @@ impl ChunkRenderData {
             bind_group,
             quad_buffer: quads.buffer().unwrap().clone(),
             occlusion_buffer: quads.buffer().unwrap().clone(),
-        })
+        });
+
+        return true;
     }
 }
 

@@ -1,8 +1,11 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{convert::identity, sync::Arc};
 
+use bevy::render::primitives::Aabb;
 use bevy::{ecs::system::lifetimeless::SRes, prelude::*, tasks::AsyncComputeTaskPool};
 use dashmap::DashMap;
 
+use crate::topo::chunk::Chunk;
 use crate::util::result::ResultFlattening;
 use crate::{
     data::registries::Registries,
@@ -16,6 +19,29 @@ use crate::{
 };
 
 use super::MeshWorkerPool;
+
+#[derive(Component)]
+pub struct ShouldExtract(AtomicBool);
+
+impl ShouldExtract {
+    pub fn get(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+
+    pub fn set(&self, value: bool) {
+        self.0.store(value, Ordering::Relaxed);
+    }
+
+    pub fn reset(&self) {
+        self.0.store(false, Ordering::Relaxed);
+    }
+}
+
+impl Default for ShouldExtract {
+    fn default() -> Self {
+        Self(AtomicBool::new(true))
+    }
+}
 
 pub fn setup_chunk_meshing_workers<M: Mesher + Resource>(
     mut cmds: Commands,
@@ -61,7 +87,16 @@ pub fn queue_chunk_meshing_tasks<M: Mesher>(
 
     for (&chunk_pos, (_cref, should_insert)) in changed.iter() {
         if *should_insert {
-            cmds.spawn((chunk_pos, ChunkEntity));
+            cmds.spawn((
+                chunk_pos,
+                ChunkEntity,
+                ShouldExtract::default(),
+                VisibilityBundle::default(),
+                TransformBundle::from_transform(Transform::from_translation(
+                    chunk_pos.worldspace_min().as_vec3(),
+                )),
+                Chunk::BOUNDING_BOX.to_aabb(),
+            ));
         }
     }
 }
