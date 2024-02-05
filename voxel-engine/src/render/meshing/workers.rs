@@ -86,12 +86,11 @@ impl<M: Mesher> Worker<M> {
                                 params.mesher.build(access, context)
                             })??)
                         }).map_err(ChunkMeshingError::from).custom_flatten();
-                        
+
                         match result {
                             Ok(output) => {
                                 params.finished.0.insert(cmd.pos, output);
                             }
-                        
                             Err(err) => error!("Error in worker '{task_label}' building chunk mesh: {err}"),
                         }
                     },
