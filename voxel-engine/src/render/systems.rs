@@ -23,17 +23,9 @@ use super::{
     meshing::greedy::algorithm::{GreedyMesher, SimplePbrMesher},
 };
 
-pub(crate) fn setup_mesh_builder<Hqm: Mesher, Lqm: Mesher>(
-    mut cmds: Commands,
-    registries: Res<Registries>,
-) {
-    let mesh_builder = ParallelMeshBuilder::new(
-        GreedyMesher::new(registries.clone()),
-        SimplePbrMesher::new(),
-        registries.as_ref().clone(),
-    );
-
-    cmds.insert_resource(mesh_builder);
+pub(crate) fn setup_meshers(mut cmds: Commands) {
+    cmds.insert_resource(GreedyMesher::new());
+    cmds.insert_resource(SimplePbrMesher::new());
 }
 
 pub(crate) fn build_meshes<HQM: Mesher, LQM: Mesher>(

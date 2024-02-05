@@ -223,13 +223,13 @@ impl ChunkManager {
 
 #[derive(Resource)]
 pub struct VoxelRealm {
-    pub chunk_manager: ChunkManager,
+    pub chunk_manager: Arc<ChunkManager>,
 }
 
 impl VoxelRealm {
     pub fn new(default_cvo: ChunkVoxelOutput) -> Self {
         Self {
-            chunk_manager: ChunkManager::new(default_cvo),
+            chunk_manager: Arc::new(ChunkManager::new(default_cvo)),
         }
     }
 }

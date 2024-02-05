@@ -1,3 +1,4 @@
+use bevy::ecs::system::Resource;
 use bevy::math::ivec2;
 use bevy::math::ivec3;
 use bevy::pbr::ExtendedMaterial;
@@ -38,7 +39,7 @@ use super::greedy_mesh::ChunkSliceMask;
 use super::material::GreedyMeshMaterial;
 use super::ChunkQuadSlice;
 
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub struct SimplePbrMesher {
     material: StandardMaterial,
 }
@@ -67,11 +68,11 @@ impl Mesher for SimplePbrMesher {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub struct GreedyMesher {}
 
 impl GreedyMesher {
-    pub fn new(registries: Registries) -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 
@@ -320,7 +321,7 @@ mod tests {
         registries.add_registry(texreg);
 
         let varreg = registries.get_registry::<VariantRegistry>().unwrap();
-        let mesher = GreedyMesher::new(registries.clone());
+        let mesher = GreedyMesher::new();
 
         let cqs = ChunkQuadSlice::new(Face::North, 8, &access, &neighbors, &varreg).unwrap();
 
@@ -371,7 +372,7 @@ mod tests {
         registries.add_registry(texreg);
 
         let varreg = registries.get_registry::<VariantRegistry>().unwrap();
-        let mesher = GreedyMesher::new(registries.clone());
+        let mesher = GreedyMesher::new();
 
         let mut cqs = ChunkQuadSlice::new(Face::North, 8, &access, &neighbors, &varreg).unwrap();
 
