@@ -180,7 +180,7 @@ impl ChunkManager {
 
                     let nbrpos_ws = ChunkPos::from(nbrpos + IVec3::from(pos));
                     if let Ok(chunk_ref) = self.get_chunk(nbrpos_ws) {
-                        refs[ivec3_to_1d(nbrpos).unwrap()] = Some(chunk_ref)
+                        refs[ivec3_to_1d(nbrpos + IVec3::ONE).unwrap()] = Some(chunk_ref)
                     }
                 }
             }

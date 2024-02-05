@@ -34,7 +34,7 @@ use crate::{
     render::{
         core::RenderCore,
         meshing::{
-            ecs::{insert_chunks, queue_chunk_meshing_tasks, setup_chunk_meshing_workers},
+            ecs::{insert_chunk_meshes, queue_chunk_meshing_tasks, setup_chunk_meshing_workers},
             greedy::{algorithm::GreedyMesher, material::GreedyMeshMaterial},
         },
         systems::{build_meshes, configure_sampling, insert_meshes, setup_meshers},
@@ -104,7 +104,7 @@ impl Plugin for VoxelPlugin {
 
         app.add_systems(
             PreUpdate,
-            insert_chunks::<Hqm>.run_if(in_state(AppState::Finished)),
+            insert_chunk_meshes::<Hqm>.run_if(in_state(AppState::Finished)),
         );
         app.add_systems(
             PostUpdate,

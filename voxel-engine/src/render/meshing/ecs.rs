@@ -39,15 +39,34 @@ pub fn setup_chunk_meshing_workers<M: Mesher + Resource>(
 }
 
 pub fn queue_chunk_meshing_tasks<M: Mesher>(
+    mut cmds: Commands,
+    chunks: Query<&ChunkPos, With<ChunkEntity>>,
     realm: Res<VoxelRealm>,
     workers: Res<MeshWorkerPool<M>>,
 ) {
+    let mut changed = hb::HashMap::new();
     for chunk in realm.chunk_manager.changed_chunks() {
+        // the boolean value in this tuple is for whether or not we should insert this chunk
+        // into the ECS world
         workers.queue_job(chunk.pos());
+        changed.insert(chunk.pos(), (chunk, true));
+    }
+
+    // don't insert chunks that already exist in the ECS world (we'll get duplicates!!! :O)
+    for chunk in &chunks {
+        changed
+            .get_mut(chunk)
+            .map(|(_, should_insert)| *should_insert = false);
+    }
+
+    for (&chunk_pos, (_cref, should_insert)) in changed.iter() {
+        if *should_insert {
+            cmds.spawn((chunk_pos, ChunkEntity));
+        }
     }
 }
 
-pub fn insert_chunks<M: Mesher>(
+pub fn insert_chunk_meshes<M: Mesher>(
     chunks: Query<(Entity, &ChunkPos, Option<&Handle<Mesh>>), With<ChunkEntity>>,
     mut cmds: Commands,
     workers: Res<MeshWorkerPool<M>>,
@@ -73,6 +92,8 @@ pub fn insert_chunks<M: Mesher>(
 
             cmds.entity(entity)
                 .insert((mesher_output.quads, mesher_output.occlusion));
+
+            info!("Inserted mesh for chunk '{chunk_pos}'")
         }
     }
 }

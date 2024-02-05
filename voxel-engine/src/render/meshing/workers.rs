@@ -10,7 +10,7 @@ use std::{
 
 use bevy::{
     ecs::system::Resource,
-    log::{error, info, warn},
+    log::{debug, error, info, warn},
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
 use crossbeam::{
@@ -89,6 +89,7 @@ impl<M: Mesher> Worker<M> {
 
                         match result {
                             Ok(output) => {
+                                info!("Worker '{task_label}' finished building mesh for chunk {}", cmd.pos);
                                 params.finished.0.insert(cmd.pos, output);
                             }
                             Err(err) => error!("Error in worker '{task_label}' building chunk mesh: {err}"),
