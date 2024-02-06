@@ -6,10 +6,12 @@ pub mod isometric;
 use std::{fmt::Debug, mem::size_of};
 
 pub use anon::*;
-use bevy::{ecs::component::Component, math::Vec3, render::render_resource::ShaderType};
+use bevy::{ecs::component::Component, math::{Vec2, Vec3}, render::render_resource::ShaderType};
 pub use data::*;
 pub use error::*;
 pub use isometric::*;
+
+use crate::data::{texture::FaceTextureRotation, tile::Face};
 
 #[rustfmt::skip]
 pub mod consts {
@@ -22,9 +24,55 @@ pub mod consts {
 #[derive(Copy, Clone, Debug, ShaderType, PartialEq)]
 pub struct GpuQuad {
     pub texture_id: u32,
-    pub rotation: u32,
-    pub min: Vec3,
-    pub max: Vec3,
+    pub bitfields: GpuQuadBitfields,
+    pub min: Vec2,
+    pub max: Vec2,
+    pub layer: f32,
+}
+
+#[derive(Copy, Clone, Debug, ShaderType, PartialEq, Eq)]
+pub struct GpuQuadBitfields {
+    value: u32
+}
+
+impl GpuQuadBitfields {
+    pub const ROTATION_MASK: u32 = 0b11 << 0;
+    pub const ROTATION_SHIFT: u32 = 0;
+    pub const FACE_MASK: u32 = 0b111 << 2;
+    pub const FACE_SHIFT: u32 = 2;
+
+    pub const FLIP_UV_X_SHIFT: u32 = 5;
+    pub const FLIP_UV_Y_SHIFT: u32 = 6;
+
+    pub fn new() -> Self {
+        Self {
+            value: 0
+        }
+    }
+
+    pub fn with_rotation(mut self, rotation: FaceTextureRotation) -> Self {
+        self.value |= (rotation.inner() as u32) << Self::ROTATION_SHIFT;
+        self
+    }
+
+    pub fn with_face(mut self, face: Face) -> Self {
+        self.value |= face.as_u32() << Self::FACE_SHIFT;
+        self
+    }
+
+    pub fn with_flip_x(mut self, flip: bool) -> Self {
+        if flip {
+            self.value |= 0b1 << Self::FLIP_UV_X_SHIFT;
+        }
+        self
+    }
+
+    pub fn with_flip_y(mut self, flip: bool) -> Self {
+        if flip {
+            self.value |= 0b1 << Self::FLIP_UV_Y_SHIFT;
+        }
+        self
+    }
 }
 
 #[derive(Clone, Component)]
