@@ -37,6 +37,7 @@ use crate::{data::texture::GpuFaceTexture, render::quad::GpuQuad};
 use super::{
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
+    RenderCore,
 };
 
 #[derive(Resource, Clone)]
@@ -98,7 +99,8 @@ impl SpecializedMeshPipeline for VoxelChunkPipeline {
         let mut descriptor = self.mesh_pipeline.specialize(key.mesh_key, layout)?;
 
         descriptor.vertex.shader = self.vert.clone();
-        descriptor.vertex.buffers = vec![];
+        descriptor.vertex.buffers =
+            vec![layout.get_layout(&[RenderCore::QUAD_INDEX_ATTR.at_shader_location(0)])?];
         descriptor.fragment.as_mut().unwrap().shader = self.frag.clone();
 
         descriptor.layout = vec![

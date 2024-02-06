@@ -41,6 +41,7 @@ use super::{
     gpu_chunk::{ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
     render::VoxelChunkPipelineKey,
+    RenderCore,
 };
 
 #[derive(Clone, Resource)]
@@ -122,8 +123,6 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
             self.pipeline.chunk_layout.clone(),
         ]);
 
-        let mut vertex_attributes = Vec::<VertexAttributeDescriptor>::new();
-
         let shader_defs: Vec<ShaderDefVal> = vec![
             "PREPASS_PIPELINE".into(),
             "VERTEX_UVS".into(),
@@ -157,7 +156,9 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
                 shader: self.vert.clone(),
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
-                buffers: vec![layout.get_layout(&vertex_attributes)?],
+                buffers: vec![
+                    layout.get_layout(&[RenderCore::QUAD_INDEX_ATTR.at_shader_location(0)])?
+                ],
             },
             primitive: PrimitiveState {
                 topology: key.mesh_key.primitive_topology(),
