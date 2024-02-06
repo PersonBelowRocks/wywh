@@ -89,7 +89,6 @@ impl<M: Mesher> Worker<M> {
 
                         match result {
                             Ok(output) => {
-                                info!("Worker '{task_label}' finished building mesh for chunk {}", cmd.pos);
                                 params.finished.0.insert(cmd.pos, output);
                             }
                             Err(err) => error!("Error in worker '{task_label}' building chunk mesh: {err}"),

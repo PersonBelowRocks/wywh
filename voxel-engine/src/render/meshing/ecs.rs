@@ -127,8 +127,6 @@ pub fn insert_chunk_meshes<M: Mesher>(
 
             cmds.entity(entity)
                 .insert((mesher_output.quads, mesher_output.occlusion));
-
-            info!("Inserted mesh for chunk '{chunk_pos}'")
         }
     }
 }

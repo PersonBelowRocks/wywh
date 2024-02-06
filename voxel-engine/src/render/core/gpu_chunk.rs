@@ -61,7 +61,7 @@ pub fn extract_chunk_render_data(
 
     if render_data.map.len() != *last_count {
         *last_count = render_data.map.len();
-        info!("Render world has {} chunks", *last_count);
+        // TODO: keep track of this somehow
     }
 }
 
@@ -80,7 +80,7 @@ pub fn prepare_chunk_render_data(
     }
 
     if count > 0 {
-        info!("Queued {count} chunks to be written to GPU memory")
+        // TODO: keep track of this
     }
 }
 
