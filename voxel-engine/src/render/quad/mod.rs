@@ -6,7 +6,11 @@ pub mod isometric;
 use std::{fmt::Debug, mem::size_of};
 
 pub use anon::*;
-use bevy::{ecs::component::Component, math::{Vec2, Vec3}, render::render_resource::ShaderType};
+use bevy::{
+    ecs::component::Component,
+    math::{Vec2, Vec3},
+    render::render_resource::ShaderType,
+};
 pub use data::*;
 pub use error::*;
 pub use isometric::*;
@@ -32,7 +36,7 @@ pub struct GpuQuad {
 
 #[derive(Copy, Clone, Debug, ShaderType, PartialEq, Eq)]
 pub struct GpuQuadBitfields {
-    value: u32
+    value: u32,
 }
 
 impl GpuQuadBitfields {
@@ -45,9 +49,7 @@ impl GpuQuadBitfields {
     pub const FLIP_UV_Y_SHIFT: u32 = 6;
 
     pub fn new() -> Self {
-        Self {
-            value: 0
-        }
+        Self { value: 0 }
     }
 
     pub fn with_rotation(mut self, rotation: FaceTextureRotation) -> Self {
