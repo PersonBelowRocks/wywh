@@ -20,7 +20,7 @@ fn vertex(
 ) -> VertexOutput {
 
     let quad = quads[chunk_quad_index];
-    let position = extract_position(quad, vertex % 4);
+    let position = extract_position(quad, vertex % 4u);
     let face = extract_face(quad);
     let model = mesh_functions::get_model_matrix(instance_index);
 
@@ -28,14 +28,14 @@ fn vertex(
     out.texture = quad.texture_id;
     out.bitfields = quad.bitfields;
 
-    out.normal = mesh_functions::mesh_normal_local_to_world(
+    out.world_normal = mesh_functions::mesh_normal_local_to_world(
         extract_normal(quad),
         get_instance_index(instance_index)
     );
 
     out.uv = project_to_2d(position, axis_from_face(face)) - quad.min;
 
-    out.world_position = mesh_functions::mesh_position_local_to_world(model, vec4<f32>(position, 1.0))
+    out.world_position = mesh_functions::mesh_position_local_to_world(model, vec4<f32>(position, 1.0));
     out.position = position_world_to_clip(out.world_position.xyz);
 
     // TODO: tangents

@@ -35,13 +35,16 @@ use bevy::{
     },
 };
 
-use crate::render::core::{gpu_chunk::ChunkRenderData, render::VoxelChunkPipeline};
+use crate::render::{
+    core::{gpu_chunk::ChunkRenderData, render::VoxelChunkPipeline},
+    quad::GpuQuadBitfields,
+};
 
 use super::{
     gpu_chunk::{ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
     render::VoxelChunkPipelineKey,
-    RenderCore,
+    u32_shader_def, RenderCore,
 };
 
 #[derive(Clone, Resource)]
@@ -100,6 +103,8 @@ impl FromWorld for ChunkPrepassPipeline {
     }
 }
 
+// most of this code is taken verbatim from
+// https://github.com/bevyengine/bevy/blob/d4132f661a8a567fd3f9c3b329c2b4032bb1e05e/crates/bevy_pbr/src/prepass/mod.rs#L297C1-L582C2
 impl SpecializedMeshPipeline for ChunkPrepassPipeline {
     type Key = VoxelChunkPipelineKey;
 
@@ -123,16 +128,66 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
             self.pipeline.chunk_layout.clone(),
         ]);
 
-        let shader_defs: Vec<ShaderDefVal> = vec![
+        let mut shader_defs: Vec<ShaderDefVal> = vec![
             "PREPASS_PIPELINE".into(),
             "VERTEX_UVS".into(),
-            "NORMAL_PREPASS".into(),
-            "NORMAL_PREPASS_OR_DEFERRED_PREPASS".into(),
+            "VERTEX_NORMALS".into(),
             "VERTEX_TANGENTS".into(),
-            "MOTION_VECTOR_PREPASS_OR_DEFERRED_PREPASS".into(),
-            "MOTION_VECTOR_PREPASS".into(),
-            "PREPASS_FRAGMENT".into(),
+            u32_shader_def("ROTATION_MASK", GpuQuadBitfields::ROTATION_MASK),
+            u32_shader_def("ROTATION_SHIFT", GpuQuadBitfields::ROTATION_SHIFT),
+            u32_shader_def("FACE_MASK", GpuQuadBitfields::FACE_MASK),
+            u32_shader_def("FACE_SHIFT", GpuQuadBitfields::FACE_SHIFT),
+            u32_shader_def("FLIP_UV_X_SHIFT", GpuQuadBitfields::FLIP_UV_X_SHIFT),
+            u32_shader_def("FLIP_UV_Y_SHIFT", GpuQuadBitfields::FLIP_UV_Y_SHIFT),
         ];
+
+        if key.mesh_key.contains(MeshPipelineKey::DEPTH_PREPASS) {
+            shader_defs.push("DEPTH_PREPASS".into());
+        }
+
+        if key.mesh_key.contains(MeshPipelineKey::NORMAL_PREPASS) {
+            shader_defs.push("NORMAL_PREPASS".into());
+        }
+
+        if key
+            .mesh_key
+            .intersects(MeshPipelineKey::NORMAL_PREPASS | MeshPipelineKey::DEFERRED_PREPASS)
+        {
+            shader_defs.push("NORMAL_PREPASS_OR_DEFERRED_PREPASS".into());
+        }
+
+        if key
+            .mesh_key
+            .intersects(MeshPipelineKey::MOTION_VECTOR_PREPASS | MeshPipelineKey::DEFERRED_PREPASS)
+        {
+            shader_defs.push("MOTION_VECTOR_PREPASS_OR_DEFERRED_PREPASS".into());
+        }
+
+        if key
+            .mesh_key
+            .contains(MeshPipelineKey::MOTION_VECTOR_PREPASS)
+        {
+            shader_defs.push("MOTION_VECTOR_PREPASS".into());
+        }
+
+        if key.mesh_key.intersects(
+            MeshPipelineKey::NORMAL_PREPASS
+                | MeshPipelineKey::MOTION_VECTOR_PREPASS
+                | MeshPipelineKey::DEFERRED_PREPASS,
+        ) {
+            shader_defs.push("PREPASS_FRAGMENT".into());
+        }
+
+        if key.mesh_key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO) {
+            shader_defs.push("DEPTH_CLAMP_ORTHO".into());
+            // PERF: This line forces the "prepass fragment shader" to always run in
+            // common scenarios like "directional light calculation". Doing so resolves
+            // a pretty nasty depth clamping bug, but it also feels a bit excessive.
+            // We should try to find a way to resolve this without forcing the fragment
+            // shader to run.
+            // https://github.com/bevyengine/bevy/pull/8877
+            shader_defs.push("PREPASS_FRAGMENT".into());
+        }
 
         let targets = vec![
             Some(ColorTargetState {

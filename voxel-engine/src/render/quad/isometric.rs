@@ -38,6 +38,11 @@ impl QuadIsometry {
     pub fn pos_2d(self) -> IVec2 {
         self.pos
     }
+
+    #[inline]
+    pub fn magnitude(self) -> i32 {
+        self.magnitude
+    }
 }
 
 /*
@@ -204,6 +209,14 @@ impl IsometrizedQuad {
     pub fn vertex_position_3d(&self, vertex: QuadVertex) -> IVec3 {
         let pos_2d = self.quad.vertex_pos(vertex);
         ivec_project_to_3d(pos_2d, self.isometry.face, self.isometry.magnitude)
+    }
+
+    pub fn min_2d(&self) -> IVec2 {
+        self.quad.min()
+    }
+
+    pub fn max_2d(&self) -> IVec2 {
+        self.quad.max()
     }
 
     pub fn min(&self) -> IVec3 {

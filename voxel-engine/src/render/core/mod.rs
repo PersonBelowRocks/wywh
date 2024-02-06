@@ -18,7 +18,9 @@ use bevy::{
         extract_resource::ExtractResourcePlugin,
         mesh::MeshVertexAttribute,
         render_phase::{AddRenderCommand, RenderPhase},
-        render_resource::{Buffer, BufferDescriptor, SpecializedMeshPipelines, VertexFormat},
+        render_resource::{
+            Buffer, BufferDescriptor, ShaderDefVal, SpecializedMeshPipelines, VertexFormat,
+        },
         renderer::RenderDevice,
         Extract, Render, RenderApp, RenderSet,
     },
@@ -32,6 +34,10 @@ use self::{
     prepass::{queue_prepass_chunks, ChunkPrepassPipeline, DrawVoxelChunkPrepass},
     render::{queue_chunks, DrawVoxelChunk, VoxelChunkPipeline},
 };
+
+pub(crate) fn u32_shader_def(name: &str, value: u32) -> ShaderDefVal {
+    ShaderDefVal::UInt(name.into(), value)
+}
 
 pub struct RenderCore;
 

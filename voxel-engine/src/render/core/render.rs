@@ -24,20 +24,23 @@ use bevy::{
         render_resource::{
             binding_types::{storage_buffer, storage_buffer_read_only},
             BindGroupLayout, BindGroupLayoutEntries, PipelineCache, RenderPipelineDescriptor,
-            Shader, ShaderStages, SpecializedMeshPipeline, SpecializedMeshPipelineError,
-            SpecializedMeshPipelines,
+            Shader, ShaderDefVal, ShaderStages, SpecializedMeshPipeline,
+            SpecializedMeshPipelineError, SpecializedMeshPipelines,
         },
         renderer::RenderDevice,
         view::{ExtractedView, VisibleEntities},
     },
 };
 
-use crate::{data::texture::GpuFaceTexture, render::quad::GpuQuad};
+use crate::{
+    data::texture::GpuFaceTexture,
+    render::quad::{GpuQuad, GpuQuadBitfields},
+};
 
 use super::{
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
-    RenderCore,
+    u32_shader_def, RenderCore,
 };
 
 #[derive(Resource, Clone)]
@@ -102,6 +105,26 @@ impl SpecializedMeshPipeline for VoxelChunkPipeline {
         descriptor.vertex.buffers =
             vec![layout.get_layout(&[RenderCore::QUAD_INDEX_ATTR.at_shader_location(0)])?];
         descriptor.fragment.as_mut().unwrap().shader = self.frag.clone();
+
+        let shader_constants = [
+            u32_shader_def("ROTATION_MASK", GpuQuadBitfields::ROTATION_MASK),
+            u32_shader_def("ROTATION_SHIFT", GpuQuadBitfields::ROTATION_SHIFT),
+            u32_shader_def("FACE_MASK", GpuQuadBitfields::FACE_MASK),
+            u32_shader_def("FACE_SHIFT", GpuQuadBitfields::FACE_SHIFT),
+            u32_shader_def("FLIP_UV_X_SHIFT", GpuQuadBitfields::FLIP_UV_X_SHIFT),
+            u32_shader_def("FLIP_UV_Y_SHIFT", GpuQuadBitfields::FLIP_UV_Y_SHIFT),
+        ];
+
+        descriptor
+            .vertex
+            .shader_defs
+            .extend_from_slice(&shader_constants);
+        descriptor
+            .fragment
+            .as_mut()
+            .unwrap()
+            .shader_defs
+            .extend_from_slice(&shader_constants);
 
         descriptor.layout = vec![
             self.mesh_pipeline

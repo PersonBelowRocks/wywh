@@ -1,4 +1,5 @@
-#import "shaders/vxl_chunk_io.wgsl"::VertexOutput
+#import "shaders/vxl_chunk_io.wgsl"::PrepassOutput
+#import "shaders/chunk_bindings.wgsl"::quads
 #import "shaders/utils.wgsl"::extract_normal
 #import "shaders/utils.wgsl"::extract_position
 #import "shaders/utils.wgsl"::project_to_2d
@@ -14,14 +15,14 @@ fn vertex(
     @builtin(vertex_index) vertex: u32,
     @builtin(instance_index) instance_index: u32,
     @location(0) chunk_quad_index: u32,
-) -> VertexOutput {
+) -> PrepassOutput {
     
     let quad = quads[chunk_quad_index];
-    let position = extract_position(quad, vertex % 4);
+    let position = extract_position(quad, vertex % 4u);
     let face = extract_face(quad);
     let model = mesh_functions::get_model_matrix(instance_index);
 
-    var out: VertexOutput;
+    var out: PrepassOutput;
     out.texture = quad.texture_id;
     out.bitfields = quad.bitfields;
 

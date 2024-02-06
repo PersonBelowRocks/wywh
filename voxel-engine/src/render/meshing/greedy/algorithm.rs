@@ -24,6 +24,7 @@ use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
 use crate::render::quad::ChunkQuads;
 use crate::render::quad::GpuQuad;
+use crate::render::quad::GpuQuadBitfields;
 use crate::topo::access::ChunkAccess;
 use crate::topo::access::WriteAccess;
 use crate::topo::chunk::Chunk;
@@ -249,11 +250,16 @@ impl Mesher for GreedyMesher {
         for i in 0..quads.len() {
             let quad = quads[i];
 
+            let bitfields = GpuQuadBitfields::new()
+                .with_rotation(quad.quad.dataquad.texture.rotation)
+                .with_face(quad.isometry.face);
+
             let gpu_quad = GpuQuad {
-                min: quad.min().as_vec3(),
-                max: quad.max().as_vec3(),
+                min: quad.min_2d().as_vec2(),
+                max: quad.max_2d().as_vec2(),
                 texture_id: quad.quad.dataquad.texture.texture.inner() as u32,
-                rotation: quad.quad.dataquad.texture.rotation.inner() as u32,
+                bitfields,
+                layer: quad.isometry.magnitude() as f32,
             };
 
             gpu_quads.push(gpu_quad);

@@ -1,3 +1,5 @@
+#import "shaders/vxl_types.wgsl"::ChunkQuad
+
 const ROTATION_MASK: u32 = #{ROTATION_MASK}u;
 const ROTATION_SHIFT: u32 = #{ROTATION_SHIFT}u;
 const FACE_MASK: u32 = #{FACE_MASK}u;
@@ -9,16 +11,16 @@ const FLIP_UV_Y_SHIFT: u32 = #{FLIP_UV_Y_SHIFT}u;
 fn extract_position(quad: ChunkQuad, quad_vertex_index: u32) -> vec3<f32> {
     var pos_2d: vec2<f32>;
     switch quad_vertex_index {
-        case 0: {
+        case 0u: {
             pos_2d = vec2(quad.min.x, quad.max.y);
         }
-        case 1: {
+        case 1u: {
             pos_2d = vec2(quad.max.x, quad.max.y);
         }
-        case 2: {
+        case 2u: {
             pos_2d = vec2(quad.min.x, quad.min.y);
         }
-        case 3: {
+        case 3u: {
             pos_2d = vec2(quad.max.x, quad.min.y);
         }
         case default: {
