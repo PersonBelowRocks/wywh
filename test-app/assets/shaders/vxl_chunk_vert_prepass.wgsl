@@ -24,7 +24,7 @@ fn vertex(
 
     var out: PrepassOutput;
     out.texture = quad.texture_id;
-    out.bitfields = quad.bitfields;
+    out.bitfields = quad.bitfields.value;
 
     out.uv = project_to_2d(position, axis_from_face(face)) - quad.min;
 

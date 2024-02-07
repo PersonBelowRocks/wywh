@@ -6,8 +6,12 @@ struct FaceTexture {
 
 struct ChunkQuad {
     texture_id: u32,
-    bitfields: u32,
+    bitfields: ChunkQuadBitfields,
     min: vec2<f32>,
     max: vec2<f32>,
     layer: f32,
+}
+
+struct ChunkQuadBitfields {
+    value: u32
 }

@@ -67,7 +67,7 @@ fn project_to_2d(pos: vec3<f32>, axis: u32) -> vec2<f32> {
 }
 
 fn extract_face(quad: ChunkQuad) -> u32 {
-    return (quad.bitfields & FACE_MASK) >> FACE_SHIFT;
+    return (quad.bitfields.value & FACE_MASK) >> FACE_SHIFT;
 }
 
 fn extract_normal(quad: ChunkQuad) -> vec3<f32> {
