@@ -29,6 +29,7 @@ fn vertex(
     out.uv = project_to_2d(position, axis_from_face(face)) - quad.min;
 
     out.position = mesh_functions::mesh_position_local_to_clip(model, vec4(position, 1.0));
+    out.local_position = position;
     out.world_position = mesh_functions::mesh_position_local_to_world(model, vec4<f32>(position, 1.0));
     
 #ifdef DEPTH_CLAMP_ORTHO

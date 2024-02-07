@@ -6,5 +6,11 @@ fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
+    var out: FragmentOutput;
+
+    out.color = vec4(0.0, 0.5, 0.5, 1.0);
+
+    return out;
+
     // TODO: implement
 }

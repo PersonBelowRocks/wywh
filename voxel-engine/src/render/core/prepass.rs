@@ -190,17 +190,26 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
         }
 
         let targets = vec![
-            Some(ColorTargetState {
-                format: NORMAL_PREPASS_FORMAT,
-                blend: None,
-                write_mask: ColorWrites::ALL,
-            }),
-            Some(ColorTargetState {
-                format: MOTION_VECTOR_PREPASS_FORMAT,
-                // BlendState::REPLACE is not needed here, and None will be potentially much faster in some cases.
-                blend: None,
-                write_mask: ColorWrites::ALL,
-            }),
+            key.mesh_key
+                .contains(MeshPipelineKey::NORMAL_PREPASS)
+                .then_some(ColorTargetState {
+                    format: NORMAL_PREPASS_FORMAT,
+                    // BlendState::REPLACE is not needed here, and None will be potentially much faster in some cases.
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                }),
+            key.mesh_key
+                .contains(MeshPipelineKey::MOTION_VECTOR_PREPASS)
+                .then_some(ColorTargetState {
+                    format: MOTION_VECTOR_PREPASS_FORMAT,
+                    // BlendState::REPLACE is not needed here, and None will be potentially much faster in some cases.
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                }),
+            // these 2 render targets are normally for the deferred prepass, but we dont support
+            // deferred rendering for chunks yet so we just leave these as None for now
+            None,
+            None,
         ];
 
         Ok(RenderPipelineDescriptor {
