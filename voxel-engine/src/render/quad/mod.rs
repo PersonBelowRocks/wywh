@@ -14,6 +14,7 @@ use bevy::{
 pub use data::*;
 pub use error::*;
 pub use isometric::*;
+use num_traits::FromPrimitive;
 
 use crate::data::{texture::FaceTextureRotation, tile::Face};
 
@@ -50,6 +51,11 @@ impl GpuQuadBitfields {
 
     pub fn new() -> Self {
         Self { value: 0 }
+    }
+
+    pub fn get_face(self) -> Face {
+        let raw = (self.value & Self::FACE_MASK) >> Self::FACE_SHIFT;
+        FromPrimitive::from_u32(raw).unwrap()
     }
 
     pub fn with_rotation(mut self, rotation: FaceTextureRotation) -> Self {

@@ -1,6 +1,8 @@
 use bevy::ecs::system::Resource;
 use bevy::math::ivec2;
 use bevy::math::ivec3;
+use bevy::math::IVec2;
+use bevy::math::Vec2;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::default;
 use bevy::prelude::Color;
@@ -163,6 +165,8 @@ impl GreedyMesher {
                 };
 
                 let mut current = PositionedQuad::new(fpos, dataquad);
+                debug_assert!(current.height() > 0);
+                debug_assert!(current.width() > 0);
 
                 // widen
                 let mut widen_by = 0;
@@ -185,6 +189,7 @@ impl GreedyMesher {
                 }
 
                 current.widen(widen_by).unwrap();
+                debug_assert!(current.width() > 0);
 
                 // heighten
                 let mut heighten_by = 0;
@@ -209,12 +214,15 @@ impl GreedyMesher {
                 }
 
                 current.heighten(heighten_by).unwrap();
+                debug_assert!(current.height() > 0);
 
                 // mask_region will return false if any of the positions provided are outside of the
                 // chunk bounds, so we do a little debug mode sanity check here to make sure thats
                 // not the case, and catch the error early
                 debug_assert!(mask.mask_region(current.min(), current.max()));
+
                 let isoquad = cqs.isometrize(current);
+
                 buffer.push(isoquad);
             }
         }
@@ -256,7 +264,7 @@ impl Mesher for GreedyMesher {
 
             let gpu_quad = GpuQuad {
                 min: quad.min_2d().as_vec2(),
-                max: quad.max_2d().as_vec2(),
+                max: quad.max_2d().as_vec2() + Vec2::ONE,
                 texture_id: quad.quad.dataquad.texture.texture.inner() as u32,
                 bitfields,
                 layer: quad.isometry.magnitude() as f32,
@@ -272,9 +280,12 @@ impl Mesher for GreedyMesher {
         // Vertex attribute for what quad the vertex is a part of
         let mut quad_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 6);
 
+        let mut current_idx = 0;
         for (i, quad) in gpu_quads.iter().enumerate() {
-            vertex_indices.extend_from_slice(&[0, 1, 2, 3, 2, 1]);
+            vertex_indices.extend_from_slice(&[0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx));
             quad_indices.extend_from_slice(&[i as u32; 6]);
+
+            current_idx += 4;
         }
 
         mesh.set_indices(Some(Indices::U32(vertex_indices)));
