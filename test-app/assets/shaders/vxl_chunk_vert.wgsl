@@ -17,12 +17,12 @@ fn vertex(
     @builtin(vertex_index) vertex: u32,
     @builtin(instance_index) instance_index: u32,
     @location(0) chunk_quad_index: u32,
-    @location(1) vertex_position: vec3<f32>,
+    // @location(1) vertex_position: vec3<f32>,
 ) -> VertexOutput {
 
     let quad = quads[chunk_quad_index];
-    // var position = extract_position(quad, vertex % 4u);
-    var position = vertex_position;
+    var position = extract_position(quad, vertex % 4u);
+    // var position = vertex_position;
     let face = extract_face(quad);
     let model = mesh_functions::get_model_matrix(instance_index);
 
@@ -47,6 +47,12 @@ fn vertex(
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     out.instance_index = get_instance_index(instance_index);
 #endif
+
+    if vertex % 4u == 0u {
+        out.color = vec3<f32>(1.0, 0.5, 0.5);
+    } else {
+        out.color = vec3<f32>(0.0, 0.5, 0.5);
+    }
 
     return out;
 }

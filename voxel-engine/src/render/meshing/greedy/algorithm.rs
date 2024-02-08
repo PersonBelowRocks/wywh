@@ -286,12 +286,15 @@ impl Mesher for GreedyMesher {
 
         let mut current_idx = 0;
         for (i, quad) in gpu_quads.iter().enumerate() {
-            const VERTEX_INDICES: [u32; 6] = [0, 1, 2, 3, 2, 1];
+            // 0---1
+            // |   |
+            // 2---3
+            const VERTEX_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
 
             vertex_indices.extend_from_slice(&VERTEX_INDICES.map(|idx| idx + current_idx));
-            quad_indices.extend_from_slice(&[i as u32; 6]);
+            quad_indices.extend_from_slice(&[i as u32; 4]);
 
-            for vi in VERTEX_INDICES {
+            for vi in 0..4 {
                 let pos_2d = match vi {
                     0 => vec2(quad.min.x, quad.max.y),
                     1 => vec2(quad.max.x, quad.max.y),
@@ -311,7 +314,7 @@ impl Mesher for GreedyMesher {
 
         mesh.set_indices(Some(Indices::U32(vertex_indices)));
         mesh.insert_attribute(RenderCore::QUAD_INDEX_ATTR, quad_indices);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 
         Ok(MesherOutput {
             mesh,

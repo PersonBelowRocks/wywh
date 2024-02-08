@@ -8,7 +8,7 @@ fn fragment(
 ) -> FragmentOutput {
     var out: FragmentOutput;
 
-    out.color = vec4(0.0, 0.5, 0.5, 1.0);
+    out.color = vec4(in.color, 1.0);
 
     return out;
 

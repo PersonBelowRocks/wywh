@@ -1,9 +1,9 @@
-#import "shaders/vxl_chunk_io.wgsl"::VertexOutput
+#import "shaders/vxl_chunk_io.wgsl"::PrepassOutput
 #import bevy_pbr::prepass_io::FragmentOutput
 
 @fragment
 fn fragment(
-    in: VertexOutput,
+    in: PrepassOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
 

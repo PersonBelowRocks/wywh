@@ -222,7 +222,7 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
                 shader_defs: shader_defs.clone(),
                 buffers: vec![layout.get_layout(&[
                     RenderCore::QUAD_INDEX_ATTR.at_shader_location(0),
-                    Mesh::ATTRIBUTE_POSITION.at_shader_location(1),
+                    // Mesh::ATTRIBUTE_POSITION.at_shader_location(1),
                 ])?],
             },
             primitive: PrimitiveState {

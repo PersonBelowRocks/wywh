@@ -8,8 +8,9 @@ struct VertexOutput {
     @location(5) @interpolate(flat) texture: u32,
     @location(6) @interpolate(flat) bitfields: u32,
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX
-    @location(7) @interpolate(flat) instance_index: u32
+    @location(7) @interpolate(flat) instance_index: u32,
 #endif
+    @location(8) color: vec3<f32>,
 }
 
 struct PrepassOutput {
