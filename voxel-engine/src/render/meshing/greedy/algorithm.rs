@@ -222,7 +222,8 @@ impl GreedyMesher {
                 // mask_region will return false if any of the positions provided are outside of the
                 // chunk bounds, so we do a little debug mode sanity check here to make sure thats
                 // not the case, and catch the error early
-                debug_assert!(mask.mask_region(current.min(), current.max()));
+                let result = mask.mask_region(current.min(), current.max());
+                debug_assert!(result);
 
                 let isoquad = cqs.isometrize(current);
 
@@ -265,12 +266,18 @@ impl Mesher for GreedyMesher {
                 .with_rotation(quad.quad.dataquad.texture.rotation)
                 .with_face(quad.isometry.face);
 
+            let magnitude = if quad.isometry.face.axis_direction() > 0 {
+                quad.isometry.magnitude() as f32 + 1.0
+            } else {
+                quad.isometry.magnitude() as f32
+            };
+
             let gpu_quad = GpuQuad {
                 min: quad.min_2d().as_vec2(),
                 max: quad.max_2d().as_vec2() + Vec2::ONE,
                 texture_id: quad.quad.dataquad.texture.texture.inner() as u32,
                 bitfields,
-                layer: quad.isometry.magnitude() as f32,
+                layer: magnitude,
             };
 
             gpu_quads.push(gpu_quad);
