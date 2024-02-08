@@ -105,8 +105,10 @@ impl SpecializedMeshPipeline for VoxelChunkPipeline {
         descriptor.primitive.cull_mode = None;
 
         descriptor.vertex.shader = self.vert.clone();
-        descriptor.vertex.buffers =
-            vec![layout.get_layout(&[RenderCore::QUAD_INDEX_ATTR.at_shader_location(0)])?];
+        descriptor.vertex.buffers = vec![layout.get_layout(&[
+            RenderCore::QUAD_INDEX_ATTR.at_shader_location(0),
+            Mesh::ATTRIBUTE_POSITION.at_shader_location(1),
+        ])?];
         descriptor.fragment.as_mut().unwrap().shader = self.frag.clone();
 
         let shader_constants = [

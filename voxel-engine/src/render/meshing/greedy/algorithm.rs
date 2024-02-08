@@ -1,8 +1,10 @@
 use bevy::ecs::system::Resource;
 use bevy::math::ivec2;
 use bevy::math::ivec3;
+use bevy::math::vec2;
 use bevy::math::IVec2;
 use bevy::math::Vec2;
+use bevy::math::Vec3;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::default;
 use bevy::prelude::Color;
@@ -24,6 +26,7 @@ use crate::render::mesh_builder::MesherOutput;
 use crate::render::occlusion::ChunkOcclusionMap;
 use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
+use crate::render::quad::project_to_3d;
 use crate::render::quad::ChunkQuads;
 use crate::render::quad::GpuQuad;
 use crate::render::quad::GpuQuadBitfields;
@@ -279,17 +282,36 @@ impl Mesher for GreedyMesher {
         let mut vertex_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 6);
         // Vertex attribute for what quad the vertex is a part of
         let mut quad_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 6);
+        let mut positions = Vec::<Vec3>::with_capacity(gpu_quads.len() * 6);
 
         let mut current_idx = 0;
         for (i, quad) in gpu_quads.iter().enumerate() {
-            vertex_indices.extend_from_slice(&[0, 1, 2, 3, 2, 1].map(|idx| idx + current_idx));
+            const VERTEX_INDICES: [u32; 6] = [0, 1, 2, 3, 2, 1];
+
+            vertex_indices.extend_from_slice(&VERTEX_INDICES.map(|idx| idx + current_idx));
             quad_indices.extend_from_slice(&[i as u32; 6]);
+
+            for vi in VERTEX_INDICES {
+                let pos_2d = match vi {
+                    0 => vec2(quad.min.x, quad.max.y),
+                    1 => vec2(quad.max.x, quad.max.y),
+                    2 => vec2(quad.min.x, quad.min.y),
+                    3 => vec2(quad.max.x, quad.min.y),
+                    _ => unreachable!(),
+                };
+
+                let face = quad.bitfields.get_face();
+                let layer = quad.layer;
+
+                positions.push(project_to_3d(pos_2d, face, layer));
+            }
 
             current_idx += 4;
         }
 
         mesh.set_indices(Some(Indices::U32(vertex_indices)));
         mesh.insert_attribute(RenderCore::QUAD_INDEX_ATTR, quad_indices);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 
         Ok(MesherOutput {
             mesh,

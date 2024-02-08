@@ -220,9 +220,10 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
                 shader: self.vert.clone(),
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
-                buffers: vec![
-                    layout.get_layout(&[RenderCore::QUAD_INDEX_ATTR.at_shader_location(0)])?
-                ],
+                buffers: vec![layout.get_layout(&[
+                    RenderCore::QUAD_INDEX_ATTR.at_shader_location(0),
+                    Mesh::ATTRIBUTE_POSITION.at_shader_location(1),
+                ])?],
             },
             primitive: PrimitiveState {
                 topology: key.mesh_key.primitive_topology(),
