@@ -278,15 +278,6 @@ impl Registry for TextureRegistry {
     }
 }
 
-// this is just a compile time test to make sure lifetimes and everything work out
-fn texture_registry_loading() {
-    let loader = TextureRegistryLoader::new();
-    let registry = loader.build_registry(todo!()).unwrap();
-    let tex = registry
-        .get_by_label(&ResourcePath::try_from("wowza!").unwrap())
-        .unwrap();
-}
-
 #[cfg(test)]
 mod tests {
     use bevy::utils::Uuid;
