@@ -8,15 +8,10 @@ use bevy::{
     prelude::Resource,
 };
 
-use crate::{
-    data::tile::Face,
-    render::occlusion::ivec3_to_cmo_idx,
-    topo::neighbors::NeighborsBuilder,
-    util::{ivec3_to_1d, FaceMap, SyncHashMap},
-};
+use crate::util::{ivec3_to_1d, SyncHashMap};
 
 use super::{
-    access::{ChunkBounds, ReadAccess},
+    access::ReadAccess,
     chunk::{Chunk, ChunkPos},
     chunk_ref::{ChunkRef, ChunkRefVxlReadAccess, ChunkVoxelOutput},
     error::ChunkManagerError,

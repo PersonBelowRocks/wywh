@@ -1,16 +1,16 @@
 use bevy::{
     asset::Asset,
     log::warn,
-    pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
+    pbr::{MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
     reflect::TypePath,
     render::{
         mesh::{Mesh, MeshVertexAttribute, MeshVertexBufferLayout},
         render_asset::RenderAssets,
         render_resource::{
             AsBindGroup, AsBindGroupError, BindGroupLayout, BindGroupLayoutEntry, BindingType,
-            Buffer, BufferBindingType, BufferInitDescriptor, BufferUsages, OwnedBindingResource,
-            RenderPipelineDescriptor, ShaderDefVal, ShaderRef, ShaderStages,
-            SpecializedMeshPipelineError, StorageBuffer, UnpreparedBindGroup, VertexFormat,
+            Buffer, BufferBindingType, OwnedBindingResource, RenderPipelineDescriptor,
+            ShaderDefVal, ShaderRef, ShaderStages, SpecializedMeshPipelineError,
+            UnpreparedBindGroup, VertexFormat,
         },
         renderer::RenderDevice,
         texture::{FallbackImage, Image},
@@ -30,10 +30,10 @@ impl AsBindGroup for VxlChunkMaterial {
 
     fn unprepared_bind_group(
         &self,
-        layout: &BindGroupLayout,
-        gpu: &RenderDevice,
-        images: &RenderAssets<Image>,
-        fallback_image: &FallbackImage,
+        _layout: &BindGroupLayout,
+        _gpu: &RenderDevice,
+        _images: &RenderAssets<Image>,
+        _fallback_image: &FallbackImage,
     ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
         let face_buffer = self.faces.clone();
         let occlusion_buffer = self.occlusion.clone();
@@ -49,7 +49,7 @@ impl AsBindGroup for VxlChunkMaterial {
         Ok(bg)
     }
 
-    fn bind_group_layout_entries(gpu: &RenderDevice) -> Vec<BindGroupLayoutEntry>
+    fn bind_group_layout_entries(_gpu: &RenderDevice) -> Vec<BindGroupLayoutEntry>
     where
         Self: Sized,
     {
@@ -94,10 +94,10 @@ macro_rules! uint_shader_def {
 
 impl MaterialExtension for VxlChunkMaterial {
     fn specialize(
-        pipeline: &MaterialExtensionPipeline,
+        _pipeline: &MaterialExtensionPipeline,
         descriptor: &mut RenderPipelineDescriptor,
         layout: &MeshVertexBufferLayout,
-        key: MaterialExtensionKey<Self>,
+        _key: MaterialExtensionKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
         use crate::render::quad::consts::*;
 

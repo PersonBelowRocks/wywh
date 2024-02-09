@@ -17,22 +17,18 @@ use cb::channel::Sender;
 use crate::data::registries::Registries;
 use crate::render::meshing::greedy::material::GreedyMeshMaterial;
 use crate::topo::access::ChunkAccess;
-use crate::topo::access::ChunkBounds;
-use crate::topo::access::ReadAccess;
 
 use crate::topo::chunk::ChunkPos;
 use crate::topo::chunk_ref::ChunkRef;
 
-use crate::topo::chunk_ref::ChunkVoxelOutput;
 use crate::topo::neighbors::Neighbors;
 
 use super::adjacency::AdjacentTransparency;
-use super::error::MesherError;
+
 use super::error::MesherResult;
-use super::mesh::ChunkMesh;
+
 use super::occlusion::ChunkOcclusionMap;
 use super::quad::ChunkQuads;
-use super::quad::GpuQuad;
 
 #[derive(Clone, Debug)]
 pub struct MesherOutput {
@@ -89,11 +85,11 @@ impl MesherWorker {
         cmd_receiver: &Receiver<MesherWorkerCommand>,
         mesh_sender: &Sender<MesherWorkerOutput>,
         mesher: &impl Mesher<Material = Mat>,
-        registries: Registries,
+        _registries: Registries,
     ) -> Self {
         let cmd_receiver = cmd_receiver.clone();
         let mesh_sender = mesh_sender.clone();
-        let mesher = mesher.clone();
+        let _mesher = mesher.clone();
 
         let handle = std::thread::spawn(move || {
             let mut interrupt = false;
@@ -108,7 +104,7 @@ impl MesherWorker {
                     MesherWorkerCommand::Shutdown => interrupt = true,
                     MesherWorkerCommand::Build(data) => {
                         // TODO: error handling
-                        let mesh = data.chunk_ref.with_read_access(|access| todo!()).unwrap();
+                        let mesh = data.chunk_ref.with_read_access(|_access| todo!()).unwrap();
 
                         mesh_sender
                             .send(MesherWorkerOutput {

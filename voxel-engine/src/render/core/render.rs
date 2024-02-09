@@ -1,7 +1,7 @@
 use bevy::{
     asset::{AssetServer, Handle},
     core_pipeline::{
-        core_3d::{Camera3d, Opaque3d},
+        core_3d::Opaque3d,
         prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass},
         tonemapping::{DebandDither, Tonemapping},
     },
@@ -10,7 +10,7 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
-    log::{error, info},
+    log::error,
     pbr::{
         DrawMesh, MeshPipeline, MeshPipelineKey, RenderMeshInstances,
         ScreenSpaceAmbientOcclusionSettings, SetMeshBindGroup, SetMeshViewBindGroup,
@@ -22,25 +22,14 @@ use bevy::{
         render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
-            binding_types::{sampler, storage_buffer, storage_buffer_read_only, texture_2d},
-            BindGroupLayout, BindGroupLayoutEntries, IntoBinding, PipelineCache,
-            RenderPipelineDescriptor, SamplerBindingType, Shader, ShaderDefVal, ShaderStages,
+            BindGroupLayout, PipelineCache, RenderPipelineDescriptor, Shader,
             SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
-            TextureSampleType,
         },
-        renderer::RenderDevice,
-        texture::Image,
         view::{ExtractedView, VisibleEntities},
     },
 };
 
-use crate::{
-    data::{
-        systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
-        texture::GpuFaceTexture,
-    },
-    render::quad::{GpuQuad, GpuQuadBitfields},
-};
+use crate::render::quad::GpuQuadBitfields;
 
 use super::{
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},

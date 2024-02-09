@@ -6,30 +6,24 @@ mod impls;
 mod prepass;
 mod render;
 
-use gpu_registries as gpureg;
-
 use bevy::{
     app::{App, Plugin},
     core_pipeline::{core_3d::Opaque3d, prepass::Opaque3dPrepass},
     ecs::system::Resource,
-    pbr::{ExtendedMaterial, MaterialPlugin, StandardMaterial},
     prelude::*,
     render::{
-        extract_component::ExtractComponentPlugin,
         extract_resource::ExtractResourcePlugin,
         mesh::MeshVertexAttribute,
-        render_phase::{AddRenderCommand, RenderPhase},
+        render_phase::AddRenderCommand,
         render_resource::{
             binding_types::{sampler, storage_buffer_read_only, texture_2d},
-            BindGroupLayout, BindGroupLayoutEntries, Buffer, BufferDescriptor, SamplerBindingType,
-            ShaderDefVal, ShaderStages, SpecializedMeshPipelines, TextureSampleType, VertexFormat,
+            BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderDefVal,
+            ShaderStages, SpecializedMeshPipelines, TextureSampleType, VertexFormat,
         },
         renderer::RenderDevice,
-        Extract, Render, RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
 };
-
-use mat::VxlChunkMaterial;
 
 use crate::data::{
     systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},

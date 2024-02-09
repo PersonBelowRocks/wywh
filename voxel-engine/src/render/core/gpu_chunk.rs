@@ -1,34 +1,23 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-
 use bevy::{
     ecs::{
-        component::Component,
         entity::Entity,
         query::{ROQueryItem, With},
-        system::{
-            lifetimeless::{Read, SRes},
-            Local, Query, Res, ResMut, Resource, SystemParamItem,
-        },
+        system::{lifetimeless::SRes, Local, Query, Res, ResMut, Resource, SystemParamItem},
         world::{FromWorld, World},
     },
-    log::info,
-    math::Vec2,
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
-            binding_types, AsBindGroupShaderType, BindGroup, BindGroupEntries, BindGroupEntry,
-            BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntryBuilder, Buffer,
-            ShaderStages, StorageBuffer,
+            binding_types, BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
+            Buffer, ShaderStages, StorageBuffer,
         },
         renderer::{RenderDevice, RenderQueue},
         Extract,
     },
     utils::EntityHashMap,
 };
-use rayon::iter::ParallelBridge;
 
 use crate::{
-    data::tile::Face,
     render::{
         meshing::ecs::ShouldExtract,
         occlusion::ChunkOcclusionMap,

@@ -2,18 +2,9 @@ use std::{path::PathBuf, sync::Arc};
 
 use bevy::{
     asset::LoadedFolder,
-    core::cast_slice,
     ecs::system::SystemParam,
     prelude::*,
-    render::{
-        render_asset::RenderAssets,
-        render_resource::{
-            encase, AsBindGroupShaderType, Buffer, BufferInitDescriptor, BufferUsages, ShaderType,
-            StorageBuffer,
-        },
-        renderer::{RenderDevice, RenderQueue},
-        texture::GpuImage,
-    },
+    render::{render_asset::RenderAssets, texture::GpuImage},
 };
 
 use crate::{

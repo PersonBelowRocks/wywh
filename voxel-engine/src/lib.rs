@@ -9,7 +9,7 @@ extern crate num_derive;
 
 use std::{path::PathBuf, sync::Arc};
 
-use bevy::{pbr::ExtendedMaterial, prelude::*};
+use bevy::prelude::*;
 use data::{
     registries::{variant::VariantRegistry, Registries, Registry},
     resourcepath::rpath,
@@ -35,9 +35,9 @@ use crate::{
         core::RenderCore,
         meshing::{
             ecs::{insert_chunk_meshes, queue_chunk_meshing_tasks, setup_chunk_meshing_workers},
-            greedy::{algorithm::GreedyMesher, material::GreedyMeshMaterial},
+            greedy::algorithm::GreedyMesher,
         },
-        systems::{build_meshes, configure_sampling, insert_meshes, setup_meshers},
+        systems::{configure_sampling, setup_meshers},
     },
     topo::systems::generate_chunks_from_events,
 };

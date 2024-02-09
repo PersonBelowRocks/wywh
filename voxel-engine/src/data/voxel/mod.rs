@@ -115,7 +115,7 @@ impl VoxelModel {
         }
     }
 
-    pub fn occlusion(&self, rotation: Option<BlockModelRotation>) -> BlockOcclusion {
+    pub fn occlusion(&self, _rotation: Option<BlockModelRotation>) -> BlockOcclusion {
         if matches!(self, Self::Block(_)) {
             BlockOcclusion::filled()
         } else {

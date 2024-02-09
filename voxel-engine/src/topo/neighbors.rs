@@ -10,7 +10,7 @@ use crate::{
         ivec_project_to_3d,
         storage::error::OutOfBounds,
     },
-    util::{self, ivec3_to_1d, ConversionError},
+    util::ivec3_to_1d,
 };
 
 use super::{access::ChunkAccess, error::NeighborAccessError};

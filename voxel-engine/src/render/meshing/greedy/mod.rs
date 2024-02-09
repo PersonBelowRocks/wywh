@@ -1,22 +1,15 @@
-use std::array;
-
 use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 
 use crate::{
     data::{
-        registries::{
-            texture::TextureRegistry, variant::VariantRegistry, Registry, RegistryId, RegistryRef,
-        },
+        registries::{texture::TextureRegistry, variant::VariantRegistry, Registry, RegistryRef},
         tile::{Face, Transparency},
         voxel::VoxelModel,
     },
-    render::{
-        adjacency::AdjacentTransparency,
-        quad::{
-            anon::Quad,
-            data::DataQuad,
-            isometric::{IsometrizedQuad, PositionedQuad, QuadIsometry, QuadVertex},
-        },
+    render::quad::{
+        anon::Quad,
+        data::DataQuad,
+        isometric::{IsometrizedQuad, PositionedQuad, QuadIsometry},
     },
     topo::{
         access::ChunkAccess,
@@ -26,7 +19,6 @@ use crate::{
         neighbors::{self, Neighbors},
         storage::error::OutOfBounds,
     },
-    util::Axis3D,
 };
 
 use self::error::CqsError;
@@ -183,7 +175,7 @@ pub mod tests {
     use crate::{
         data::{
             registries::{texture::TestTextureRegistryLoader, variant::VariantRegistryLoader},
-            resourcepath::{rpath, ResourcePath},
+            resourcepath::rpath,
             texture::FaceTextureRotation,
             voxel::descriptor::{
                 BlockDescriptor, FaceTextureDescriptor, VariantDescriptor, VoxelModelDescriptor,

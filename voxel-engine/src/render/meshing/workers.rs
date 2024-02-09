@@ -1,6 +1,5 @@
 use std::{
     marker::PhantomData,
-    ops::Shr,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -10,25 +9,19 @@ use std::{
 
 use bevy::{
     ecs::system::Resource,
-    log::{debug, error, info, warn},
+    log::{error, info, warn},
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
-use crossbeam::{
-    atomic,
-    channel::{self, Receiver, RecvTimeoutError, Sender},
-};
+use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender};
 use dashmap::DashMap;
 
 use crate::{
     data::registries::Registries,
     render::{
-        mesh_builder::{Context, Mesher, MesherOutput, MesherWorkerCommand},
+        mesh_builder::{Context, Mesher, MesherOutput},
         meshing::error::ChunkMeshingError,
     },
-    topo::{
-        chunk::ChunkPos,
-        realm::{ChunkManager, VoxelRealm},
-    },
+    topo::{chunk::ChunkPos, realm::ChunkManager},
     util::result::ResultFlattening,
 };
 

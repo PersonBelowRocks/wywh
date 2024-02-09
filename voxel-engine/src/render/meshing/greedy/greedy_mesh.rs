@@ -1,17 +1,6 @@
 use bevy::{math::ivec2, prelude::IVec2};
 
-use crate::{
-    data::{
-        registries::{variant::VariantRegistry, Registry, RegistryRef},
-        texture::{FaceTexture, FaceTextureRotation},
-        tile::{Face, Transparency},
-        voxel::rotations::BlockModelRotation,
-    },
-    render::adjacency::AdjacentTransparency,
-    topo::{access::ReadAccess, chunk::Chunk, chunk_ref::ChunkVoxelOutput},
-};
-
-use super::ChunkAccess;
+use crate::topo::chunk::Chunk;
 
 #[derive(Default)]
 pub(crate) struct ChunkSliceMask([[bool; Chunk::USIZE]; Chunk::USIZE]);

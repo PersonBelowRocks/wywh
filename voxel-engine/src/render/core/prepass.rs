@@ -8,18 +8,18 @@ use bevy::{
         },
     },
     ecs::{
-        query::{Has, Or, With},
+        query::Has,
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
     log::error,
     pbr::{
-        DrawMesh, MeshLayouts, MeshPipeline, MeshPipelineKey, PreviousViewProjection,
-        RenderMeshInstances, SetMeshBindGroup, SetPrepassViewBindGroup,
+        DrawMesh, MeshLayouts, MeshPipelineKey, PreviousViewProjection, RenderMeshInstances,
+        SetMeshBindGroup, SetPrepassViewBindGroup,
     },
     render::{
         globals::GlobalsUniform,
-        mesh::{Mesh, MeshVertexBufferLayout, VertexAttributeDescriptor},
+        mesh::{Mesh, MeshVertexBufferLayout},
         render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{

@@ -1,7 +1,4 @@
-use crate::data::{
-    registries::{texture::TextureRegistry, RegistryId},
-    texture::FaceTexture,
-};
+use crate::data::texture::FaceTexture;
 
 use super::{anon::Quad, isometric::QuadVertex};
 

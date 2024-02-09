@@ -1,21 +1,13 @@
 use bevy::{
-    pbr::{wireframe::Wireframe, ExtendedMaterial},
+    pbr::ExtendedMaterial,
     prelude::*,
-    render::{
-        render_resource::{BufferInitDescriptor, BufferUsages},
-        renderer::RenderDevice,
-        texture::ImageSampler,
-    },
+    render::{renderer::RenderDevice, texture::ImageSampler},
 };
 
 use crate::{
-    data::{
-        registries::Registries,
-        systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
-    },
+    data::systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
     render::{adjacency::AdjacentTransparency, core::mat::VxlChunkMaterial},
     topo::{chunk::Chunk, realm::VoxelRealm},
-    ChunkEntity,
 };
 
 use super::{
@@ -42,19 +34,17 @@ pub(crate) fn build_meshes<HQM: Mesher, LQM: Mesher>(
 }
 
 pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
-    mut cmds: Commands,
+    _cmds: Commands,
     mut mesh_builder: ResMut<ParallelMeshBuilder<HQM, LQM>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, VxlChunkMaterial>>>,
-    gpu: Res<RenderDevice>,
-    texture_atlas: Res<VoxelColorTextureAtlas>,
-    normal_atlas: Res<VoxelNormalTextureAtlas>,
+    _meshes: ResMut<Assets<Mesh>>,
+    _materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, VxlChunkMaterial>>>,
+    _gpu: Res<RenderDevice>,
+    _texture_atlas: Res<VoxelColorTextureAtlas>,
+    _normal_atlas: Res<VoxelNormalTextureAtlas>,
 ) {
-    use slice_of_array::prelude::*;
-
     for finished_mesh in mesh_builder.finished_meshes() {
         debug!("Inserting mesh at {:?}", finished_mesh.pos);
-        let pos = (*finished_mesh.pos * Chunk::SIZE).as_vec3() + Vec3::splat(0.5);
+        let _pos = (*finished_mesh.pos * Chunk::SIZE).as_vec3() + Vec3::splat(0.5);
 
         // TODO: insert chunk meshes so that the render core can extract it
         todo!()

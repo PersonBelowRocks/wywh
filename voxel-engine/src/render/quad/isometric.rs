@@ -1,11 +1,6 @@
 use bevy::math::{ivec2, vec2, vec3, IVec2, IVec3, Vec2, Vec3};
-use ordered_float::{FloatIsNan, NotNan};
 
-use crate::{
-    data::tile::Face,
-    topo::ivec_project_to_3d,
-    util::{notnan::NotNanVec2, Axis3D},
-};
+use crate::{data::tile::Face, topo::ivec_project_to_3d, util::Axis3D};
 
 use super::{
     data::{DataQuad, QVertexData},

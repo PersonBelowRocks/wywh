@@ -2,7 +2,7 @@ use bevy::ecs::system::Resource;
 use bevy::math::ivec2;
 use bevy::math::ivec3;
 use bevy::math::vec2;
-use bevy::math::IVec2;
+
 use bevy::math::Vec2;
 use bevy::math::Vec3;
 use bevy::pbr::ExtendedMaterial;
@@ -14,7 +14,6 @@ use bevy::render::mesh::Indices;
 use bevy::render::mesh::Mesh;
 use bevy::render::render_resource::PrimitiveTopology;
 
-use crate::data::registries::texture::TextureRegistry;
 use crate::data::registries::variant::VariantRegistry;
 use crate::data::registries::Registries;
 use crate::data::registries::Registry;

@@ -2,17 +2,13 @@ use bevy::{
     ecs::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, Commands, Res, Resource, SystemParamItem},
-        world::{FromWorld, World},
     },
     log::info,
     render::{
-        extract_resource::ExtractResource,
-        render_asset::{RenderAsset, RenderAssets},
+        render_asset::RenderAssets,
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
-            BindGroup, BindGroupEntries, BindGroupEntry, BindGroupLayoutEntry, BindingResource,
-            BindingType, Buffer, BufferBinding, BufferBindingType, BufferInitDescriptor,
-            ShaderStages, StorageBuffer, TextureSampleType, TextureView, TextureViewDimension,
+            BindGroup, BindGroupEntries, BindingResource, BufferBinding, StorageBuffer,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::Image,
@@ -21,12 +17,10 @@ use bevy::{
 };
 
 use crate::data::{
-    registries::texture::TexregFaces,
-    systems::{TextureAtlasHandles, VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
-    texture::GpuFaceTexture,
+    registries::texture::TexregFaces, systems::TextureAtlasHandles, texture::GpuFaceTexture,
 };
 
-use super::{render::VoxelChunkPipeline, DefaultBindGroupLayouts};
+use super::DefaultBindGroupLayouts;
 
 #[derive(Clone, Resource)]
 pub struct RegistryBindGroup {

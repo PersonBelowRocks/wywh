@@ -280,9 +280,6 @@ impl Registry for TextureRegistry {
 
 #[cfg(test)]
 mod tests {
-    use bevy::utils::Uuid;
-
-    use super::*;
 
     #[test]
     #[ignore]
