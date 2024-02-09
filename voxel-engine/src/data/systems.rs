@@ -45,10 +45,10 @@ pub struct VoxelNormalMapFolder {
     pub loaded: bool,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct VoxelColorTextureAtlas(pub Handle<Image>);
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct VoxelNormalTextureAtlas(pub Handle<Image>);
 
 #[derive(Resource, Deref, dm::Constructor)]

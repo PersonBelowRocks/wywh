@@ -2,6 +2,7 @@ pub mod mat;
 
 mod gpu_chunk;
 mod gpu_registries;
+mod impls;
 mod prepass;
 mod render;
 
@@ -28,6 +29,8 @@ use bevy::{
 
 use mat::VxlChunkMaterial;
 
+use crate::data::systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas};
+
 use self::{
     gpu_chunk::{extract_chunk_render_data, prepare_chunk_render_data, ChunkRenderDataStore},
     gpu_registries::{extract_texreg_faces, prepare_gpu_face_texture_buffer, ExtractedTexregFaces},
@@ -48,6 +51,9 @@ impl RenderCore {
 
 impl Plugin for RenderCore {
     fn build(&self, app: &mut App) {
+        app.add_plugins(ExtractResourcePlugin::<VoxelColorTextureAtlas>::default());
+        app.add_plugins(ExtractResourcePlugin::<VoxelNormalTextureAtlas>::default());
+
         // Render app logic
         let render_app = app.sub_app_mut(RenderApp);
 
