@@ -74,27 +74,11 @@ pub fn prepare_chunk_render_data(
     queue: Res<RenderQueue>,
 ) {
     let mut count = 0;
-    let mut horizontals = 0;
 
     for data in chunk_data_store.map.values_mut() {
-        if let ChunkRenderData::Cpu(data) = data {
-            for quad in data.quads.iter_mut() {
-                let dims = quad.max - quad.min;
-                assert!(dims.cmpge(Vec2::ONE).all());
-
-                if quad.bitfields.get_face().is_horizontal() {
-                    horizontals += 1;
-                }
-            }
-        }
-
         if data.move_to_gpu(gpu.as_ref(), queue.as_ref(), &pipeline.chunk_layout) {
             count += 1;
         }
-    }
-
-    if horizontals > 0 {
-        info!("Found {horizontals} horizontally facing quads");
     }
 
     if count > 0 {
