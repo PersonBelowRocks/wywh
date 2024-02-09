@@ -1,0 +1,161 @@
+#import "shaders/utils.wgsl"::faces
+#import "shaders/utils.wgsl"::color_texture
+#import "shaders/utils.wgsl"::color_sampler
+#import "shaders/utils.wgsl"::normal_texture
+#import "shaders/utils.wgsl"::normal_sampler
+
+#import "shaders/vxl_chunk_io.wgsl"::VertexOutput
+#import "shaders/vxl_types.wgsl"::FaceTexture
+
+#import "shaders/chunk_bindings.wgsl"
+
+#import bevy_pbr::{
+    mesh_bindings::mesh,
+    mesh_view_bindings::view,
+    pbr_types,
+    mesh_view_bindings as view_bindings,
+    prepass_utils,
+}
+
+const HAS_NORMAL_MAP_BIT: u32 = #{HAS_NORMAL_MAP_BIT}u;
+
+fn standard_material_new() -> StandardMaterial {
+    var material: StandardMaterial;
+
+    material.base_color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    material.emissive = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    material.perceptual_roughness = 0.5;
+    material.metallic = 0.00;
+    material.reflectance = 0.5;
+    material.diffuse_transmission = 0.0;
+    material.specular_transmission = 0.0;
+    material.thickness = 0.0;
+    material.ior = 1.5;
+    material.attenuation_distance = 1.0;
+    material.attenuation_color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    material.flags = pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_OPAQUE;
+    material.alpha_cutoff = 0.5;
+    material.parallax_depth_scale = 0.1;
+    material.max_parallax_layer_count = 16.0;
+    material.max_relief_mapping_search_steps = 5u;
+    material.deferred_lighting_pass_id = 1u;
+
+    return material;
+}
+
+fn calculate_view(
+    world_position: vec4<f32>,
+    is_orthographic: bool,
+) -> vec3<f32> {
+    var V: vec3<f32>;
+    if is_orthographic {
+        // Orthographic view vector
+        V = normalize(vec3<f32>(view_bindings::view.view_proj[0].z, view_bindings::view.view_proj[1].z, view_bindings::view.view_proj[2].z));
+    } else {
+        // Only valid for a perpective projection
+        V = normalize(view_bindings::view.world_position.xyz - world_position.xyz);
+    }
+    return V;
+}
+
+fn pbr_input_from_vertex_output(
+    in: VertexOutput,
+) -> pbr_types::PbrInput {
+    var pbr_input: pbr_types::PbrInput = pbr_types::pbr_input_new();
+
+    pbr_input.flags = mesh[in.instance_index].flags;
+    pbr_input.is_orthographic = view.projection[3].w == 1.0;
+    pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
+    pbr_input.frag_coord = in.position;
+    pbr_input.world_position = in.world_position;
+
+    pbr_input.world_normal = in.world_normal;
+
+#ifdef LOAD_PREPASS_NORMALS
+    pbr_input.N = prepass_utils::prepass_normal(in.position, 0u);
+#else
+    pbr_input.N = normalize(pbr_input.world_normal);
+#endif
+
+    return pbr_input;
+}
+
+fn create_pbr_input(
+    in: VertexOutput,
+    is_front: bool,
+    face: FaceTexture,
+    scale: f32,
+) -> pbr_types::PbrInput {
+
+    var pbr_input: pbr_types::PbrInput = pbr_input_from_vertex_output(in);
+    
+    // TODO: UV calculation is a bit more complicated than this, fix it!!
+    var uv = fract(in.uv);
+
+    let color_uv = ((uv / scale) + (face.color_tex_pos / scale) / scale);
+    pbr_input.material.base_color *= textureSampleBias(color_texture, color_sampler, color_uv, view.mip_bias);
+
+    pbr_input.occlusion = vec3(1.0);
+
+    // N (normal vector)
+//#ifndef LOAD_PREPASS_NORMALS
+
+    if (face.flags & HAS_NORMAL_MAP_BIT) != 0u {
+        let normal_map_uv = ((uv / scale) + (face.normal_tex_pos / scale) / scale);
+
+        pbr_input.N = apply_normal_mapping(
+            0u,
+            pbr_input.world_normal,
+            in.world_tangent,
+            normal_map_uv,
+            view.mip_bias,
+        );
+    } else {
+        pbr_input.N = pbr_input.world_normal;
+    }
+
+    return pbr_input;
+}
+
+// TODO: theres a lot of yapping about mikktspace and whatever here, find out if we care about
+// what mikktspace is doing in our case.
+fn apply_normal_mapping(
+    standard_material_flags: u32,
+    world_normal: vec3<f32>,
+    world_tangent: vec4<f32>,
+    uv: vec2<f32>,
+    mip_bias: f32,
+) -> vec3<f32> {
+    // NOTE: The mikktspace method of normal mapping explicitly requires that the world normal NOT
+    // be re-normalized in the fragment shader. This is primarily to match the way mikktspace
+    // bakes vertex tangents and normal maps so that this is the exact inverse. Blender, Unity,
+    // Unreal Engine, Godot, and more all use the mikktspace method. Do not change this code
+    // unless you really know what you are doing.
+    // http://www.mikktspace.com/
+    var N: vec3<f32> = world_normal;
+
+    // NOTE: The mikktspace method of normal mapping explicitly requires that these NOT be
+    // normalized nor any Gram-Schmidt applied to ensure the vertex normal is orthogonal to the
+    // vertex tangent! Do not change this code unless you really know what you are doing.
+    // http://www.mikktspace.com/
+    var T: vec3<f32> = world_tangent.xyz;
+    var B: vec3<f32> = world_tangent.w * cross(N, T);
+
+    // Nt is the tangent-space normal.
+    var Nt = textureSampleBias(normal_texture, normal_sampler, uv, mip_bias).rgb;
+    Nt = Nt * 2.0 - 1.0;
+    // TODO: do we need this?
+    // Normal maps authored for DirectX require flipping the y component
+    if (standard_material_flags & pbr_types::STANDARD_MATERIAL_FLAGS_FLIP_NORMAL_MAP_Y) != 0u {
+        Nt.y = -Nt.y;
+    }
+
+    // NOTE: The mikktspace method of normal mapping applies maps the tangent-space normal from
+    // the normal map texture in this way to be an EXACT inverse of how the normal map baker
+    // calculates the normal maps so there is no error introduced. Do not change this code
+    // unless you really know what you are doing.
+    // http://www.mikktspace.com/
+    N = Nt.x * T + Nt.y * B + Nt.z * N;
+
+    return normalize(N);
+}

@@ -29,7 +29,7 @@ use bevy::{
     },
 };
 
-use crate::render::quad::GpuQuadBitfields;
+use crate::{data::texture::GpuFaceTexture, render::quad::GpuQuadBitfields};
 
 use super::{
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
@@ -81,10 +81,8 @@ impl SpecializedMeshPipeline for VoxelChunkPipeline {
         descriptor.primitive.cull_mode = None;
 
         descriptor.vertex.shader = self.vert.clone();
-        descriptor.vertex.buffers = vec![layout.get_layout(&[
-            RenderCore::QUAD_INDEX_ATTR.at_shader_location(0),
-            // Mesh::ATTRIBUTE_POSITION.at_shader_location(1),
-        ])?];
+        descriptor.vertex.buffers =
+            vec![layout.get_layout(&[RenderCore::QUAD_INDEX_ATTR.at_shader_location(0)])?];
         descriptor.fragment.as_mut().unwrap().shader = self.frag.clone();
 
         let shader_constants = [
@@ -94,6 +92,7 @@ impl SpecializedMeshPipeline for VoxelChunkPipeline {
             u32_shader_def("FACE_SHIFT", GpuQuadBitfields::FACE_SHIFT),
             u32_shader_def("FLIP_UV_X_SHIFT", GpuQuadBitfields::FLIP_UV_X_SHIFT),
             u32_shader_def("FLIP_UV_Y_SHIFT", GpuQuadBitfields::FLIP_UV_Y_SHIFT),
+            u32_shader_def("HAS_NORMAL_MAP_BIT", GpuFaceTexture::HAS_NORMAL_MAP_BIT),
         ];
 
         descriptor
