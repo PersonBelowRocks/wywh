@@ -44,7 +44,7 @@ use super::{
     gpu_chunk::{ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
     render::VoxelChunkPipelineKey,
-    u32_shader_def, RenderCore,
+    u32_shader_def, DefaultBindGroupLayouts, RenderCore,
 };
 
 #[derive(Clone, Resource)]
@@ -52,7 +52,7 @@ pub struct ChunkPrepassPipeline {
     pub view_layout_motion_vectors: BindGroupLayout,
     pub view_layout_no_motion_vectors: BindGroupLayout,
     pub mesh_layouts: MeshLayouts,
-    pub pipeline: VoxelChunkPipeline,
+    pub layouts: DefaultBindGroupLayouts,
     pub vert: Handle<Shader>,
     pub frag: Handle<Shader>,
 }
@@ -96,7 +96,7 @@ impl FromWorld for ChunkPrepassPipeline {
             view_layout_motion_vectors,
             view_layout_no_motion_vectors,
             mesh_layouts: mesh_pipeline.mesh_pipeline.mesh_layouts.clone(),
-            pipeline: mesh_pipeline.clone(),
+            layouts: world.resource::<DefaultBindGroupLayouts>().clone(),
             vert: server.load("shaders/vxl_chunk_vert_prepass.wgsl"),
             frag: server.load("shaders/vxl_chunk_frag_prepass.wgsl"),
         }
@@ -124,8 +124,8 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
 
         bind_group_layouts.extend_from_slice(&[
             self.mesh_layouts.model_only.clone(),
-            self.pipeline.registry_layout.clone(),
-            self.pipeline.chunk_layout.clone(),
+            self.layouts.registry_bg_layout.clone(),
+            self.layouts.chunk_bg_layout.clone(),
         ]);
 
         let mut shader_defs: Vec<ShaderDefVal> = vec![

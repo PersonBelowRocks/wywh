@@ -22,25 +22,30 @@ use bevy::{
         render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
-            binding_types::{storage_buffer, storage_buffer_read_only},
-            BindGroupLayout, BindGroupLayoutEntries, PipelineCache, RenderPipelineDescriptor,
-            Shader, ShaderDefVal, ShaderStages, SpecializedMeshPipeline,
-            SpecializedMeshPipelineError, SpecializedMeshPipelines,
+            binding_types::{sampler, storage_buffer, storage_buffer_read_only, texture_2d},
+            BindGroupLayout, BindGroupLayoutEntries, IntoBinding, PipelineCache,
+            RenderPipelineDescriptor, SamplerBindingType, Shader, ShaderDefVal, ShaderStages,
+            SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
+            TextureSampleType,
         },
         renderer::RenderDevice,
+        texture::Image,
         view::{ExtractedView, VisibleEntities},
     },
 };
 
 use crate::{
-    data::texture::GpuFaceTexture,
+    data::{
+        systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
+        texture::GpuFaceTexture,
+    },
     render::quad::{GpuQuad, GpuQuadBitfields},
 };
 
 use super::{
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
-    u32_shader_def, RenderCore,
+    u32_shader_def, DefaultBindGroupLayouts, RenderCore,
 };
 
 #[derive(Resource, Clone)]
@@ -60,31 +65,13 @@ pub struct VoxelChunkPipelineKey {
 impl FromWorld for VoxelChunkPipeline {
     fn from_world(world: &mut World) -> Self {
         let server = world.resource::<AssetServer>();
-        let gpu = world.resource::<RenderDevice>();
 
-        let registry_layout = gpu.create_bind_group_layout(
-            Some("registry_bind_group_layout"),
-            &BindGroupLayoutEntries::with_indices(
-                ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                ((0, storage_buffer_read_only::<GpuFaceTexture>(false)),),
-            ),
-        );
-
-        let chunk_layout = gpu.create_bind_group_layout(
-            Some("registry_bind_group_layout"),
-            &BindGroupLayoutEntries::with_indices(
-                ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                (
-                    (0, storage_buffer_read_only::<GpuQuad>(false)),
-                    (1, storage_buffer_read_only::<u32>(false)),
-                ),
-            ),
-        );
+        let layouts = world.resource::<DefaultBindGroupLayouts>();
 
         Self {
             mesh_pipeline: world.resource::<MeshPipeline>().clone(),
-            registry_layout,
-            chunk_layout,
+            registry_layout: layouts.registry_bg_layout.clone(),
+            chunk_layout: layouts.chunk_bg_layout.clone(),
             vert: server.load("shaders/vxl_chunk_vert.wgsl"),
             frag: server.load("shaders/vxl_chunk_frag.wgsl"),
         }

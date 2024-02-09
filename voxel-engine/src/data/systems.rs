@@ -3,13 +3,16 @@ use std::{path::PathBuf, sync::Arc};
 use bevy::{
     asset::LoadedFolder,
     core::cast_slice,
+    ecs::system::SystemParam,
     prelude::*,
     render::{
+        render_asset::RenderAssets,
         render_resource::{
             encase, AsBindGroupShaderType, Buffer, BufferInitDescriptor, BufferUsages, ShaderType,
             StorageBuffer,
         },
         renderer::{RenderDevice, RenderQueue},
+        texture::GpuImage,
     },
 };
 
@@ -19,6 +22,7 @@ use crate::{
 };
 
 use super::{
+    error::TextureAtlasesGetAssetError,
     registries::{
         error::TextureRegistryError,
         texture::{TexregFaces, TextureRegistry},
@@ -50,6 +54,70 @@ pub struct VoxelColorTextureAtlas(pub Handle<Image>);
 
 #[derive(Resource, Default, Clone)]
 pub struct VoxelNormalTextureAtlas(pub Handle<Image>);
+
+#[derive(SystemParam)]
+pub struct TextureAtlasHandles<'w> {
+    pub color: Option<Res<'w, VoxelColorTextureAtlas>>,
+    pub normal: Option<Res<'w, VoxelNormalTextureAtlas>>,
+}
+
+pub struct TextureAtlases<'a> {
+    pub color: &'a Image,
+    pub normal: &'a Image,
+}
+
+pub struct GpuTextureAtlases<'a> {
+    pub color: &'a GpuImage,
+    pub normal: &'a GpuImage,
+}
+
+impl<'w> TextureAtlasHandles<'w> {
+    pub fn get_assets<'a>(
+        &self,
+        assets: &'a Assets<Image>,
+    ) -> Result<TextureAtlases<'a>, TextureAtlasesGetAssetError> {
+        let Some(handle) = self.color.as_deref() else {
+            return Err(TextureAtlasesGetAssetError::MissingColorHandle);
+        };
+
+        let color = assets
+            .get(&handle.0)
+            .ok_or(TextureAtlasesGetAssetError::MissingColor)?;
+
+        let Some(handle) = self.normal.as_deref() else {
+            return Err(TextureAtlasesGetAssetError::MissingNormalHandle);
+        };
+
+        let normal = assets
+            .get(&handle.0)
+            .ok_or(TextureAtlasesGetAssetError::MissingNormal)?;
+
+        Ok(TextureAtlases { color, normal })
+    }
+
+    pub fn get_render_assets<'a>(
+        &self,
+        assets: &'a RenderAssets<Image>,
+    ) -> Result<GpuTextureAtlases<'a>, TextureAtlasesGetAssetError> {
+        let Some(handle) = self.color.as_deref() else {
+            return Err(TextureAtlasesGetAssetError::MissingColorHandle);
+        };
+
+        let color = assets
+            .get(&handle.0)
+            .ok_or(TextureAtlasesGetAssetError::MissingColor)?;
+
+        let Some(handle) = self.normal.as_deref() else {
+            return Err(TextureAtlasesGetAssetError::MissingNormalHandle);
+        };
+
+        let normal = assets
+            .get(&handle.0)
+            .ok_or(TextureAtlasesGetAssetError::MissingNormal)?;
+
+        Ok(GpuTextureAtlases { color, normal })
+    }
+}
 
 #[derive(Resource, Deref, dm::Constructor)]
 pub struct VariantFolders(Arc<Vec<PathBuf>>);
@@ -166,8 +234,8 @@ pub fn build_registries(world: &mut World) {
     };
 
     world.insert_resource(VoxelColorTextureAtlas(textures.color_texture().clone()));
-    world.insert_resource(TexregFaces(textures.face_texture_buffer()));
     world.insert_resource(VoxelNormalTextureAtlas(textures.normal_texture().clone()));
+    world.insert_resource(TexregFaces(textures.face_texture_buffer()));
 
     let variant_folders = world.get_resource::<VariantFolders>().unwrap();
 
