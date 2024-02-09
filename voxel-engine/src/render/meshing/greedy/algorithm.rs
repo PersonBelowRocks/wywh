@@ -176,6 +176,10 @@ impl GreedyMesher {
                 for dx in 1..(Chunk::SIZE - x) {
                     let candidate_pos = fpos + ivec2(dx, 0);
 
+                    if mask.is_masked(candidate_pos).unwrap() {
+                        break;
+                    }
+
                     match cqs.get_quad(candidate_pos)? {
                         Some(merge_candidate) if merge_candidate == current.dataquad => {
                             widen_by = dx
@@ -202,6 +206,10 @@ impl GreedyMesher {
                     // will terminate the outer loop since we've heightened by as much as we can
                     for hx in (current.min().x)..=(current.max().x) {
                         let candidate_pos = ivec2(hx, dy + fpos.y);
+
+                        if mask.is_masked(candidate_pos).unwrap() {
+                            break 'heighten;
+                        }
 
                         let candidate_quad = cqs.get_quad(candidate_pos)?;
                         if matches!(candidate_quad, None)
