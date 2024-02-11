@@ -17,7 +17,7 @@ fn vertex(
     @location(0) chunk_quad_index: u32,
     // @location(1) vertex_position: vec3<f32>,
 ) -> PrepassOutput {
-    
+
     let quad = quads[chunk_quad_index];
     var position = extract_position(quad, vertex % 4u);
     // var position = vertex_position;
