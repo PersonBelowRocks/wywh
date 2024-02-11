@@ -8,3 +8,5 @@ const FACE_SHIFT: u32 = #{FACE_SHIFT}u;
 
 const FLIP_UV_X_SHIFT: u32 = #{FLIP_UV_X_SHIFT}u;
 const FLIP_UV_Y_SHIFT: u32 = #{FLIP_UV_Y_SHIFT}u;
+
+const HAS_NORMAL_MAP_BIT: u32 = #{HAS_NORMAL_MAP_BIT}u;

@@ -1,13 +1,18 @@
-#import "shaders/utils.wgsl"::faces
-#import "shaders/utils.wgsl"::color_texture
-#import "shaders/utils.wgsl"::color_sampler
-#import "shaders/utils.wgsl"::normal_texture
-#import "shaders/utils.wgsl"::normal_sampler
+#import "shaders/registry_bindings.wgsl"::faces
+#import "shaders/registry_bindings.wgsl"::color_texture
+#import "shaders/registry_bindings.wgsl"::color_sampler
+#import "shaders/registry_bindings.wgsl"::normal_texture
+#import "shaders/registry_bindings.wgsl"::normal_sampler
+
+#import "shaders/utils.wgsl"::index_from_3d_pos
+#import "shaders/utils.wgsl"::project_to_3d
 
 #import "shaders/vxl_chunk_io.wgsl"::VertexOutput
 #import "shaders/vxl_types.wgsl"::FaceTexture
 
-#import "shaders/chunk_bindings.wgsl"
+#import "shaders/chunk_bindings.wgsl"::occlusion
+
+#import "shaders/constants.wgsl"::HAS_NORMAL_MAP_BIT
 
 #import bevy_pbr::{
     mesh_bindings::mesh,
@@ -16,8 +21,6 @@
     mesh_view_bindings as view_bindings,
     prepass_utils,
 }
-
-const HAS_NORMAL_MAP_BIT: u32 = #{HAS_NORMAL_MAP_BIT}u;
 
 fn standard_material_new() -> StandardMaterial {
     var material: StandardMaterial;
@@ -56,6 +59,21 @@ fn calculate_view(
         V = normalize(view_bindings::view.world_position.xyz - world_position.xyz);
     }
     return V;
+}
+
+fn occlusion(pos_on_face: vec2<f32>, axis: u32, mag: f32) -> f32 {
+    let pos_3d = project_to_3d(pos_on_face, axis, mag);
+    let floored_pos_3d = floor(pos_3d);
+
+    let int_pos_3d = vec3<u32>(
+        u32(floored_pos_3d.x),
+        u32(floored_pos_3d.y),
+        u32(floored_pos_3d.z),
+    );
+
+    
+
+    return 0.0;
 }
 
 fn pbr_input_from_vertex_output(

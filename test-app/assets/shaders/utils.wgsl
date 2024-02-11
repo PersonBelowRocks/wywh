@@ -129,3 +129,7 @@ fn axis_from_face(face: u32) -> u32 {
         }
     }
 }
+
+fn index_from_3d_pos(pos: vec3<u32>, max: u32) -> u32 {
+    return (pos.z * max * max) + (pos.y * max) + pos.x
+}

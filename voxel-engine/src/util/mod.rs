@@ -30,6 +30,7 @@ pub fn ivec3_to_1d(v: IVec3) -> Result<usize, ConversionError> {
 }
 
 pub fn to_1d(x: usize, y: usize, z: usize) -> usize {
+    // FIXME: this should be a parameter
     const MAX: usize = 3;
     return (z * MAX * MAX) + (y * MAX) + x;
 }
