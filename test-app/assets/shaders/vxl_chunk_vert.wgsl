@@ -29,6 +29,7 @@ fn vertex(
     var out: VertexOutput;
     out.texture = quad.texture_id;
     out.bitfields = quad.bitfields.value;
+    out.face = face;
 
     out.world_normal = mesh_functions::mesh_normal_local_to_world(
         extract_normal(quad),

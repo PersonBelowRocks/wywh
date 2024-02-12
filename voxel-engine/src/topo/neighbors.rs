@@ -34,7 +34,7 @@ fn localspace_to_neighbor_localspace(pos: IVec3) -> IVec3 {
 // TODO: document what localspace, worldspace, chunkspace, and facespace are
 #[derive(Clone)]
 pub struct Neighbors<C: ChunkAccess> {
-    chunks: [Option<C>; 3 * 3 * 3],
+    chunks: [Option<C>; NEIGHBOR_ARRAY_SIZE],
     default: ChunkVoxelOutput,
 }
 
@@ -56,8 +56,11 @@ pub fn is_in_bounds_3d(pos: IVec3) -> bool {
 
 pub type NbResult<T, E> = Result<T, NeighborAccessError<E>>;
 
+pub const NEIGHBOR_CUBIC_ARRAY_DIMENSIONS: usize = 3;
+pub const NEIGHBOR_ARRAY_SIZE: usize = NEIGHBOR_CUBIC_ARRAY_DIMENSIONS.pow(3);
+
 impl<C: ChunkAccess> Neighbors<C> {
-    pub fn from_raw(chunks: [Option<C>; 3 * 3 * 3], default: ChunkVoxelOutput) -> Self {
+    pub fn from_raw(chunks: [Option<C>; NEIGHBOR_ARRAY_SIZE], default: ChunkVoxelOutput) -> Self {
         Self { chunks, default }
     }
 
@@ -70,8 +73,8 @@ impl<C: ChunkAccess> Neighbors<C> {
             return Err(NeighborAccessError::OutOfBounds);
         }
 
-        let chk_index =
-            ivec3_to_1d(chk_pos + IVec3::ONE).map_err(|_| NeighborAccessError::OutOfBounds)?;
+        let chk_index = ivec3_to_1d(chk_pos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
+            .map_err(|_| NeighborAccessError::OutOfBounds)?;
         let chk = self
             .chunks
             .get(chk_index)
@@ -139,7 +142,8 @@ impl<C: ChunkAccess> NeighborsBuilder<C> {
             return Err(OutOfBounds);
         }
 
-        let idx = ivec3_to_1d(pos + IVec3::ONE).map_err(|_| OutOfBounds)?;
+        let idx = ivec3_to_1d(pos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
+            .map_err(|_| OutOfBounds)?;
 
         let slot = self.0.chunks.get_mut(idx).ok_or(OutOfBounds)?;
         *slot = Some(access);

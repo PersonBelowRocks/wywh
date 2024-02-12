@@ -31,6 +31,40 @@ fn extract_position(quad: ChunkQuad, quad_vertex_index: u32) -> vec3<f32> {
     return project_to_3d(pos_2d, axis_from_face(face), quad.layer);
 }
 
+fn ivec_project_to_3d(pos: vec2<i32>, axis: u32, mag: i32) -> vec3<i32> {
+    switch axis {
+        case AXIS_X: {
+            return vec3(mag, pos.y, pos.x);
+        }
+        case AXIS_Y: {
+            return vec3(pos.x, mag, pos.y);
+        }
+        case AXIS_Z: {
+            return vec3(pos.x, pos.y, mag);
+        }
+        default: {
+            return vec3(0, 0, 0);
+        }
+    }
+}
+
+fn get_magnitude(pos: vec3<f32>, axis: u32) -> f32 {
+    switch axis {
+        case AXIS_X: {
+            return pos.x;
+        }
+        case AXIS_Y: {
+            return pos.y;
+        }
+        case AXIS_Z: {
+            return pos.z;
+        }
+        default: {
+            return 100.0;
+        }
+    }
+}
+
 fn project_to_3d(pos: vec2<f32>, axis: u32, mag: f32) -> vec3<f32> {
     switch axis {
         case AXIS_X: {
@@ -107,6 +141,43 @@ fn normal_from_face(face: u32) -> vec3<f32> {
     }
 }
 
+fn face_from_normal(normal: vec3<i32>) -> u32 {
+    if all(normal == vec3<i32>(0, 1, 0)) {
+        return FACE_TOP;
+    }
+    if all(normal == vec3<i32>(0, -1, 0)) {
+        return FACE_BOTTOM;
+    }
+    if all(normal == vec3<i32>(1, 0, 0)) {
+        return FACE_NORTH;
+    }
+    if all(normal == vec3<i32>(0, 0, 1)) {
+        return FACE_EAST;
+    }
+    if all(normal == vec3<i32>(-1, 0, 0)) {
+        return FACE_SOUTH;
+    }
+    if all(normal == vec3<i32>(0, 0, -1)) {
+        return FACE_WEST;
+    }
+
+    return 100u;
+}
+
+fn face_signum(face: u32) -> i32 {
+    switch face {
+        case FACE_TOP, FACE_NORTH, FACE_EAST: {
+            return 1;
+        }
+        case FACE_BOTTOM, FACE_SOUTH, FACE_WEST: {
+            return -1;
+        }
+        default: {
+            return 0;
+        }
+    }
+}
+
 const AXIS_X: u32 = 0u;
 const AXIS_Y: u32 = 1u;
 const AXIS_Z: u32 = 2u;
@@ -130,6 +201,32 @@ fn axis_from_face(face: u32) -> u32 {
     }
 }
 
+fn opposite_face(face: u32) -> u32 {
+    switch face {
+        case FACE_NORTH: {
+            return FACE_SOUTH;
+        }
+        case FACE_SOUTH: {
+            return FACE_NORTH;
+        }
+        case FACE_EAST: {
+            return FACE_WEST;
+        }
+        case FACE_WEST: {
+            return FACE_EAST;
+        }
+        case FACE_TOP: {
+            return FACE_BOTTOM;
+        }
+        case FACE_BOTTOM: {
+            return FACE_TOP;
+        }
+        default: {
+            return 100u;
+        }
+    }
+}
+
 fn index_from_3d_pos(pos: vec3<u32>, max: u32) -> u32 {
-    return (pos.z * max * max) + (pos.y * max) + pos.x
+    return (pos.z * max * max) + (pos.y * max) + pos.x;
 }

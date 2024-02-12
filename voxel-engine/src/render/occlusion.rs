@@ -68,6 +68,8 @@ impl ChunkOcclusionMap {
     pub const SIZE: i32 = Self::USIZE as i32;
 
     pub const BUFFER_SIZE: usize = Self::USIZE.pow(3);
+    pub const GPU_BUFFER_SIZE: u32 = (Self::BUFFER_SIZE as u32) / 4;
+    pub const GPU_BUFFER_DIMENSIONS: u32 = Self::USIZE as u32;
 
     pub const BOUNDS: BoundingBox = BoundingBox {
         min: IVec3::splat(-1),
@@ -102,7 +104,7 @@ pub(crate) fn ivec3_to_cmo_idx(mut pos: IVec3) -> Result<usize, OutOfBounds> {
 
     // the lowest value pos can be is [-1, -1, -1]
     pos += IVec3::ONE;
-    ivec3_to_1d(pos).map_err(|_| OutOfBounds)
+    ivec3_to_1d(pos, ChunkOcclusionMap::USIZE).map_err(|_| OutOfBounds)
 }
 
 impl HasBounds for ChunkOcclusionMap {

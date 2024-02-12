@@ -15,7 +15,7 @@ use super::{
     chunk::{Chunk, ChunkPos},
     chunk_ref::{ChunkRef, ChunkRefVxlReadAccess, ChunkVoxelOutput},
     error::ChunkManagerError,
-    neighbors::Neighbors,
+    neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
 };
 
 #[derive(Default)]
@@ -163,7 +163,8 @@ impl ChunkManager {
         F: for<'a> FnMut(Neighbors<ChunkRefVxlReadAccess<'a, ahash::RandomState>>) -> R,
     {
         // we need to make a map of the neighboring chunks so that the references are owned by the function scope
-        let mut refs = std::array::from_fn::<Option<StrongChunkRef>, { 3 * 3 * 3 }, _>(|_| None);
+        let mut refs =
+            std::array::from_fn::<Option<StrongChunkRef>, { NEIGHBOR_ARRAY_SIZE }, _>(|_| None);
 
         for x in -1..=1 {
             for y in -1..=1 {
@@ -175,7 +176,8 @@ impl ChunkManager {
 
                     let nbrpos_ws = ChunkPos::from(nbrpos + IVec3::from(pos));
                     if let Ok(chunk_ref) = self.get_chunk(nbrpos_ws) {
-                        refs[ivec3_to_1d(nbrpos + IVec3::ONE).unwrap()] = Some(chunk_ref)
+                        refs[ivec3_to_1d(nbrpos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
+                            .unwrap()] = Some(chunk_ref)
                     }
                 }
             }
@@ -183,7 +185,7 @@ impl ChunkManager {
 
         let mut accesses = std::array::from_fn(|_| None);
 
-        for i in 0..(3 * 3 * 3) {
+        for i in 0..NEIGHBOR_ARRAY_SIZE {
             let Some(cref) = refs[i].as_deref() else {
                 continue;
             };

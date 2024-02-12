@@ -6,6 +6,11 @@
 
 #import "shaders/utils.wgsl"::index_from_3d_pos
 #import "shaders/utils.wgsl"::project_to_3d
+#import "shaders/utils.wgsl"::axis_from_face
+#import "shaders/utils.wgsl"::face_signum
+#import "shaders/utils.wgsl"::ivec_project_to_3d
+#import "shaders/utils.wgsl"::opposite_face
+#import "shaders/utils.wgsl"::face_from_normal
 
 #import "shaders/vxl_chunk_io.wgsl"::VertexOutput
 #import "shaders/vxl_types.wgsl"::FaceTexture
@@ -13,6 +18,7 @@
 #import "shaders/chunk_bindings.wgsl"::occlusion
 
 #import "shaders/constants.wgsl"::HAS_NORMAL_MAP_BIT
+#import "shaders/constants.wgsl"::CHUNK_OCCLUSION_BUFFER_DIMENSIONS
 
 #import bevy_pbr::{
     mesh_bindings::mesh,
@@ -22,8 +28,8 @@
     prepass_utils,
 }
 
-fn standard_material_new() -> StandardMaterial {
-    var material: StandardMaterial;
+fn standard_material_new() -> pbr_types::StandardMaterial {
+    var material: pbr_types::StandardMaterial;
 
     material.base_color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
     material.emissive = vec4<f32>(0.0, 0.0, 0.0, 1.0);
@@ -61,17 +67,68 @@ fn calculate_view(
     return V;
 }
 
-fn occlusion(pos_on_face: vec2<f32>, axis: u32, mag: f32) -> f32 {
-    let pos_3d = project_to_3d(pos_on_face, axis, mag);
-    let floored_pos_3d = floor(pos_3d);
+const U8_BITS: u32 = 8u;
+const U32_BYTES: u32 = 4u;
 
-    let int_pos_3d = vec3<u32>(
-        u32(floored_pos_3d.x),
-        u32(floored_pos_3d.y),
-        u32(floored_pos_3d.z),
+fn get_block_occlusion(whole_idx: u32) -> u32 {
+
+    // based on the unit test "test_shader_logic" in "occlusion.rs"
+    let actual_idx = whole_idx / U32_BYTES;
+    let raw_occlusion_value = occlusion[actual_idx];
+
+    // which byte in the u32 are we interested in
+    let subidx = whole_idx % U32_BYTES;
+    // a mask that selects the bits in that byte
+    let mask = 0xffu << (subidx * U8_BITS);
+
+    // mask and shift our raw value so we get a bitmask of the occluded faces for this block
+    let normalized_value = (raw_occlusion_value & mask) >> (subidx * U8_BITS);
+    return normalized_value;
+}
+
+fn calculate_occlusion(
+    // facespace position on a face, the origin is at the bottom left
+    // corner of the face
+    fs_pos_on_face: vec2<f32>,
+    // localspace position on a face, the origin is at the bottom left
+    // of the chunk "layer" this face is on
+    ls_pos_on_face: vec2<f32>,
+    face: u32,
+    mag: f32
+) -> f32 {
+    let axis = axis_from_face(face);
+
+    let floored_pos_2d = floor(ls_pos_on_face);
+    let int_pos_2d = vec2<i32>(
+        i32(floored_pos_2d.x),
+        i32(floored_pos_2d.y),
     );
 
-    
+    // FIXME: theres some rounding issues here and probably elsewhere, discover why its all messed up and fix
+    let mag_above = i32(floor(mag)) + face_signum(face);
+    let pos_above = ivec_project_to_3d(int_pos_2d, axis, mag_above);
+
+    // up
+
+    // down
+    let offset = vec2<i32>(0, -1);
+    let offset_pos = int_pos_2d + offset;
+    let pos_3d = ivec_project_to_3d(offset_pos, axis, mag_above);
+    let normal = pos_3d - pos_above; // should have a magnitude of 1
+    let index = index_from_3d_pos(vec3<u32>(pos_3d + vec3<i32>(1)), CHUNK_OCCLUSION_BUFFER_DIMENSIONS);
+    let occlusion = get_block_occlusion(index);
+
+    if (occlusion & (1u << opposite_face(face_from_normal(normal)))) != 0u {
+        let centered_fs_pos_on_face = fs_pos_on_face - vec2(0.5);
+        
+        let t = abs(min(centered_fs_pos_on_face.y, 0.0));
+        return t;
+        // TODO: occlusion math
+    }
+
+    // left
+
+    // right
 
     return 0.0;
 }
