@@ -45,7 +45,7 @@ fn fragment(
         quad.magnitude - max(0, face_signum(face)),
     );
 
-    out.color = vec4(occlusion, 0.5, 0.5, 1.0);
+    out.color = vec4(occlusion * 1.25, 0.15, 0.15, 1.0);
 
     return out;
 
