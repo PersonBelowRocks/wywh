@@ -9,25 +9,75 @@
 
 fn extract_position(quad: ChunkQuad, quad_vertex_index: u32) -> vec3<f32> {
     var pos_2d: vec2<f32>;
-    switch quad_vertex_index {
-        case 0u: {
-            pos_2d = vec2(quad.min.x, quad.max.y);
+    let face = extract_face(quad);
+    
+    // 0---1
+    // |   |
+    // 2---3
+
+    // quad: 0, 1, 2, 2, 1, 3
+    switch face {
+        case FACE_EAST, FACE_SOUTH, FACE_BOTTOM: {
+            let positions = array(
+                vec2(quad.max.x, quad.min.y),
+                vec2(quad.max.x, quad.max.y),
+                vec2(quad.min.x, quad.min.y),
+                vec2(quad.min.x, quad.max.y),
+            );
+
+            // absolutely hilarious workaround to this ridiculous bug:
+            // https://github.com/gfx-rs/wgpu/issues/4337
+            switch quad_vertex_index {
+                case 0u: {
+                    pos_2d = positions[0];
+                }
+                case 1u: {
+                    pos_2d = positions[1];
+                }
+                case 2u: {
+                    pos_2d = positions[2];
+                }
+                case 3u: {
+                    pos_2d = positions[3];
+                }
+                default: {
+                    return vec3(0.0, 0.0, 0.0);
+                }
+            }
         }
-        case 1u: {
-            pos_2d = vec2(quad.max.x, quad.max.y);
+        case FACE_WEST, FACE_NORTH, FACE_TOP: {
+            let positions = array(
+                vec2(quad.min.x, quad.max.y),
+                vec2(quad.max.x, quad.max.y),
+                vec2(quad.min.x, quad.min.y),
+                vec2(quad.max.x, quad.min.y),
+            );
+
+            // see above
+            switch quad_vertex_index {
+                case 0u: {
+                    pos_2d = positions[0];
+                }
+                case 1u: {
+                    pos_2d = positions[1];
+                }
+                case 2u: {
+                    pos_2d = positions[2];
+                }
+                case 3u: {
+                    pos_2d = positions[3];
+                }
+                default: {
+                    return vec3(0.0, 0.0, 0.0);
+                }
+            }
         }
-        case 2u: {
-            pos_2d = vec2(quad.min.x, quad.min.y);
-        }
-        case 3u: {
-            pos_2d = vec2(quad.max.x, quad.min.y);
-        }
+
         default: {
             return vec3(0.0, 0.0, 0.0);
         }
     }
 
-    let face = extract_face(quad);
     return project_to_3d(pos_2d, axis_from_face(face), quad.layer);
 }
 

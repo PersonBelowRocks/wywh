@@ -22,7 +22,7 @@ use bevy::{
         render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
-            BindGroupLayout, PipelineCache, RenderPipelineDescriptor, Shader,
+            BindGroupLayout, Face, FrontFace, PipelineCache, RenderPipelineDescriptor, Shader,
             SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
         },
         view::{ExtractedView, VisibleEntities},
@@ -80,8 +80,8 @@ impl SpecializedMeshPipeline for VoxelChunkPipeline {
     ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
         let mut descriptor = self.mesh_pipeline.specialize(key.mesh_key, layout)?;
 
-        // FIXME: fix face culling! gonna need to tweak and experiment with the logic in the shaders
-        descriptor.primitive.cull_mode = None;
+        descriptor.primitive.cull_mode = Some(Face::Back);
+        descriptor.primitive.front_face = FrontFace::Ccw;
 
         descriptor.vertex.shader = self.vert.clone();
         descriptor.vertex.buffers =
