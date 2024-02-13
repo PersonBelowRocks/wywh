@@ -28,7 +28,7 @@ pub struct GpuQuad {
     pub bitfields: GpuQuadBitfields,
     pub min: Vec2,
     pub max: Vec2,
-    pub layer: f32,
+    pub magnitude: i32,
 }
 
 #[derive(Copy, Clone, Debug, ShaderType, PartialEq, Eq)]

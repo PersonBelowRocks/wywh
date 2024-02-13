@@ -274,9 +274,9 @@ impl Mesher for GreedyMesher {
                 .with_face(quad.isometry.face);
 
             let magnitude = if quad.isometry.face.axis_direction() > 0 {
-                quad.isometry.magnitude() as f32 + 1.0
+                quad.isometry.magnitude() + 1
             } else {
-                quad.isometry.magnitude() as f32
+                quad.isometry.magnitude()
             };
 
             let gpu_quad = GpuQuad {
@@ -284,7 +284,7 @@ impl Mesher for GreedyMesher {
                 max: quad.max_2d().as_vec2() + Vec2::ONE,
                 texture_id: quad.quad.dataquad.texture.texture.inner() as u32,
                 bitfields,
-                layer: magnitude,
+                magnitude,
             };
 
             gpu_quads.push(gpu_quad);
@@ -318,7 +318,7 @@ impl Mesher for GreedyMesher {
                 };
 
                 let face = quad.bitfields.get_face();
-                let layer = quad.layer;
+                let layer = quad.magnitude as f32;
 
                 positions.push(project_to_3d(pos_2d, face, layer));
             }

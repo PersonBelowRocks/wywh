@@ -9,7 +9,7 @@ struct ChunkQuad {
     bitfields: ChunkQuadBitfields,
     min: vec2<f32>,
     max: vec2<f32>,
-    layer: f32,
+    magnitude: i32,
 }
 
 struct ChunkQuadBitfields {

@@ -25,9 +25,7 @@ fn vertex(
     let model = mesh_functions::get_model_matrix(instance_index);
 
     var out: PrepassOutput;
-    out.texture = quad.texture_id;
-    out.bitfields = quad.bitfields.value;
-    out.face = face;
+    out.quad_idx = chunk_quad_index;
 
     out.uv = project_to_2d(position, axis_from_face(face)) - quad.min;
 
@@ -39,17 +37,6 @@ fn vertex(
     out.clip_position_unclamped = out.position;
     out.position.z = min(out.position.z, 1.0);
 #endif // DEPTH_CLAMP_ORTHO
-
-#ifdef NORMAL_PREPASS_OR_DEFERRED_PREPASS
-    let normal = extract_normal(quad);
-    out.world_normal = mesh_functions::mesh_normal_local_to_world(
-        normal,
-        instance_index
-    );
-
-    // TODO: tangents
-    out.world_tangent = vec4(0.0, 0.0, 0.0, 0.0);
-#endif // NORMAL_PREPASS_OR_DEFERRED_PREPASS
 
     
 #ifdef VERTEX_OUTPUT_INSTANCE_INDEX

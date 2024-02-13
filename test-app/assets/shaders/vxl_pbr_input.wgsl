@@ -11,9 +11,12 @@
 #import "shaders/utils.wgsl"::ivec_project_to_3d
 #import "shaders/utils.wgsl"::opposite_face
 #import "shaders/utils.wgsl"::face_from_normal
+#import "shaders/utils.wgsl"::normal_from_face
+#import "shaders/utils.wgsl"::extract_face
 
 #import "shaders/vxl_chunk_io.wgsl"::VertexOutput
 #import "shaders/vxl_types.wgsl"::FaceTexture
+#import "shaders/vxl_types.wgsl"::ChunkQuad
 
 #import "shaders/chunk_bindings.wgsl"::occlusion
 
@@ -94,7 +97,7 @@ fn calculate_occlusion(
     // of the chunk "layer" this face is on
     ls_pos_on_face: vec2<f32>,
     face: u32,
-    mag: f32
+    mag: i32
 ) -> f32 {
     let axis = axis_from_face(face);
 
@@ -105,7 +108,8 @@ fn calculate_occlusion(
     );
 
     // FIXME: theres some rounding issues here and probably elsewhere, discover why its all messed up and fix
-    let mag_above = i32(floor(mag)) + face_signum(face);
+    // let rounded_mag = floor(mag + (-sign(mag) / 2.0));
+    let mag_above = mag + face_signum(face);
     let pos_above = ivec_project_to_3d(int_pos_2d, axis, mag_above);
 
     // up
@@ -114,6 +118,7 @@ fn calculate_occlusion(
     let offset = vec2<i32>(0, -1);
     let offset_pos = int_pos_2d + offset;
     let pos_3d = ivec_project_to_3d(offset_pos, axis, mag_above);
+
     let normal = pos_3d - pos_above; // should have a magnitude of 1
     let index = index_from_3d_pos(vec3<u32>(pos_3d + vec3<i32>(1)), CHUNK_OCCLUSION_BUFFER_DIMENSIONS);
     let occlusion = get_block_occlusion(index);
@@ -135,7 +140,10 @@ fn calculate_occlusion(
 
 fn pbr_input_from_vertex_output(
     in: VertexOutput,
+    quad: ChunkQuad,
 ) -> pbr_types::PbrInput {
+    let world_normal = normal_from_face(extract_face(quad));
+
     var pbr_input: pbr_types::PbrInput = pbr_types::pbr_input_new();
 
     pbr_input.flags = mesh[in.instance_index].flags;
@@ -144,7 +152,7 @@ fn pbr_input_from_vertex_output(
     pbr_input.frag_coord = in.position;
     pbr_input.world_position = in.world_position;
 
-    pbr_input.world_normal = in.world_normal;
+    pbr_input.world_normal = world_normal;
 
 #ifdef LOAD_PREPASS_NORMALS
     pbr_input.N = prepass_utils::prepass_normal(in.position, 0u);
@@ -181,7 +189,7 @@ fn create_pbr_input(
         pbr_input.N = apply_normal_mapping(
             0u,
             pbr_input.world_normal,
-            in.world_tangent,
+            vec4(0.0, 0.0, 0.0, 0.0),
             normal_map_uv,
             view.mip_bias,
         );

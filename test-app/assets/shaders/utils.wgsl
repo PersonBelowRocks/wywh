@@ -78,7 +78,7 @@ fn extract_position(quad: ChunkQuad, quad_vertex_index: u32) -> vec3<f32> {
         }
     }
 
-    return project_to_3d(pos_2d, axis_from_face(face), quad.layer);
+    return project_to_3d(pos_2d, axis_from_face(face), f32(quad.magnitude));
 }
 
 fn ivec_project_to_3d(pos: vec2<i32>, axis: u32, mag: i32) -> vec3<i32> {

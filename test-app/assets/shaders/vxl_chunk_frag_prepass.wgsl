@@ -1,7 +1,7 @@
 #import "shaders/vxl_chunk_io.wgsl"::PrepassOutput
 #import bevy_pbr::prepass_io::FragmentOutput
 
-
+#import "shaders/chunk_bindings.wgsl"::quads
 
 @fragment
 fn fragment(
