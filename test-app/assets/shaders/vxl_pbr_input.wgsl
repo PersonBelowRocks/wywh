@@ -89,6 +89,25 @@ fn get_block_occlusion(whole_idx: u32) -> u32 {
     return normalized_value;
 }
 
+fn is_occluded_at_offset(
+    pos: vec2i,
+    // offset must have a magnitude of 1
+    offset: vec2i,
+    magnitude: i32,
+    axis: u32,
+) -> bool {
+    let centered_pos = ivec_project_to_3d(pos, axis, magnitude);
+
+    let offset_pos = pos + offset;
+    let occlusion_pos = ivec_project_to_3d(offset_pos, axis, magnitude);
+    let normal = occlusion_pos - centered_pos;
+
+    let index = index_from_3d_pos(vec3u(occlusion_pos + vec3i(1)), CHUNK_OCCLUSION_BUFFER_DIMENSIONS);
+    let occlusion = get_block_occlusion(index);
+
+    return (occlusion & (1u << opposite_face(face_from_normal(normal)))) != 0u;
+}
+
 fn calculate_occlusion(
     // facespace position on a face, the origin is at the bottom left
     // corner of the face
@@ -101,34 +120,21 @@ fn calculate_occlusion(
 ) -> f32 {
     let axis = axis_from_face(face);
 
-    let floored_pos_2d = floor(ls_pos_on_face);
-    let int_pos_2d = vec2<i32>(
-        i32(floored_pos_2d.x),
-        i32(floored_pos_2d.y),
-    );
+    let centered_pos = vec2i(floor(ls_pos_on_face));
 
-    // FIXME: theres some rounding issues here and probably elsewhere, discover why its all messed up and fix
-    // let rounded_mag = floor(mag + (-sign(mag) / 2.0));
     let mag_above = mag + face_signum(face);
-    let pos_above = ivec_project_to_3d(int_pos_2d, axis, mag_above);
+    let above_centered_pos = ivec_project_to_3d(centered_pos, axis, mag_above);
+
+    // TODO: occlusion math
 
     // up
 
     // down
-    let offset = vec2<i32>(0, -1);
-    let offset_pos = int_pos_2d + offset;
-    let pos_3d = ivec_project_to_3d(offset_pos, axis, mag_above);
-
-    let normal = pos_3d - pos_above; // should have a magnitude of 1
-    let index = index_from_3d_pos(vec3<u32>(pos_3d + vec3<i32>(1)), CHUNK_OCCLUSION_BUFFER_DIMENSIONS);
-    let occlusion = get_block_occlusion(index);
-
-    if (occlusion & (1u << opposite_face(face_from_normal(normal)))) != 0u {
+    if is_occluded_at_offset(centered_pos, vec2i(0, -1), mag_above, axis) {
         let centered_fs_pos_on_face = fs_pos_on_face - vec2(0.5);
         
         let t = abs(min(centered_fs_pos_on_face.y, 0.0));
         return t;
-        // TODO: occlusion math
     }
 
     // left
