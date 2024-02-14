@@ -91,7 +91,7 @@ fn get_block_occlusion(whole_idx: u32) -> u32 {
 
 fn is_occluded_at_offset(
     pos: vec2i,
-    // offset must have a magnitude of 1
+    // the components of the offset vector cannot have an absolute value greater than 1
     offset: vec2i,
     magnitude: i32,
     axis: u32,
@@ -105,8 +105,34 @@ fn is_occluded_at_offset(
     let index = index_from_3d_pos(vec3u(occlusion_pos + vec3i(1)), CHUNK_OCCLUSION_BUFFER_DIMENSIONS);
     let occlusion = get_block_occlusion(index);
 
-    return (occlusion & (1u << opposite_face(face_from_normal(normal)))) != 0u;
+    var is_occluded: bool;
+    if offset.x != 0 && offset.y != 0 {
+        // we're testing a corner so we need to split up our offset into 2 normals
+        let normal_1 = ivec_project_to_3d(vec2i(offset.x, 0), axis, 0);
+        let face_1 = opposite_face(face_from_normal(normal_1));
+        let normal_2 = ivec_project_to_3d(vec2i(0, offset.y), axis, 0);
+        let face_2 = opposite_face(face_from_normal(normal_2));
+
+        is_occluded = (occlusion & (1u << face_1)) != 0u && (occlusion & (1u << face_2)) != 0u;
+    } else {
+        // we're testing an edge
+        is_occluded = (occlusion & (1u << opposite_face(face_from_normal(normal)))) != 0u;
+    }
+
+    return is_occluded;
 }
+
+fn corner_occlusion(centered_pos: vec2f, corner_pos: vec2f) -> f32 {
+    let sq_2: f32 = sqrt(2.0);
+
+    let d = distance(centered_pos, corner_pos);
+    return max(0.0, 1.0 - d);
+    // return max(0.0, sq_2 - d - (sq_2 / 3.5));
+}
+
+const BIAS: f32 = -0.75;
+const WEIGHT: f32 = 1.0;
+const GLOBAL_WEIGHT: f32 = 0.15;
 
 fn calculate_occlusion(
     // facespace position on a face, the origin is at the bottom left
@@ -126,59 +152,66 @@ fn calculate_occlusion(
     let mag_above = mag + face_signum(face);
     let above_centered_pos = ivec_project_to_3d(centered_pos, axis, mag_above);
 
+    let top = is_occluded_at_offset(centered_pos, vec2i(0, 1), mag_above, axis);
+    let bottom = is_occluded_at_offset(centered_pos, vec2i(0, -1), mag_above, axis);
+    let left = is_occluded_at_offset(centered_pos, vec2i(-1, 0), mag_above, axis);
+    let right = is_occluded_at_offset(centered_pos, vec2i(1, 0), mag_above, axis);
+
     // TODO: occlusion math
     var t: f32 = 0.0;
 
-    // up
-    if is_occluded_at_offset(centered_pos, vec2i(0, 1), mag_above, axis) {
-        t += abs(max(centered_fs_pos_on_face.y, 0.0));
+    // top
+    if top {
+        let v = centered_fs_pos_on_face.y + 0.5;
+        t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
-    // down
-    if is_occluded_at_offset(centered_pos, vec2i(0, -1), mag_above, axis) {
-        t += abs(min(centered_fs_pos_on_face.y, 0.0));
+    // bottom
+    if bottom {
+        let v = abs(centered_fs_pos_on_face.y - 0.5);
+        t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
     // left
-    if is_occluded_at_offset(centered_pos, vec2i(-1, 0), mag_above, axis) {
-        t += abs(min(centered_fs_pos_on_face.x, 0.0));
+    if left {
+        let v = abs(centered_fs_pos_on_face.x - 0.5);
+        t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
     // right
-    if is_occluded_at_offset(centered_pos, vec2i(1, 0), mag_above, axis) {
-        t += abs(max(centered_fs_pos_on_face.x, 0.0));
+    if right {
+        let v = centered_fs_pos_on_face.x + 0.5;
+        t += max((WEIGHT * v) + BIAS, 0.0);
     }
+
+    // t = max(t - 0.2, 0.0);
 
     let x = centered_fs_pos_on_face.x;
     let y = centered_fs_pos_on_face.y;
 
     // corners!
 
-    // top-left
-    if is_occluded_at_offset(centered_pos, vec2i(-1, 0), mag_above, axis) && is_occluded_at_offset(centered_pos, vec2i(0, 1), mag_above, axis) {
-        let v = vec2(min(x, 0.0), max(y, 0.0));
-        t += max(length(v) - 0.5, 0.0);
+    if !top && !left && is_occluded_at_offset(centered_pos, vec2i(-1, 1), mag_above, axis) {
+        let v = corner_occlusion(centered_fs_pos_on_face, vec2f(-0.5, 0.5));
+        t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
-    // top-right
-    if is_occluded_at_offset(centered_pos, vec2i(1, 0), mag_above, axis) && is_occluded_at_offset(centered_pos, vec2i(0, 1), mag_above, axis) {
-        let v = vec2(max(x, 0.0), max(y, 0.0));
-        t += max(length(v) - 0.5, 0.0);
+    if !top && !right && is_occluded_at_offset(centered_pos, vec2i(1, 1), mag_above, axis) {
+        let v = corner_occlusion(centered_fs_pos_on_face, vec2f(0.5, 0.5));
+        t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
-    // bottom-left
-    if is_occluded_at_offset(centered_pos, vec2i(-1, 0), mag_above, axis) && is_occluded_at_offset(centered_pos, vec2i(0, -1), mag_above, axis) {
-        let v = vec2(min(x, 0.0), min(y, 0.0));
-        t += max(length(v) - 0.5, 0.0);
+    if !bottom && !left && is_occluded_at_offset(centered_pos, vec2i(-1, -1), mag_above, axis) {
+        let v = corner_occlusion(centered_fs_pos_on_face, vec2f(-0.5, -0.5));
+        t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
-    // bottom-right
-    if is_occluded_at_offset(centered_pos, vec2i(1, 0), mag_above, axis) && is_occluded_at_offset(centered_pos, vec2i(0, -1), mag_above, axis) {
-        let v = vec2(max(x, 0.0), min(y, 0.0));
-        t += max(length(v) - 0.5, 0.0);
+    if !bottom && !right && is_occluded_at_offset(centered_pos, vec2i(1, -1), mag_above, axis) {
+        let v = corner_occlusion(centered_fs_pos_on_face, vec2f(0.5, -0.5));
+        t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
-    return max(t, 0.0) / 8.0;
+    return max(t * GLOBAL_WEIGHT, 0.0);
 }
 
 fn pbr_input_from_vertex_output(
