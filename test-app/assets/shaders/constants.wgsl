@@ -9,7 +9,7 @@ const ROTATION_SHIFT: u32 = #{ROTATION_SHIFT}u;
 const FACE_MASK: u32 = #{FACE_MASK}u;
 const FACE_SHIFT: u32 = #{FACE_SHIFT}u;
 
-const FLIP_UV_X_SHIFT: u32 = #{FLIP_UV_X_SHIFT}u;
-const FLIP_UV_Y_SHIFT: u32 = #{FLIP_UV_Y_SHIFT}u;
+const FLIP_UV_X_BIT: u32 = #{FLIP_UV_X_BIT}u;
+const FLIP_UV_Y_BIT: u32 = #{FLIP_UV_Y_BIT}u;
 
 const HAS_NORMAL_MAP_BIT: u32 = #{HAS_NORMAL_MAP_BIT}u;

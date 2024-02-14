@@ -4,8 +4,58 @@
 #import "shaders/constants.wgsl"::ROTATION_SHIFT
 #import "shaders/constants.wgsl"::FACE_MASK
 #import "shaders/constants.wgsl"::FACE_SHIFT
-#import "shaders/constants.wgsl"::FLIP_UV_X_SHIFT
-#import "shaders/constants.wgsl"::FLIP_UV_Y_SHIFT
+#import "shaders/constants.wgsl"::FLIP_UV_X_BIT
+#import "shaders/constants.wgsl"::FLIP_UV_Y_BIT
+
+// texture_rot must be below 4
+fn create_rotation_matrix(texture_rot: u32) -> mat2x2<f32> {
+    let r = radians(90.0 * f32(texture_rot));
+
+    return mat2x2(
+        cos(r), -sin(r),
+        sin(r),  cos(r),
+    );
+}
+
+fn uv_coords_from_fs_pos_and_params(
+    fs_pos: vec2f,
+    rot: mat2x2<f32>,
+    flip_x: bool,
+    flip_y: bool
+) -> vec2f {
+    var raw_uv = fract(fs_pos);
+
+    // flip UV coordinate V (y) component by default, as the UV origin is in the top left of textures but the facespace
+    // origin is in the bottom left
+    raw_uv.y = 1.0 - raw_uv.y;
+
+    if flip_x {
+        raw_uv.x = 1.0 - raw_uv.x;
+    }
+
+    if flip_y {
+        raw_uv.y = 1.0 - raw_uv.y;
+    }
+
+    // we need to center the UVs to rotate it around the origin
+    let centered_uv = raw_uv - vec2f(0.5);
+    let rotated_uv = rot * centered_uv;
+
+    // reverse the centering before we return
+    return rotated_uv + vec2f(0.5);
+}
+
+fn flipped_uv_x(quad: ChunkQuad) -> bool {
+    return (quad.bitfields.value & FLIP_UV_X_BIT) != 0u;
+}
+
+fn flipped_uv_y(quad: ChunkQuad) -> bool {
+    return (quad.bitfields.value & FLIP_UV_Y_BIT) != 0u;
+}
+
+fn extract_texture_rot(quad: ChunkQuad) -> u32 {
+    return (quad.bitfields.value & ROTATION_MASK) >> ROTATION_SHIFT;
+}
 
 fn extract_position(quad: ChunkQuad, quad_vertex_index: u32) -> vec3<f32> {
     var pos_2d: vec2<f32>;

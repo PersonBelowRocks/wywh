@@ -33,9 +33,7 @@ fn vertex(
     out.world_position = mesh_functions::mesh_position_local_to_world(model, vec4<f32>(position, 1.0));
     out.position = position_world_to_clip(out.world_position.xyz);
 
-#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     out.instance_index = get_instance_index(instance_index);
-#endif
 
     return out;
 }

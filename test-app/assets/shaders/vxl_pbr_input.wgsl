@@ -6,6 +6,7 @@
 
 #import "shaders/utils.wgsl"::index_from_3d_pos
 #import "shaders/utils.wgsl"::project_to_3d
+#import "shaders/utils.wgsl"::project_to_2d
 #import "shaders/utils.wgsl"::axis_from_face
 #import "shaders/utils.wgsl"::face_signum
 #import "shaders/utils.wgsl"::ivec_project_to_3d
@@ -13,6 +14,11 @@
 #import "shaders/utils.wgsl"::face_from_normal
 #import "shaders/utils.wgsl"::normal_from_face
 #import "shaders/utils.wgsl"::extract_face
+#import "shaders/utils.wgsl"::extract_texture_rot
+#import "shaders/utils.wgsl"::create_rotation_matrix
+#import "shaders/utils.wgsl"::flipped_uv_x
+#import "shaders/utils.wgsl"::flipped_uv_y
+#import "shaders/utils.wgsl"::uv_coords_from_fs_pos_and_params
 
 #import "shaders/vxl_chunk_io.wgsl"::VertexOutput
 #import "shaders/vxl_types.wgsl"::FaceTexture
@@ -22,6 +28,10 @@
 
 #import "shaders/constants.wgsl"::HAS_NORMAL_MAP_BIT
 #import "shaders/constants.wgsl"::CHUNK_OCCLUSION_BUFFER_DIMENSIONS
+#import "shaders/constants.wgsl"::FLIP_UV_X_BIT
+#import "shaders/constants.wgsl"::FLIP_UV_Y_BIT
+#import "shaders/constants.wgsl"::ROTATION_MASK
+#import "shaders/constants.wgsl"::ROTATION_SHIFT
 
 #import bevy_pbr::{
     mesh_bindings::mesh,
@@ -29,6 +39,7 @@
     pbr_types,
     mesh_view_bindings as view_bindings,
     prepass_utils,
+    mesh_functions,
 }
 
 fn standard_material_new() -> pbr_types::StandardMaterial {
@@ -96,11 +107,11 @@ fn is_occluded_at_offset(
     magnitude: i32,
     axis: u32,
 ) -> bool {
-    let centered_pos = ivec_project_to_3d(pos, axis, magnitude);
+    let ls_face_pos_2d = ivec_project_to_3d(pos, axis, magnitude);
 
     let offset_pos = pos + offset;
     let occlusion_pos = ivec_project_to_3d(offset_pos, axis, magnitude);
-    let normal = occlusion_pos - centered_pos;
+    let normal = occlusion_pos - ls_face_pos_2d;
 
     let index = index_from_3d_pos(vec3u(occlusion_pos + vec3i(1)), CHUNK_OCCLUSION_BUFFER_DIMENSIONS);
     let occlusion = get_block_occlusion(index);
@@ -122,40 +133,41 @@ fn is_occluded_at_offset(
     return is_occluded;
 }
 
-fn corner_occlusion(centered_pos: vec2f, corner_pos: vec2f) -> f32 {
+fn corner_occlusion(ls_face_pos_2d: vec2f, corner_pos: vec2f) -> f32 {
     let sq_2: f32 = sqrt(2.0);
 
-    let d = distance(centered_pos, corner_pos);
+    let d = distance(ls_face_pos_2d, corner_pos);
     return max(0.0, 1.0 - d);
     // return max(0.0, sq_2 - d - (sq_2 / 3.5));
 }
 
 const BIAS: f32 = -0.75;
 const WEIGHT: f32 = 1.0;
-const GLOBAL_WEIGHT: f32 = 0.15;
+const GLOBAL_WEIGHT: f32 = 0.33;
 
+// TODO: refactor occlusion code into own file
 fn calculate_occlusion(
     // facespace position on a face, the origin is at the bottom left
     // corner of the face
     fs_pos_on_face: vec2<f32>,
     // localspace position on a face, the origin is at the bottom left
     // of the chunk "layer" this face is on
-    ls_pos_on_face: vec2<f32>,
+    ls_face_pos_2d: vec2<i32>,
     face: u32,
     mag: i32
 ) -> f32 {
     let axis = axis_from_face(face);
 
-    let centered_pos = vec2i(floor(ls_pos_on_face));
+    // let ls_face_pos_2d = vec2i(floor(ls_pos_on_face));
     let centered_fs_pos_on_face = fs_pos_on_face - vec2(0.5);
 
     let mag_above = mag + face_signum(face);
-    let above_centered_pos = ivec_project_to_3d(centered_pos, axis, mag_above);
+    let above_centered_pos = ivec_project_to_3d(ls_face_pos_2d, axis, mag_above);
 
-    let top = is_occluded_at_offset(centered_pos, vec2i(0, 1), mag_above, axis);
-    let bottom = is_occluded_at_offset(centered_pos, vec2i(0, -1), mag_above, axis);
-    let left = is_occluded_at_offset(centered_pos, vec2i(-1, 0), mag_above, axis);
-    let right = is_occluded_at_offset(centered_pos, vec2i(1, 0), mag_above, axis);
+    let top = is_occluded_at_offset(ls_face_pos_2d, vec2i(0, 1), mag_above, axis);
+    let bottom = is_occluded_at_offset(ls_face_pos_2d, vec2i(0, -1), mag_above, axis);
+    let left = is_occluded_at_offset(ls_face_pos_2d, vec2i(-1, 0), mag_above, axis);
+    let right = is_occluded_at_offset(ls_face_pos_2d, vec2i(1, 0), mag_above, axis);
 
     // TODO: occlusion math
     var t: f32 = 0.0;
@@ -184,29 +196,27 @@ fn calculate_occlusion(
         t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
-    // t = max(t - 0.2, 0.0);
-
     let x = centered_fs_pos_on_face.x;
     let y = centered_fs_pos_on_face.y;
 
     // corners!
 
-    if !top && !left && is_occluded_at_offset(centered_pos, vec2i(-1, 1), mag_above, axis) {
+    if !top && !left && is_occluded_at_offset(ls_face_pos_2d, vec2i(-1, 1), mag_above, axis) {
         let v = corner_occlusion(centered_fs_pos_on_face, vec2f(-0.5, 0.5));
         t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
-    if !top && !right && is_occluded_at_offset(centered_pos, vec2i(1, 1), mag_above, axis) {
+    if !top && !right && is_occluded_at_offset(ls_face_pos_2d, vec2i(1, 1), mag_above, axis) {
         let v = corner_occlusion(centered_fs_pos_on_face, vec2f(0.5, 0.5));
         t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
-    if !bottom && !left && is_occluded_at_offset(centered_pos, vec2i(-1, -1), mag_above, axis) {
+    if !bottom && !left && is_occluded_at_offset(ls_face_pos_2d, vec2i(-1, -1), mag_above, axis) {
         let v = corner_occlusion(centered_fs_pos_on_face, vec2f(-0.5, -0.5));
         t += max((WEIGHT * v) + BIAS, 0.0);
     }
 
-    if !bottom && !right && is_occluded_at_offset(centered_pos, vec2i(1, -1), mag_above, axis) {
+    if !bottom && !right && is_occluded_at_offset(ls_face_pos_2d, vec2i(1, -1), mag_above, axis) {
         let v = corner_occlusion(centered_fs_pos_on_face, vec2f(0.5, -0.5));
         t += max((WEIGHT * v) + BIAS, 0.0);
     }
@@ -214,13 +224,28 @@ fn calculate_occlusion(
     return max(t * GLOBAL_WEIGHT, 0.0);
 }
 
-fn pbr_input_from_vertex_output(
+fn create_pbr_input(
     in: VertexOutput,
     quad: ChunkQuad,
+    scale: f32,
 ) -> pbr_types::PbrInput {
-    let world_normal = normal_from_face(extract_face(quad));
-
     var pbr_input: pbr_types::PbrInput = pbr_types::pbr_input_new();
+
+    let face = extract_face(quad);
+    let raw_normal = normal_from_face(face);
+    let ls_pos = project_to_2d(in.local_position, axis_from_face(face));
+    let fs_pos = fract(ls_pos);
+
+    // TODO: UV calculation is a bit more complicated than this, fix it!!
+    let texture_rot = extract_texture_rot(quad);
+    let uv_rotation_matrix = create_rotation_matrix(texture_rot);
+
+    let uv = uv_coords_from_fs_pos_and_params(
+        fs_pos,
+        uv_rotation_matrix,
+        flipped_uv_x(quad),
+        flipped_uv_y(quad),
+    );
 
     pbr_input.flags = mesh[in.instance_index].flags;
     pbr_input.is_orthographic = view.projection[3].w == 1.0;
@@ -228,7 +253,10 @@ fn pbr_input_from_vertex_output(
     pbr_input.frag_coord = in.position;
     pbr_input.world_position = in.world_position;
 
-    pbr_input.world_normal = world_normal;
+    pbr_input.world_normal = mesh_functions::mesh_normal_local_to_world(
+        raw_normal,
+        in.instance_index
+    );;
 
 #ifdef LOAD_PREPASS_NORMALS
     pbr_input.N = prepass_utils::prepass_normal(in.position, 0u);
@@ -236,42 +264,51 @@ fn pbr_input_from_vertex_output(
     pbr_input.N = normalize(pbr_input.world_normal);
 #endif
 
-    return pbr_input;
-}
+    let face_texture = faces[quad.texture_id];
 
-fn create_pbr_input(
-    in: VertexOutput,
-    is_front: bool,
-    face: FaceTexture,
-    scale: f32,
-) -> pbr_types::PbrInput {
-
-    var pbr_input: pbr_types::PbrInput = pbr_input_from_vertex_output(in);
-    
-    // TODO: UV calculation is a bit more complicated than this, fix it!!
-    var uv = fract(in.uv);
-
-    let color_uv = ((uv / scale) + (face.color_tex_pos / scale) / scale);
+    let color_uv = ((uv / scale) + (face_texture.color_tex_pos / scale) / scale);
     pbr_input.material.base_color *= textureSampleBias(color_texture, color_sampler, color_uv, view.mip_bias);
 
-    pbr_input.occlusion = vec3(1.0);
+    let vis = calculate_occlusion(
+        fs_pos,
+        vec2i(floor(ls_pos)),
+        face,
+        // the magnitude passed to the shader is actually different from the magnitude used on the CPU side.
+        // if the quad is pointed in the positive direction of the axis, the magnitude is 1 more than the CPU magnitude.
+        // this is to actually give the blocks some volume, as otherwise quads would be placed at the same magnitude
+        // no matter the direction they're facing along an axis.
+        // e.g., consider two quads coming from the same block, A and B, such that:
+        // A is pointing east
+        // B is pointing west
+        // their dimensions and positions are identical
+        // 
+        // in this arrangement the CPU side magnitude in a CQS would be the same for both of these
+        // because we use the face to distinguish between the two. however for rendering we should "puff" quad A
+        // out a bit to give the block its volume.
+        // this happens in the mesher as part of converting the data to the format used in shaders, but we need to
+        // reverse it here to calculate our occlusion!
+        // TODO: this is (probably) not the best way of doing this, investigate better ways of doing it
+        quad.magnitude - max(0, face_signum(face)),
+    );
+
+    pbr_input.occlusion = vec3(1.0 - vis);
 
     // N (normal vector)
 //#ifndef LOAD_PREPASS_NORMALS
 
-    if (face.flags & HAS_NORMAL_MAP_BIT) != 0u {
-        let normal_map_uv = ((uv / scale) + (face.normal_tex_pos / scale) / scale);
+    // if (face.flags & HAS_NORMAL_MAP_BIT) != 0u {
+    //     let normal_map_uv = ((uv / scale) + (face.normal_tex_pos / scale) / scale);
 
-        pbr_input.N = apply_normal_mapping(
-            0u,
-            pbr_input.world_normal,
-            vec4(0.0, 0.0, 0.0, 0.0),
-            normal_map_uv,
-            view.mip_bias,
-        );
-    } else {
-        pbr_input.N = pbr_input.world_normal;
-    }
+    //     pbr_input.N = apply_normal_mapping(
+    //         0u,
+    //         pbr_input.world_normal,
+    //         vec4(0.0, 0.0, 0.0, 0.0),
+    //         normal_map_uv,
+    //         view.mip_bias,
+    //     );
+    // } else {
+    //     pbr_input.N = pbr_input.world_normal;
+    // }
 
     return pbr_input;
 }

@@ -42,8 +42,8 @@ impl GpuQuadBitfields {
     pub const FACE_MASK: u32 = 0b111 << 2;
     pub const FACE_SHIFT: u32 = 2;
 
-    pub const FLIP_UV_X_SHIFT: u32 = 5;
-    pub const FLIP_UV_Y_SHIFT: u32 = 6;
+    pub const FLIP_UV_X_BIT: u32 = 5;
+    pub const FLIP_UV_Y_BIT: u32 = 6;
 
     pub fn new() -> Self {
         Self { value: 0 }
@@ -66,14 +66,14 @@ impl GpuQuadBitfields {
 
     pub fn with_flip_x(mut self, flip: bool) -> Self {
         if flip {
-            self.value |= 0b1 << Self::FLIP_UV_X_SHIFT;
+            self.value |= 0b1 << Self::FLIP_UV_X_BIT;
         }
         self
     }
 
     pub fn with_flip_y(mut self, flip: bool) -> Self {
         if flip {
-            self.value |= 0b1 << Self::FLIP_UV_Y_SHIFT;
+            self.value |= 0b1 << Self::FLIP_UV_Y_BIT;
         }
         self
     }
