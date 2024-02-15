@@ -13,9 +13,7 @@ struct PrepassOutput {
     @location(1) local_position: vec3<f32>,
     @location(2) uv: vec2<f32>,
     @location(3) @interpolate(flat) quad_idx: u32,
-#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     @location(4) @interpolate(flat) instance_index: u32,
-#endif
 #ifdef MOTION_VECTOR_PREPASS
     @location(5) previous_world_position: vec4<f32>,
 #endif

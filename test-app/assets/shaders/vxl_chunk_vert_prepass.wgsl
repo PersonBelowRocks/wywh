@@ -38,10 +38,7 @@ fn vertex(
     out.position.z = min(out.position.z, 1.0);
 #endif // DEPTH_CLAMP_ORTHO
 
-    
-#ifdef VERTEX_OUTPUT_INSTANCE_INDEX
     out.instance_index = instance_index;
-#endif
     
     return out;
 }

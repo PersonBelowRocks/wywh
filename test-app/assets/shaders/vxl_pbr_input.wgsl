@@ -256,7 +256,7 @@ fn create_pbr_input(
     pbr_input.world_normal = mesh_functions::mesh_normal_local_to_world(
         raw_normal,
         in.instance_index
-    );;
+    );
 
 #ifdef LOAD_PREPASS_NORMALS
     pbr_input.N = prepass_utils::prepass_normal(in.position, 0u);
