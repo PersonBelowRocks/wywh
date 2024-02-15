@@ -8,13 +8,48 @@
 #import "shaders/constants.wgsl"::FLIP_UV_Y_BIT
 
 // texture_rot must be below 4
-fn create_rotation_matrix(texture_rot: u32) -> mat2x2<f32> {
+fn create_rotation_matrix(texture_rot: u32) -> mat2x2f {
     let r = radians(90.0 * f32(texture_rot));
 
     return mat2x2(
         cos(r), -sin(r),
         sin(r),  cos(r),
     );
+}
+
+fn tex_rotation_matrix_around_axis(texture_rot: u32, axis: u32) -> mat3x3f {
+    let r = radians(90.0 * f32(texture_rot));
+
+    switch axis {
+        case AXIS_X: {
+            return mat3x3(
+                1.0,    0.0,     0.0,
+                0.0, cos(r), -sin(r),
+                0.0, sin(r),  cos(r),
+            );
+        }
+        case AXIS_Y: {
+            return mat3x3(
+                cos(r), 0.0, -sin(r),
+                0.0   , 1.0,     0.0,
+                sin(r), 0.0,  cos(r),
+            );
+        }
+        case AXIS_Z: {
+            return mat3x3(
+                cos(r), -sin(r), 0.0,
+                sin(r),  cos(r), 0.0,
+                0.0   ,     0.0, 1.0,
+            );
+        }
+        default: {
+            return mat3x3(
+                0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0,
+            );
+        }
+    }
 }
 
 fn uv_coords_from_fs_pos_and_params(
@@ -234,6 +269,32 @@ fn normal_from_face(face: u32) -> vec3<f32> {
         }
         case FACE_WEST: {
             return vec3(0.0, 0.0, -1.0);
+        }
+        default: {
+            return vec3(0.0, 0.0, 0.0);
+        }
+    }
+}
+
+fn tangent_from_face(face: u32) -> vec3<f32> {
+    switch face {
+        case FACE_TOP: {
+            return vec3(1.0, 0.0, 0.0);
+        }
+        case FACE_BOTTOM: {
+            return vec3(1.0, 0.0, 0.0);
+        }
+        case FACE_NORTH: {
+            return vec3(0.0, 0.0, 1.0);
+        }
+        case FACE_EAST: {
+            return vec3(1.0, 0.0, 0.0);
+        }
+        case FACE_SOUTH: {
+            return vec3(0.0, 0.0, 1.0);
+        }
+        case FACE_WEST: {
+            return vec3(1.0, 0.0, 0.0);
         }
         default: {
             return vec3(0.0, 0.0, 0.0);

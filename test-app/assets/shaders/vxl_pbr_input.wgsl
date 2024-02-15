@@ -13,6 +13,8 @@
 #import "shaders/utils.wgsl"::opposite_face
 #import "shaders/utils.wgsl"::face_from_normal
 #import "shaders/utils.wgsl"::normal_from_face
+#import "shaders/utils.wgsl"::tangent_from_face
+#import "shaders/utils.wgsl"::tex_rotation_matrix_around_axis
 #import "shaders/utils.wgsl"::extract_face
 #import "shaders/utils.wgsl"::extract_texture_rot
 #import "shaders/utils.wgsl"::create_rotation_matrix
@@ -232,12 +234,17 @@ fn create_pbr_input(
     var pbr_input: pbr_types::PbrInput = pbr_types::pbr_input_new();
 
     let face = extract_face(quad);
+    let axis = axis_from_face(face);
     let raw_normal = normal_from_face(face);
     let ls_pos = project_to_2d(in.local_position, axis_from_face(face));
     let fs_pos = fract(ls_pos);
 
     // TODO: UV calculation is a bit more complicated than this, fix it!!
     let texture_rot = extract_texture_rot(quad);
+
+    let tangent_rotation_matrix = tex_rotation_matrix_around_axis(texture_rot, axis);
+    let tangent = tangent_from_face(face);
+
     let uv_rotation_matrix = create_rotation_matrix(texture_rot);
 
     let uv = uv_coords_from_fs_pos_and_params(
@@ -296,19 +303,19 @@ fn create_pbr_input(
     // N (normal vector)
 //#ifndef LOAD_PREPASS_NORMALS
 
-    // if (face.flags & HAS_NORMAL_MAP_BIT) != 0u {
-    //     let normal_map_uv = ((uv / scale) + (face.normal_tex_pos / scale) / scale);
+    if (face_texture.flags & HAS_NORMAL_MAP_BIT) != 0u {
+        let normal_map_uv = ((uv / scale) + (face_texture.normal_tex_pos / scale) / scale);
 
-    //     pbr_input.N = apply_normal_mapping(
-    //         0u,
-    //         pbr_input.world_normal,
-    //         vec4(0.0, 0.0, 0.0, 0.0),
-    //         normal_map_uv,
-    //         view.mip_bias,
-    //     );
-    // } else {
-    //     pbr_input.N = pbr_input.world_normal;
-    // }
+        pbr_input.N = apply_normal_mapping(
+            0u,
+            pbr_input.world_normal,
+            vec4f(tangent_rotation_matrix * tangent, 0.0),
+            normal_map_uv,
+            view.mip_bias,
+        );
+    } else {
+        pbr_input.N = pbr_input.world_normal;
+    }
 
     return pbr_input;
 }
