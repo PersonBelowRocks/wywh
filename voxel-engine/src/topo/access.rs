@@ -3,18 +3,22 @@ use std::error::Error;
 
 use super::bounding_box::BoundingBox;
 use super::chunk::Chunk;
+use super::chunk_ref::ChunkVoxelOutput;
+
+pub trait ChunkAccess: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
+impl<T> ChunkAccess for T where T: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
 
 pub trait ReadAccess {
     type ReadType;
     // TODO: create custom access error trait that lets a caller check if the access errored due to an out of bounds position
-    type ReadErr: Error;
+    type ReadErr: Error + 'static;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr>;
 }
 
 pub trait WriteAccess {
     type WriteType;
-    type WriteErr: Error;
+    type WriteErr: Error + 'static;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr>;
 }

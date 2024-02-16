@@ -123,6 +123,16 @@ impl Face {
     }
 
     #[inline]
+    pub fn as_u8(self) -> u8 {
+        self.as_usize() as u8
+    }
+
+    #[inline]
+    pub fn as_u32(self) -> u32 {
+        self.as_usize() as u32
+    }
+
+    #[inline]
     pub const fn opposite(self) -> Self {
         match self {
             Self::Top => Self::Bottom,
@@ -155,6 +165,7 @@ impl Face {
         }
     }
 
+    // TODO: this should be reworked or removed
     #[inline]
     pub fn pos_on_face(self, pos: IVec3) -> IVec2 {
         match self {

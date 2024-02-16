@@ -9,10 +9,14 @@ extern crate num_derive;
 
 use std::{path::PathBuf, sync::Arc};
 
-use bevy::{pbr::ExtendedMaterial, prelude::*};
-use data::registries::Registries;
-use render::meshing_algos::SimplePbrMesher;
+use bevy::prelude::*;
+use data::{
+    registries::{variant::VariantRegistry, Registries, Registry},
+    resourcepath::rpath,
+};
+use render::meshing::greedy::algorithm::SimplePbrMesher;
 use topo::{
+    chunk_ref::ChunkVoxelOutput,
     generator::{GenerateChunk, Generator, GeneratorChoice},
     realm::VoxelRealm,
 };
@@ -23,11 +27,17 @@ pub mod topo;
 pub mod util;
 
 use crate::{
-    data::systems::{build_registries, check_textures, load_textures, VariantFolders},
+    data::{
+        systems::{build_registries, check_textures, load_textures, VariantFolders},
+        tile::Transparency,
+    },
     render::{
-        greedy_mesh_material::GreedyMeshMaterial,
-        meshing_algos::GreedyMesher,
-        systems::{build_meshes, configure_sampling, insert_meshes, setup_mesh_builder},
+        core::RenderCore,
+        meshing::{
+            ecs::{insert_chunk_meshes, queue_chunk_meshing_tasks, setup_chunk_meshing_workers},
+            greedy::algorithm::GreedyMesher,
+        },
+        systems::{configure_sampling, setup_meshers},
     },
     topo::systems::generate_chunks_from_events,
 };
@@ -48,30 +58,10 @@ impl VoxelPlugin {
 pub struct VoxelSystemSet;
 
 #[derive(Resource, Deref)]
-pub struct EngineThreadPool(rayon::ThreadPool);
-
-#[derive(Resource, Deref)]
-pub struct HqMaterial<M: Material>(Handle<M>);
-
-#[derive(Resource, Deref)]
-pub struct LqMaterial<M: Material>(Handle<M>);
-
-#[derive(Resource, Deref)]
 pub struct DefaultGenerator(Generator);
 
 #[derive(Component)]
 pub struct ChunkEntity;
-
-impl EngineThreadPool {
-    pub fn new(num_threads: usize) -> Self {
-        let internal_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(num_threads)
-            .build()
-            .unwrap();
-
-        Self(internal_pool)
-    }
-}
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash, States)]
 pub enum AppState {
@@ -87,9 +77,8 @@ impl Plugin for VoxelPlugin {
 
         // app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
         // app.add_plugins(MaterialPlugin::<GreedyMeshMaterial>::default());
-        app.add_plugins(MaterialPlugin::<
-            ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>,
-        >::default());
+        app.add_plugins(RenderCore);
+
         app.add_event::<GenerateChunk>();
         app.add_state::<AppState>();
 
@@ -103,10 +92,11 @@ impl Plugin for VoxelPlugin {
             (
                 build_registries,
                 apply_deferred,
-                setup_mesh_builder::<Hqm, Lqm>,
+                setup_meshers,
                 configure_sampling,
                 apply_deferred,
                 setup,
+                setup_chunk_meshing_workers::<Hqm>,
                 generate_debug_chunks,
             )
                 .chain(),
@@ -114,11 +104,14 @@ impl Plugin for VoxelPlugin {
 
         app.add_systems(
             PreUpdate,
-            insert_meshes::<Hqm, Lqm>.run_if(in_state(AppState::Finished)),
+            insert_chunk_meshes::<Hqm>.run_if(in_state(AppState::Finished)),
         );
         app.add_systems(
             PostUpdate,
-            (generate_chunks_from_events, build_meshes::<Hqm, Lqm>)
+            (
+                generate_chunks_from_events,
+                queue_chunk_meshing_tasks::<Hqm>,
+            )
                 .chain()
                 .run_if(in_state(AppState::Finished)),
         );
@@ -147,26 +140,14 @@ fn generate_debug_chunks(mut events: EventWriter<GenerateChunk>) {
 }
 
 fn setup(mut cmds: Commands, registries: Res<Registries>) {
-    let available_parallelism = std::thread::available_parallelism().unwrap();
-    // let mut texture_reg_builder = VoxelTextureRegistryBuilder::new(server.as_ref());
+    let varreg = registries.get_registry::<VariantRegistry>().unwrap();
+    let void_cvo = ChunkVoxelOutput {
+        variant: varreg.get_id(&rpath("void")).unwrap(),
+        transparency: Transparency::Transparent,
+        rotation: None,
+    };
 
-    // texture_reg_builder
-    //     .add_texture("textures/debug_texture.png")
-    //     .unwrap();
-
-    // let texture_registry = texture_reg_builder.finish(textures.as_mut()).unwrap();
-    // let atlas_texture = texture_registry.atlas_texture();
-
-    // let mut voxel_reg_builder = VoxelRegistryBuilder::new(&texture_registry);
-    // voxel_reg_builder.register::<defaults::Void>();
-    // voxel_reg_builder.register::<defaults::DebugVoxel>();
-
-    // let voxel_registry = voxel_reg_builder.finish();
-    // let registries = Registries::new(texture_registry, voxel_registry);
-
-    // cmds.insert_resource(registries.clone());
-    cmds.insert_resource(VoxelRealm::new());
-    cmds.insert_resource(EngineThreadPool::new(available_parallelism.into()));
+    cmds.insert_resource(VoxelRealm::new(void_cvo));
     cmds.insert_resource(DefaultGenerator(Generator::new(
         112456754,
         registries.as_ref(),

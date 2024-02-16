@@ -1,3 +1,6 @@
+pub mod notnan;
+pub mod result;
+
 use bevy::prelude::*;
 use dashmap::DashMap;
 use ordered_float::NotNan;
@@ -21,6 +24,15 @@ pub fn notnan_arr<const SIZE: usize>(arr: [f32; SIZE]) -> Option<[NotNan<f32>; S
     Some(arr.map(|f| NotNan::new(f).unwrap()))
 }
 
+pub fn ivec3_to_1d(v: IVec3, max: usize) -> Result<usize, ConversionError> {
+    let [x, y, z] = try_ivec3_to_usize_arr(v)?;
+    Ok(to_1d(x, y, z, max))
+}
+
+pub fn to_1d(x: usize, y: usize, z: usize, max: usize) -> usize {
+    return (z * max * max) + (y * max) + x;
+}
+
 pub fn try_ivec3_to_usize_arr(ivec: IVec3) -> Result<[usize; 3], ConversionError> {
     let [x, y, z] = ivec.to_array();
 
@@ -39,13 +51,21 @@ pub enum Axis2D {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Axis3D {
-    X,
-    Y,
-    Z,
+    X = 0,
+    Y = 1,
+    Z = 2,
 }
 
 impl Axis3D {
     pub const XYZ: [Self; 3] = [Self::X, Self::Y, Self::Z];
+
+    pub fn as_usize(self) -> usize {
+        match self {
+            Self::X => 0,
+            Self::Y => 1,
+            Self::Z => 2,
+        }
+    }
 
     pub fn choose(self, vec: Vec3) -> f32 {
         match self {

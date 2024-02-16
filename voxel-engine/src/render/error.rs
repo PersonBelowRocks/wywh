@@ -1,9 +1,23 @@
 use std::error::Error;
 
-#[derive(te::Error, Debug, Clone)]
-pub enum MesherError<AE: Error> {
+use crate::topo::error::NeighborAccessError;
+
+use super::mesh_builder::MesherOutput;
+
+#[derive(te::Error, Debug)]
+pub enum MesherError<A: Error, Nb: Error> {
     #[error("Access returned an error during meshing: {0}")]
-    AccessError(#[from] AE),
+    AccessError(A),
+    #[error("Neighbor access returned an error during meshing: {0}")]
+    NeighborAccessError(NeighborAccessError<Nb>),
     #[error("Mesher ran into an internal error: '{0}'")]
-    InternalError(String),
+    CustomError(Box<dyn Error + Send>),
 }
+
+impl<A: Error, Nb: Error> MesherError<A, Nb> {
+    pub fn custom<E: Error + Send + 'static>(error: E) -> Self {
+        Self::CustomError(Box::new(error))
+    }
+}
+
+pub type MesherResult<A, Nb> = Result<MesherOutput, MesherError<A, Nb>>;

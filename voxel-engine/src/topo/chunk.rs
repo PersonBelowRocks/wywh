@@ -9,14 +9,28 @@ use crate::data::registries::RegistryId;
 use crate::data::tile::Transparency;
 use crate::data::voxel::rotations::BlockModelRotation;
 
-const CHUNK_SIZE: usize = 16;
-
 #[derive(
-    dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Deref, DerefMut,
+    dm::From,
+    dm::Into,
+    dm::Display,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Copy,
+    Clone,
+    Deref,
+    DerefMut,
+    Component,
 )]
 pub struct ChunkPos(IVec3);
 
+#[derive(Copy, Clone, Debug, Component, PartialEq, Eq)]
+pub struct ChunkEntity;
+
 impl ChunkPos {
+    pub const ZERO: Self = Self(IVec3::ZERO);
+
     pub fn worldspace_max(self) -> IVec3 {
         (self.0 * Chunk::SIZE) + (Chunk::SIZE - 1)
     }
@@ -29,7 +43,7 @@ impl ChunkPos {
 pub type VariantType = RegistryId<VariantRegistry>;
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, dm::Constructor)]
-pub(crate) struct VoxelVariantData {
+pub struct VoxelVariantData {
     pub variant: RegistryId<VariantRegistry>,
     pub rotation: Option<BlockModelRotation>,
 }
@@ -39,10 +53,13 @@ pub struct Chunk {
     pub variants: SyncIndexedChunkContainer<VoxelVariantData>,
 }
 
+const CHUNK_SIZE: usize = 16;
+
 #[allow(dead_code)]
 impl Chunk {
     pub const USIZE: usize = CHUNK_SIZE;
     pub const SIZE: i32 = Self::USIZE as i32;
+    pub const VEC: IVec3 = IVec3::splat(Self::SIZE);
 
     pub const BOUNDING_BOX: BoundingBox = BoundingBox {
         min: IVec3::splat(0),

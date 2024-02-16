@@ -5,7 +5,7 @@ use bevy::prelude::Asset;
 use bevy::prelude::Material;
 use bevy::prelude::Mesh;
 use bevy::prelude::Resource;
-use bevy::prelude::Vec2;
+
 use bevy::prelude::Vec3;
 use bevy::render::mesh::Indices;
 
@@ -15,40 +15,44 @@ use cb::channel::Receiver;
 use cb::channel::Sender;
 
 use crate::data::registries::Registries;
-use crate::render::greedy_mesh_material::GreedyMeshMaterial;
-use crate::topo::access::ChunkBounds;
-use crate::topo::access::ReadAccess;
+use crate::render::meshing::greedy::material::GreedyMeshMaterial;
+use crate::topo::access::ChunkAccess;
 
 use crate::topo::chunk::ChunkPos;
 use crate::topo::chunk_ref::ChunkRef;
 
-use crate::topo::chunk_ref::ChunkVoxelOutput;
+use crate::topo::neighbors::Neighbors;
 
 use super::adjacency::AdjacentTransparency;
-use super::error::MesherError;
-use super::mesh::ChunkMesh;
 
+use super::error::MesherResult;
+
+use super::occlusion::ChunkOcclusionMap;
+use super::quad::ChunkQuads;
+
+#[derive(Clone, Debug)]
 pub struct MesherOutput {
     pub mesh: Mesh,
+    pub occlusion: ChunkOcclusionMap,
+    pub quads: ChunkQuads,
 }
 
-pub struct Context<'a> {
-    pub adjacency: &'a AdjacentTransparency,
+pub struct Context<'a, A: ChunkAccess> {
+    pub neighbors: Neighbors<A>,
     pub registries: &'a Registries,
 }
 
 pub trait Mesher: Clone + Send + Sync + 'static {
     type Material: Material + Asset;
 
-    fn build<Acc>(
+    fn build<A, Nb>(
         &self,
-        access: &Acc,
-        adjacency: Context,
-    ) -> Result<MesherOutput, MesherError<Acc::ReadErr>>
+        access: A,
+        context: Context<Nb>,
+    ) -> MesherResult<A::ReadErr, Nb::ReadErr>
     where
-        Acc: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds;
-
-    fn material(&self) -> Self::Material;
+        A: ChunkAccess,
+        Nb: ChunkAccess;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, dm::From, dm::Into)]
@@ -65,10 +69,11 @@ pub(crate) enum MesherWorkerCommand {
     Shutdown,
 }
 
-pub(crate) struct MesherWorkerOutput {
-    pos: ChunkPos,
-    id: MeshingTaskId,
-    output: MesherOutput,
+#[derive(Debug, Clone)]
+pub struct MesherWorkerOutput {
+    pub pos: ChunkPos,
+    pub id: MeshingTaskId,
+    pub output: MesherOutput,
 }
 
 pub(crate) struct MesherWorker {
@@ -80,11 +85,11 @@ impl MesherWorker {
         cmd_receiver: &Receiver<MesherWorkerCommand>,
         mesh_sender: &Sender<MesherWorkerOutput>,
         mesher: &impl Mesher<Material = Mat>,
-        registries: Registries,
+        _registries: Registries,
     ) -> Self {
         let cmd_receiver = cmd_receiver.clone();
         let mesh_sender = mesh_sender.clone();
-        let mesher = mesher.clone();
+        let _mesher = mesher.clone();
 
         let handle = std::thread::spawn(move || {
             let mut interrupt = false;
@@ -99,17 +104,7 @@ impl MesherWorker {
                     MesherWorkerCommand::Shutdown => interrupt = true,
                     MesherWorkerCommand::Build(data) => {
                         // TODO: error handling
-                        let mesh = data
-                            .chunk_ref
-                            .with_read_access(|access| {
-                                let cx = Context {
-                                    adjacency: &data.adjacency,
-                                    registries: &registries,
-                                };
-
-                                mesher.build(&access, cx).unwrap()
-                            })
-                            .unwrap();
+                        let mesh = data.chunk_ref.with_read_access(|_access| todo!()).unwrap();
 
                         mesh_sender
                             .send(MesherWorkerOutput {
@@ -231,21 +226,11 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
     }
 
     // TODO: make this return an iterator instead
-    pub fn finished_meshes(&mut self) -> Vec<ChunkMesh> {
-        let mut meshes = Vec::<ChunkMesh>::new();
-
-        while let Ok(worker_response) = self.mesh_receiver.try_recv() {
-            self.remove_pending_task(worker_response.id);
-
-            let mesh = ChunkMesh {
-                pos: worker_response.pos,
-                mesh: worker_response.output.mesh,
-            };
-
-            meshes.push(mesh);
+    pub fn finished_meshes(&mut self) -> MesherResults<'_> {
+        MesherResults {
+            pending_tasks: &mut self.pending_tasks,
+            recv: &mut self.mesh_receiver,
         }
-
-        meshes
     }
 
     pub fn shutdown(self) {
@@ -257,13 +242,21 @@ impl<HQM: Mesher, LQM: Mesher> ParallelMeshBuilder<HQM, LQM> {
             worker.handle.join().unwrap();
         }
     }
+}
 
-    pub fn lq_material(&self) -> LQM::Material {
-        self.lq_mesher.material()
-    }
+pub struct MesherResults<'a> {
+    pending_tasks: &'a mut hb::HashSet<MeshingTaskId>,
+    recv: &'a mut Receiver<MesherWorkerOutput>,
+}
 
-    pub fn hq_material(&self) -> HQM::Material {
-        self.hq_mesher.material()
+impl<'a> Iterator for MesherResults<'a> {
+    type Item = MesherWorkerOutput;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.recv.try_recv().ok().map(|output| {
+            self.pending_tasks.remove(&output.id);
+            output
+        })
     }
 }
 

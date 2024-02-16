@@ -1,14 +1,6 @@
 use std::ops;
 
-use bevy::{
-    log::info,
-    math::{vec2, Vec2},
-    render::render_resource::{ShaderSize, ShaderType},
-};
-use bitflags::bitflags;
-use ordered_float::NotNan;
-
-use crate::util::notnan_arr;
+use bevy::{log::info, math::Vec2, render::render_resource::ShaderType};
 
 use super::{
     error::FaceTextureRotationParseError,
@@ -74,8 +66,6 @@ impl FaceTextureRotation {
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-// TODO: is this worth it? it cuts the size of BlockModel down a lot...
-#[repr(packed)]
 pub struct FaceTexture {
     pub rotation: FaceTextureRotation,
     pub texture: RegistryId<TextureRegistry>,
@@ -101,7 +91,7 @@ impl FaceTexture {
     }
 }
 
-#[derive(Copy, Clone, Debug, ShaderType)]
+#[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct GpuFaceTexture {
     pub flags: u32,
     pub color_tex_pos: Vec2,

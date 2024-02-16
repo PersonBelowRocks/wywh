@@ -17,7 +17,7 @@ use crate::data::{
 use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
     chunk::{Chunk, ChunkPos, VoxelVariantData},
-    error::{ChunkAccessError, ChunkRefAccessError},
+    error::{ChunkAccessError, ChunkManagerError},
     storage::containers::{
         data_storage::{SiccAccess, SiccReadAccess},
         dense::{SyncDenseContainerAccess, SyncDenseContainerReadAccess},
@@ -36,21 +36,18 @@ impl ChunkRef {
         self.pos
     }
 
-    pub fn treat_as_changed(&self) -> Result<(), ChunkRefAccessError> {
-        let changed = self
-            .changed
-            .upgrade()
-            .ok_or(ChunkRefAccessError::Unloaded)?;
+    pub fn treat_as_changed(&self) -> Result<(), ChunkManagerError> {
+        let changed = self.changed.upgrade().ok_or(ChunkManagerError::Unloaded)?;
         changed.store(true, Ordering::SeqCst);
         Ok(())
     }
 
     #[allow(clippy::let_and_return)] // We need do to this little crime so the borrowchecker doesn't yell at us
-    pub fn with_access<F, U>(&self, f: F) -> Result<U, ChunkRefAccessError>
+    pub fn with_access<F, U>(&self, f: F) -> Result<U, ChunkManagerError>
     where
         F: for<'a> FnOnce(ChunkRefVxlAccess<'a, ahash::RandomState>) -> U,
     {
-        let chunk = self.chunk.upgrade().ok_or(ChunkRefAccessError::Unloaded)?;
+        let chunk = self.chunk.upgrade().ok_or(ChunkManagerError::Unloaded)?;
         self.treat_as_changed()?;
 
         let transparency_access = chunk.transparency.access();
@@ -64,11 +61,11 @@ impl ChunkRef {
     }
 
     #[allow(clippy::let_and_return)]
-    pub fn with_read_access<F, U>(&self, f: F) -> Result<U, ChunkRefAccessError>
+    pub fn with_read_access<F, U>(&self, f: F) -> Result<U, ChunkManagerError>
     where
         F: for<'a> FnOnce(ChunkRefVxlReadAccess<'a, ahash::RandomState>) -> U,
     {
-        let chunk = self.chunk.upgrade().ok_or(ChunkRefAccessError::Unloaded)?;
+        let chunk = self.chunk.upgrade().ok_or(ChunkManagerError::Unloaded)?;
 
         let voxel_access = chunk.transparency.read_access();
         let variant_access = chunk.variants.read_access();
@@ -81,9 +78,9 @@ impl ChunkRef {
     }
 }
 
-pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher> {
-    transparency: SyncDenseContainerReadAccess<'a, Transparency>,
-    variants: SiccReadAccess<'a, VoxelVariantData, S>,
+pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher = ahash::RandomState> {
+    pub(crate) transparency: SyncDenseContainerReadAccess<'a, Transparency>,
+    pub(crate) variants: SiccReadAccess<'a, VoxelVariantData, S>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -100,7 +97,7 @@ pub struct ChunkVoxelInput {
     pub rotation: Option<BlockModelRotation>,
 }
 
-pub struct ChunkRefVxlAccess<'a, S: BuildHasher> {
+pub struct ChunkRefVxlAccess<'a, S: BuildHasher = ahash::RandomState> {
     transparency: SyncDenseContainerAccess<'a, Transparency>,
     variants: SiccAccess<'a, VoxelVariantData, S>,
 }

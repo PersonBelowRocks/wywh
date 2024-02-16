@@ -24,7 +24,7 @@ impl From<OutOfBounds> for ChunkAccessError {
 }
 
 #[derive(te::Error, Debug, PartialEq, Eq)]
-pub enum ChunkManagerGetChunkError {
+pub enum ChunkManagerError {
     #[error("Chunk not loaded")]
     Unloaded,
     #[error("Chunk doesn't exist")]
@@ -43,4 +43,12 @@ pub enum GeneratorError<E: Error> {
     AccessNotChunk,
     #[error("Error while writing to provided access: {0}")]
     AccessError(#[from] E),
+}
+
+#[derive(te::Error, Debug, Clone)]
+pub enum NeighborAccessError<E: Error> {
+    #[error("Attempted to access out of bounds position")]
+    OutOfBounds,
+    #[error("Underlying access error: {0}")]
+    Internal(#[from] E),
 }

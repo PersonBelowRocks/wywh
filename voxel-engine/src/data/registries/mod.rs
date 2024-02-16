@@ -50,7 +50,7 @@ impl<R: Registry> Debug for RegistryId<R> {
 impl<R: Registry> RegistryId<R> {
     /// Create a new registry ID from the provided `id`.
     /// RegistryIds should only be created when a registry is populated, so don't call this unless that's what you're doing.
-    pub fn new(id: u64) -> Self {
+    pub const fn new(id: u64) -> Self {
         Self {
             id,
 

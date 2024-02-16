@@ -1,43 +1,23 @@
-use bevy::{pbr::ExtendedMaterial, prelude::*, render::texture::ImageSampler};
+use bevy::{
+    pbr::ExtendedMaterial,
+    prelude::*,
+    render::{renderer::RenderDevice, texture::ImageSampler},
+};
 
 use crate::{
-    data::{
-        registries::Registries,
-        systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
-    },
-    render::adjacency::AdjacentTransparency,
+    data::systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
+    render::{adjacency::AdjacentTransparency, core::mat::VxlChunkMaterial},
     topo::{chunk::Chunk, realm::VoxelRealm},
-    ChunkEntity, HqMaterial, LqMaterial,
 };
 
 use super::{
-    greedy_mesh_material::GreedyMeshMaterial,
     mesh_builder::{Mesher, ParallelMeshBuilder},
-    meshing_algos::{GreedyMesher, SimplePbrMesher},
+    meshing::greedy::algorithm::{GreedyMesher, SimplePbrMesher},
 };
 
-pub(crate) fn setup_mesh_builder<Hqm: Mesher, Lqm: Mesher>(
-    mut cmds: Commands,
-
-    _atlas_texture: Res<VoxelColorTextureAtlas>,
-    registries: Res<Registries>,
-
-    mut hqs: ResMut<Assets<ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>>>,
-    mut lqs: ResMut<Assets<StandardMaterial>>,
-) {
-    let mesh_builder = ParallelMeshBuilder::new(
-        GreedyMesher::new(registries.clone()),
-        SimplePbrMesher::new(),
-        registries.as_ref().clone(),
-    );
-
-    let hq = hqs.add(mesh_builder.hq_material());
-    cmds.insert_resource(HqMaterial(hq));
-
-    let lq = lqs.add(mesh_builder.lq_material());
-    cmds.insert_resource(LqMaterial(lq));
-
-    cmds.insert_resource(mesh_builder);
+pub(crate) fn setup_meshers(mut cmds: Commands) {
+    cmds.insert_resource(GreedyMesher::new());
+    cmds.insert_resource(SimplePbrMesher::new());
 }
 
 pub(crate) fn build_meshes<HQM: Mesher, LQM: Mesher>(
@@ -54,23 +34,51 @@ pub(crate) fn build_meshes<HQM: Mesher, LQM: Mesher>(
 }
 
 pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
-    mut cmds: Commands,
+    _cmds: Commands,
     mut mesh_builder: ResMut<ParallelMeshBuilder<HQM, LQM>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    hq_material: Res<HqMaterial<HQM::Material>>,
+    _meshes: ResMut<Assets<Mesh>>,
+    _materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, VxlChunkMaterial>>>,
+    _gpu: Res<RenderDevice>,
+    _texture_atlas: Res<VoxelColorTextureAtlas>,
+    _normal_atlas: Res<VoxelNormalTextureAtlas>,
 ) {
-    for finished_mesh in mesh_builder.finished_meshes().into_iter() {
-        debug!("Inserting mesh at {:?}", finished_mesh.pos());
-        let pos = (*finished_mesh.pos() * Chunk::SIZE).as_vec3() + Vec3::splat(0.5);
+    for finished_mesh in mesh_builder.finished_meshes() {
+        debug!("Inserting mesh at {:?}", finished_mesh.pos);
+        let _pos = (*finished_mesh.pos * Chunk::SIZE).as_vec3() + Vec3::splat(0.5);
 
-        cmds.spawn(MaterialMeshBundle {
-            mesh: meshes.add(finished_mesh.into()),
-            material: hq_material.clone(),
-            transform: Transform::from_translation(pos),
+        // TODO: insert chunk meshes so that the render core can extract it
+        todo!()
+        // let material = {
+        //     let occlusion_map = gpu.create_buffer_with_data(&BufferInitDescriptor {
+        //         label: Some("occlusion_buffer"),
+        //         contents: finished_mesh.output.occlusion.as_buffer().flat(),
+        //         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        //     });
 
-            ..default()
-        })
-        .insert((ChunkEntity, Chunk::BOUNDING_BOX.to_aabb()));
+        //     VxlChunkMaterial {
+        //         faces: faces.0.as_ref().unwrap().clone(),
+        //         occlusion: occlusion_map,
+        //     }
+        // };
+
+        // cmds.spawn(MaterialMeshBundle {
+        //     mesh: meshes.add(finished_mesh.output.mesh),
+        //     material: materials.add(ExtendedMaterial {
+        //         base: StandardMaterial {
+        //             base_color_texture: Some(texture_atlas.0.clone()),
+        //             normal_map_texture: Some(normal_atlas.0.clone()),
+        //             perceptual_roughness: 1.0,
+        //             reflectance: 0.0,
+        //             // base_color: Color::rgb(0.5, 0.5, 0.65),
+        //             ..default()
+        //         },
+        //         extension: material,
+        //     }),
+        //     transform: Transform::from_translation(pos),
+
+        //     ..default()
+        // })
+        // .insert((Wireframe, ChunkEntity, Chunk::BOUNDING_BOX.to_aabb()));
     }
 }
 

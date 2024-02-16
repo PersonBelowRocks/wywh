@@ -7,12 +7,12 @@ use super::chunk::Chunk;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct BoundingBox {
-    pub min: IVec3,
-    pub max: IVec3,
+    pub(crate) min: IVec3,
+    pub(crate) max: IVec3,
 }
 
 impl BoundingBox {
-    // Panics if any component in `min` is greater than that component in `max`
+    /// Panics if any component in `min` is greater than that component in `max`
     pub fn from_min_max(min: IVec3, max: IVec3) -> Self {
         if min.cmpgt(max).any() {
             panic!(
@@ -22,6 +22,10 @@ impl BoundingBox {
         }
 
         Self { min, max }
+    }
+
+    pub fn new(a: IVec3, b: IVec3) -> Self {
+        Self::from_min_max(a.min(b), a.max(b))
     }
 
     pub fn min(self) -> IVec3 {

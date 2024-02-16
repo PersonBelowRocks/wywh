@@ -1,10 +1,10 @@
 pub mod adjacency;
+pub mod core;
 pub mod error;
-pub mod greedy_mesh;
-pub mod greedy_mesh_material;
 pub mod mesh;
 pub mod mesh_builder;
-pub mod meshing_algos;
+pub mod meshing;
 pub mod model_data;
+pub mod occlusion;
 pub mod quad;
 pub mod systems;

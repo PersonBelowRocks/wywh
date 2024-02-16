@@ -89,3 +89,15 @@ pub enum VoxelModelCreationError {
     #[error("{0}")]
     BlockModelError(#[from] SubmodelFromDescriptorError),
 }
+
+#[derive(Copy, Clone, te::Error, Debug)]
+pub enum TextureAtlasesGetAssetError {
+    #[error("Color texture atlas handle did not exist in world")]
+    MissingColorHandle,
+    #[error("Could not find color texture atlas in assets")]
+    MissingColor,
+    #[error("Normal texture atlas handle did not exist in world")]
+    MissingNormalHandle,
+    #[error("Could not find normal texture atlas in assets")]
+    MissingNormal,
+}

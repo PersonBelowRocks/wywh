@@ -20,6 +20,7 @@ struct Vertex {
 const ROTATION_MASK: u32 = #{ROTATION_MASK}u;
 const FLIP_UV_X: u32 = #{FLIP_UV_X}u;
 const FLIP_UV_Y: u32 = #{FLIP_UV_Y}u;
+const OCCLUSION: u32 = #{OCCLUSION}u;
 
 @vertex
 fn vertex(
@@ -38,6 +39,12 @@ fn vertex(
 
     out.flip_uv_x = (misc & FLIP_UV_X);
     out.flip_uv_y = (misc & FLIP_UV_Y);
+
+    if (misc & OCCLUSION) != 0u {
+        out.occlusion = 1.0;
+    } else {
+        out.occlusion = 0.0;
+    }
 
     // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
     // See https://github.com/gfx-rs/naga/issues/2416 .

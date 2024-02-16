@@ -28,7 +28,7 @@ fn main() {
                 .into(),
             }),
             WireframePlugin,
-            ve::VoxelPlugin::new(vec![PathBuf::from_iter(["test-app", "assets", "variants"])]),
+            ve::VoxelPlugin::new(vec!["test-app\\assets\\variants".into()]),
         ))
         .add_systems(Startup, setup)
         .add_systems(
@@ -140,22 +140,22 @@ fn setup(
     });
 
     // light
-    // commands.spawn(DirectionalLightBundle {
-    //     directional_light: DirectionalLight {
-    //         color: Color::WHITE,
-    //         illuminance: 100000.0,
-    //         shadows_enabled: true,
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            color: Color::WHITE,
+            illuminance: 10000.0,
+            shadows_enabled: true,
 
-    //         ..default()
-    //     },
-    //     transform: Transform::from_rotation(Quat::from_euler(
-    //         EulerRot::ZYX,
-    //         0.0,
-    //         PI * -0.15,
-    //         PI * -0.15,
-    //     )),
-    //     ..default()
-    // });
+            ..default()
+        },
+        transform: Transform::from_rotation(Quat::from_euler(
+            EulerRot::ZYX,
+            0.0,
+            PI * -0.15,
+            PI * -0.15,
+        )),
+        ..default()
+    });
 
     commands.insert_resource(Msaa::Off);
     commands.insert_resource(AmbientLight {
