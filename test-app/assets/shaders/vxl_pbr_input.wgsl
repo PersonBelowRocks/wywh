@@ -143,7 +143,7 @@ fn corner_occlusion(ls_face_pos_2d: vec2f, corner_pos: vec2f) -> f32 {
     // return max(0.0, sq_2 - d - (sq_2 / 3.5));
 }
 
-const BIAS: f32 = -0.75;
+const BIAS: f32 = -0.4;
 const WEIGHT: f32 = 1.0;
 const GLOBAL_WEIGHT: f32 = 0.33;
 
