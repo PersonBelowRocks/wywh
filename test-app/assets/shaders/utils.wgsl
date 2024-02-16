@@ -55,6 +55,7 @@ fn tex_rotation_matrix_around_axis(texture_rot: u32, axis: u32) -> mat3x3f {
 fn uv_coords_from_fs_pos_and_params(
     fs_pos: vec2f,
     rot: mat2x2<f32>,
+    face: u32,
     flip_x: bool,
     flip_y: bool
 ) -> vec2f {
@@ -63,6 +64,10 @@ fn uv_coords_from_fs_pos_and_params(
     // flip UV coordinate V (y) component by default, as the UV origin is in the top left of textures but the facespace
     // origin is in the bottom left
     raw_uv.y = 1.0 - raw_uv.y;
+
+    if face == FACE_NORTH || face == FACE_WEST {
+        raw_uv.x = 1.0 - raw_uv.x;
+    }
 
     if flip_x {
         raw_uv.x = 1.0 - raw_uv.x;

@@ -250,6 +250,7 @@ fn create_pbr_input(
     let uv = uv_coords_from_fs_pos_and_params(
         fs_pos,
         uv_rotation_matrix,
+        face,
         flipped_uv_x(quad),
         flipped_uv_y(quad),
     );
