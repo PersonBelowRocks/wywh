@@ -41,7 +41,7 @@ use super::{
 };
 
 #[derive(Resource, Clone)]
-pub struct VoxelChunkPipeline {
+pub struct ChunkPipeline {
     pub mesh_pipeline: MeshPipeline,
     pub registry_layout: BindGroupLayout,
     pub chunk_layout: BindGroupLayout,
@@ -50,11 +50,11 @@ pub struct VoxelChunkPipeline {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct VoxelChunkPipelineKey {
+pub struct ChunkPipelineKey {
     pub mesh_key: MeshPipelineKey,
 }
 
-impl FromWorld for VoxelChunkPipeline {
+impl FromWorld for ChunkPipeline {
     fn from_world(world: &mut World) -> Self {
         let server = world.resource::<AssetServer>();
 
@@ -70,8 +70,8 @@ impl FromWorld for VoxelChunkPipeline {
     }
 }
 
-impl SpecializedMeshPipeline for VoxelChunkPipeline {
-    type Key = VoxelChunkPipelineKey;
+impl SpecializedMeshPipeline for ChunkPipeline {
+    type Key = ChunkPipelineKey;
 
     fn specialize(
         &self,
@@ -79,6 +79,7 @@ impl SpecializedMeshPipeline for VoxelChunkPipeline {
         layout: &MeshVertexBufferLayout,
     ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
         let mut descriptor = self.mesh_pipeline.specialize(key.mesh_key, layout)?;
+        descriptor.label = Some("chunk_pipeline".into());
 
         descriptor.primitive.cull_mode = Some(Face::Back);
         descriptor.primitive.front_face = FrontFace::Ccw;
@@ -148,8 +149,8 @@ pub const fn tonemapping_pipeline_key(tonemapping: Tonemapping) -> MeshPipelineK
 
 pub fn queue_chunks(
     functions: Res<DrawFunctions<Opaque3d>>,
-    pipeline: Res<VoxelChunkPipeline>,
-    mut pipelines: ResMut<SpecializedMeshPipelines<VoxelChunkPipeline>>,
+    pipeline: Res<ChunkPipeline>,
+    mut pipelines: ResMut<SpecializedMeshPipelines<ChunkPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     mut render_mesh_instances: ResMut<RenderMeshInstances>,
     render_meshes: Res<RenderAssets<Mesh>>,
@@ -267,7 +268,7 @@ pub fn queue_chunks(
             let pipeline_id = match pipelines.specialize(
                 pipeline_cache.as_ref(),
                 pipeline.as_ref(),
-                VoxelChunkPipelineKey { mesh_key },
+                ChunkPipelineKey { mesh_key },
                 &mesh.layout,
             ) {
                 Ok(id) => id,

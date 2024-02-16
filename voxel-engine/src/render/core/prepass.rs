@@ -38,7 +38,7 @@ use bevy::{
 use crate::{
     data::texture::GpuFaceTexture,
     render::{
-        core::{gpu_chunk::ChunkRenderData, render::VoxelChunkPipeline},
+        core::{gpu_chunk::ChunkRenderData, render::ChunkPipeline},
         occlusion::ChunkOcclusionMap,
         quad::GpuQuadBitfields,
     },
@@ -47,7 +47,7 @@ use crate::{
 use super::{
     gpu_chunk::{ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
-    render::VoxelChunkPipelineKey,
+    render::ChunkPipelineKey,
     u32_shader_def, DefaultBindGroupLayouts, RenderCore,
 };
 
@@ -66,7 +66,7 @@ impl FromWorld for ChunkPrepassPipeline {
         let server = world.resource::<AssetServer>();
         let gpu = world.resource::<RenderDevice>();
 
-        let mesh_pipeline = world.resource::<VoxelChunkPipeline>();
+        let mesh_pipeline = world.resource::<ChunkPipeline>();
 
         let view_layout_motion_vectors = gpu.create_bind_group_layout(
             "chunk_prepass_view_layout_motion_vectors",
@@ -110,7 +110,7 @@ impl FromWorld for ChunkPrepassPipeline {
 // most of this code is taken verbatim from
 // https://github.com/bevyengine/bevy/blob/d4132f661a8a567fd3f9c3b329c2b4032bb1e05e/crates/bevy_pbr/src/prepass/mod.rs#L297C1-L582C2
 impl SpecializedMeshPipeline for ChunkPrepassPipeline {
-    type Key = VoxelChunkPipelineKey;
+    type Key = ChunkPipelineKey;
 
     fn specialize(
         &self,
@@ -202,7 +202,7 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
             shader_defs.push("PREPASS_FRAGMENT".into());
         }
 
-        let targets = vec![
+        let mut targets = vec![
             key.mesh_key
                 .contains(MeshPipelineKey::NORMAL_PREPASS)
                 .then_some(ColorTargetState {
@@ -224,6 +224,27 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
             None,
             None,
         ];
+
+        if targets.iter().all(Option::is_none) {
+            // if no targets are required then clear the list, so that no fragment shader is required
+            // (though one may still be used for discarding depth buffer writes)
+            targets.clear();
+        }
+
+        let fragment_required = !targets.is_empty()
+            || key.mesh_key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO)
+            || key.mesh_key.contains(MeshPipelineKey::MAY_DISCARD);
+
+        let fragment = fragment_required.then(|| {
+            // Use the fragment shader from the material
+
+            FragmentState {
+                shader: self.frag.clone(),
+                entry_point: "fragment".into(),
+                shader_defs: shader_defs.clone(),
+                targets,
+            }
+        });
 
         Ok(RenderPipelineDescriptor {
             label: Some("chunk_prepass_pipeline".into()),
@@ -268,12 +289,7 @@ impl SpecializedMeshPipeline for ChunkPrepassPipeline {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            fragment: Some(FragmentState {
-                shader: self.frag.clone(),
-                shader_defs,
-                entry_point: "fragment".into(),
-                targets,
-            }),
+            fragment,
         })
     }
 }
@@ -338,7 +354,7 @@ pub fn queue_prepass_chunks(
             let pipeline_id = match pipelines.specialize(
                 &pipeline_cache,
                 &prepass_pipeline,
-                VoxelChunkPipelineKey { mesh_key },
+                ChunkPipelineKey { mesh_key },
                 &mesh.layout,
             ) {
                 Ok(id) => id,

@@ -5,11 +5,13 @@ mod gpu_registries;
 mod impls;
 mod prepass;
 mod render;
+mod shadows;
 
 use bevy::{
     app::{App, Plugin},
     core_pipeline::{core_3d::Opaque3d, prepass::Opaque3dPrepass},
     ecs::system::Resource,
+    pbr::Shadow,
     prelude::*,
     render::{
         extract_resource::ExtractResourcePlugin,
@@ -36,7 +38,8 @@ use self::{
         extract_texreg_faces, prepare_gpu_registry_data, ExtractedTexregFaces, RegistryBindGroup,
     },
     prepass::{queue_prepass_chunks, ChunkPrepassPipeline, DrawVoxelChunkPrepass},
-    render::{queue_chunks, DrawVoxelChunk, VoxelChunkPipeline},
+    render::{queue_chunks, ChunkPipeline, DrawVoxelChunk},
+    shadows::queue_shadows,
 };
 
 use super::quad::GpuQuad;
@@ -62,8 +65,9 @@ impl Plugin for RenderCore {
 
         render_app.add_render_command::<Opaque3d, DrawVoxelChunk>();
         render_app.add_render_command::<Opaque3dPrepass, DrawVoxelChunkPrepass>();
+        render_app.add_render_command::<Shadow, DrawVoxelChunkPrepass>();
 
-        render_app.init_resource::<SpecializedMeshPipelines<VoxelChunkPipeline>>();
+        render_app.init_resource::<SpecializedMeshPipelines<ChunkPipeline>>();
         render_app.init_resource::<SpecializedMeshPipelines<ChunkPrepassPipeline>>();
 
         render_app.add_systems(
@@ -81,7 +85,7 @@ impl Plugin for RenderCore {
                     prepare_chunk_render_data,
                 )
                     .in_set(RenderSet::PrepareResources),
-                (queue_chunks, queue_prepass_chunks).in_set(RenderSet::QueueMeshes),
+                (queue_chunks, queue_prepass_chunks, queue_shadows).in_set(RenderSet::QueueMeshes),
             ),
         );
     }
@@ -93,7 +97,7 @@ impl Plugin for RenderCore {
 
         render_app.init_resource::<DefaultBindGroupLayouts>();
 
-        render_app.init_resource::<VoxelChunkPipeline>();
+        render_app.init_resource::<ChunkPipeline>();
         render_app.init_resource::<ChunkPrepassPipeline>();
     }
 }

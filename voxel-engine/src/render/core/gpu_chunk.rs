@@ -26,7 +26,7 @@ use crate::{
     ChunkEntity,
 };
 
-use super::render::VoxelChunkPipeline;
+use super::render::ChunkPipeline;
 
 pub fn extract_chunk_render_data(
     mut last_count: Local<usize>,
@@ -58,7 +58,7 @@ pub fn extract_chunk_render_data(
 
 pub fn prepare_chunk_render_data(
     mut chunk_data_store: ResMut<ChunkRenderDataStore>,
-    pipeline: Res<VoxelChunkPipeline>,
+    pipeline: Res<ChunkPipeline>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {

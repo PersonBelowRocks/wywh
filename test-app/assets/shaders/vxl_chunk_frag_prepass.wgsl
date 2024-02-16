@@ -42,7 +42,7 @@ fn fragment(
 #endif
 
 #ifdef DEPTH_CLAMP_ORTHO
-    out.frag_depth = 0.0;
+    out.frag_depth = in.clip_position_unclamped.z;
 #endif
 
     return out;
