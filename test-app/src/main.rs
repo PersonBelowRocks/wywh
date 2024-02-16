@@ -6,10 +6,15 @@ mod debug_info;
 use std::f32::consts::PI;
 use std::path::PathBuf;
 
+use bevy::core_pipeline::experimental::taa::{
+    TemporalAntiAliasBundle, TemporalAntiAliasPlugin, TemporalAntiAliasSettings,
+};
+use bevy::math::vec2;
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::pbr::ScreenSpaceAmbientOcclusionBundle;
 use bevy::prelude::*;
 
+use bevy::render::camera::TemporalJitter;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, PositionText};
@@ -20,14 +25,20 @@ fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.4, 0.75, 0.9)))
         .add_plugins((
-            DefaultPlugins.set(RenderPlugin {
-                render_creation: WgpuSettings {
-                    features: WgpuFeatures::POLYGON_MODE_LINE,
+            DefaultPlugins
+                .set(RenderPlugin {
+                    render_creation: WgpuSettings {
+                        features: WgpuFeatures::POLYGON_MODE_LINE,
+                        ..default()
+                    }
+                    .into(),
+                })
+                .set(AssetPlugin {
+                    mode: AssetMode::Unprocessed,
                     ..default()
-                }
-                .into(),
-            }),
+                }),
             WireframePlugin,
+            TemporalAntiAliasPlugin,
             ve::VoxelPlugin::new(vec!["test-app\\assets\\variants".into()]),
         ))
         .add_systems(Startup, setup)
@@ -143,7 +154,7 @@ fn setup(
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             color: Color::WHITE,
-            illuminance: 10000.0,
+            illuminance: 100000.0,
             shadows_enabled: true,
 
             ..default()
@@ -165,15 +176,16 @@ fn setup(
 
     // camera
     commands
-        .spawn(Camera3dBundle {
-            transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-            ..default()
-        })
-        .insert(camera::PlayerCamController::default())
-        .insert(VisibilityBundle::default())
-        .insert(ScreenSpaceAmbientOcclusionBundle::default())
-        // .insert(DepthPrepass)
-        // .insert(NormalPrepass)
+        .spawn((
+            Camera3dBundle {
+                transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+                ..default()
+            },
+            camera::PlayerCamController::default(),
+            VisibilityBundle::default(),
+            ScreenSpaceAmbientOcclusionBundle::default(),
+        ))
+        .insert(TemporalAntiAliasBundle { ..default() })
         .with_children(|builder| {
             builder.spawn((
                 SpotLightBundle {
