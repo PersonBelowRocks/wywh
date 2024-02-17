@@ -25,7 +25,7 @@ use crate::{TextureArray, TEXTURE_FORMAT};
 pub const MIPMAP_COMPUTE_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(147253048844306429480044375066837132481);
 
-pub const MAX_WORKGROUP_SIZE: u32 = 64;
+pub const WORKGROUP_SIZE_PER_DIM: u32 = 8;
 
 #[derive(SystemParam)]
 pub struct MipmapGeneratorSystemParam<'w> {
@@ -131,11 +131,14 @@ impl TexArrayMipGenerator {
 
         for mip_level in 1..texarr.mip_levels() {
             let bind_group = &bind_groups[mip_level as usize];
-            let size = view_sizes[mip_level as usize];
 
             pass.set_bind_group(0, bind_group, &[]);
 
-            pass.dispatch_workgroups(size, size, texarr.images());
+            // Get precomputed size
+            let size = view_sizes[mip_level as usize];
+            let workgroup_count: u32 = (size + WORKGROUP_SIZE_PER_DIM - 1) / WORKGROUP_SIZE_PER_DIM;
+
+            pass.dispatch_workgroups(workgroup_count, workgroup_count, texarr.images());
         }
 
         // wgpu automatically ends the compute pass when dropping it.
