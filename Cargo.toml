@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "test-app",
     "voxel-engine",
+    "mip-texture-array"
 ]
 
 [workspace.dependencies]
