@@ -59,7 +59,7 @@ impl<'a> From<MipmapGeneratorSystemParam<'a>> for MipmapGeneratorParams<'a> {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct TexArrayMipGenerator;
 
 impl TexArrayMipGenerator {
@@ -209,10 +209,14 @@ impl Plugin for MipGeneratorPlugin {
             "mipmap.wgsl",
             Shader::from_wgsl
         );
+
+        let render_app = app.sub_app_mut(RenderApp);
+        render_app.init_resource::<SpecializedComputePipelines<MipGeneratorPipeline>>();
+        render_app.init_resource::<TexArrayMipGenerator>();
     }
 
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
-        todo!()
+        render_app.init_resource::<MipGeneratorPipeline>();
     }
 }
