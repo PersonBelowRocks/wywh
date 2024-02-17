@@ -11,6 +11,10 @@ use bevy::{
 mod error;
 pub use error::*;
 
+pub mod mipmap;
+
+pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
+
 /// Builder for a texture array
 #[derive(Clone, Debug)]
 pub struct TextureArrayBuilder {
@@ -25,7 +29,7 @@ impl TextureArrayBuilder {
         Self::new_with_format(dims, vec![0; 4], TextureFormat::Rgba8UnormSrgb)
     }
 
-    pub fn new_with_format(dims: u32, empty_pixel_data: Vec<u8>, format: TextureFormat) -> Self {
+    fn new_with_format(dims: u32, empty_pixel_data: Vec<u8>, format: TextureFormat) -> Self {
         Self {
             handles: Vec::new(),
             empty_pixel_data,
@@ -78,6 +82,8 @@ impl TextureArrayBuilder {
             &self.empty_pixel_data,
             self.format,
         );
+
+        arr_texture.texture_descriptor.mip_level_count = self.dims.ilog2();
 
         for (idx, handle) in self.handles.iter().enumerate() {
             // The image might have been removed from the assets by the time that finish() is run, so we handle the error again here so we avoid panicking in a library.
@@ -157,5 +163,9 @@ impl TextureArray {
 
     pub fn dims(&self) -> u32 {
         self.dims
+    }
+
+    pub fn mip_levels(&self) -> u32 {
+        self.dims().ilog2()
     }
 }
