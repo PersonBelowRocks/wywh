@@ -157,7 +157,7 @@ impl TextureArray {
         &self.handle
     }
 
-    pub fn images(&self) -> u32 {
+    pub fn tex_array_len(&self) -> u32 {
         self.images
     }
 

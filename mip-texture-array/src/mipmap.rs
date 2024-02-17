@@ -98,7 +98,7 @@ impl TexArrayMipGenerator {
                 mip_level_count: Some(1),
                 aspect: TextureAspect::All,
                 base_array_layer: 0,
-                array_layer_count: Some(texarr.images()),
+                array_layer_count: Some(texarr.tex_array_len()),
             });
 
             views.push(view);
@@ -140,7 +140,7 @@ impl TexArrayMipGenerator {
             let size = view_sizes[mip_level as usize];
             let workgroup_count: u32 = (size + WORKGROUP_SIZE_PER_DIM - 1) / WORKGROUP_SIZE_PER_DIM;
 
-            pass.dispatch_workgroups(workgroup_count, workgroup_count, texarr.images());
+            pass.dispatch_workgroups(workgroup_count, workgroup_count, texarr.tex_array_len());
         }
 
         // wgpu automatically ends the compute pass when dropping it.
