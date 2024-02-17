@@ -89,7 +89,7 @@ impl TexArrayMipGenerator {
         let mut views = vec![];
         let mut view_sizes = vec![texarr.dims()];
 
-        for mip_level in 1..mip_levels {
+        for mip_level in 0..mip_levels {
             let view = texarr_img.texture.create_view(&TextureViewDescriptor {
                 label: Some("mip"),
                 format: Some(texarr_img.texture_format),
@@ -102,7 +102,9 @@ impl TexArrayMipGenerator {
             });
 
             views.push(view);
-            view_sizes.push(view_sizes[(mip_level - 1) as usize] / 2);
+            if mip_level > 0 {
+                view_sizes.push(view_sizes[(mip_level - 1) as usize] / 2);
+            }
         }
 
         let mut bind_groups = vec![];
