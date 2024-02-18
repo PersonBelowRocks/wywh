@@ -1,19 +1,74 @@
 extern crate thiserror as te;
 
+use asset::MippedArrayTexture;
 use bevy::{
+    asset::load_internal_asset,
     prelude::*,
     render::{
-        render_resource::{Extent3d, TextureDimension, TextureFormat},
+        render_asset::{RenderAssetPlugin, RenderAssets},
+        render_resource::{Extent3d, SpecializedComputePipelines, TextureDimension, TextureFormat},
         texture::TextureFormatPixelInfo,
+        Render, RenderApp, RenderSet,
     },
+    utils::Uuid,
 };
 
 mod error;
 pub use error::*;
 
+use crate::mipmap::{MipGeneratorPipeline, MipGeneratorPipelineMeta, MIPMAP_COMPUTE_SHADER_HANDLE};
+
+pub mod asset;
 pub mod mipmap;
 
-pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
+pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
+
+#[derive(Default)]
+pub struct MippedArrayTexturePlugin {
+    /// Should the prepared `GpuImage`s that we create be injected into Bevy's default `RenderAssets<Image>`?
+    /// This option should NEVER be used outside of testing stuff
+    pub inject_into_render_images: bool,
+}
+
+impl Plugin for MippedArrayTexturePlugin {
+    fn build(&self, app: &mut App) {
+        load_internal_asset!(
+            app,
+            MIPMAP_COMPUTE_SHADER_HANDLE,
+            "mipmap.wgsl",
+            Shader::from_wgsl
+        );
+
+        app.init_asset::<MippedArrayTexture>();
+        app.add_plugins(RenderAssetPlugin::<MippedArrayTexture>::default());
+
+        let render_app = app.sub_app_mut(RenderApp);
+        render_app.init_resource::<SpecializedComputePipelines<MipGeneratorPipeline>>();
+
+        if self.inject_into_render_images {
+            render_app.add_systems(
+                Render,
+                inject_array_textures_into_render_images.in_set(RenderSet::PrepareAssets),
+            );
+        }
+    }
+
+    fn finish(&self, app: &mut App) {
+        let render_app = app.sub_app_mut(RenderApp);
+        render_app.init_resource::<MipGeneratorPipelineMeta>();
+    }
+}
+
+fn inject_array_textures_into_render_images(
+    array_textures: Res<RenderAssets<MippedArrayTexture>>,
+    mut images: ResMut<RenderAssets<Image>>,
+) {
+    for (id, image) in array_textures.iter() {
+        // this is so sketchy but bevy's AsBindGroup trait only gives you access to RenderAssets<Image>
+        // so to make it easier for myself to test this crap we do this
+        images.insert(id.untyped().typed_unchecked::<Image>(), image.clone());
+    }
+}
 
 /// Builder for a texture array
 #[derive(Clone, Debug)]
@@ -67,7 +122,8 @@ impl TextureArrayBuilder {
     pub fn finish(
         &self,
         images: &mut Assets<Image>,
-    ) -> Result<TextureArray, TextureArrayBuilderError> {
+        array_textures: &mut Assets<MippedArrayTexture>,
+    ) -> Result<Handle<MippedArrayTexture>, TextureArrayBuilderError> {
         let total_imgs = self.handles.len();
 
         let arr_tex_dims = Extent3d {
@@ -83,7 +139,7 @@ impl TextureArrayBuilder {
             self.format,
         );
 
-        arr_texture.texture_descriptor.mip_level_count = self.dims.ilog2();
+        // arr_texture.texture_descriptor.mip_level_count = self.dims.ilog2();
 
         for (idx, handle) in self.handles.iter().enumerate() {
             // The image might have been removed from the assets by the time that finish() is run, so we handle the error again here so we avoid panicking in a library.
@@ -96,14 +152,19 @@ impl TextureArrayBuilder {
         }
 
         arr_texture.reinterpret_stacked_2d_as_array(total_imgs as _);
-
-        let texture_array_handle = images.add(arr_texture);
-
-        Ok(TextureArray {
-            handle: texture_array_handle,
-            images: total_imgs as _,
+        let asset = MippedArrayTexture {
+            label: None,
+            image: arr_texture,
+            array_layers: total_imgs as _,
             dims: self.dims,
-        })
+        };
+
+        let manual_id = AssetId::Uuid {
+            uuid: Uuid::new_v4(),
+        };
+        array_textures.insert(manual_id, asset);
+
+        Ok(Handle::Weak(manual_id))
     }
 
     fn copy_to_arr_tex(
@@ -142,30 +203,5 @@ impl TextureArrayBuilder {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct TextureArray {
-    handle: Handle<Image>,
-    images: u32,
-    dims: u32,
-}
-
-impl TextureArray {
-    pub fn handle(&self) -> &Handle<Image> {
-        &self.handle
-    }
-
-    pub fn tex_array_len(&self) -> u32 {
-        self.images
-    }
-
-    pub fn dims(&self) -> u32 {
-        self.dims
-    }
-
-    pub fn mip_levels(&self) -> u32 {
-        self.dims().ilog2()
     }
 }

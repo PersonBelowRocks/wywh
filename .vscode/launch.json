@@ -42,5 +42,23 @@
             "args": [],
             "cwd": "${workspaceFolder}"
         },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug 'mip-texture-array' example binary",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--package=mip-texture-array",
+                    "--bin=mip-texture-array",
+                ],
+                "filter": {
+                    "name": "mip-texture-array",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
     ]
 }
