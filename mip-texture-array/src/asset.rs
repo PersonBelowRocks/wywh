@@ -9,9 +9,8 @@ use bevy::{
         render_resource::{
             AddressMode, BindGroupEntries, CommandEncoderDescriptor, ComputePassDescriptor,
             Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, Origin3d, PipelineCache,
-            SamplerDescriptor, SpecializedComputePipelines, Texture, TextureAspect,
-            TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
-            TextureViewDescriptor, TextureViewDimension,
+            SamplerDescriptor, Texture, TextureAspect, TextureDescriptor, TextureDimension,
+            TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
@@ -20,7 +19,7 @@ use bevy::{
 
 use crate::{
     mipmap::{MipGeneratorPipelineMeta, WORKGROUP_SIZE_PER_DIM},
-    TEXTURE_FORMAT,
+    STORAGE_TEXTURE_FORMAT, TEXTURE_FORMAT,
 };
 
 #[derive(Asset, Clone, TypePath)]
@@ -56,11 +55,11 @@ fn create_array_texture_with_filled_mip_level_0(
         mip_level_count: asset.mipmap_levels(),
         sample_count: 1,
         dimension: TextureDimension::D2,
-        format: TEXTURE_FORMAT,
+        format: STORAGE_TEXTURE_FORMAT,
         usage: TextureUsages::COPY_DST
             | TextureUsages::STORAGE_BINDING
             | TextureUsages::TEXTURE_BINDING,
-        view_formats: &[TextureFormat::Rgba8UnormSrgb],
+        view_formats: &[TEXTURE_FORMAT],
     };
 
     let texture = gpu.create_texture(&desc);
@@ -143,6 +142,29 @@ fn create_mip_views(mip_levels: u32, texture: &Texture, array_layers: u32) -> Ve
     views
 }
 
+fn create_mip_storage_views(
+    mip_levels: u32,
+    texture: &Texture,
+    array_layers: u32,
+) -> Vec<TextureView> {
+    let mut views = vec![];
+
+    for mip in 0..mip_levels {
+        views.push(texture.create_view(&TextureViewDescriptor {
+            label: Some("mip_storage"),
+            format: Some(STORAGE_TEXTURE_FORMAT),
+            dimension: Some(TextureViewDimension::D2Array),
+            aspect: TextureAspect::All,
+            base_mip_level: mip,
+            mip_level_count: Some(1),
+            base_array_layer: 0,
+            array_layer_count: Some(array_layers),
+        }))
+    }
+
+    views
+}
+
 impl RenderAsset for MippedArrayTexture {
     type ExtractedAsset = Self;
     type PreparedAsset = GpuImage;
@@ -168,13 +190,14 @@ impl RenderAsset for MippedArrayTexture {
         let texture = create_array_texture_with_filled_mip_level_0(&asset, gpu, queue);
 
         let views = create_mip_views(mip_levels, &texture, asset.array_layers);
+        let storage_views = create_mip_storage_views(mip_levels, &texture, asset.array_layers);
 
         let view_sizes = create_mip_view_sizes(mip_levels, asset.dims);
 
         let mut bind_groups = vec![];
         for mip_level in 1..mip_levels {
             let previous_mip_view = &views[(mip_level - 1) as usize];
-            let output_mip_view = &views[mip_level as usize];
+            let output_mip_view = &storage_views[mip_level as usize];
 
             bind_groups.push(gpu.create_bind_group(
                 "mipmap_generator_bind_group",
@@ -217,7 +240,7 @@ impl RenderAsset for MippedArrayTexture {
 
         let main_view = texture.create_view(&TextureViewDescriptor {
             label: Some("mipped_array_texture_main_view"),
-            format: Some(TextureFormat::Rgba8UnormSrgb),
+            format: Some(TEXTURE_FORMAT),
             dimension: Some(TextureViewDimension::D2Array),
             aspect: TextureAspect::All,
             base_mip_level: 0,
@@ -229,7 +252,7 @@ impl RenderAsset for MippedArrayTexture {
         Ok(GpuImage {
             texture,
             texture_view: main_view,
-            texture_format: TEXTURE_FORMAT,
+            texture_format: STORAGE_TEXTURE_FORMAT,
             sampler: gpu.create_sampler(&SamplerDescriptor {
                 label: Some("mipped_array_texture_sampler"),
                 address_mode_u: AddressMode::ClampToEdge,

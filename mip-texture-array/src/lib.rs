@@ -21,7 +21,8 @@ use crate::mipmap::{MipGeneratorPipeline, MipGeneratorPipelineMeta, MIPMAP_COMPU
 pub mod asset;
 pub mod mipmap;
 
-pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
+pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
+pub const STORAGE_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 
 #[derive(Default)]
 pub struct MippedArrayTexturePlugin {

@@ -12,7 +12,7 @@ use bevy::{
     },
 };
 
-use crate::TEXTURE_FORMAT;
+use crate::STORAGE_TEXTURE_FORMAT;
 
 pub const MIPMAP_COMPUTE_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(147253048844306429480044375066837132481);
@@ -38,7 +38,7 @@ impl FromWorld for MipGeneratorPipelineMeta {
                         (
                             texture_2d_array(TextureSampleType::Float { filterable: true }),
                             texture_storage_2d_array(
-                                TEXTURE_FORMAT,
+                                STORAGE_TEXTURE_FORMAT,
                                 StorageTextureAccess::WriteOnly,
                             ),
                         ),
