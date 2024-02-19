@@ -9,6 +9,7 @@ anyhow = "1.0.75"
 anymap = "0.12.1"
 ascii = { version = "1.1.0", features = ["serde"] }
 bevy = {workspace = true}
+mip-texture-array = {path = "../mip-texture-array"}
 bevy_crevice = "0.7.0"
 bevy_rapier3d = "0.23.0"
 bimap = "0.6.3"

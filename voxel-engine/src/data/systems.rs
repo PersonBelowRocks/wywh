@@ -6,6 +6,7 @@ use bevy::{
     prelude::*,
     render::{render_asset::RenderAssets, texture::GpuImage},
 };
+use mip_texture_array::asset::MippedArrayTexture;
 
 use crate::{
     data::{registries::texture::TextureRegistryLoader, resourcepath::ResourcePath},
@@ -42,32 +43,32 @@ pub struct VoxelNormalMapFolder {
 }
 
 #[derive(Resource, Default, Clone)]
-pub struct VoxelColorTextureAtlas(pub Handle<Image>);
+pub struct VoxelColorArrayTexture(pub Handle<MippedArrayTexture>);
 
 #[derive(Resource, Default, Clone)]
-pub struct VoxelNormalTextureAtlas(pub Handle<Image>);
+pub struct VoxelNormalArrayTexture(pub Handle<MippedArrayTexture>);
 
 #[derive(SystemParam)]
-pub struct TextureAtlasHandles<'w> {
-    pub color: Option<Res<'w, VoxelColorTextureAtlas>>,
-    pub normal: Option<Res<'w, VoxelNormalTextureAtlas>>,
+pub struct ArrayTextureHandles<'w> {
+    pub color: Option<Res<'w, VoxelColorArrayTexture>>,
+    pub normal: Option<Res<'w, VoxelNormalArrayTexture>>,
 }
 
-pub struct TextureAtlases<'a> {
-    pub color: &'a Image,
-    pub normal: &'a Image,
+pub struct ArrayTextures<'a> {
+    pub color: &'a MippedArrayTexture,
+    pub normal: &'a MippedArrayTexture,
 }
 
-pub struct GpuTextureAtlases<'a> {
+pub struct GpuArrayTextures<'a> {
     pub color: &'a GpuImage,
     pub normal: &'a GpuImage,
 }
 
-impl<'w> TextureAtlasHandles<'w> {
+impl<'w> ArrayTextureHandles<'w> {
     pub fn get_assets<'a>(
         &self,
-        assets: &'a Assets<Image>,
-    ) -> Result<TextureAtlases<'a>, TextureAtlasesGetAssetError> {
+        assets: &'a Assets<MippedArrayTexture>,
+    ) -> Result<ArrayTextures<'a>, TextureAtlasesGetAssetError> {
         let Some(handle) = self.color.as_deref() else {
             return Err(TextureAtlasesGetAssetError::MissingColorHandle);
         };
@@ -84,13 +85,13 @@ impl<'w> TextureAtlasHandles<'w> {
             .get(&handle.0)
             .ok_or(TextureAtlasesGetAssetError::MissingNormal)?;
 
-        Ok(TextureAtlases { color, normal })
+        Ok(ArrayTextures { color, normal })
     }
 
     pub fn get_render_assets<'a>(
         &self,
-        assets: &'a RenderAssets<Image>,
-    ) -> Result<GpuTextureAtlases<'a>, TextureAtlasesGetAssetError> {
+        assets: &'a RenderAssets<MippedArrayTexture>,
+    ) -> Result<GpuArrayTextures<'a>, TextureAtlasesGetAssetError> {
         let Some(handle) = self.color.as_deref() else {
             return Err(TextureAtlasesGetAssetError::MissingColorHandle);
         };
@@ -107,7 +108,7 @@ impl<'w> TextureAtlasHandles<'w> {
             .get(&handle.0)
             .ok_or(TextureAtlasesGetAssetError::MissingNormal)?;
 
-        Ok(GpuTextureAtlases { color, normal })
+        Ok(GpuArrayTextures { color, normal })
     }
 }
 
@@ -149,6 +150,7 @@ pub(crate) fn check_textures(
 fn create_texture_registry(
     folders: Res<Assets<LoadedFolder>>,
     mut images: ResMut<Assets<Image>>,
+    mut array_textures: ResMut<Assets<MippedArrayTexture>>,
     texture_folder: Res<VoxelTextureFolder>,
     normalmap_folder: Res<VoxelNormalMapFolder>,
 ) -> Result<TextureRegistry, TextureRegistryError> {
@@ -206,7 +208,7 @@ fn create_texture_registry(
         registry_loader.register(rpath.clone(), texture, normalmap)
     }
 
-    Ok(registry_loader.build_registry(images.as_mut())?)
+    Ok(registry_loader.build_registry(images.as_ref(), &mut array_textures)?)
 }
 
 pub fn build_registries(world: &mut World) {
@@ -225,8 +227,8 @@ pub fn build_registries(world: &mut World) {
         }
     };
 
-    world.insert_resource(VoxelColorTextureAtlas(textures.color_texture().clone()));
-    world.insert_resource(VoxelNormalTextureAtlas(textures.normal_texture().clone()));
+    world.insert_resource(VoxelColorArrayTexture(textures.color_texture().clone()));
+    world.insert_resource(VoxelNormalArrayTexture(textures.normal_texture().clone()));
     world.insert_resource(TexregFaces(textures.face_texture_buffer()));
 
     let variant_folders = world.get_resource::<VariantFolders>().unwrap();

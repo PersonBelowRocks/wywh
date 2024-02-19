@@ -1,7 +1,7 @@
 struct FaceTexture {
     flags: u32,
-    color_tex_pos: vec2<f32>,
-    normal_tex_pos: vec2<f32>,
+    color_tex_idx: u32,
+    normal_tex_idx: u32,
 }
 
 struct ChunkQuad {

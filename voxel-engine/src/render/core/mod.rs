@@ -18,7 +18,7 @@ use bevy::{
         mesh::MeshVertexAttribute,
         render_phase::AddRenderCommand,
         render_resource::{
-            binding_types::{sampler, storage_buffer_read_only, texture_2d},
+            binding_types::{sampler, storage_buffer_read_only, texture_2d, texture_2d_array},
             BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderDefVal,
             ShaderStages, SpecializedMeshPipelines, TextureSampleType, VertexFormat,
         },
@@ -28,7 +28,7 @@ use bevy::{
 };
 
 use crate::data::{
-    systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
+    systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     texture::GpuFaceTexture,
 };
 
@@ -57,8 +57,8 @@ impl RenderCore {
 
 impl Plugin for RenderCore {
     fn build(&self, app: &mut App) {
-        app.add_plugins(ExtractResourcePlugin::<VoxelColorTextureAtlas>::default());
-        app.add_plugins(ExtractResourcePlugin::<VoxelNormalTextureAtlas>::default());
+        app.add_plugins(ExtractResourcePlugin::<VoxelColorArrayTexture>::default());
+        app.add_plugins(ExtractResourcePlugin::<VoxelNormalArrayTexture>::default());
 
         // Render app logic
         let render_app = app.sub_app_mut(RenderApp);
@@ -119,10 +119,10 @@ impl FromWorld for DefaultBindGroupLayouts {
                     ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     (
                         storage_buffer_read_only::<GpuFaceTexture>(false),
-                        texture_2d(TextureSampleType::default()),
-                        sampler(SamplerBindingType::Filtering),
-                        texture_2d(TextureSampleType::default()),
-                        sampler(SamplerBindingType::Filtering),
+                        texture_2d_array(TextureSampleType::default()),
+                        sampler(SamplerBindingType::NonFiltering),
+                        texture_2d_array(TextureSampleType::default()),
+                        sampler(SamplerBindingType::NonFiltering),
                     ),
                 ),
             ),

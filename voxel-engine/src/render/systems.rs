@@ -5,7 +5,7 @@ use bevy::{
 };
 
 use crate::{
-    data::systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas},
+    data::systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     render::{adjacency::AdjacentTransparency, core::mat::VxlChunkMaterial},
     topo::{chunk::Chunk, realm::VoxelRealm},
 };
@@ -39,8 +39,8 @@ pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
     _meshes: ResMut<Assets<Mesh>>,
     _materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, VxlChunkMaterial>>>,
     _gpu: Res<RenderDevice>,
-    _texture_atlas: Res<VoxelColorTextureAtlas>,
-    _normal_atlas: Res<VoxelNormalTextureAtlas>,
+    _texture_atlas: Res<VoxelColorArrayTexture>,
+    _normal_atlas: Res<VoxelNormalArrayTexture>,
 ) {
     for finished_mesh in mesh_builder.finished_meshes() {
         debug!("Inserting mesh at {:?}", finished_mesh.pos);
@@ -80,16 +80,4 @@ pub(crate) fn insert_meshes<HQM: Mesher, LQM: Mesher>(
         // })
         // .insert((Wireframe, ChunkEntity, Chunk::BOUNDING_BOX.to_aabb()));
     }
-}
-
-pub(crate) fn configure_sampling(
-    color_atlas_handle: Res<VoxelColorTextureAtlas>,
-    normal_atlas_handle: Res<VoxelNormalTextureAtlas>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    let texture = images.get_mut(&color_atlas_handle.0).unwrap();
-    texture.sampler = ImageSampler::nearest();
-
-    let texture = images.get_mut(&normal_atlas_handle.0).unwrap();
-    texture.sampler = ImageSampler::nearest();
 }

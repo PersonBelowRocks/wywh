@@ -14,6 +14,7 @@ use data::{
     registries::{variant::VariantRegistry, Registries, Registry},
     resourcepath::rpath,
 };
+use mip_texture_array::MippedArrayTexturePlugin;
 use render::meshing::greedy::algorithm::SimplePbrMesher;
 use topo::{
     chunk_ref::ChunkVoxelOutput,
@@ -37,7 +38,7 @@ use crate::{
             ecs::{insert_chunk_meshes, queue_chunk_meshing_tasks, setup_chunk_meshing_workers},
             greedy::algorithm::GreedyMesher,
         },
-        systems::{configure_sampling, setup_meshers},
+        systems::setup_meshers,
     },
     topo::systems::generate_chunks_from_events,
 };
@@ -78,6 +79,7 @@ impl Plugin for VoxelPlugin {
         // app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
         // app.add_plugins(MaterialPlugin::<GreedyMeshMaterial>::default());
         app.add_plugins(RenderCore);
+        app.add_plugins(MippedArrayTexturePlugin::default());
 
         app.add_event::<GenerateChunk>();
         app.add_state::<AppState>();
@@ -93,7 +95,6 @@ impl Plugin for VoxelPlugin {
                 build_registries,
                 apply_deferred,
                 setup_meshers,
-                configure_sampling,
                 apply_deferred,
                 setup,
                 setup_chunk_meshing_workers::<Hqm>,

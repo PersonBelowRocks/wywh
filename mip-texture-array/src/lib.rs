@@ -123,7 +123,7 @@ impl MippedArrayTextureBuilder {
 
     pub fn finish(
         &self,
-        images: &mut Assets<Image>,
+        images: &Assets<Image>,
         array_textures: &mut Assets<MippedArrayTexture>,
     ) -> Result<Handle<MippedArrayTexture>, TextureArrayBuilderError> {
         let total_imgs = self.handles.len();

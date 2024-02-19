@@ -5,6 +5,7 @@ use bevy::{
     render::texture::Image,
     sprite::TextureAtlasBuilderError,
 };
+use mip_texture_array::TextureArrayBuilderError;
 
 use crate::data::{
     error::VoxelModelCreationError,
@@ -27,7 +28,7 @@ pub enum TextureRegistryError {
     #[error("Voxel normal map folder asset is not loaded")]
     VoxelNormalMapFolderNotLoaded,
     #[error("Atlas builder error: {0}")]
-    AtlasBuilderError(#[from] TextureAtlasBuilderError),
+    BuilderError(#[from] TextureArrayBuilderError),
     #[error("Unexpected asset ID type: {0}")]
     UnexpectedAssetIdType(#[from] UntypedAssetIdConversionError),
     #[error("'{0:?}' was not a square image")]

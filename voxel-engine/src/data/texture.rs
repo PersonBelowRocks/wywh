@@ -72,8 +72,8 @@ pub struct FaceTexture {
 }
 
 impl FaceTexture {
-    pub fn tex_pos(&self, registry: &TextureRegistry) -> Vec2 {
-        registry.get_by_id(self.texture).texture_pos
+    pub fn color_tex_idx(&self, registry: &TextureRegistry) -> u32 {
+        registry.get_by_id(self.texture).texture_idx
     }
 
     pub fn new(texture: RegistryId<TextureRegistry>) -> Self {
@@ -94,25 +94,25 @@ impl FaceTexture {
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct GpuFaceTexture {
     pub flags: u32,
-    pub color_tex_pos: Vec2,
-    pub normal_tex_pos: Vec2,
+    pub color_tex_idx: u32,
+    pub normal_tex_idx: u32,
 }
 
 impl GpuFaceTexture {
     pub const HAS_NORMAL_MAP_BIT: u32 = 0b1;
 
-    pub fn new(color: Vec2, normal: Option<Vec2>) -> Self {
+    pub fn new(color_idx: u32, normal_idx: Option<u32>) -> Self {
         let mut flags = 0u32;
 
-        if normal.is_some() {
+        if normal_idx.is_some() {
             flags |= Self::HAS_NORMAL_MAP_BIT;
             info!("flags are now: {flags}");
         }
 
         Self {
             flags,
-            color_tex_pos: color,
-            normal_tex_pos: normal.unwrap_or(Vec2::ZERO),
+            color_tex_idx: color_idx,
+            normal_tex_idx: normal_idx.unwrap_or(0),
         }
     }
 }

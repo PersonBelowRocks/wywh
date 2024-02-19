@@ -241,9 +241,9 @@ impl RenderAsset for MippedArrayTexture {
             dimension: Some(TextureViewDimension::D2Array),
             aspect: TextureAspect::All,
             base_mip_level: 0,
-            mip_level_count: Some(mip_levels),
+            mip_level_count: None, // Some(mip_levels),
             base_array_layer: 0,
-            array_layer_count: Some(asset.array_layers),
+            array_layer_count: None, // Some(asset.array_layers),
         });
 
         Ok(GpuImage {
@@ -257,9 +257,9 @@ impl RenderAsset for MippedArrayTexture {
                 address_mode_w: AddressMode::ClampToEdge,
                 mag_filter: FilterMode::Nearest,
                 min_filter: FilterMode::Nearest,
-                mipmap_filter: FilterMode::Nearest,
+                mipmap_filter: FilterMode::Linear,
                 lod_min_clamp: 0.0,
-                lod_max_clamp: mip_levels as f32,
+                lod_max_clamp: 1.0,
                 compare: None,
                 anisotropy_clamp: 1,
                 border_color: None,

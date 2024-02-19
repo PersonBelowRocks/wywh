@@ -1,8 +1,8 @@
 use bevy::render::extract_resource::ExtractResource;
 
-use crate::data::systems::{VoxelColorTextureAtlas, VoxelNormalTextureAtlas};
+use crate::data::systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture};
 
-impl ExtractResource for VoxelColorTextureAtlas {
+impl ExtractResource for VoxelColorArrayTexture {
     type Source = Self;
 
     fn extract_resource(source: &Self::Source) -> Self {
@@ -10,7 +10,7 @@ impl ExtractResource for VoxelColorTextureAtlas {
     }
 }
 
-impl ExtractResource for VoxelNormalTextureAtlas {
+impl ExtractResource for VoxelNormalArrayTexture {
     type Source = Self;
 
     fn extract_resource(source: &Self::Source) -> Self {

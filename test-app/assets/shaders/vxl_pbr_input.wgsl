@@ -239,7 +239,6 @@ fn create_pbr_input(
     let ls_pos = project_to_2d(in.local_position, axis_from_face(face));
     let fs_pos = fract(ls_pos);
 
-    // TODO: UV calculation is a bit more complicated than this, fix it!!
     let texture_rot = extract_texture_rot(quad);
 
     let tangent_rotation_matrix = tex_rotation_matrix_around_axis(texture_rot, axis);
@@ -247,6 +246,7 @@ fn create_pbr_input(
 
     let uv_rotation_matrix = create_rotation_matrix(texture_rot);
 
+    // TODO: UV calculation is a bit more complicated than this, fix it!!
     let uv = uv_coords_from_fs_pos_and_params(
         fs_pos,
         uv_rotation_matrix,
@@ -274,8 +274,13 @@ fn create_pbr_input(
 
     let face_texture = faces[quad.texture_id];
 
-    let color_uv = ((uv / scale) + (face_texture.color_tex_pos / scale) / scale);
-    pbr_input.material.base_color *= textureSampleBias(color_texture, color_sampler, color_uv, view.mip_bias);
+    pbr_input.material.base_color *= textureSampleBias(
+        color_texture,
+        color_sampler,
+        uv,
+        face_texture.color_tex_idx,
+        view.mip_bias
+    );
 
     let vis = calculate_occlusion(
         fs_pos,
@@ -304,19 +309,18 @@ fn create_pbr_input(
     // N (normal vector)
 //#ifndef LOAD_PREPASS_NORMALS
 
-    if (face_texture.flags & HAS_NORMAL_MAP_BIT) != 0u {
-        let normal_map_uv = ((uv / scale) + (face_texture.normal_tex_pos / scale) / scale);
-
-        pbr_input.N = apply_normal_mapping(
-            0u,
-            pbr_input.world_normal,
-            vec4f(tangent_rotation_matrix * tangent, 0.0),
-            normal_map_uv,
-            view.mip_bias,
-        );
-    } else {
-        pbr_input.N = pbr_input.world_normal;
-    }
+    // if (face_texture.flags & HAS_NORMAL_MAP_BIT) != 0u {
+    //     pbr_input.N = apply_normal_mapping(
+    //         0u,
+    //         pbr_input.world_normal,
+    //         vec4f(tangent_rotation_matrix * tangent, 0.0),
+    //         uv,
+    //         face_texture.normal_tex_idx,
+    //         view.mip_bias,
+    //     );
+    // } else {
+    //     pbr_input.N = pbr_input.world_normal;
+    // }
 
     return pbr_input;
 }
@@ -328,6 +332,7 @@ fn apply_normal_mapping(
     world_normal: vec3<f32>,
     world_tangent: vec4<f32>,
     uv: vec2<f32>,
+    texture_array_idx: u32,
     mip_bias: f32,
 ) -> vec3<f32> {
     // NOTE: The mikktspace method of normal mapping explicitly requires that the world normal NOT
@@ -346,7 +351,13 @@ fn apply_normal_mapping(
     var B: vec3<f32> = world_tangent.w * cross(N, T);
 
     // Nt is the tangent-space normal.
-    var Nt = textureSampleBias(normal_texture, normal_sampler, uv, mip_bias).rgb;
+    var Nt = textureSampleBias(
+        normal_texture,
+        normal_sampler,
+        uv,
+        texture_array_idx,
+        mip_bias
+    ).rgb;
     Nt = Nt * 2.0 - 1.0;
     // TODO: do we need this?
     // Normal maps authored for DirectX require flipping the y component

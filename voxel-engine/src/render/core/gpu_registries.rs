@@ -15,9 +15,10 @@ use bevy::{
         Extract,
     },
 };
+use mip_texture_array::asset::MippedArrayTexture;
 
 use crate::data::{
-    registries::texture::TexregFaces, systems::TextureAtlasHandles, texture::GpuFaceTexture,
+    registries::texture::TexregFaces, systems::ArrayTextureHandles, texture::GpuFaceTexture,
 };
 
 use super::DefaultBindGroupLayouts;
@@ -47,15 +48,15 @@ pub fn prepare_gpu_registry_data(
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     layouts: Res<DefaultBindGroupLayouts>,
-    images: Res<RenderAssets<Image>>,
-    handles: TextureAtlasHandles,
+    array_textures: Res<RenderAssets<MippedArrayTexture>>,
+    handles: ArrayTextureHandles,
 ) {
     // we can only initialize the registry bind group resource if the faces and textures have been extracted
     let Some(extracted_faces) = extracted_faces else {
         return;
     };
 
-    let Ok(atlases) = handles.get_render_assets(images.as_ref()) else {
+    let Ok(gpu_array_textures) = handles.get_render_assets(array_textures.as_ref()) else {
         return;
     };
 
@@ -74,10 +75,10 @@ pub fn prepare_gpu_registry_data(
                 offset: 0,
                 size: None,
             }),
-            &atlases.color.texture_view,
-            &atlases.color.sampler,
-            &atlases.normal.texture_view,
-            &atlases.normal.sampler,
+            &gpu_array_textures.color.texture_view,
+            &gpu_array_textures.color.sampler,
+            &gpu_array_textures.normal.texture_view,
+            &gpu_array_textures.normal.sampler,
         )),
     );
 
