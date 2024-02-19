@@ -309,18 +309,18 @@ fn create_pbr_input(
     // N (normal vector)
 //#ifndef LOAD_PREPASS_NORMALS
 
-    // if (face_texture.flags & HAS_NORMAL_MAP_BIT) != 0u {
-    //     pbr_input.N = apply_normal_mapping(
-    //         0u,
-    //         pbr_input.world_normal,
-    //         vec4f(tangent_rotation_matrix * tangent, 0.0),
-    //         uv,
-    //         face_texture.normal_tex_idx,
-    //         view.mip_bias,
-    //     );
-    // } else {
-    //     pbr_input.N = pbr_input.world_normal;
-    // }
+    if (face_texture.flags & HAS_NORMAL_MAP_BIT) != 0u {
+        pbr_input.N = apply_normal_mapping(
+            0u,
+            pbr_input.world_normal,
+            vec4f(tangent_rotation_matrix * tangent, 0.0),
+            uv,
+            face_texture.normal_tex_idx,
+            view.mip_bias,
+        );
+    } else {
+        pbr_input.N = pbr_input.world_normal;
+    }
 
     return pbr_input;
 }
