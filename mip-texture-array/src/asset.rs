@@ -217,7 +217,7 @@ impl RenderAsset for MippedArrayTexture {
 
         let main_view = texture.create_view(&TextureViewDescriptor {
             label: Some("mipped_array_texture_main_view"),
-            format: Some(TEXTURE_FORMAT),
+            format: Some(TextureFormat::Rgba8UnormSrgb),
             dimension: Some(TextureViewDimension::D2Array),
             aspect: TextureAspect::All,
             base_mip_level: 0,
