@@ -75,7 +75,7 @@ fn inject_array_textures_into_render_images(
 /// Builder for a texture array
 #[derive(Clone, Debug)]
 pub struct MippedArrayTextureBuilder {
-    handles: Vec<Handle<Image>>,
+    handles: Vec<AssetId<Image>>,
     empty_pixel_data: Vec<u8>,
     format: TextureFormat,
     dims: u32,
@@ -100,12 +100,12 @@ impl MippedArrayTextureBuilder {
     // same as what the builder expects.
     pub fn add_image(
         &mut self,
-        handle: Handle<Image>,
+        asset_id: AssetId<Image>,
         images: &Assets<Image>,
     ) -> Result<usize, TextureArrayBuilderError> {
         let image = images
-            .get(&handle)
-            .ok_or_else(|| TextureArrayBuilderError::ImageNotFound(handle.clone()))?;
+            .get(asset_id)
+            .ok_or_else(|| TextureArrayBuilderError::ImageNotFound(asset_id.clone()))?;
         let extent = image.texture_descriptor.size;
 
         if extent.width != self.dims || extent.height != self.dims {
@@ -117,7 +117,7 @@ impl MippedArrayTextureBuilder {
         }
 
         let idx = self.handles.len();
-        self.handles.push(handle);
+        self.handles.push(asset_id);
         Ok(idx)
     }
 
@@ -143,11 +143,11 @@ impl MippedArrayTextureBuilder {
 
         // arr_texture.texture_descriptor.mip_level_count = self.dims.ilog2();
 
-        for (idx, handle) in self.handles.iter().enumerate() {
+        for (idx, asset_id) in self.handles.iter().enumerate() {
             // The image might have been removed from the assets by the time that finish() is run, so we handle the error again here so we avoid panicking in a library.
             let source = images
-                .get(handle)
-                .ok_or_else(|| TextureArrayBuilderError::ImageNotFound(handle.clone()))?;
+                .get(*asset_id)
+                .ok_or_else(|| TextureArrayBuilderError::ImageNotFound(asset_id.clone()))?;
 
             // Finally we perform the actual copy.
             self.copy_to_arr_tex(&mut arr_texture, source, idx as _)?;

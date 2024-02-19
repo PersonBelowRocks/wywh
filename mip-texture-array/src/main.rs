@@ -3,7 +3,9 @@ use bevy::{
     prelude::*,
     render::render_resource::{AsBindGroup, ShaderRef},
 };
-use mip_texture_array::{asset::MippedArrayTexture, MippedArrayTexturePlugin, MippedArrayTextureBuilder};
+use mip_texture_array::{
+    asset::MippedArrayTexture, MippedArrayTextureBuilder, MippedArrayTexturePlugin,
+};
 
 #[derive(Resource)]
 struct TexarrTextures(Vec<Handle<Image>>);
@@ -72,7 +74,9 @@ fn insert_example(
     let mut builder = MippedArrayTextureBuilder::new(16);
 
     for handle in handles.0.iter() {
-        builder.add_image(handle.clone(), images.as_ref()).unwrap();
+        builder
+            .add_image(handle.clone().into(), images.as_ref())
+            .unwrap();
     }
 
     let texarr_handle = builder
