@@ -1,8 +1,5 @@
 use bevy::{
-    ecs::system::{
-        lifetimeless::{SRes, SResMut},
-        SystemParamItem,
-    },
+    ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
     render::{
         render_asset::{PrepareAssetError, RenderAsset},
@@ -10,7 +7,7 @@ use bevy::{
             AddressMode, BindGroupEntries, CommandEncoderDescriptor, ComputePassDescriptor,
             Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, Origin3d, PipelineCache,
             SamplerDescriptor, Texture, TextureAspect, TextureDescriptor, TextureDimension,
-            TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
+            TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
@@ -24,10 +21,10 @@ use crate::{
 
 #[derive(Asset, Clone, TypePath)]
 pub struct MippedArrayTexture {
-    pub(crate) label: Option<&'static str>,
-    pub(crate) image: Image,
-    pub(crate) dims: u32,
-    pub(crate) array_layers: u32,
+    pub label: Option<&'static str>,
+    pub image: Image,
+    pub dims: u32,
+    pub array_layers: u32,
 }
 
 impl MippedArrayTexture {
