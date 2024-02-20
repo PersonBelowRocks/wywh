@@ -7,6 +7,16 @@
 #import "shaders/constants.wgsl"::FLIP_UV_X_BIT
 #import "shaders/constants.wgsl"::FLIP_UV_Y_BIT
 
+// from https://community.khronos.org/t/mipmap-level-calculation-using-dfdx-dfdy/67480/2
+fn calculate_mip_level(uv: vec2f) -> f32 {
+    let dx_vtc = dpdx(uv);
+    let dy_vtc = dpdy(uv);
+
+    let delta_max_sqr: f32 = max(dot(dx_vtc, dx_vtc), dot(dy_vtc, dy_vtc));
+
+    return 0.5 * log2(delta_max_sqr);
+}
+
 // texture_rot must be below 4
 fn create_rotation_matrix(texture_rot: u32) -> mat2x2f {
     let r = radians(90.0 * f32(texture_rot));

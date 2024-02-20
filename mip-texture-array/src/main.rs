@@ -4,7 +4,7 @@ use bevy::{
     render::render_resource::{AsBindGroup, ShaderRef},
 };
 use mip_texture_array::{
-    asset::MippedArrayTexture, MippedArrayTextureBuilder, MippedArrayTexturePlugin,
+    asset::MippedArrayTexture, MipArrayTextureBuilder, MippedArrayTexturePlugin,
 };
 
 #[derive(Resource)]
@@ -71,7 +71,7 @@ fn insert_example(
     mut std_materials: ResMut<Assets<StandardMaterial>>,
     mut array_textures: ResMut<Assets<MippedArrayTexture>>,
 ) {
-    let mut builder = MippedArrayTextureBuilder::new(16);
+    let mut builder = MipArrayTextureBuilder::new(16);
 
     for handle in handles.0.iter() {
         builder

@@ -74,14 +74,14 @@ fn inject_array_textures_into_render_images(
 
 /// Builder for a texture array
 #[derive(Clone, Debug)]
-pub struct MippedArrayTextureBuilder {
+pub struct MipArrayTextureBuilder {
     handles: Vec<AssetId<Image>>,
     empty_pixel_data: Vec<u8>,
     format: TextureFormat,
     dims: u32,
 }
 
-impl MippedArrayTextureBuilder {
+impl MipArrayTextureBuilder {
     pub fn new(dims: u32) -> Self {
         Self::new_with_format(dims, vec![0; 4], TextureFormat::Rgba8UnormSrgb)
     }

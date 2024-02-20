@@ -9,7 +9,8 @@ use bevy::{
     sprite::{TextureAtlas, TextureAtlasBuilder},
 };
 use indexmap::IndexMap;
-use mip_texture_array::{asset::MippedArrayTexture, MippedArrayTextureBuilder};
+use mip_texture_array::asset::MippedArrayTexture;
+use mip_texture_array::MipArrayTextureBuilder;
 
 use crate::data::{resourcepath::ResourcePath, texture::GpuFaceTexture};
 
@@ -55,7 +56,7 @@ impl TextureRegistryLoader {
         let mut color_id_to_idx = hb::HashMap::<AssetId<Image>, u32>::new();
 
         let color_arr_tex = {
-            let mut builder = MippedArrayTextureBuilder::new(TEXTURE_DIMENSIONS);
+            let mut builder = MipArrayTextureBuilder::new(TEXTURE_DIMENSIONS);
 
             for id in self.textures.values().cloned() {
                 let id = id.color;
@@ -74,7 +75,7 @@ impl TextureRegistryLoader {
         let mut normal_id_to_idx = hb::HashMap::<AssetId<Image>, u32>::new();
 
         let normal_arr_tex = {
-            let mut builder = MippedArrayTextureBuilder::new(TEXTURE_DIMENSIONS);
+            let mut builder = MipArrayTextureBuilder::new(TEXTURE_DIMENSIONS);
             for id in self.textures.values().cloned() {
                 let Some(id) = id.normal else {
                     continue;

@@ -21,6 +21,7 @@
 #import "shaders/utils.wgsl"::flipped_uv_x
 #import "shaders/utils.wgsl"::flipped_uv_y
 #import "shaders/utils.wgsl"::uv_coords_from_fs_pos_and_params
+#import "shaders/utils.wgsl"::calculate_mip_level
 
 #import "shaders/vxl_chunk_io.wgsl"::VertexOutput
 #import "shaders/vxl_types.wgsl"::FaceTexture
@@ -143,9 +144,9 @@ fn corner_occlusion(ls_face_pos_2d: vec2f, corner_pos: vec2f) -> f32 {
     // return max(0.0, sq_2 - d - (sq_2 / 3.5));
 }
 
-const BIAS: f32 = -0.4;
-const WEIGHT: f32 = 1.0;
-const GLOBAL_WEIGHT: f32 = 0.33;
+const BIAS: f32 = -0.45;
+const WEIGHT: f32 = 1.2;
+const GLOBAL_WEIGHT: f32 = 0.4;
 
 // TODO: refactor occlusion code into own file
 fn calculate_occlusion(
@@ -273,13 +274,14 @@ fn create_pbr_input(
 #endif
 
     let face_texture = faces[quad.texture_id];
+    let mip_level = calculate_mip_level(uv);
 
-    pbr_input.material.base_color *= textureSampleBias(
+    pbr_input.material.base_color *= textureSampleLevel(
         color_texture,
         color_sampler,
         uv,
         face_texture.color_tex_idx,
-        view.mip_bias
+        mip_level
     );
 
     let vis = calculate_occlusion(
@@ -306,9 +308,6 @@ fn create_pbr_input(
 
     pbr_input.occlusion = vec3(1.0 - vis);
 
-    // N (normal vector)
-//#ifndef LOAD_PREPASS_NORMALS
-
     if (face_texture.flags & HAS_NORMAL_MAP_BIT) != 0u {
         pbr_input.N = apply_normal_mapping(
             0u,
@@ -316,7 +315,7 @@ fn create_pbr_input(
             vec4f(tangent_rotation_matrix * tangent, 0.0),
             uv,
             face_texture.normal_tex_idx,
-            view.mip_bias,
+            mip_level,
         );
     } else {
         pbr_input.N = pbr_input.world_normal;
@@ -333,7 +332,7 @@ fn apply_normal_mapping(
     world_tangent: vec4<f32>,
     uv: vec2<f32>,
     texture_array_idx: u32,
-    mip_bias: f32,
+    mip_level: f32,
 ) -> vec3<f32> {
     // NOTE: The mikktspace method of normal mapping explicitly requires that the world normal NOT
     // be re-normalized in the fragment shader. This is primarily to match the way mikktspace
@@ -351,12 +350,12 @@ fn apply_normal_mapping(
     var B: vec3<f32> = world_tangent.w * cross(N, T);
 
     // Nt is the tangent-space normal.
-    var Nt = textureSampleBias(
+    var Nt = textureSampleLevel(
         normal_texture,
         normal_sampler,
         uv,
         texture_array_idx,
-        mip_bias
+        mip_level
     ).rgb;
     Nt = Nt * 2.0 - 1.0;
     // TODO: do we need this?

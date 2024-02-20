@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::{
+    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
+    prelude::*,
+};
 use voxel_engine::{data::tile::Face, topo::chunk::Chunk, ChunkEntity};
 
 use crate::camera::PlayerCamController;
@@ -8,6 +11,9 @@ pub struct PositionText;
 
 #[derive(Component)]
 pub struct DirectionText;
+
+#[derive(Component)]
+pub struct FpsText;
 
 pub fn update_position_text(
     mut q: Query<&mut Text, With<PositionText>>,
@@ -64,5 +70,28 @@ pub fn chunk_borders(mut giz: Gizmos, chunks: Query<&Transform, With<ChunkEntity
         let gizmo_tf = Transform::from_translation(gizmo_translation)
             .with_scale(Vec3::splat(Chunk::SIZE as _));
         giz.cuboid(gizmo_tf, Color::LIME_GREEN);
+    }
+}
+
+pub fn fps_text_update_system(
+    diagnostics: Res<DiagnosticsStore>,
+    mut query: Query<&mut Text, With<FpsText>>,
+) {
+    for mut text in &mut query {
+        // try to get a "smoothed" FPS value from Bevy
+        if let Some(value) = diagnostics
+            .get(FrameTimeDiagnosticsPlugin::FPS)
+            .and_then(|fps| fps.smoothed())
+        {
+            // Format the number as to leave space for 4 digits, just in case,
+            // right-aligned and rounded. This helps readability when the
+            // number changes rapidly.
+            text.sections[1].value = format!("{value:>4.0}");
+        } else {
+            // display "N/A" if we can't get a FPS measurement
+            // add an extra space to preserve alignment
+            text.sections[1].value = " N/A".into();
+            text.sections[1].style.color = Color::WHITE;
+        }
     }
 }

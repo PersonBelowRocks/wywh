@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use bevy::core_pipeline::experimental::taa::{
     TemporalAntiAliasBundle, TemporalAntiAliasPlugin, TemporalAntiAliasSettings,
 };
+use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::math::vec2;
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::pbr::ScreenSpaceAmbientOcclusionBundle;
@@ -17,7 +18,7 @@ use bevy::prelude::*;
 use bevy::render::camera::TemporalJitter;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
-use debug_info::{DirectionText, PositionText};
+use debug_info::{DirectionText, FpsText, PositionText};
 
 use ve::topo::generator::{GenerateChunk, GeneratorChoice};
 
@@ -40,6 +41,7 @@ fn main() {
             WireframePlugin,
             TemporalAntiAliasPlugin,
             ve::VoxelPlugin::new(vec!["test-app\\assets\\variants".into()]),
+            FrameTimeDiagnosticsPlugin,
         ))
         .add_systems(Startup, setup)
         .add_systems(
@@ -56,6 +58,7 @@ fn main() {
                 debug_info::update_position_text,
                 // debug_info::chunk_borders,
                 debug_info::update_direction_text,
+                debug_info::fps_text_update_system,
             ),
         )
         .run();
@@ -135,6 +138,35 @@ fn setup(
             ..default()
         }),
         DirectionText,
+    ));
+
+    commands.spawn((
+        TextBundle::from_sections([
+            TextSection {
+                value: "FPS: ".into(),
+                style: TextStyle {
+                    color: Color::WHITE,
+                    font_size: 35.0,
+                    ..default()
+                },
+            },
+            TextSection {
+                value: "N/A".into(),
+                style: TextStyle {
+                    color: Color::WHITE,
+                    font_size: 35.0,
+                    ..default()
+                },
+            },
+        ])
+        .with_text_justify(JustifyText::Left)
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            bottom: Val::Percent(80.0),
+            right: Val::Percent(90.0),
+            ..default()
+        }),
+        FpsText,
     ));
 
     commands.spawn(PbrBundle {
