@@ -34,6 +34,8 @@ fn fragment(
     out.color = apply_pbr_lighting(pbr_input);
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 
+    // out.color = pbr_input.material.base_color;
+
     return out;
 
     // TODO: implement

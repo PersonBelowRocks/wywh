@@ -274,7 +274,7 @@ fn create_pbr_input(
 #endif
 
     let face_texture = faces[quad.texture_id];
-    let mip_level = calculate_mip_level(uv);
+    let mip_level = 0.0; // calculate_mip_level(ls_pos * 5.0);
 
     pbr_input.material.base_color *= textureSampleLevel(
         color_texture,
@@ -320,6 +320,8 @@ fn create_pbr_input(
     } else {
         pbr_input.N = pbr_input.world_normal;
     }
+
+    // pbr_input.material.base_color = vec4(vec3(mip_level / 4.0), 1.0);
 
     return pbr_input;
 }

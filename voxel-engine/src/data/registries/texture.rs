@@ -57,13 +57,10 @@ impl TextureRegistryLoader {
 
         let color_arr_tex = {
             let mut builder = MipArrayTextureBuilder::new(TEXTURE_DIMENSIONS);
+            builder.set_label(Some("color_array_texture"));
 
             for id in self.textures.values().cloned() {
                 let id = id.color;
-
-                let tex = textures
-                    .get(id)
-                    .ok_or(TextureRegistryError::TextureNotLoaded(id))?;
 
                 let texarr_idx = builder.add_image(id, textures)? as u32;
                 color_id_to_idx.insert(id, texarr_idx);
@@ -76,14 +73,12 @@ impl TextureRegistryLoader {
 
         let normal_arr_tex = {
             let mut builder = MipArrayTextureBuilder::new(TEXTURE_DIMENSIONS);
+            builder.set_label(Some("normal_array_texture"));
+
             for id in self.textures.values().cloned() {
                 let Some(id) = id.normal else {
                     continue;
                 };
-
-                let tex = textures
-                    .get(id)
-                    .ok_or(TextureRegistryError::TextureNotLoaded(id))?;
 
                 let texarr_idx = builder.add_image(id, textures)? as u32;
                 normal_id_to_idx.insert(id, texarr_idx);

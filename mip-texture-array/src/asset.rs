@@ -184,6 +184,11 @@ impl RenderAsset for MippedArrayTexture {
         let (gpu, queue, pipeline_meta, pipeline_cache) = param;
         let mip_levels = asset.mipmap_levels();
 
+        info!(
+            "Generating {} mip levels for array texture '{:?}'",
+            mip_levels, asset.label
+        );
+
         let texture = create_array_texture_with_filled_mip_level_0(&asset, gpu, queue);
 
         let views = create_mip_views(mip_levels, &texture, asset.array_layers);
@@ -235,15 +240,20 @@ impl RenderAsset for MippedArrayTexture {
         let commands = encoder.finish();
         queue.submit([commands]);
 
+        info!(
+            "Command buffer for array texture '{:?}' submitted to queue.",
+            asset.label
+        );
+
         let main_view = texture.create_view(&TextureViewDescriptor {
             label: Some("mipped_array_texture_main_view"),
             format: Some(TEXTURE_FORMAT),
             dimension: Some(TextureViewDimension::D2Array),
             aspect: TextureAspect::All,
             base_mip_level: 0,
-            mip_level_count: None, // Some(mip_levels),
+            mip_level_count: None,
             base_array_layer: 0,
-            array_layer_count: None, // Some(asset.array_layers),
+            array_layer_count: None,
         });
 
         Ok(GpuImage {
@@ -259,7 +269,7 @@ impl RenderAsset for MippedArrayTexture {
                 min_filter: FilterMode::Nearest,
                 mipmap_filter: FilterMode::Linear,
                 lod_min_clamp: 0.0,
-                lod_max_clamp: 1.0,
+                lod_max_clamp: mip_levels as f32,
                 compare: None,
                 anisotropy_clamp: 1,
                 border_color: None,

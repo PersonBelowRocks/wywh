@@ -75,6 +75,7 @@ fn inject_array_textures_into_render_images(
 /// Builder for a texture array
 #[derive(Clone, Debug)]
 pub struct MipArrayTextureBuilder {
+    label: Option<&'static str>,
     handles: Vec<AssetId<Image>>,
     empty_pixel_data: Vec<u8>,
     format: TextureFormat,
@@ -88,11 +89,16 @@ impl MipArrayTextureBuilder {
 
     fn new_with_format(dims: u32, empty_pixel_data: Vec<u8>, format: TextureFormat) -> Self {
         Self {
+            label: None,
             handles: Vec::new(),
             empty_pixel_data,
             format,
             dims,
         }
+    }
+
+    pub fn set_label(&mut self, label: Option<&'static str>) {
+        self.label = label;
     }
 
     /// Add an image to the builder. `handle` is the image handle, `images` is the `Assets` instance where the image the handle points to is stored.
@@ -141,8 +147,6 @@ impl MipArrayTextureBuilder {
             self.format,
         );
 
-        // arr_texture.texture_descriptor.mip_level_count = self.dims.ilog2();
-
         for (idx, asset_id) in self.handles.iter().enumerate() {
             // The image might have been removed from the assets by the time that finish() is run, so we handle the error again here so we avoid panicking in a library.
             let source = images
@@ -155,7 +159,7 @@ impl MipArrayTextureBuilder {
 
         arr_texture.reinterpret_stacked_2d_as_array(total_imgs as _);
         let asset = MippedArrayTexture {
-            label: None,
+            label: self.label,
             image: arr_texture,
             array_layers: total_imgs as _,
             dims: self.dims,
