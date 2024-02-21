@@ -10,6 +10,7 @@ use std::{
 use bevy::{
     ecs::system::Resource,
     log::{error, info, warn},
+    render::mesh::Mesh,
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
 use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender};
@@ -18,12 +19,15 @@ use dashmap::DashMap;
 use crate::{
     data::registries::Registries,
     render::{
-        mesh_builder::{Context, Mesher, MesherOutput},
-        meshing::error::ChunkMeshingError,
+        meshing::{error::ChunkMeshingError, Context, MesherOutput},
+        occlusion::ChunkOcclusionMap,
+        quad::ChunkQuads,
     },
     topo::{chunk::ChunkPos, realm::ChunkManager},
     util::result::ResultFlattening,
 };
+
+use super::Mesher;
 
 pub struct Worker<M: Mesher> {
     task: Task<()>,

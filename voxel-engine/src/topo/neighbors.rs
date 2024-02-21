@@ -169,7 +169,6 @@ mod tests {
 
     fn make_cvo(id: u64) -> ChunkVoxelOutput {
         ChunkVoxelOutput {
-            transparency: Transparency::Opaque,
             variant: RegistryId::new(id),
             rotation: None,
         }

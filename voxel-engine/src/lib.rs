@@ -35,10 +35,12 @@ use crate::{
     render::{
         core::RenderCore,
         meshing::{
-            ecs::{insert_chunk_meshes, queue_chunk_meshing_tasks, setup_chunk_meshing_workers},
+            ecs::{
+                insert_chunk_meshes, queue_chunk_meshing_tasks, setup_chunk_meshing_workers,
+                setup_meshers,
+            },
             greedy::algorithm::GreedyMesher,
         },
-        systems::setup_meshers,
     },
     topo::systems::generate_chunks_from_events,
 };
@@ -116,12 +118,6 @@ impl Plugin for VoxelPlugin {
                 .chain()
                 .run_if(in_state(AppState::Finished)),
         );
-
-        // app.add_systems(PreUpdate, insert_meshes::<Hqm, Lqm>);
-        // app.add_systems(
-        //     PostUpdate,
-        //     (generate_chunks_from_events, build_meshes::<Hqm, Lqm>).chain(),
-        // );
     }
 }
 
@@ -144,7 +140,6 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
     let varreg = registries.get_registry::<VariantRegistry>().unwrap();
     let void_cvo = ChunkVoxelOutput {
         variant: varreg.get_id(&rpath("void")).unwrap(),
-        transparency: Transparency::Transparent,
         rotation: None,
     };
 

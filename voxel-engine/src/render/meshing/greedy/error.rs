@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use crate::{
-    render::error::MesherError,
+    render::meshing::error::MesherError,
     topo::{error::NeighborAccessError, storage::error::OutOfBounds},
 };
 

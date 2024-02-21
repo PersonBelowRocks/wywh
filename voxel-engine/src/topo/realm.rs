@@ -191,7 +191,6 @@ impl ChunkManager {
             };
 
             accesses[i] = Some(ChunkRefVxlReadAccess {
-                transparency: cref.transparency.read_access(),
                 variants: cref.variants.read_access(),
             });
         }

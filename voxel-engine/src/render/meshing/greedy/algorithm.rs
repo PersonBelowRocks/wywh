@@ -20,8 +20,11 @@ use crate::data::registries::Registry;
 use crate::data::tile::Face;
 
 use crate::render::core::RenderCore;
-use crate::render::error::MesherResult;
-use crate::render::mesh_builder::MesherOutput;
+use crate::render::meshing::error::MesherError;
+use crate::render::meshing::error::MesherResult;
+use crate::render::meshing::Context;
+use crate::render::meshing::Mesher;
+use crate::render::meshing::MesherOutput;
 use crate::render::occlusion::ChunkOcclusionMap;
 use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
@@ -33,9 +36,6 @@ use crate::topo::access::ChunkAccess;
 use crate::topo::access::WriteAccess;
 use crate::topo::chunk::Chunk;
 
-use crate::render::error::MesherError;
-use crate::render::mesh_builder::Context;
-use crate::render::mesh_builder::Mesher;
 use crate::topo::ivec_project_to_3d;
 use crate::topo::neighbors::Neighbors;
 
@@ -62,8 +62,6 @@ impl SimplePbrMesher {
 
 // TODO: optimize the hell out of this little guy
 impl Mesher for SimplePbrMesher {
-    type Material = StandardMaterial;
-
     fn build<A, Nb>(&self, _access: A, _cx: Context<Nb>) -> MesherResult<A::ReadErr, Nb::ReadErr>
     where
         A: ChunkAccess,
@@ -243,8 +241,6 @@ impl GreedyMesher {
 }
 
 impl Mesher for GreedyMesher {
-    type Material = ExtendedMaterial<StandardMaterial, GreedyMeshMaterial>;
-
     fn build<A, Nb>(&self, access: A, cx: Context<Nb>) -> MesherResult<A::ReadErr, Nb::ReadErr>
     where
         A: ChunkAccess,
@@ -356,7 +352,6 @@ mod tests {
         let (varreg, texreg) = testing_registries();
 
         let void_cvo = ChunkVoxelOutput {
-            transparency: Transparency::Transparent,
             variant: varreg.get_id(&rpath("void")).unwrap(),
             rotation: None,
         };
@@ -393,13 +388,11 @@ mod tests {
         let (varreg, texreg) = testing_registries();
 
         let void_cvo = ChunkVoxelOutput {
-            transparency: Transparency::Transparent,
             variant: varreg.get_id(&rpath("void")).unwrap(),
             rotation: None,
         };
 
         let var1_cvo = ChunkVoxelOutput {
-            transparency: Transparency::Opaque,
             variant: varreg.get_id(&rpath("var1")).unwrap(),
             rotation: None,
         };

@@ -2,8 +2,8 @@ use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 
 use crate::{
     data::{
-        registries::{texture::TextureRegistry, variant::VariantRegistry, Registry, RegistryRef},
-        tile::{Face, Transparency},
+        registries::{variant::VariantRegistry, Registry, RegistryRef},
+        tile::Face,
         voxel::VoxelModel,
     },
     render::quad::{
@@ -143,8 +143,12 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
     #[inline(always)]
     pub fn get_quad(&self, pos: IVec2) -> CqsResult<Option<DataQuad>, C, Nb> {
         let cvo = self.get(pos)?;
+        let transparency = self.registry.get_by_id(cvo.variant).transparency;
 
-        if cvo.transparency.is_transparent() || self.get_above(pos)?.transparency.is_opaque() {
+        let cvo_above = self.get_above(pos)?;
+        let transparency_above = self.registry.get_by_id(cvo_above.variant).transparency;
+
+        if transparency.is_transparent() || transparency_above.is_opaque() {
             // nothing to see here if we're either transparent or the block above is obscuring us
             return Ok(None);
         }
@@ -174,9 +178,13 @@ pub mod tests {
 
     use crate::{
         data::{
-            registries::{texture::TestTextureRegistryLoader, variant::VariantRegistryLoader},
+            registries::{
+                texture::{TestTextureRegistryLoader, TextureRegistry},
+                variant::VariantRegistryLoader,
+            },
             resourcepath::rpath,
             texture::FaceTextureRotation,
+            tile::Transparency,
             voxel::descriptor::{
                 BlockDescriptor, FaceTextureDescriptor, VariantDescriptor, VoxelModelDescriptor,
             },
@@ -274,20 +282,17 @@ pub mod tests {
             RwLockReadGuard::map(variants_lock.read(), |g| g);
 
         let void_cvo = ChunkVoxelOutput {
-            transparency: Transparency::Transparent,
             variant: variants.get_id(&rpath("void")).unwrap(),
             rotation: None,
         };
 
         let test_cvo = ChunkVoxelOutput {
-            transparency: Transparency::Opaque,
             variant: variants.get_id(&rpath("var1")).unwrap(),
             rotation: None,
         };
 
         let neighbors = {
             let mut builder = NeighborsBuilder::<TestAccess>::new(ChunkVoxelOutput {
-                transparency: Transparency::Opaque,
                 variant: variants.get_id(&rpath("filled")).unwrap(),
                 rotation: None,
             });

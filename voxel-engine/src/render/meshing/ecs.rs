@@ -6,12 +6,17 @@ use crate::topo::chunk::Chunk;
 
 use crate::{
     data::registries::Registries,
-    render::mesh_builder::Mesher,
     topo::{chunk::ChunkPos, realm::VoxelRealm},
     ChunkEntity,
 };
 
-use super::MeshWorkerPool;
+use super::greedy::algorithm::{GreedyMesher, SimplePbrMesher};
+use super::{MeshWorkerPool, Mesher};
+
+pub(crate) fn setup_meshers(mut cmds: Commands) {
+    cmds.insert_resource(GreedyMesher::new());
+    cmds.insert_resource(SimplePbrMesher::new());
+}
 
 #[derive(Component)]
 pub struct ShouldExtract(AtomicBool);

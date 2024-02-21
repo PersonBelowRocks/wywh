@@ -49,7 +49,6 @@ pub struct VoxelVariantData {
 }
 
 pub struct Chunk {
-    pub transparency: SyncDenseChunkContainer<Transparency>,
     pub variants: SyncIndexedChunkContainer<VoxelVariantData>,
 }
 
@@ -67,9 +66,8 @@ impl Chunk {
     };
 
     #[inline]
-    pub fn new(voxel_data: DenseChunkStorage<Transparency>) -> Self {
+    pub fn new() -> Self {
         Self {
-            transparency: SyncDenseChunkContainer::new(voxel_data),
             variants: SyncIndexedChunkContainer::new(),
         }
     }
@@ -77,7 +75,6 @@ impl Chunk {
     #[inline]
     pub fn new_from_container(container: DenseChunkContainer<Transparency>) -> Self {
         Self {
-            transparency: SyncDenseChunkContainer(container.into()),
             variants: SyncIndexedChunkContainer::new(),
         }
     }
@@ -85,7 +82,6 @@ impl Chunk {
     #[inline]
     pub fn empty() -> Self {
         Self {
-            transparency: SyncDenseChunkContainer::empty(),
             variants: SyncIndexedChunkContainer::new(),
         }
     }

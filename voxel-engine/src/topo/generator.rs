@@ -35,7 +35,6 @@ pub enum GeneratorChoice {
 }
 
 pub struct GeneratorInputAccess<'a> {
-    transparency: AutoDenseContainerAccess<'a, Transparency>,
     variants: &'a mut IndexedChunkStorage<VoxelVariantData>,
 }
 
@@ -46,7 +45,6 @@ impl<'a> WriteAccess for GeneratorInputAccess<'a> {
     type WriteErr = ChunkAccessError;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.transparency.set(pos, data.transparency)?;
         self.variants
             .set(pos, VoxelVariantData::new(data.variant, data.rotation))?;
 
@@ -69,17 +67,12 @@ impl GeneratorInput {
 
     pub fn access(&mut self) -> GeneratorInputAccess<'_> {
         GeneratorInputAccess {
-            transparency: AutoDenseContainerAccess::new(
-                &mut self.transparency,
-                Transparency::Transparent,
-            ),
             variants: &mut self.variants,
         }
     }
 
     pub fn to_chunk(self) -> Chunk {
         Chunk {
-            transparency: SyncDenseChunkContainer(RwLock::new(self.transparency)),
             variants: SyncIndexedChunkContainer(RwLock::new(self.variants)),
         }
     }
@@ -160,7 +153,6 @@ impl Generator {
                     access.set(
                         ls_pos,
                         ChunkVoxelInput {
-                            transparency: Transparency::Transparent,
                             variant: self.palette.void,
                             rotation: None,
                         },
@@ -178,7 +170,6 @@ impl Generator {
                         access.set(
                             ls_pos,
                             ChunkVoxelInput {
-                                transparency: Transparency::Opaque,
                                 variant: self.palette.water,
                                 rotation: None,
                             },
@@ -198,7 +189,6 @@ impl Generator {
                             access.set(
                                 ls_pos,
                                 ChunkVoxelInput {
-                                    transparency: Transparency::Opaque,
                                     variant: self.palette.stone,
                                     rotation: None,
                                 },

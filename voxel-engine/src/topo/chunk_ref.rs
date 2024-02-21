@@ -50,11 +50,9 @@ impl ChunkRef {
         let chunk = self.chunk.upgrade().ok_or(ChunkManagerError::Unloaded)?;
         self.treat_as_changed()?;
 
-        let transparency_access = chunk.transparency.access();
         let variant_access = chunk.variants.access();
 
         let x = Ok(f(ChunkRefVxlAccess {
-            transparency: transparency_access,
             variants: variant_access,
         }));
         x
@@ -67,11 +65,9 @@ impl ChunkRef {
     {
         let chunk = self.chunk.upgrade().ok_or(ChunkManagerError::Unloaded)?;
 
-        let voxel_access = chunk.transparency.read_access();
         let variant_access = chunk.variants.read_access();
 
         let x = Ok(f(ChunkRefVxlReadAccess {
-            transparency: voxel_access,
             variants: variant_access,
         }));
         x
@@ -79,26 +75,22 @@ impl ChunkRef {
 }
 
 pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher = ahash::RandomState> {
-    pub(crate) transparency: SyncDenseContainerReadAccess<'a, Transparency>,
     pub(crate) variants: SiccReadAccess<'a, VoxelVariantData, S>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ChunkVoxelOutput {
-    pub transparency: Transparency,
     pub variant: RegistryId<VariantRegistry>,
     pub rotation: Option<BlockModelRotation>,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct ChunkVoxelInput {
-    pub transparency: Transparency,
     pub variant: RegistryId<VariantRegistry>,
     pub rotation: Option<BlockModelRotation>,
 }
 
 pub struct ChunkRefVxlAccess<'a, S: BuildHasher = ahash::RandomState> {
-    transparency: SyncDenseContainerAccess<'a, Transparency>,
     variants: SiccAccess<'a, VoxelVariantData, S>,
 }
 
@@ -107,7 +99,6 @@ impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
     type WriteType = ChunkVoxelInput;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.transparency.set(pos, data.transparency)?;
         self.variants.set(
             pos,
             Some(VoxelVariantData::new(data.variant, data.rotation)),
@@ -128,7 +119,6 @@ impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlAccess<'a, S> {
             .ok_or(ChunkAccessError::NotInitialized)?;
 
         Ok(ChunkVoxelOutput {
-            transparency: self.transparency.get(pos)?,
             variant: variant_data.variant,
             rotation: variant_data.rotation,
         })
@@ -148,7 +138,6 @@ impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlReadAccess<'a, S> {
             .ok_or(ChunkAccessError::NotInitialized)?;
 
         Ok(ChunkVoxelOutput {
-            transparency: self.transparency.get(pos)?,
             variant: variant_data.variant,
             rotation: variant_data.rotation,
         })
