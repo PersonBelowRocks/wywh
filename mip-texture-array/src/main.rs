@@ -1,5 +1,5 @@
 use bevy::{
-    math::{vec3},
+    math::vec3,
     prelude::*,
     render::render_resource::{AsBindGroup, ShaderRef},
 };

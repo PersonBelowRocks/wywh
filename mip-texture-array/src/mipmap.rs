@@ -4,9 +4,9 @@ use bevy::{
         render_resource::{
             binding_types::{texture_2d_array, texture_storage_2d_array},
             BindGroupLayout, BindGroupLayoutEntries, CachedComputePipelineId,
-            ComputePipelineDescriptor, PipelineCache, ShaderDefVal,
-            ShaderStages, SpecializedComputePipeline, SpecializedComputePipelines,
-            StorageTextureAccess, TextureSampleType,
+            ComputePipelineDescriptor, PipelineCache, ShaderDefVal, ShaderStages,
+            SpecializedComputePipeline, SpecializedComputePipelines, StorageTextureAccess,
+            TextureSampleType,
         },
         renderer::RenderDevice,
     },

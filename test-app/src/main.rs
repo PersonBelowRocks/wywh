@@ -4,18 +4,14 @@ mod camera;
 mod debug_info;
 
 use std::f32::consts::PI;
-use std::path::PathBuf;
 
-use bevy::core_pipeline::experimental::taa::{
-    TemporalAntiAliasBundle, TemporalAntiAliasPlugin, TemporalAntiAliasSettings,
-};
+use bevy::core_pipeline::experimental::taa::{TemporalAntiAliasBundle, TemporalAntiAliasPlugin};
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
-use bevy::math::vec2;
+
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::pbr::ScreenSpaceAmbientOcclusionBundle;
 use bevy::prelude::*;
 
-use bevy::render::camera::TemporalJitter;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, FpsText, PositionText};
