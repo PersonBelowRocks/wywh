@@ -1,5 +1,5 @@
 use bevy::{
-    math::{ivec3, primitives::Primitive3d, vec3},
+    math::{vec3},
     prelude::*,
     render::render_resource::{AsBindGroup, ShaderRef},
 };
@@ -68,7 +68,7 @@ fn insert_example(
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<TestingMaterial>>,
-    mut std_materials: ResMut<Assets<StandardMaterial>>,
+    _std_materials: ResMut<Assets<StandardMaterial>>,
     mut array_textures: ResMut<Assets<MippedArrayTexture>>,
 ) {
     let mut builder = MipArrayTextureBuilder::new(16);

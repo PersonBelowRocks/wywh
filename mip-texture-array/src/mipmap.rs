@@ -3,8 +3,8 @@ use bevy::{
     render::{
         render_resource::{
             binding_types::{texture_2d_array, texture_storage_2d_array},
-            BindGroupLayout, BindGroupLayoutEntries, CachedComputePipelineId, ComputePipeline,
-            ComputePipelineDescriptor, ComputePipelineId, PipelineCache, ShaderDefVal,
+            BindGroupLayout, BindGroupLayoutEntries, CachedComputePipelineId,
+            ComputePipelineDescriptor, PipelineCache, ShaderDefVal,
             ShaderStages, SpecializedComputePipeline, SpecializedComputePipelines,
             StorageTextureAccess, TextureSampleType,
         },

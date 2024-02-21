@@ -78,8 +78,6 @@ impl Plugin for VoxelPlugin {
         type Hqm = GreedyMesher;
         type Lqm = SimplePbrMesher;
 
-        // app.add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default());
-        // app.add_plugins(MaterialPlugin::<GreedyMeshMaterial>::default());
         app.add_plugins(RenderCore);
         app.add_plugins(MippedArrayTexturePlugin::default());
 
