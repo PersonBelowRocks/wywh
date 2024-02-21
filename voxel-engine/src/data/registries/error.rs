@@ -3,7 +3,6 @@ use std::any::type_name;
 use bevy::{
     asset::{AssetId, AssetPath, UntypedAssetIdConversionError, UntypedHandle},
     render::texture::Image,
-    sprite::TextureAtlasBuilderError,
 };
 use mip_texture_array::TextureArrayBuilderError;
 

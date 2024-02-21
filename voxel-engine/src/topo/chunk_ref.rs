@@ -10,7 +10,6 @@ use bevy::prelude::IVec3;
 
 use crate::data::{
     registries::{variant::VariantRegistry, RegistryId},
-    tile::Transparency,
     voxel::rotations::BlockModelRotation,
 };
 
@@ -18,10 +17,7 @@ use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
     chunk::{Chunk, ChunkPos, VoxelVariantData},
     error::{ChunkAccessError, ChunkManagerError},
-    storage::containers::{
-        data_storage::{SiccAccess, SiccReadAccess},
-        dense::{SyncDenseContainerAccess, SyncDenseContainerReadAccess},
-    },
+    storage::containers::data_storage::{SiccAccess, SiccReadAccess},
 };
 
 #[derive(Clone)]

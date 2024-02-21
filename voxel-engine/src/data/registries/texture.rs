@@ -1,12 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy::{
-    asset::{AssetId, Assets, Handle},
-    ecs::system::Resource,
-    log::info,
-    math::Vec2,
-    render::texture::Image,
-    sprite::{TextureAtlas, TextureAtlasBuilder},
+    asset::{AssetId, Assets, Handle}, ecs::system::Resource, math::Vec2, render::texture::Image
 };
 use indexmap::IndexMap;
 use mip_texture_array::asset::MippedArrayTexture;
