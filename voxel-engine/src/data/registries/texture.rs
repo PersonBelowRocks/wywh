@@ -1,7 +1,10 @@
 use std::marker::PhantomData;
 
 use bevy::{
-    asset::{AssetId, Assets, Handle}, ecs::system::Resource, math::Vec2, render::texture::Image
+    asset::{AssetId, Assets, Handle},
+    ecs::system::Resource,
+    math::Vec2,
+    render::texture::Image,
 };
 use indexmap::IndexMap;
 use mip_texture_array::asset::MippedArrayTexture;
@@ -9,7 +12,7 @@ use mip_texture_array::MipArrayTextureBuilder;
 
 use crate::data::{resourcepath::ResourcePath, texture::GpuFaceTexture};
 
-use super::{error::TextureRegistryError, Registry, RegistryId};
+use super::{error::TextureRegistryError, Registry};
 
 pub const TEXTURE_DIMENSIONS: u32 = 16;
 
@@ -219,17 +222,26 @@ impl<'a> TextureRegistryEntry<'a> {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, dm::Display)]
+#[display(fmt="[texture:{:08}]", self.0)]
+pub struct TextureId(u32);
+
+impl TextureId {
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 impl Registry for TextureRegistry {
-    // GATs my beloved
     type Item<'a> = TextureRegistryEntry<'a>;
+    type Id = TextureId;
 
     fn get_by_label(&self, label: &ResourcePath) -> Option<Self::Item<'_>> {
         Some(self.get_by_id(self.get_id(label)?))
     }
 
-    #[cfg(not(test))]
-    fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_> {
-        let map_idx = id.inner() as usize;
+    fn get_by_id(&self, id: Self::Id) -> Self::Item<'_> {
+        let map_idx = id.index();
         let indices = self.map.get_index(map_idx).unwrap().1;
 
         TextureRegistryEntry {
@@ -239,22 +251,10 @@ impl Registry for TextureRegistry {
         }
     }
 
-    #[cfg(test)]
-    fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_> {
-        let map_idx = id.inner() as usize;
-        let indices = self.map.get_index(map_idx).unwrap().1;
-
-        TextureRegistryEntry {
-            texture_idx: indices.color as u32,
-            normal_idx: indices.normal.map(|v| v as u32),
-            _data: PhantomData,
-        }
-    }
-
-    fn get_id(&self, label: &ResourcePath) -> Option<RegistryId<Self>> {
+    fn get_id(&self, label: &ResourcePath) -> Option<Self::Id> {
         self.map
             .get_index_of(label)
-            .map(|idx| RegistryId::new(idx as _))
+            .map(|idx| TextureId(idx as u32))
     }
 }
 

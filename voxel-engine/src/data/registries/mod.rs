@@ -1,4 +1,10 @@
-use std::{any::type_name, fmt::Debug, hash, marker::PhantomData, sync::Arc};
+use std::{
+    any::type_name,
+    fmt::{Debug, Display},
+    hash::{self, Hash},
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use anymap::any::Any;
 use bevy::ecs::system::Resource;
@@ -11,66 +17,16 @@ pub mod model;
 pub mod texture;
 pub mod variant;
 
-pub struct RegistryId<R: Registry + ?Sized> {
-    id: u64,
-    _reg: PhantomData<fn() -> R>,
-}
-
-impl<R: Registry + ?Sized> Clone for RegistryId<R> {
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            _reg: PhantomData,
-        }
-    }
-}
-
-impl<R: Registry + ?Sized> Copy for RegistryId<R> {}
-
-impl<R: Registry + ?Sized> PartialEq for RegistryId<R> {
-    fn eq(&self, other: &Self) -> bool {
-        self.id.eq(&other.id)
-    }
-}
-
-impl<R: Registry + ?Sized> Eq for RegistryId<R> {}
-
-impl<R: Registry + ?Sized> hash::Hash for RegistryId<R> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        state.write_u64(self.id);
-    }
-}
-
-impl<R: Registry> Debug for RegistryId<R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", type_name::<R>(), self.id)
-    }
-}
-
-impl<R: Registry> RegistryId<R> {
-    /// Create a new registry ID from the provided `id`.
-    /// RegistryIds should only be created when a registry is populated, so don't call this unless that's what you're doing.
-    pub const fn new(id: u64) -> Self {
-        Self {
-            id,
-
-            _reg: PhantomData,
-        }
-    }
-
-    pub fn inner(self) -> u64 {
-        self.id
-    }
-}
-
 pub trait Registry: Send + Sync {
+    type Id: Sized + Eq + Hash + Clone + Display;
+
     type Item<'a>
     where
         Self: 'a;
 
     fn get_by_label(&self, label: &ResourcePath) -> Option<Self::Item<'_>>;
-    fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_>;
-    fn get_id(&self, label: &ResourcePath) -> Option<RegistryId<Self>>;
+    fn get_by_id(&self, id: Self::Id) -> Self::Item<'_>;
+    fn get_id(&self, label: &ResourcePath) -> Option<Self::Id>;
 }
 
 #[derive(Clone, Debug)]

@@ -4,19 +4,19 @@ use crate::data::{
     resourcepath::ResourcePath,
     tile::Transparency,
     variant_file_loader::VariantFileLoader,
-    voxel::{descriptor::VariantDescriptor, VoxelModel},
+    voxel::{descriptor::BlockDescriptor, BlockModel},
 };
 
-use super::{error::VariantRegistryError, texture::TextureRegistry, Registry, RegistryId};
+use super::{error::BlockVariantRegistryError, texture::TextureRegistry, Registry};
 
 #[derive(Debug, Clone)]
 pub struct VariantRegistryEntry<'a> {
     pub transparency: Transparency,
-    pub model: &'a Option<VoxelModel>,
+    pub model: &'a Option<BlockModel>,
 }
 
 pub struct VariantRegistryLoader {
-    descriptors: hb::HashMap<ResourcePath, VariantDescriptor>,
+    descriptors: hb::HashMap<ResourcePath, BlockDescriptor>,
 }
 
 impl VariantRegistryLoader {
@@ -30,28 +30,28 @@ impl VariantRegistryLoader {
         Ok(())
     }
 
-    pub fn register(&mut self, label: ResourcePath, descriptor: VariantDescriptor) {
+    pub fn register(&mut self, label: ResourcePath, descriptor: BlockDescriptor) {
         self.descriptors.insert(label.into(), descriptor);
     }
 
     pub fn build_registry(
         self,
         texture_registry: &TextureRegistry,
-    ) -> Result<VariantRegistry, VariantRegistryError> {
+    ) -> Result<BlockVariantRegistry, BlockVariantRegistryError> {
         let mut map =
-            IndexMap::<ResourcePath, Variant, ahash::RandomState>::with_capacity_and_hasher(
+            IndexMap::<ResourcePath, BlockVariant, ahash::RandomState>::with_capacity_and_hasher(
                 self.descriptors.len(),
                 ahash::RandomState::new(),
             );
 
         for (label, descriptor) in self.descriptors.into_iter() {
-            let model = descriptor
-                .model
-                .map(|m| m.create_voxel_model(texture_registry))
-                .map(|r| r.map(Some))
-                .unwrap_or(Ok(None))?;
+            let model = if descriptor.transparency.is_opaque() {
+                Some(BlockModel::from_descriptor(&descriptor, texture_registry)?)
+            } else {
+                None
+            };
 
-            let variant = Variant {
+            let variant = BlockVariant {
                 transparency: descriptor.transparency,
                 model,
             };
@@ -59,22 +59,33 @@ impl VariantRegistryLoader {
             map.insert(label, variant);
         }
 
-        Ok(VariantRegistry { map })
+        Ok(BlockVariantRegistry { map })
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Variant {
+pub struct BlockVariant {
     transparency: Transparency,
-    model: Option<VoxelModel>,
+    model: Option<BlockModel>,
 }
 
-pub struct VariantRegistry {
-    map: IndexMap<ResourcePath, Variant, ahash::RandomState>,
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, dm::Display)]
+#[display(fmt="[block_variant:{:08}]", self.0)]
+pub struct BlockVariantId(u32);
+
+impl BlockVariantId {
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
 }
 
-impl Registry for VariantRegistry {
+pub struct BlockVariantRegistry {
+    map: IndexMap<ResourcePath, BlockVariant, ahash::RandomState>,
+}
+
+impl Registry for BlockVariantRegistry {
     type Item<'a> = VariantRegistryEntry<'a>;
+    type Id = BlockVariantId;
 
     fn get_by_label(&self, label: &ResourcePath) -> Option<Self::Item<'_>> {
         let variant = self.map.get(label)?;
@@ -85,8 +96,8 @@ impl Registry for VariantRegistry {
         })
     }
 
-    fn get_by_id(&self, id: RegistryId<Self>) -> Self::Item<'_> {
-        let idx = id.inner() as usize;
+    fn get_by_id(&self, id: Self::Id) -> Self::Item<'_> {
+        let idx = id.index();
         let (_, variant) = self.map.get_index(idx).unwrap();
 
         VariantRegistryEntry {
@@ -95,10 +106,8 @@ impl Registry for VariantRegistry {
         }
     }
 
-    fn get_id(&self, label: &ResourcePath) -> Option<RegistryId<Self>> {
-        self.map
-            .get_index_of(label)
-            .map(|i| RegistryId::new(i as _))
+    fn get_id(&self, label: &ResourcePath) -> Option<Self::Id> {
+        self.map.get_index_of(label).map(|i| BlockVariantId(i as _))
     }
 }
 

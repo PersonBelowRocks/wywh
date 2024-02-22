@@ -7,7 +7,7 @@ use bevy::{
 use mip_texture_array::TextureArrayBuilderError;
 
 use crate::data::{
-    error::VoxelModelCreationError,
+    error::{SubmodelFromDescriptorError, VoxelModelCreationError},
     resourcepath::{error::FromPathError, ResourcePath},
     systems::{VoxelNormalMapFolder, VoxelTextureFolder},
 };
@@ -41,9 +41,9 @@ pub enum TextureRegistryError {
 }
 
 #[derive(Debug, te::Error)]
-pub enum VariantRegistryError {
-    #[error("{0}")]
-    VoxelModelCreationError(#[from] VoxelModelCreationError),
+pub enum BlockVariantRegistryError {
+    #[error(transparent)]
+    BlockModelCreationError(#[from] SubmodelFromDescriptorError),
 }
 
 #[derive(Debug, te::Error)]

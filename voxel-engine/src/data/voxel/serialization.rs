@@ -72,6 +72,7 @@ impl TryFrom<UnparsedBlockModelDescriptor> for BlockDescriptor {
         let default_direction = BlockModelRotation::new(Face::North, Face::Top).unwrap();
 
         let mut out = BlockDescriptor {
+            transparency: todo!(),
             directions: FaceMap::new(),
             default: FaceMap::new(),
         };

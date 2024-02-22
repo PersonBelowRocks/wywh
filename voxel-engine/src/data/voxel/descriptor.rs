@@ -44,6 +44,7 @@ impl VoxelModelDescriptor {
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 #[serde(try_from = "UnparsedBlockModelDescriptor")]
 pub struct BlockDescriptor {
+    pub transparency: Transparency,
     pub directions: FaceMap<FaceMap<FaceTextureDescriptor>>,
     pub default: FaceMap<FaceTextureDescriptor>,
 }
@@ -58,6 +59,7 @@ pub struct FaceTextureDescriptor {
 impl BlockDescriptor {
     pub fn filled(label: ResourcePath) -> Self {
         Self {
+            transparency: Transparency::Opaque,
             directions: FaceMap::new(),
             default: FaceMap::from_fn(|_| {
                 Some(FaceTextureDescriptor {
