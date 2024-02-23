@@ -161,22 +161,25 @@ mod tests {
     use bevy::math::ivec2;
 
     use crate::{
-        data::{registries::RegistryId, tile::Transparency},
+        data::{
+            registries::{variant::BlockVariantRegistry, Registry},
+            tile::Transparency,
+        },
         topo::access::{self, HasBounds},
     };
 
     use super::*;
 
-    fn make_cvo(id: u64) -> ChunkVoxelOutput {
+    fn make_cvo(id: u32) -> ChunkVoxelOutput {
         ChunkVoxelOutput {
-            variant: RegistryId::new(id),
+            variant: <BlockVariantRegistry as Registry>::Id::new(id),
             rotation: None,
         }
     }
 
     struct TestAccess {
-        even: u64,
-        odd: u64,
+        even: u32,
+        odd: u32,
     }
 
     impl ChunkBounds for TestAccess {}
@@ -289,7 +292,7 @@ mod tests {
                 .get(Face::Bottom, ivec2(-1, 0))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -298,7 +301,7 @@ mod tests {
                 .get(Face::Bottom, ivec2(0, 0))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
         assert_eq!(
             8,
@@ -306,7 +309,7 @@ mod tests {
                 .get(Face::Bottom, ivec2(1, 1))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -315,7 +318,7 @@ mod tests {
                 .get(Face::Bottom, ivec2(6, 10))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
         assert_eq!(
             8,
@@ -323,7 +326,7 @@ mod tests {
                 .get(Face::Bottom, ivec2(5, 5))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -332,7 +335,7 @@ mod tests {
                 .get(Face::Bottom, ivec2(16, 16))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert!(neighbors.get(Face::Bottom, ivec2(16, 17)).is_err());
@@ -346,7 +349,7 @@ mod tests {
                 .get(Face::Top, ivec2(0, 0))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -355,7 +358,7 @@ mod tests {
                 .get(Face::Top, ivec2(16, 5))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -364,7 +367,7 @@ mod tests {
                 .get(Face::North, ivec2(6, 16))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -373,7 +376,7 @@ mod tests {
                 .get(Face::North, ivec2(6, 6))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -382,7 +385,7 @@ mod tests {
                 .get(Face::Top, ivec2(-1, 5))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -391,7 +394,7 @@ mod tests {
                 .get(Face::Top, ivec2(5, 16))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -400,7 +403,7 @@ mod tests {
                 .get(Face::Top, ivec2(5, -1))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         // CORNERS
@@ -411,7 +414,7 @@ mod tests {
                 .get(Face::Top, ivec2(16, 16))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -420,7 +423,7 @@ mod tests {
                 .get(Face::Top, ivec2(-1, 16))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -429,7 +432,7 @@ mod tests {
                 .get(Face::Top, ivec2(16, -1))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
 
         assert_eq!(
@@ -438,7 +441,7 @@ mod tests {
                 .get(Face::Top, ivec2(-1, -1))
                 .unwrap()
                 .variant
-                .inner()
+                .as_u32()
         );
     }
 
@@ -448,14 +451,14 @@ mod tests {
 
         assert_eq!(
             1,
-            neighbors.get_3d(ivec3(16, 5, 5)).unwrap().variant.inner()
+            neighbors.get_3d(ivec3(16, 5, 5)).unwrap().variant.as_u32()
         );
         assert!(neighbors.get_3d(ivec3(17, 5, 5)).is_err());
         assert!(neighbors.get_3d(ivec3(5, 5, 5)).is_err());
 
         assert_eq!(
             4,
-            neighbors.get_3d(ivec3(-1, 5, 5)).unwrap().variant.inner()
+            neighbors.get_3d(ivec3(-1, 5, 5)).unwrap().variant.as_u32()
         );
     }
 

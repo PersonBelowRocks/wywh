@@ -8,7 +8,7 @@ use noise::{NoiseFn, Perlin};
 use parking_lot::RwLock;
 
 use crate::data::{
-    registries::{variant::VariantRegistry, Registries, Registry, RegistryId},
+    registries::{variant::BlockVariantRegistry, Registries, Registry},
     resourcepath::{rpath, ResourcePath},
     tile::{Face, Transparency},
     voxel::rotations::BlockModelRotation,
@@ -86,10 +86,10 @@ pub struct GenerateChunk {
 
 #[derive(Copy, Clone)]
 struct GeneratorPalette {
-    void: RegistryId<VariantRegistry>,
-    debug: RegistryId<VariantRegistry>,
-    stone: RegistryId<VariantRegistry>,
-    water: RegistryId<VariantRegistry>,
+    void: <BlockVariantRegistry as Registry>::Id,
+    debug: <BlockVariantRegistry as Registry>::Id,
+    stone: <BlockVariantRegistry as Registry>::Id,
+    water: <BlockVariantRegistry as Registry>::Id,
 }
 
 #[derive(Clone)]
@@ -103,7 +103,7 @@ pub struct Generator {
 impl Generator {
     pub fn new(seed: u32, registries: &Registries) -> Self {
         let _noise = Perlin::new(seed);
-        let variants = registries.get_registry::<VariantRegistry>().unwrap();
+        let variants = registries.get_registry::<BlockVariantRegistry>().unwrap();
 
         let palette = GeneratorPalette {
             void: variants.get_id(&rpath("void")).unwrap(),

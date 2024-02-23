@@ -24,7 +24,7 @@ use super::{
     resourcepath::rpath,
     tile::Transparency,
     variant_file_loader::VariantFileLoader,
-    voxel::descriptor::VariantDescriptor,
+    voxel::descriptor::{BlockDescriptor, VariantDescriptor},
 };
 
 pub static TEXTURE_FOLDER_NAME: &'static str = "textures";
@@ -238,9 +238,10 @@ pub fn build_registries(world: &mut World) {
 
     registry_loader.register(
         rpath("void"),
-        VariantDescriptor {
+        BlockDescriptor {
             transparency: Transparency::Transparent,
-            model: None,
+            directions: Default::default(),
+            default: Default::default(),
         },
     );
 
@@ -255,7 +256,7 @@ pub fn build_registries(world: &mut World) {
         match file_loader.parse(label) {
             Ok(descriptor) => {
                 info!("Registering variant with label '{label}'");
-                registry_loader.register(label.clone(), descriptor);
+                registry_loader.register(label.clone(), todo!());
             }
             Err(error) => error!("Couldn't parse variant descriptor with label '{label}': {error}"),
         }

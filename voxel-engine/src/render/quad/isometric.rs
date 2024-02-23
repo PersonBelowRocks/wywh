@@ -247,7 +247,10 @@ impl IsometrizedQuad {
 #[cfg(test)]
 mod tests {
     use crate::{
-        data::{registries::RegistryId, texture::FaceTexture},
+        data::{
+            registries::{texture::TextureRegistry, variant::BlockVariantRegistry, Registry},
+            texture::FaceTexture,
+        },
         render::quad::anon::Quad,
     };
 
@@ -268,7 +271,10 @@ mod tests {
     fn test_resizing() {
         let mut quad = PositionedQuad::new(
             ivec2(0, 0),
-            DataQuad::new(Quad::ONE, FaceTexture::new(RegistryId::new(0))),
+            DataQuad::new(
+                Quad::ONE,
+                FaceTexture::new(<TextureRegistry as Registry>::Id::new(0)),
+            ),
         );
 
         assert_eq!(ivec2(0, 0), quad.min());

@@ -14,7 +14,7 @@ use bevy::render::mesh::Indices;
 use bevy::render::mesh::Mesh;
 use bevy::render::render_resource::PrimitiveTopology;
 
-use crate::data::registries::variant::VariantRegistry;
+use crate::data::registries::variant::BlockVariantRegistry;
 use crate::data::registries::Registries;
 use crate::data::registries::Registry;
 use crate::data::tile::Face;
@@ -90,7 +90,7 @@ impl GreedyMesher {
         Nb: ChunkAccess,
     {
         let mut occlusion = ChunkOcclusionMap::new();
-        let varreg = registries.get_registry::<VariantRegistry>().unwrap();
+        let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
 
         // occlusion for the actual chunk
         for x in 0..Chunk::SIZE {
@@ -104,8 +104,7 @@ impl GreedyMesher {
 
                     let variant = varreg.get_by_id(cvo.variant);
                     if let Some(model) = variant.model {
-                        let bo = model.occlusion(cvo.rotation);
-                        occlusion.set(ls_pos, bo).map_err(MesherError::custom)?;
+                        todo!()
                     }
                 }
             }
@@ -132,8 +131,7 @@ impl GreedyMesher {
                             ivec_project_to_3d(pos_on_face, face, mag)
                         };
 
-                        let bo = model.occlusion(cvo.rotation);
-                        occlusion.set(ls_pos, bo).map_err(MesherError::custom)?;
+                        todo!()
                     }
                 }
             }
@@ -246,7 +244,10 @@ impl Mesher for GreedyMesher {
         A: ChunkAccess,
         Nb: ChunkAccess,
     {
-        let varreg = cx.registries.get_registry::<VariantRegistry>().unwrap();
+        let varreg = cx
+            .registries
+            .get_registry::<BlockVariantRegistry>()
+            .unwrap();
 
         let mut cqs = ChunkQuadSlice::new(Face::North, 0, &access, &cx.neighbors, &varreg).unwrap();
         let mut quads = Vec::<IsometrizedQuad>::new();
@@ -278,7 +279,7 @@ impl Mesher for GreedyMesher {
             let gpu_quad = GpuQuad {
                 min: quad.min_2d().as_vec2(),
                 max: quad.max_2d().as_vec2() + Vec2::ONE,
-                texture_id: quad.quad.dataquad.texture.texture.inner() as u32,
+                texture_id: quad.quad.dataquad.texture.id.as_u32(),
                 bitfields,
                 magnitude,
             };
@@ -371,7 +372,7 @@ mod tests {
         registries.add_registry(varreg);
         registries.add_registry(texreg);
 
-        let varreg = registries.get_registry::<VariantRegistry>().unwrap();
+        let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
         let mesher = GreedyMesher::new();
 
         let cqs = ChunkQuadSlice::new(Face::North, 8, &access, &neighbors, &varreg).unwrap();
@@ -420,7 +421,7 @@ mod tests {
         registries.add_registry(varreg);
         registries.add_registry(texreg);
 
-        let varreg = registries.get_registry::<VariantRegistry>().unwrap();
+        let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
         let mesher = GreedyMesher::new();
 
         let mut cqs = ChunkQuadSlice::new(Face::North, 8, &access, &neighbors, &varreg).unwrap();

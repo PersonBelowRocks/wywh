@@ -77,6 +77,15 @@ impl BlockVariantId {
     pub fn index(self) -> usize {
         self.0 as usize
     }
+
+    pub fn as_u32(self) -> u32 {
+        self.0 as u32
+    }
+
+    #[cfg(test)]
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
 }
 
 pub struct BlockVariantRegistry {

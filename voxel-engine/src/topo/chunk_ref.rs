@@ -9,7 +9,7 @@ use std::{
 use bevy::prelude::IVec3;
 
 use crate::data::{
-    registries::{variant::VariantRegistry, RegistryId},
+    registries::{variant::BlockVariantRegistry, Registry},
     voxel::rotations::BlockModelRotation,
 };
 
@@ -76,13 +76,13 @@ pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher = ahash::RandomState> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ChunkVoxelOutput {
-    pub variant: RegistryId<VariantRegistry>,
+    pub variant: <BlockVariantRegistry as Registry>::Id,
     pub rotation: Option<BlockModelRotation>,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct ChunkVoxelInput {
-    pub variant: RegistryId<VariantRegistry>,
+    pub variant: <BlockVariantRegistry as Registry>::Id,
     pub rotation: Option<BlockModelRotation>,
 }
 

@@ -4,7 +4,7 @@ use bevy::{log::info, math::Vec2, render::render_resource::ShaderType};
 
 use super::{
     error::FaceTextureRotationParseError,
-    registries::{texture::TextureRegistry, Registry, RegistryId},
+    registries::{texture::TextureRegistry, Registry},
 };
 
 #[derive(
@@ -68,26 +68,29 @@ impl FaceTextureRotation {
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct FaceTexture {
     pub rotation: FaceTextureRotation,
-    pub texture: RegistryId<TextureRegistry>,
+    pub id: <TextureRegistry as Registry>::Id,
 }
 
 impl FaceTexture {
     pub fn color_tex_idx(&self, registry: &TextureRegistry) -> u32 {
-        registry.get_by_id(self.texture).texture_idx
+        registry.get_by_id(self.id).texture_idx
     }
 
-    pub fn new(texture: RegistryId<TextureRegistry>) -> Self {
+    pub fn new(texture: <TextureRegistry as Registry>::Id) -> Self {
         Self {
             rotation: Default::default(),
-            texture,
+            id: texture,
         }
     }
 
     pub fn new_rotated(
-        texture: RegistryId<TextureRegistry>,
+        texture: <TextureRegistry as Registry>::Id,
         rotation: FaceTextureRotation,
     ) -> Self {
-        Self { rotation, texture }
+        Self {
+            rotation,
+            id: texture,
+        }
     }
 }
 

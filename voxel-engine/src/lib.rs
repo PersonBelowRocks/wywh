@@ -11,7 +11,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use bevy::prelude::*;
 use data::{
-    registries::{variant::VariantRegistry, Registries, Registry},
+    registries::{variant::BlockVariantRegistry, Registries, Registry},
     resourcepath::rpath,
 };
 use mip_texture_array::MippedArrayTexturePlugin;
@@ -135,7 +135,7 @@ fn generate_debug_chunks(mut events: EventWriter<GenerateChunk>) {
 }
 
 fn setup(mut cmds: Commands, registries: Res<Registries>) {
-    let varreg = registries.get_registry::<VariantRegistry>().unwrap();
+    let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
     let void_cvo = ChunkVoxelOutput {
         variant: varreg.get_id(&rpath("void")).unwrap(),
         rotation: None,

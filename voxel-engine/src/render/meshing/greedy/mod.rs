@@ -2,7 +2,7 @@ use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 
 use crate::{
     data::{
-        registries::{variant::VariantRegistry, Registry, RegistryRef},
+        registries::{variant::BlockVariantRegistry, Registry, RegistryRef},
         tile::Face,
         voxel::VoxelModel,
     },
@@ -35,7 +35,7 @@ pub struct ChunkQuadSlice<'a, C: ChunkAccess, Nb: ChunkAccess> {
 
     access: &'a C,
     neighbors: &'a Neighbors<Nb>,
-    registry: &'a RegistryRef<'a, VariantRegistry>,
+    registry: &'a RegistryRef<'a, BlockVariantRegistry>,
 }
 
 pub const MAX: IVec2 = IVec2::splat(Chunk::SIZE);
@@ -51,7 +51,7 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
         magnitude: i32,
         access: &'a C,
         neighbors: &'a Neighbors<Nb>,
-        registry: &'a RegistryRef<'a, VariantRegistry>,
+        registry: &'a RegistryRef<'a, BlockVariantRegistry>,
     ) -> Result<Self, OutOfBounds> {
         if 0 > magnitude && magnitude > Chunk::SIZE {
             return Err(OutOfBounds);
@@ -154,7 +154,7 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
         }
 
         let variant = self.registry.get_by_id(cvo.variant);
-        if let Some(VoxelModel::Block(model)) = variant.model {
+        if let Some(model) = variant.model {
             let submodel = match cvo.rotation {
                 Some(rotation) => model.submodel(rotation.front()),
                 None => model.default_submodel(),
@@ -165,7 +165,6 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
 
             Ok(Some(quad))
         } else {
-            // can only get quads from a block model
             Ok(None)
         }
     }
@@ -221,7 +220,7 @@ pub mod tests {
         }
     }
 
-    pub fn testing_registries() -> (VariantRegistry, TextureRegistry) {
+    pub fn testing_registries() -> (BlockVariantRegistry, TextureRegistry) {
         let textures = {
             let mut loader = TestTextureRegistryLoader::new();
             loader.add(rpath("test1"), vec2(0.0, 0.0), None);
@@ -233,40 +232,40 @@ pub mod tests {
         let mut vloader = VariantRegistryLoader::new();
         vloader.register(
             rpath("var1"),
-            VariantDescriptor {
+            BlockDescriptor {
                 transparency: Transparency::Opaque,
-                model: Some(VoxelModelDescriptor::Block(BlockDescriptor {
-                    directions: FaceMap::new(),
-                    default: {
-                        let mut map = FaceMap::from_fn(|_| {
-                            Some(FaceTextureDescriptor::new(
-                                rpath("test1"),
-                                FaceTextureRotation::new(0),
-                            ))
-                        });
-                        map.set(
-                            Face::East,
-                            FaceTextureDescriptor::new(rpath("test2"), FaceTextureRotation::new(0)),
-                        );
-                        map
-                    },
-                })),
+                directions: FaceMap::new(),
+                default: {
+                    let mut map = FaceMap::from_fn(|_| {
+                        Some(FaceTextureDescriptor::new(
+                            rpath("test1"),
+                            FaceTextureRotation::new(0),
+                        ))
+                    });
+                    map.set(
+                        Face::East,
+                        FaceTextureDescriptor::new(rpath("test2"), FaceTextureRotation::new(0)),
+                    );
+                    map
+                },
             },
         );
 
         vloader.register(
             rpath("void"),
-            VariantDescriptor {
+            BlockDescriptor {
                 transparency: Transparency::Transparent,
-                model: None,
+                directions: FaceMap::default(),
+                default: FaceMap::default(),
             },
         );
 
         vloader.register(
             rpath("filled"),
-            VariantDescriptor {
+            BlockDescriptor {
                 transparency: Transparency::Opaque,
-                model: None,
+                directions: FaceMap::default(),
+                default: FaceMap::default(),
             },
         );
 
@@ -278,7 +277,7 @@ pub mod tests {
         let (varreg, texreg) = testing_registries();
 
         let variants_lock = RwLock::new(varreg);
-        let variants: RegistryRef<VariantRegistry> =
+        let variants: RegistryRef<BlockVariantRegistry> =
             RwLockReadGuard::map(variants_lock.read(), |g| g);
 
         let void_cvo = ChunkVoxelOutput {
@@ -352,7 +351,7 @@ pub mod tests {
 
         assert_eq!(
             expected_texture,
-            cqs.get_quad(ivec2(8, 8)).unwrap().unwrap().texture.texture
+            cqs.get_quad(ivec2(8, 8)).unwrap().unwrap().texture.id
         );
 
         cqs.reposition(Face::East, 8).unwrap();
@@ -361,7 +360,7 @@ pub mod tests {
 
         assert_eq!(
             expected_texture,
-            cqs.get_quad(ivec2(8, 1)).unwrap().unwrap().texture.texture
+            cqs.get_quad(ivec2(8, 1)).unwrap().unwrap().texture.id
         );
     }
 }

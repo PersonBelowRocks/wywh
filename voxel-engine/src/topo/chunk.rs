@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use super::bounding_box::BoundingBox;
 use super::storage::containers::data_storage::SyncIndexedChunkContainer;
-use crate::data::registries::variant::VariantRegistry;
-use crate::data::registries::RegistryId;
+use crate::data::registries::variant::BlockVariantRegistry;
+use crate::data::registries::Registry;
 use crate::data::voxel::rotations::BlockModelRotation;
 
 #[derive(
@@ -37,11 +37,9 @@ impl ChunkPos {
     }
 }
 
-pub type VariantType = RegistryId<VariantRegistry>;
-
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, dm::Constructor)]
 pub struct VoxelVariantData {
-    pub variant: RegistryId<VariantRegistry>,
+    pub variant: <BlockVariantRegistry as Registry>::Id,
     pub rotation: Option<BlockModelRotation>,
 }
 
