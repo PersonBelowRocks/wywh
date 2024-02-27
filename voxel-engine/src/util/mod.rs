@@ -1,3 +1,4 @@
+pub mod cubic;
 pub mod notnan;
 pub mod result;
 
@@ -41,6 +42,12 @@ pub fn try_ivec3_to_usize_arr(ivec: IVec3) -> Result<[usize; 3], ConversionError
         y.try_into().map_err(|_| ConversionError(ivec))?,
         z.try_into().map_err(|_| ConversionError(ivec))?,
     ])
+}
+
+pub fn uvec_to_usize_arr(uvec: UVec3) -> [usize; 3] {
+    let [x, y, z] = uvec.to_array();
+
+    [x as usize, y as usize, z as usize]
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

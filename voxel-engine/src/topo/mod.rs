@@ -3,6 +3,7 @@ use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 use crate::{data::tile::Face, util::Axis3D};
 
 pub mod access;
+pub mod block;
 pub mod bounding_box;
 pub mod chunk;
 pub mod chunk_ref;
