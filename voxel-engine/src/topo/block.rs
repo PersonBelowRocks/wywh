@@ -1,3 +1,6 @@
+use bevy::math::uvec3;
+use itertools::Itertools;
+
 use crate::{
     data::{
         registries::{variant::BlockVariantRegistry, Registry},
@@ -17,12 +20,27 @@ pub enum BlockVoxel {
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct FullBlock {
-    rotation: Option<BlockModelRotation>,
-    block: <BlockVariantRegistry as Registry>::Id,
+    pub rotation: Option<BlockModelRotation>,
+    pub block: <BlockVariantRegistry as Registry>::Id,
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct SubdividedBlock {
-    rotation: Option<BlockModelRotation>,
-    data: Cubic<{ SUBDIVISIONS_USIZE }, <BlockVariantRegistry as Registry>::Id>,
+    pub rotation: Option<BlockModelRotation>,
+    pub data: Cubic<{ SUBDIVISIONS_USIZE }, <BlockVariantRegistry as Registry>::Id>,
+}
+
+impl SubdividedBlock {
+    pub fn coalesce(&self) -> Option<FullBlock> {
+        if self.data.flattened().iter().all_equal() {
+            let block = *self.data.get(uvec3(0, 0, 0)).unwrap();
+
+            Some(FullBlock {
+                rotation: self.rotation,
+                block,
+            })
+        } else {
+            None
+        }
+    }
 }

@@ -1,6 +1,7 @@
 use std::array;
 
 use bevy::math::UVec3;
+use slice_of_array::SliceFlatExt;
 
 use super::{uvec_to_usize_arr, CubicArray};
 
@@ -47,6 +48,11 @@ impl<const S: usize, T> Cubic<S, T> {
 
             Some(&mut self.0[x][y][z])
         }
+    }
+
+    // TODO: test position -> index logic in the flattened array
+    pub fn flattened(&self) -> &[T] {
+        self.0.flat().flat()
     }
 }
 
