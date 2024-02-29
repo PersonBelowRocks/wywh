@@ -1,6 +1,13 @@
+use itertools::Itertools;
+use nom::{
+    bytes::complete::tag,
+    character::complete::{alphanumeric1, anychar},
+    multi::separated_list1,
+};
+
 use crate::{
     data::{
-        error::{FaceTextureParseError, SubmodelFaceTextureParseError},
+        error::{FaceTextureDescParseError, SubmodelFaceTextureDescParseError},
         resourcepath::ResourcePath,
         texture::FaceTextureRotation,
         tile::Transparency,
@@ -40,7 +47,7 @@ pub enum SubmodelFaceTextureDescriptor {
 }
 
 impl TryFrom<&str> for SubmodelFaceTextureDescriptor {
-    type Error = SubmodelFaceTextureParseError;
+    type Error = SubmodelFaceTextureDescParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         todo!()
@@ -55,7 +62,7 @@ pub struct FaceTextureDescriptor {
 }
 
 impl TryFrom<&str> for FaceTextureDescriptor {
-    type Error = FaceTextureParseError;
+    type Error = FaceTextureDescParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         todo!()
@@ -65,4 +72,14 @@ impl TryFrom<&str> for FaceTextureDescriptor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_face_texture() {
+        todo!()
+    }
+
+    #[test]
+    fn parse_submodel_face_texture() {
+        todo!()
+    }
 }
