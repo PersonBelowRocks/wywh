@@ -5,7 +5,7 @@ use std::{
 
 use bevy::math::{vec2, IVec3};
 
-use crate::data::tile::Face;
+use crate::data::{error::BlockModelFaceParseError, tile::Face};
 
 #[derive(
     Copy,
@@ -36,10 +36,19 @@ pub enum BlockModelFace {
 }
 
 impl std::str::FromStr for BlockModelFace {
-    type Err = ();
+    type Err = BlockModelFaceParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        todo!()
+        Ok(match s {
+            "u" | "up" => Self::Up,
+            "d" | "down" => Self::Down,
+            "l" | "left" => Self::Left,
+            "r" | "right" => Self::Right,
+            "f" | "front" => Self::Front,
+            "b" | "back" => Self::Back,
+
+            _ => return Err(Self::Err::new(s)),
+        })
     }
 }
 
