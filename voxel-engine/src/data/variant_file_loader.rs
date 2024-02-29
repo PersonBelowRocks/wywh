@@ -1,8 +1,6 @@
 use std::{ffi::OsStr, fs::File, io::Read, path::Path};
 
-use super::{
-    error::VariantFileLoaderError, resourcepath::ResourcePath, voxel::descriptor::VariantDescriptor,
-};
+use super::{error::VariantFileLoaderError, resourcepath::ResourcePath};
 
 pub static VARIANT_FILE_EXTENSION: &'static str = "variant";
 
@@ -79,15 +77,5 @@ impl VariantFileLoader {
 
     pub fn add_raw_buffer(&mut self, label: ResourcePath, buffer: Vec<u8>) {
         self.raw_descriptors.insert(label, buffer);
-    }
-
-    pub fn parse(&self, label: &ResourcePath) -> Result<VariantDescriptor, VariantFileLoaderError> {
-        let buffer = self
-            .raw_descriptors
-            .get(label)
-            .ok_or(VariantFileLoaderError::VariantNotFound)?;
-
-        let descriptor = deser_hjson::from_slice::<VariantDescriptor>(buffer)?;
-        Ok(descriptor)
     }
 }

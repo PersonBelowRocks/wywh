@@ -24,7 +24,6 @@ use super::{
     resourcepath::rpath,
     tile::Transparency,
     variant_file_loader::VariantFileLoader,
-    voxel::descriptor::{BlockDescriptor, VariantDescriptor},
 };
 
 pub static TEXTURE_FOLDER_NAME: &'static str = "textures";
@@ -236,14 +235,7 @@ pub fn build_registries(world: &mut World) {
     let mut file_loader = VariantFileLoader::new();
     let mut registry_loader = VariantRegistryLoader::new();
 
-    registry_loader.register(
-        rpath("void"),
-        BlockDescriptor {
-            transparency: Transparency::Transparent,
-            directions: Default::default(),
-            default: Default::default(),
-        },
-    );
+    registry_loader.register(rpath("void"), todo!());
 
     for folder in variant_folders.iter() {
         if let Err(err) = file_loader.load_folder(folder) {
@@ -253,19 +245,20 @@ pub fn build_registries(world: &mut World) {
     }
 
     for label in file_loader.labels() {
-        match file_loader.parse(label) {
-            Ok(descriptor) => {
-                info!("Registering variant with label '{label}'");
-                registry_loader.register(label.clone(), todo!());
-            }
-            Err(error) => error!("Couldn't parse variant descriptor with label '{label}': {error}"),
-        }
+        todo!()
+        // match file_loader.parse(label) {
+        //     Ok(descriptor) => {
+        //         info!("Registering variant with label '{label}'");
+        //         registry_loader.register(label.clone(), todo!());
+        //     }
+        //     Err(error) => error!("Couldn't parse variant descriptor with label '{label}': {error}"),
+        // }
     }
 
     let variants = registry_loader.build_registry(&textures);
 
     if let Err(error) = variants {
-        error!("Error building variant registry: '{error}'");
+        // error!("Error building variant registry: '{error}'");
         panic!();
     }
 

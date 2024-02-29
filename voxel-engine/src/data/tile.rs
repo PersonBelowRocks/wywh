@@ -91,7 +91,7 @@ impl std::str::FromStr for Face {
             "s" | "south" => Self::South,
             "w" | "west" => Self::West,
 
-            _ => return Err(Self::Err::new(s.to_string())),
+            _ => return Err(Self::Err::default()),
         })
     }
 }

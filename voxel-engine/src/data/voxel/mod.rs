@@ -1,17 +1,13 @@
-use crate::{
-    data::{error::SubmodelFromDescriptorError, registries::Registry},
-    render::occlusion::BlockOcclusion,
-    util::FaceMap,
-};
+use crate::{data::registries::Registry, render::occlusion::BlockOcclusion, util::FaceMap};
 
 use self::{
-    descriptor::{BlockDescriptor, FaceTextureDescriptor},
-    rotations::BlockModelRotation,
+    descriptor::{BlockVariantDescriptor, FaceTextureDescriptor},
+    rotations::{BlockModelFace, BlockModelFaceMap, BlockModelRotation},
 };
 
 use super::{
     registries::{error::TextureNotFound, texture::TextureRegistry},
-    texture::FaceTexture,
+    texture::{FaceTexture, FaceTextureRotation},
     tile::{Face, Transparency},
 };
 
@@ -27,77 +23,54 @@ pub struct VoxelProperties {
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BlockModel {
     pub directions: FaceMap<BlockSubmodel>,
-    pub default: BlockSubmodel,
+    pub default: BlockModelFaceMap<FaceTexture>,
 }
 
 impl BlockModel {
     pub fn from_descriptor(
-        descriptor: &BlockDescriptor,
+        descriptor: &BlockVariantDescriptor,
         registry: &TextureRegistry,
-    ) -> Result<Self, SubmodelFromDescriptorError> {
-        let default = BlockSubmodel::from_descriptor(&descriptor.default, registry)?;
-
-        let mut directions = FaceMap::<BlockSubmodel>::new();
-        for (face, desc) in descriptor.directions.iter() {
-            if let Some(desc) = desc {
-                let submodel = BlockSubmodel::from_descriptor(desc, registry)?;
-                directions.set(face, submodel);
-            }
-        }
-
-        Ok(Self {
-            default,
-            directions,
-        })
+    ) -> Result<Self, ()> {
+        todo!()
     }
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BlockSubmodel([FaceTexture; 6]);
+pub enum SubmodelFaceTexture {
+    Model {
+        tex: BlockModelFace,
+        rotation: FaceTextureRotation,
+    },
+    Unique(FaceTexture),
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct BlockSubmodel([SubmodelFaceTexture; 6]);
 
 impl BlockSubmodel {
     pub fn from_face_map(map: FaceMap<FaceTexture>) -> Option<Self> {
-        let mut arr: [Option<FaceTexture>; 6] = std::array::from_fn(|_i| None);
-
-        for (face, tex) in map.iter() {
-            arr[face.as_usize()] = Some(tex.copied()?);
-        }
-
-        Some(Self(arr.map(Option::unwrap)))
+        todo!()
     }
 
     pub fn from_descriptor(
         map: &FaceMap<FaceTextureDescriptor>,
         registry: &TextureRegistry,
-    ) -> Result<Self, SubmodelFromDescriptorError> {
-        let mut textures = FaceMap::<FaceTexture>::new();
-
-        for face in Face::FACES {
-            let desc = map
-                .get(face)
-                .ok_or(SubmodelFromDescriptorError::MissingFace(face))?;
-            let texture = registry
-                .get_id(&desc.label)
-                .ok_or_else(|| TextureNotFound(desc.label.clone()))?;
-
-            textures.set(face, FaceTexture::new_rotated(texture, desc.rotation));
-        }
-
-        Ok(Self::from_face_map(textures).unwrap())
+    ) -> Result<Self, ()> {
+        todo!()
     }
 
     pub fn get_texture(&self, face: Face) -> FaceTexture {
-        self.0[face.as_usize()]
+        todo!()
     }
 }
 
 impl BlockModel {
     pub fn submodel(&self, direction: Face) -> &BlockSubmodel {
-        self.directions.get(direction).unwrap_or(&self.default)
+        todo!()
     }
 
     pub fn default_submodel(&self) -> &BlockSubmodel {
-        &self.default
+        todo!()
     }
 }
 

@@ -4,10 +4,10 @@ use crate::data::{
     resourcepath::ResourcePath,
     tile::Transparency,
     variant_file_loader::VariantFileLoader,
-    voxel::{descriptor::BlockDescriptor, BlockModel},
+    voxel::{descriptor::BlockVariantDescriptor, BlockModel},
 };
 
-use super::{error::BlockVariantRegistryError, texture::TextureRegistry, Registry};
+use super::{texture::TextureRegistry, Registry};
 
 #[derive(Debug, Clone)]
 pub struct VariantRegistryEntry<'a> {
@@ -16,7 +16,7 @@ pub struct VariantRegistryEntry<'a> {
 }
 
 pub struct VariantRegistryLoader {
-    descriptors: hb::HashMap<ResourcePath, BlockDescriptor>,
+    descriptors: hb::HashMap<ResourcePath, BlockVariantDescriptor>,
 }
 
 impl VariantRegistryLoader {
@@ -30,14 +30,14 @@ impl VariantRegistryLoader {
         Ok(())
     }
 
-    pub fn register(&mut self, label: ResourcePath, descriptor: BlockDescriptor) {
+    pub fn register(&mut self, label: ResourcePath, descriptor: BlockVariantDescriptor) {
         self.descriptors.insert(label.into(), descriptor);
     }
 
     pub fn build_registry(
         self,
         texture_registry: &TextureRegistry,
-    ) -> Result<BlockVariantRegistry, BlockVariantRegistryError> {
+    ) -> Result<BlockVariantRegistry, ()> {
         let mut map =
             IndexMap::<ResourcePath, BlockVariant, ahash::RandomState>::with_capacity_and_hasher(
                 self.descriptors.len(),
@@ -46,7 +46,7 @@ impl VariantRegistryLoader {
 
         for (label, descriptor) in self.descriptors.into_iter() {
             let model = if descriptor.transparency.is_opaque() {
-                Some(BlockModel::from_descriptor(&descriptor, texture_registry)?)
+                todo!() // Some(BlockModel::from_descriptor(&descriptor, texture_registry)?)
             } else {
                 None
             };

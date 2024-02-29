@@ -31,7 +31,7 @@ impl std::str::FromStr for FaceTextureRotation {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         i32::from_str(s)
             .map(Self::new)
-            .map_err(|_| Self::Err::new(s.to_string()))
+            .map_err(|_| Default::default())
     }
 }
 
