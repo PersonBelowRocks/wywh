@@ -45,14 +45,14 @@ impl VariantRegistryLoader {
             );
 
         for (label, descriptor) in self.descriptors.into_iter() {
-            let model = if descriptor.transparency.is_opaque() {
+            let model = if descriptor.options.transparency.is_opaque() {
                 todo!() // Some(BlockModel::from_descriptor(&descriptor, texture_registry)?)
             } else {
                 None
             };
 
             let variant = BlockVariant {
-                transparency: descriptor.transparency,
+                transparency: descriptor.options.transparency,
                 model,
             };
 

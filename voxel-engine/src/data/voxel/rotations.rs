@@ -47,7 +47,7 @@ impl std::str::FromStr for BlockModelFace {
             "f" | "front" => Self::Front,
             "b" | "back" => Self::Back,
 
-            _ => return Err(Self::Err::new(s)),
+            _ => return Err(Self::Err::new(s.into())),
         })
     }
 }

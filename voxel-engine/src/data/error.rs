@@ -48,32 +48,14 @@ pub struct FaceTextureRotationParseError;
 #[error("Error parsing {}", stringify!(Face))]
 pub struct FaceParseError;
 
-#[derive(Clone, te::Error, Debug, PartialEq)]
+#[derive(Clone, te::Error, Debug, PartialEq, dm::Constructor)]
 #[error("Error parsing {0} as face texture descriptor")]
 pub struct FaceTextureDescParseError(String);
 
-impl FaceTextureDescParseError {
-    pub fn new(s: &str) -> Self {
-        Self(s.into())
-    }
-}
-
-#[derive(Clone, te::Error, Debug, PartialEq)]
+#[derive(Clone, te::Error, Debug, PartialEq, dm::Constructor)]
 #[error("Error parsing {0} as submodel face texture descriptor")]
 pub struct SubmodelFaceTextureDescParseError(String);
 
-impl SubmodelFaceTextureDescParseError {
-    pub fn new(s: &str) -> Self {
-        Self(s.into())
-    }
-}
-
-#[derive(Clone, te::Error, Debug, PartialEq)]
+#[derive(Clone, te::Error, Debug, PartialEq, dm::Constructor)]
 #[error("Error parsing {0} block model face")]
 pub struct BlockModelFaceParseError(String);
-
-impl BlockModelFaceParseError {
-    pub fn new(s: &str) -> Self {
-        Self(s.into())
-    }
-}
