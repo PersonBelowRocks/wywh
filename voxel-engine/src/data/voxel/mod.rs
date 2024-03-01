@@ -23,7 +23,7 @@ pub struct VoxelProperties {
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BlockModel {
     pub directions: FaceMap<BlockSubmodel>,
-    pub default: BlockModelFaceMap<FaceTexture>,
+    pub model: BlockModelFaceMap<FaceTexture>,
 }
 
 impl BlockModel {
@@ -37,8 +37,8 @@ impl BlockModel {
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum SubmodelFaceTexture {
-    Model {
-        tex: BlockModelFace,
+    SelfFace {
+        face: BlockModelFace,
         rotation: FaceTextureRotation,
     },
     Unique(FaceTexture),
@@ -48,15 +48,8 @@ pub enum SubmodelFaceTexture {
 pub struct BlockSubmodel([SubmodelFaceTexture; 6]);
 
 impl BlockSubmodel {
-    pub fn from_face_map(map: FaceMap<FaceTexture>) -> Option<Self> {
-        todo!()
-    }
-
-    pub fn from_descriptor(
-        map: &FaceMap<FaceTextureDescriptor>,
-        registry: &TextureRegistry,
-    ) -> Result<Self, ()> {
-        todo!()
+    pub(crate) fn from_arr(arr: [SubmodelFaceTexture; 6]) -> Self {
+        Self(arr)
     }
 
     pub fn get_texture(&self, face: Face) -> FaceTexture {

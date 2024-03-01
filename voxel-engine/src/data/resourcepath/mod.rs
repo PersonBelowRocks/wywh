@@ -55,6 +55,19 @@ impl ResourcePath {
     pub fn get_part(&self, idx: usize) -> Option<&str> {
         self.parts.get(idx).map(String::as_str)
     }
+
+    pub fn string(&self) -> String {
+        let mut string = String::with_capacity(self.len());
+        let mut parts = self.parts().peekable();
+        while let Some(part) = parts.next() {
+            string.push_str(part);
+
+            if parts.peek().is_some() {
+                string.push('.');
+            }
+        }
+        string
+    }
 }
 
 #[cfg(test)]

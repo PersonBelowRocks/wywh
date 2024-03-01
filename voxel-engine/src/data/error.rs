@@ -1,6 +1,10 @@
 use std::path::PathBuf;
 
-use super::resourcepath::error::FromPathError;
+use super::{
+    resourcepath::{error::FromPathError, ResourcePath},
+    tile::Face,
+    voxel::rotations::BlockModelFace,
+};
 
 #[derive(te::Error, Debug)]
 #[error("TODO")]
@@ -59,3 +63,13 @@ pub struct SubmodelFaceTextureDescParseError(String);
 #[derive(Clone, te::Error, Debug, PartialEq, dm::Constructor)]
 #[error("Error parsing {0} block model face")]
 pub struct BlockModelFaceParseError(String);
+
+#[derive(te::Error, Clone, Debug, PartialEq)]
+pub enum BlockModelCreationError {
+    #[error("Texture {0} not found in the provided texture registry")]
+    TextureNotFound(ResourcePath),
+    #[error("Descriptor doesn't provide model face {0:?}")]
+    MissingModelFace(BlockModelFace),
+    #[error("Descriptor submodel for direction {0:?} is missing face {1:?}")]
+    MissingDirectionFace(Face, Face),
+}
