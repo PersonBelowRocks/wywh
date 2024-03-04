@@ -16,14 +16,14 @@ use crate::{
 use super::{
     error::TextureAtlasesGetAssetError,
     registries::{
-        error::TextureRegistryError,
+        error::{BlockVariantRegistryLoadError, TextureRegistryError},
         texture::{TexregFaces, TextureRegistry},
-        variant::VariantRegistryLoader,
+        variant::{BlockOptions, BlockVariantRegistry, BlockVariantRegistryLoader},
         Registries,
     },
     resourcepath::rpath,
     tile::Transparency,
-    variant_file_loader::VariantFileLoader,
+    voxel::descriptor::BlockVariantDescriptor,
 };
 
 pub static TEXTURE_FOLDER_NAME: &'static str = "textures";
@@ -210,60 +210,72 @@ fn create_texture_registry(
     Ok(registry_loader.build_registry(images.as_ref(), &mut array_textures)?)
 }
 
-pub fn build_registries(world: &mut World) {
-    let create_texreg_sysid = world.register_system(create_texture_registry);
+fn create_block_variant_registry(
+    registries: Res<Registries>,
+    folders: Res<VariantFolders>,
+) -> Result<BlockVariantRegistry, BlockVariantRegistryLoadError> {
+    let texreg = registries.get_registry::<TextureRegistry>().unwrap();
+    let mut loader = BlockVariantRegistryLoader::new();
 
-    let result: Result<TextureRegistry, TextureRegistryError> =
-        world.run_system(create_texreg_sysid).unwrap();
+    loader.register(
+        rpath("void"),
+        BlockVariantDescriptor {
+            options: BlockOptions {
+                transparency: Transparency::Transparent,
+                subdividable: false,
+            },
+            model: None,
+        },
+    );
 
-    let registries = Registries::new();
-
-    let textures = match result {
-        Ok(textures) => textures,
-        Err(error) => {
-            error!("Error when building texture registry: '{:?}'", error);
-            panic!("Cannot build registries");
-        }
-    };
-
-    world.insert_resource(VoxelColorArrayTexture(textures.color_texture().clone()));
-    world.insert_resource(VoxelNormalArrayTexture(textures.normal_texture().clone()));
-    world.insert_resource(TexregFaces(textures.face_texture_buffer()));
-
-    let variant_folders = world.get_resource::<VariantFolders>().unwrap();
-
-    let mut file_loader = VariantFileLoader::new();
-    let mut registry_loader = VariantRegistryLoader::new();
-
-    registry_loader.register(rpath("void"), todo!());
-
-    for folder in variant_folders.iter() {
-        if let Err(err) = file_loader.load_folder(folder) {
+    for folder in folders.iter() {
+        if let Err(err) = loader.register_from_directory(folder, true) {
             let path = folder.as_path().to_string_lossy();
             error!("Error while loading variant folder at path '{path}': '{err}'");
         }
     }
 
-    for label in file_loader.labels() {
-        todo!()
-        // match file_loader.parse(label) {
-        //     Ok(descriptor) => {
-        //         info!("Registering variant with label '{label}'");
-        //         registry_loader.register(label.clone(), todo!());
-        //     }
-        //     Err(error) => error!("Couldn't parse variant descriptor with label '{label}': {error}"),
-        // }
-    }
+    loader.build_registry(&texreg)
+}
 
-    let variants = registry_loader.build_registry(&textures);
+pub fn build_registries(world: &mut World) {
+    let create_texreg_sysid = world.register_system(create_texture_registry);
+    let create_block_variant_sysid = world.register_system(create_block_variant_registry);
 
-    if let Err(error) = variants {
-        // error!("Error building variant registry: '{error}'");
-        panic!();
-    }
+    world.insert_resource(Registries::new());
 
-    registries.add_registry(textures);
-    registries.add_registry(variants.unwrap());
+    let texreg = match world
+        .run_system::<Result<TextureRegistry, TextureRegistryError>>(create_texreg_sysid)
+        .unwrap()
+    {
+        Ok(registry) => registry,
+        Err(error) => {
+            error!("Error creating texture registry: {error}");
+            panic!();
+        }
+    };
 
-    world.insert_resource(registries);
+    world.insert_resource(VoxelColorArrayTexture(texreg.color_texture().clone()));
+    world.insert_resource(VoxelNormalArrayTexture(texreg.normal_texture().clone()));
+    world.insert_resource(TexregFaces(texreg.face_texture_buffer()));
+    let registries = world.resource_mut::<Registries>();
+
+    registries.add_registry(texreg);
+    drop(registries);
+
+    let blockreg = match world
+        .run_system::<Result<BlockVariantRegistry, BlockVariantRegistryLoadError>>(
+            create_block_variant_sysid,
+        )
+        .unwrap()
+    {
+        Ok(registry) => registry,
+        Err(error) => {
+            error!("Error creating block variant registry: {error}");
+            panic!();
+        }
+    };
+
+    let registries = world.resource_mut::<Registries>();
+    registries.add_registry(blockreg);
 }

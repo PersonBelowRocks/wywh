@@ -1,72 +1,183 @@
+use std::{ffi::OsStr, fs::File, io::Read, path::Path};
+
 use indexmap::IndexMap;
 
 use crate::data::{
+    error::BlockVariantFileLoaderError,
     resourcepath::ResourcePath,
     tile::Transparency,
-    variant_file_loader::VariantFileLoader,
     voxel::{descriptor::BlockVariantDescriptor, BlockModel},
 };
 
-use super::{texture::TextureRegistry, Registry};
+use super::{error::BlockVariantRegistryLoadError, texture::TextureRegistry, Registry};
+
+pub const MAX_RECURSION_DEPTH: usize = 8;
+pub static BLOCK_VARIANT_FILE_EXTENSION: &'static str = "variant";
 
 #[derive(Debug, Clone)]
-pub struct VariantRegistryEntry<'a> {
-    pub transparency: Transparency,
-    pub model: &'a Option<BlockModel>,
+pub struct BlockVariantRegistryEntry<'a> {
+    pub options: BlockOptions,
+    pub model: Option<&'a BlockModel>,
 }
 
-pub struct VariantRegistryLoader {
-    descriptors: hb::HashMap<ResourcePath, BlockVariantDescriptor>,
+#[derive(Clone)]
+pub struct BlockVariantFileLoader {
+    raw_descriptors: hb::HashMap<ResourcePath, Vec<u8>>,
 }
 
-impl VariantRegistryLoader {
+impl BlockVariantFileLoader {
     pub fn new() -> Self {
         Self {
-            descriptors: hb::HashMap::new(),
+            raw_descriptors: hb::HashMap::new(),
         }
     }
 
-    pub fn register_from_file_loader(&mut self, _loader: &VariantFileLoader) -> Result<(), ()> {
+    pub fn labels(&self) -> impl Iterator<Item = &ResourcePath> {
+        self.raw_descriptors.keys()
+    }
+
+    pub fn entries(&self) -> impl Iterator<Item = (&ResourcePath, &[u8])> {
+        self.raw_descriptors.iter().map(|(r, v)| (r, v.as_slice()))
+    }
+
+    pub fn load_folder(
+        &mut self,
+        path: impl AsRef<Path>,
+        recurse_depth: usize,
+    ) -> Result<(), BlockVariantFileLoaderError> {
+        let path = path.as_ref();
+
+        for entry in walkdir::WalkDir::new(path).max_depth(recurse_depth) {
+            let entry = entry?;
+
+            if entry.file_type().is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .is_some_and(|ext| ext == BLOCK_VARIANT_FILE_EXTENSION)
+            {
+                let rpath =
+                    ResourcePath::try_from(entry.path().strip_prefix(path).map_err(|_| {
+                        BlockVariantFileLoaderError::InvalidFileName(entry.path().to_path_buf())
+                    })?)
+                    .map_err(|_| {
+                        BlockVariantFileLoaderError::InvalidFileName(entry.path().to_path_buf())
+                    })?;
+
+                self.load_file(entry.path(), rpath)?;
+            }
+        }
+
         Ok(())
     }
 
+    pub fn load_file(
+        &mut self,
+        path: impl AsRef<Path>,
+        resource_path: ResourcePath,
+    ) -> Result<(), BlockVariantFileLoaderError> {
+        let path = path.as_ref();
+
+        let mut file = File::open(&path)?;
+
+        let mut buffer = Vec::<u8>::with_capacity(file.metadata()?.len() as _);
+        file.read_to_end(&mut buffer)?;
+
+        self.add_raw_buffer(resource_path, buffer);
+
+        Ok(())
+    }
+
+    pub fn add_raw_buffer(&mut self, label: ResourcePath, buffer: Vec<u8>) {
+        self.raw_descriptors.insert(label, buffer);
+    }
+}
+
+pub struct BlockVariantRegistryLoader {
+    file_loader: BlockVariantFileLoader,
+    manual_descriptors: hb::HashMap<ResourcePath, BlockVariantDescriptor>,
+}
+
+impl BlockVariantRegistryLoader {
+    pub fn new() -> Self {
+        Self {
+            file_loader: BlockVariantFileLoader::new(),
+            manual_descriptors: hb::HashMap::new(),
+        }
+    }
+
+    pub fn register_from_directory(
+        &mut self,
+        path: impl AsRef<Path>,
+        recurse: bool,
+    ) -> Result<(), BlockVariantRegistryLoadError> {
+        let depth = if recurse { MAX_RECURSION_DEPTH } else { 0 };
+
+        Ok(self.file_loader.load_folder(path, depth)?)
+    }
+
     pub fn register(&mut self, label: ResourcePath, descriptor: BlockVariantDescriptor) {
-        self.descriptors.insert(label.into(), descriptor);
+        self.manual_descriptors.insert(label.into(), descriptor);
     }
 
     pub fn build_registry(
         self,
         texture_registry: &TextureRegistry,
-    ) -> Result<BlockVariantRegistry, ()> {
+    ) -> Result<BlockVariantRegistry, BlockVariantRegistryLoadError> {
         let mut map =
             IndexMap::<ResourcePath, BlockVariant, ahash::RandomState>::with_capacity_and_hasher(
-                self.descriptors.len(),
+                self.manual_descriptors.len(),
                 ahash::RandomState::new(),
             );
 
-        for (label, descriptor) in self.descriptors.into_iter() {
-            let model = if descriptor.options.transparency.is_opaque() {
-                todo!() // Some(BlockModel::from_descriptor(&descriptor, texture_registry)?)
+        for (rpath, descriptor) in self.manual_descriptors.into_iter() {
+            let model = if let Some(model_desc) = descriptor.model {
+                Some(model_desc.create_block_model(texture_registry)?)
             } else {
                 None
             };
 
             let variant = BlockVariant {
-                transparency: descriptor.options.transparency,
+                options: descriptor.options,
                 model,
             };
 
-            map.insert(label, variant);
+            map.insert(rpath, variant);
+        }
+
+        for (rpath, buffer) in self.file_loader.entries() {
+            let descriptor =
+                toml::from_str::<BlockVariantDescriptor>(String::from_utf8_lossy(buffer).as_ref())?;
+
+            let model = if let Some(model_desc) = descriptor.model {
+                Some(model_desc.create_block_model(texture_registry)?)
+            } else {
+                None
+            };
+
+            let variant = BlockVariant {
+                options: descriptor.options,
+                model,
+            };
+
+            map.insert(rpath.clone(), variant);
         }
 
         Ok(BlockVariantRegistry { map })
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct BlockVariant {
-    transparency: Transparency,
+    options: BlockOptions,
     model: Option<BlockModel>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize)]
+pub struct BlockOptions {
+    pub transparency: Transparency,
+    #[serde(default)]
+    pub subdividable: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, dm::Display)]
@@ -93,15 +204,15 @@ pub struct BlockVariantRegistry {
 }
 
 impl Registry for BlockVariantRegistry {
-    type Item<'a> = VariantRegistryEntry<'a>;
+    type Item<'a> = BlockVariantRegistryEntry<'a>;
     type Id = BlockVariantId;
 
     fn get_by_label(&self, label: &ResourcePath) -> Option<Self::Item<'_>> {
         let variant = self.map.get(label)?;
 
-        Some(VariantRegistryEntry {
-            transparency: variant.transparency,
-            model: &variant.model,
+        Some(BlockVariantRegistryEntry {
+            options: variant.options,
+            model: variant.model.as_ref(),
         })
     }
 
@@ -109,9 +220,9 @@ impl Registry for BlockVariantRegistry {
         let idx = id.index();
         let (_, variant) = self.map.get_index(idx).unwrap();
 
-        VariantRegistryEntry {
-            transparency: variant.transparency,
-            model: &variant.model,
+        BlockVariantRegistryEntry {
+            options: variant.options,
+            model: variant.model.as_ref(),
         }
     }
 

@@ -5,7 +5,9 @@ use crate::{
         error::{
             BlockModelCreationError, FaceTextureDescParseError, SubmodelFaceTextureDescParseError,
         },
-        registries::{error::TextureNotFound, texture::TextureRegistry, Registry},
+        registries::{
+            error::TextureNotFound, texture::TextureRegistry, variant::BlockOptions, Registry,
+        },
         resourcepath::ResourcePath,
         texture::{FaceTexture, FaceTextureRotation},
         tile::{Face, Transparency},
@@ -24,13 +26,6 @@ pub struct BlockVariantDescriptor {
     pub options: BlockOptions,
     #[serde(flatten)]
     pub model: Option<BlockModelDescriptor>,
-}
-
-#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
-pub struct BlockOptions {
-    pub transparency: Transparency,
-    #[serde(default)]
-    pub subdividable: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]

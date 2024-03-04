@@ -143,10 +143,14 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
     #[inline(always)]
     pub fn get_quad(&self, pos: IVec2) -> CqsResult<Option<DataQuad>, C, Nb> {
         let cvo = self.get(pos)?;
-        let transparency = self.registry.get_by_id(cvo.variant).transparency;
+        let transparency = self.registry.get_by_id(cvo.variant).options.transparency;
 
         let cvo_above = self.get_above(pos)?;
-        let transparency_above = self.registry.get_by_id(cvo_above.variant).transparency;
+        let transparency_above = self
+            .registry
+            .get_by_id(cvo_above.variant)
+            .options
+            .transparency;
 
         if transparency.is_transparent() || transparency_above.is_opaque() {
             // nothing to see here if we're either transparent or the block above is obscuring us

@@ -7,6 +7,7 @@ use bevy::{
 use mip_texture_array::TextureArrayBuilderError;
 
 use crate::data::{
+    error::{BlockModelCreationError, BlockVariantFileLoaderError},
     resourcepath::{error::FromPathError, ResourcePath},
     systems::{VoxelNormalMapFolder, VoxelTextureFolder},
 };
@@ -42,3 +43,13 @@ pub enum TextureRegistryError {
 #[derive(Debug, te::Error)]
 #[error("Texture with label '{0}' not found")]
 pub struct TextureNotFound(pub ResourcePath);
+
+#[derive(Debug, te::Error)]
+pub enum BlockVariantRegistryLoadError {
+    #[error("Error creating block model: {0}")]
+    ModelCreationError(#[from] BlockModelCreationError),
+    #[error("Error loading block variant from file: {0}")]
+    FileLoadError(#[from] BlockVariantFileLoaderError),
+    #[error("Error parsing block variant TOML file: {0}")]
+    TomlParseError(#[from] toml::de::Error),
+}

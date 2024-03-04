@@ -19,17 +19,13 @@ pub enum TextureLoadingError {
 }
 
 #[derive(te::Error, Debug)]
-pub enum VariantFileLoaderError {
-    #[error("{0}")]
-    IoError(#[from] std::io::Error),
-    #[error("{0}")]
-    ParseError(#[from] deser_hjson::Error),
-    #[error("Requested variant was not found")]
-    VariantNotFound,
-    #[error("Invalid variant file name: '{0}'")]
+pub enum BlockVariantFileLoaderError {
+    #[error("Error walking through provided directory: {0}")]
+    DirectoryWalkError(#[from] walkdir::Error),
+    #[error("File at path {0} has invalid name")]
     InvalidFileName(PathBuf),
-    #[error("Error parsing file path to ResourcePath")]
-    ResourcePathError(#[from] FromPathError),
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }
 
 #[derive(Copy, Clone, te::Error, Debug)]
