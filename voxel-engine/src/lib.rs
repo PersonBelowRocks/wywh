@@ -12,7 +12,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use bevy::prelude::*;
 use data::{
-    registries::{variant::BlockVariantRegistry, Registries, Registry},
+    registries::{block::BlockVariantRegistry, Registries, Registry},
     resourcepath::rpath,
 };
 use mip_texture_array::MippedArrayTexturePlugin;

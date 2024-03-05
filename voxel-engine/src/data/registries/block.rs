@@ -12,7 +12,7 @@ use crate::data::{
 use super::{error::BlockVariantRegistryLoadError, texture::TextureRegistry, Registry};
 
 pub const MAX_RECURSION_DEPTH: usize = 8;
-pub static BLOCK_VARIANT_FILE_EXTENSION: &'static str = "variant";
+pub static BLOCK_VARIANT_FILE_EXTENSION: &'static str = "block";
 
 #[derive(Debug, Clone)]
 pub struct BlockVariantRegistryEntry<'a> {

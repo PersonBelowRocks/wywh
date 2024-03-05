@@ -16,9 +16,9 @@ use crate::{
 use super::{
     error::TextureAtlasesGetAssetError,
     registries::{
+        block::{BlockOptions, BlockVariantRegistry, BlockVariantRegistryLoader},
         error::{BlockVariantRegistryLoadError, TextureRegistryError},
         texture::{TexregFaces, TextureRegistry},
-        variant::{BlockOptions, BlockVariantRegistry, BlockVariantRegistryLoader},
         Registries,
     },
     resourcepath::rpath,

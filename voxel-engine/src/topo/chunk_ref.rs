@@ -9,7 +9,7 @@ use std::{
 use bevy::prelude::IVec3;
 
 use crate::data::{
-    registries::{variant::BlockVariantRegistry, Registry},
+    registries::{block::BlockVariantRegistry, Registry},
     voxel::rotations::BlockModelRotation,
 };
 

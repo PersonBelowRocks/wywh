@@ -1,0 +1,11 @@
+[options]
+transparency = "opaque"
+subdividable = false
+
+[model.root]
+up = "debug_texture"
+down = "debug_texture"
+left = "debug_texture"
+right = "debug_texture"
+front = "debug_texture"
+back = "debug_texture"

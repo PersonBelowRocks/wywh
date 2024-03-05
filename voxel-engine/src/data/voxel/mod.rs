@@ -45,25 +45,76 @@ pub enum SubmodelFaceTexture {
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BlockSubmodel([SubmodelFaceTexture; 6]);
+pub struct BlockSubmodel(FaceMap<SubmodelFaceTexture>);
 
 impl BlockSubmodel {
-    pub(crate) fn from_arr(arr: [SubmodelFaceTexture; 6]) -> Self {
-        Self(arr)
+    fn selfref_no_tex_rot_submodel(model_rotation: BlockModelRotation) -> BlockSubmodel {
+        let mut map = FaceMap::<SubmodelFaceTexture>::new();
+
+        for model_face in BlockModelFace::FACES {
+            let world_face = model_rotation.get_cardinal_face(model_face);
+            map.set(
+                world_face,
+                SubmodelFaceTexture::SelfFace {
+                    face: model_face,
+                    rotation: Default::default(),
+                },
+            );
+        }
+
+        BlockSubmodel::from_map(map).unwrap()
     }
 
-    pub fn get_texture(&self, face: Face) -> FaceTexture {
-        todo!()
+    pub fn from_map(map: FaceMap<SubmodelFaceTexture>) -> Option<Self> {
+        if map.is_filled() {
+            Some(Self(map))
+        } else {
+            None
+        }
     }
 }
 
 impl BlockModel {
-    pub fn submodel(&self, direction: Face) -> &BlockSubmodel {
-        todo!()
+    pub fn submodel(&self, direction: Face) -> SubmodelRef<'_> {
+        let submodel =
+            *self
+                .directions
+                .get(direction)
+                .unwrap_or(&BlockSubmodel::selfref_no_tex_rot_submodel(
+                    BlockModelRotation::DEFAULT,
+                ));
+
+        SubmodelRef {
+            parent: &self,
+            model: submodel,
+        }
     }
 
-    pub fn default_submodel(&self) -> &BlockSubmodel {
-        todo!()
+    pub fn default_submodel(&self) -> SubmodelRef<'_> {
+        SubmodelRef {
+            parent: &self,
+            model: BlockSubmodel::selfref_no_tex_rot_submodel(BlockModelRotation::DEFAULT),
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct SubmodelRef<'a> {
+    parent: &'a BlockModel,
+    model: BlockSubmodel,
+}
+
+impl<'a> SubmodelRef<'a> {
+    pub fn texture(&self, face: Face) -> FaceTexture {
+        match *self.model.0.get(face).unwrap() {
+            SubmodelFaceTexture::Unique(tex) => tex,
+            SubmodelFaceTexture::SelfFace { face, rotation } => {
+                let mut tex = *self.parent.model.get(face).unwrap();
+                tex.rotation += rotation;
+
+                tex
+            }
+        }
     }
 }
 

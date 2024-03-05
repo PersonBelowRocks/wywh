@@ -8,7 +8,7 @@ use noise::{NoiseFn, Perlin};
 use parking_lot::RwLock;
 
 use crate::data::{
-    registries::{variant::BlockVariantRegistry, Registries, Registry},
+    registries::{block::BlockVariantRegistry, Registries, Registry},
     resourcepath::{rpath, ResourcePath},
     tile::{Face, Transparency},
     voxel::rotations::BlockModelRotation,

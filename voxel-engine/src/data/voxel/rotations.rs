@@ -154,6 +154,11 @@ pub struct BlockModelRotation {
 }
 
 impl BlockModelRotation {
+    pub const DEFAULT: Self = Self {
+        fwd: Face::North,
+        up: Face::Top,
+    };
+
     pub fn new(fwd: Face, up: Face) -> Option<Self> {
         if fwd.is_orthogonal(up) {
             Some(Self { fwd, up })

@@ -6,7 +6,7 @@ use crate::{
             BlockModelCreationError, FaceTextureDescParseError, SubmodelFaceTextureDescParseError,
         },
         registries::{
-            error::TextureNotFound, texture::TextureRegistry, variant::BlockOptions, Registry,
+            block::BlockOptions, error::TextureNotFound, texture::TextureRegistry, Registry,
         },
         resourcepath::ResourcePath,
         texture::{FaceTexture, FaceTextureRotation},
@@ -24,13 +24,13 @@ use super::{
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 pub struct BlockVariantDescriptor {
     pub options: BlockOptions,
-    #[serde(flatten)]
     pub model: Option<BlockModelDescriptor>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 pub struct BlockModelDescriptor {
-    pub model: BlockModelFaceMap<FaceTextureDescriptor>,
+    pub root: BlockModelFaceMap<FaceTextureDescriptor>,
+    #[serde(default)]
     pub directions: FaceMap<SubmodelDescriptor>,
 }
 
@@ -43,7 +43,7 @@ impl BlockModelDescriptor {
             let mut map = BlockModelFaceMap::<FaceTexture>::new();
             for face in BlockModelFace::FACES {
                 let tex_desc = self
-                    .model
+                    .root
                     .get(face)
                     .ok_or(BlockModelCreationError::MissingModelFace(face))?;
 
@@ -65,35 +65,37 @@ impl BlockModelDescriptor {
                     continue;
                 };
 
-                let mut submodel_arr = [None::<SubmodelFaceTexture>; 6];
+                let mut submodel_map = FaceMap::<SubmodelFaceTexture>::new();
 
                 for submodel_face in Face::FACES {
                     let submodel_face_tex_desc = submodel_desc.0.get(submodel_face).ok_or(
                         BlockModelCreationError::MissingDirectionFace(direction, submodel_face),
                     )?;
 
-                    submodel_arr[submodel_face as usize] = Some(match submodel_face_tex_desc {
-                        SubmodelFaceTextureDescriptor::SelfFace { face, rotation } => {
-                            SubmodelFaceTexture::SelfFace {
-                                face: *face,
-                                rotation: *rotation,
+                    submodel_map.set(
+                        submodel_face,
+                        match submodel_face_tex_desc {
+                            SubmodelFaceTextureDescriptor::SelfFace { face, rotation } => {
+                                SubmodelFaceTexture::SelfFace {
+                                    face: *face,
+                                    rotation: *rotation,
+                                }
                             }
-                        }
-                        SubmodelFaceTextureDescriptor::Unique(desc) => {
-                            SubmodelFaceTexture::Unique(FaceTexture::new_rotated(
-                                registry.get_id(&desc.rpath).ok_or(
-                                    BlockModelCreationError::TextureNotFound(desc.rpath.clone()),
-                                )?,
-                                desc.rotation,
-                            ))
-                        }
-                    });
+                            SubmodelFaceTextureDescriptor::Unique(desc) => {
+                                SubmodelFaceTexture::Unique(FaceTexture::new_rotated(
+                                    registry.get_id(&desc.rpath).ok_or(
+                                        BlockModelCreationError::TextureNotFound(
+                                            desc.rpath.clone(),
+                                        ),
+                                    )?,
+                                    desc.rotation,
+                                ))
+                            }
+                        },
+                    );
                 }
 
-                map.set(
-                    direction,
-                    BlockSubmodel::from_arr(submodel_arr.map(Option::unwrap)),
-                );
+                map.set(direction, BlockSubmodel::from_map(submodel_map).unwrap());
             }
 
             map
@@ -284,7 +286,7 @@ mod tests {
     #[test]
     fn parse_block_model_descriptor() {
         let s = r#"
-            [model]
+            [root]
             up = "example.face.up"
             down = "example.face.down"
             left = "example.face.left:-1"
@@ -311,7 +313,7 @@ mod tests {
                 rpath: rpath("example.face.front"),
                 rotation: FaceTextureRotation::default()
             }),
-            de.model.get(BlockModelFace::Front)
+            de.root.get(BlockModelFace::Front)
         );
 
         assert_eq!(
@@ -319,7 +321,7 @@ mod tests {
                 rpath: rpath("example.face.left"),
                 rotation: FaceTextureRotation::new(-1)
             }),
-            de.model.get(BlockModelFace::Left)
+            de.root.get(BlockModelFace::Left)
         );
     }
 
@@ -352,7 +354,7 @@ mod tests {
     #[test]
     fn build_block_model() {
         let desc = BlockModelDescriptor {
-            model: BlockModelFaceMap::from_fn(|_| {
+            root: BlockModelFaceMap::from_fn(|_| {
                 Some(FaceTextureDescriptor {
                     rpath: rpath("rpath.one"),
                     rotation: Default::default(),

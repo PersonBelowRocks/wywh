@@ -3,7 +3,7 @@ use itertools::Itertools;
 
 use crate::{
     data::{
-        registries::{variant::BlockVariantRegistry, Registry},
+        registries::{block::BlockVariantRegistry, Registry},
         voxel::rotations::BlockModelRotation,
     },
     util::cubic::Cubic,

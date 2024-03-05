@@ -12,10 +12,10 @@ use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
 use super::resourcepath::ResourcePath;
 
+pub mod block;
 pub mod error;
 pub mod model;
 pub mod texture;
-pub mod variant;
 
 pub trait Registry: Send + Sync {
     type Id: Sized + Eq + Hash + Clone + Display;

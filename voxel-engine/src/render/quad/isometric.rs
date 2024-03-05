@@ -248,7 +248,7 @@ impl IsometrizedQuad {
 mod tests {
     use crate::{
         data::{
-            registries::{texture::TextureRegistry, variant::BlockVariantRegistry, Registry},
+            registries::{block::BlockVariantRegistry, texture::TextureRegistry, Registry},
             texture::FaceTexture,
         },
         render::quad::anon::Quad,

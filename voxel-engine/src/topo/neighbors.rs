@@ -162,7 +162,7 @@ mod tests {
 
     use crate::{
         data::{
-            registries::{variant::BlockVariantRegistry, Registry},
+            registries::{block::BlockVariantRegistry, Registry},
             tile::Transparency,
         },
         topo::access::{self, HasBounds},

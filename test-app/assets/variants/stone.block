@@ -1,0 +1,11 @@
+[options]
+transparency = "opaque"
+subdividable = false
+
+[model.root]
+up = "stone"
+down = "stone"
+left = "stone"
+right = "stone"
+front = "stone"
+back = "stone"

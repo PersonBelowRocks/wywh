@@ -1,0 +1,11 @@
+[options]
+transparency = "opaque"
+subdividable = false
+
+[model.root]
+up = "water"
+down = "water"
+left = "water"
+right = "water"
+front = "water"
+back = "water"

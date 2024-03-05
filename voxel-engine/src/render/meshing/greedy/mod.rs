@@ -2,7 +2,7 @@ use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 
 use crate::{
     data::{
-        registries::{variant::BlockVariantRegistry, Registry, RegistryRef},
+        registries::{block::BlockVariantRegistry, Registry, RegistryRef},
         tile::Face,
         voxel::VoxelModel,
     },
@@ -164,7 +164,7 @@ impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
                 None => model.default_submodel(),
             };
 
-            let texture = submodel.get_texture(self.face);
+            let texture = submodel.texture(self.face);
             let quad = DataQuad::new(Quad::ONE, texture);
 
             Ok(Some(quad))
