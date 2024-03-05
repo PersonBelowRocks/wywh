@@ -8,7 +8,8 @@ members = [
 ]
 
 [workspace.dependencies]
-bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "2c7eab1b4c4ec6c533b6b609d5ddf8a7282f2c4f"}
+# bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "2c7eab1b4c4ec6c533b6b609d5ddf8a7282f2c4f"}
+bevy = "0.13"
 
 [profile.release]
 opt-level = 2

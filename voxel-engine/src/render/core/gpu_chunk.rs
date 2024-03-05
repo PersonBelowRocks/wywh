@@ -1,6 +1,6 @@
 use bevy::{
     ecs::{
-        entity::Entity,
+        entity::{Entity, EntityHashMap},
         query::{ROQueryItem, With},
         system::{lifetimeless::SRes, Local, Query, Res, ResMut, Resource, SystemParamItem},
         world::{FromWorld, World},
@@ -14,7 +14,6 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
         Extract,
     },
-    utils::EntityHashMap,
 };
 
 use crate::{
@@ -77,7 +76,7 @@ pub fn prepare_chunk_render_data(
 
 #[derive(Resource)]
 pub struct ChunkRenderDataStore {
-    pub map: EntityHashMap<Entity, ChunkRenderData>,
+    pub map: EntityHashMap<ChunkRenderData>,
     pub layout: BindGroupLayout,
 }
 

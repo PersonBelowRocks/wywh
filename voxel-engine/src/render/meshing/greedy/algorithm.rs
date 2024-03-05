@@ -12,6 +12,7 @@ use bevy::prelude::Color;
 use bevy::prelude::StandardMaterial;
 use bevy::render::mesh::Indices;
 use bevy::render::mesh::Mesh;
+use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
 
 use crate::data::registries::block::BlockVariantRegistry;
@@ -288,7 +289,7 @@ impl Mesher for GreedyMesher {
             gpu_quads.push(gpu_quad);
         }
 
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::all());
 
         // The index buffer
         let mut vertex_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 6);

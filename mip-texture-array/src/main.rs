@@ -1,7 +1,10 @@
 use bevy::{
     math::vec3,
     prelude::*,
-    render::render_resource::{AsBindGroup, ShaderRef},
+    render::{
+        mesh::shape::{Plane, Quad},
+        render_resource::{AsBindGroup, ShaderRef},
+    },
 };
 use mip_texture_array::{
     asset::MippedArrayTexture, MipArrayTextureBuilder, MippedArrayTexturePlugin,
@@ -30,7 +33,7 @@ fn main() {
         MaterialPlugin::<TestingMaterial>::default(),
     ));
 
-    app.add_state::<AppState>();
+    app.init_state::<AppState>();
 
     app.add_systems(Startup, setup)
         .add_systems(Update, loading.run_if(in_state(AppState::Loading)))
@@ -86,7 +89,7 @@ fn insert_example(
     for mip in 0..4 {
         cmds.spawn(MaterialMeshBundle::<TestingMaterial> {
             transform: Transform::from_translation(vec3(0.0, 0.0, (mip as f32) * 2.1)),
-            mesh: meshes.add(shape::Plane::from_size(2.0).into()),
+            mesh: meshes.add(Rectangle::new(2.0, 2.0)),
             material: materials.add(TestingMaterial {
                 tex: texarr_handle.clone().untyped().typed_unchecked::<Image>(),
                 array_idx: 0,

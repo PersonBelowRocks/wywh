@@ -2,7 +2,7 @@ use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
     render::{
-        render_asset::{PrepareAssetError, RenderAsset},
+        render_asset::{PrepareAssetError, RenderAsset, RenderAssetUsages},
         render_resource::{
             AddressMode, BindGroupEntries, CommandEncoderDescriptor, ComputePassDescriptor,
             Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, Origin3d, PipelineCache,
@@ -163,7 +163,6 @@ fn create_mip_storage_views(
 }
 
 impl RenderAsset for MippedArrayTexture {
-    type ExtractedAsset = Self;
     type PreparedAsset = GpuImage;
 
     type Param = (
@@ -173,28 +172,28 @@ impl RenderAsset for MippedArrayTexture {
         SRes<PipelineCache>,
     );
 
-    fn extract_asset(&self) -> Self::ExtractedAsset {
-        self.clone()
+    fn asset_usage(&self) -> RenderAssetUsages {
+        RenderAssetUsages::all()
     }
 
     fn prepare_asset(
-        asset: Self::ExtractedAsset,
+        self,
         param: &mut SystemParamItem<Self::Param>,
-    ) -> Result<Self::PreparedAsset, PrepareAssetError<Self::ExtractedAsset>> {
+    ) -> Result<Self::PreparedAsset, PrepareAssetError<Self>> {
         let (gpu, queue, pipeline_meta, pipeline_cache) = param;
-        let mip_levels = asset.mipmap_levels();
+        let mip_levels = self.mipmap_levels();
 
         info!(
             "Generating {} mip levels for array texture '{:?}'",
-            mip_levels, asset.label
+            mip_levels, self.label
         );
 
-        let texture = create_array_texture_with_filled_mip_level_0(&asset, gpu, queue);
+        let texture = create_array_texture_with_filled_mip_level_0(&self, gpu, queue);
 
-        let views = create_mip_views(mip_levels, &texture, asset.array_layers);
-        let storage_views = create_mip_storage_views(mip_levels, &texture, asset.array_layers);
+        let views = create_mip_views(mip_levels, &texture, self.array_layers);
+        let storage_views = create_mip_storage_views(mip_levels, &texture, self.array_layers);
 
-        let view_sizes = create_mip_view_sizes(mip_levels, asset.dims);
+        let view_sizes = create_mip_view_sizes(mip_levels, self.dims);
 
         let mut bind_groups = vec![];
         for mip_level in 1..mip_levels {
@@ -231,7 +230,7 @@ impl RenderAsset for MippedArrayTexture {
             let size = view_sizes[mip_level as usize];
             let workgroup_count: u32 = (size + WORKGROUP_SIZE_PER_DIM - 1) / WORKGROUP_SIZE_PER_DIM;
 
-            pass.dispatch_workgroups(workgroup_count, workgroup_count, asset.array_layers);
+            pass.dispatch_workgroups(workgroup_count, workgroup_count, self.array_layers);
         }
 
         // wgpu automatically ends the compute pass when dropping it.
@@ -242,7 +241,7 @@ impl RenderAsset for MippedArrayTexture {
 
         info!(
             "Command buffer for array texture '{:?}' submitted to queue.",
-            asset.label
+            self.label
         );
 
         let main_view = texture.create_view(&TextureViewDescriptor {
@@ -274,7 +273,7 @@ impl RenderAsset for MippedArrayTexture {
                 anisotropy_clamp: 1,
                 border_color: None,
             }),
-            size: UVec2::splat(asset.dims).as_vec2(),
+            size: UVec2::splat(self.dims).as_vec2(),
             mip_level_count: mip_levels,
         })
     }

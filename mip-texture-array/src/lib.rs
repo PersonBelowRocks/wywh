@@ -5,7 +5,7 @@ use bevy::{
     asset::load_internal_asset,
     prelude::*,
     render::{
-        render_asset::{RenderAssetPlugin, RenderAssets},
+        render_asset::{RenderAssetPlugin, RenderAssetUsages, RenderAssets},
         render_resource::{Extent3d, SpecializedComputePipelines, TextureDimension, TextureFormat},
         texture::TextureFormatPixelInfo,
         Render, RenderApp, RenderSet,
@@ -145,6 +145,7 @@ impl MipArrayTextureBuilder {
             TextureDimension::D2,
             &self.empty_pixel_data,
             self.format,
+            RenderAssetUsages::all(),
         );
 
         for (idx, asset_id) in self.handles.iter().enumerate() {
