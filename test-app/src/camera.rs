@@ -86,10 +86,10 @@ pub fn kb_controls(
 
     for code in input.get_pressed() {
         match code {
-            KeyCode::W => tfm.translation += fwd * travel,
-            KeyCode::A => tfm.translation -= right * travel,
-            KeyCode::S => tfm.translation -= fwd * travel,
-            KeyCode::D => tfm.translation += right * travel,
+            KeyCode::KeyW => tfm.translation += fwd * travel,
+            KeyCode::KeyA => tfm.translation -= right * travel,
+            KeyCode::KeyS => tfm.translation -= fwd * travel,
+            KeyCode::KeyD => tfm.translation += right * travel,
             KeyCode::Space => tfm.translation.y += travel,
             KeyCode::ShiftLeft | KeyCode::ShiftRight => tfm.translation.y -= travel,
 

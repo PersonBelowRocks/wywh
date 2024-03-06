@@ -91,13 +91,13 @@ pub struct SetRegistryBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetRegistryBindGroup<I> {
     type Param = SRes<RegistryBindGroup>;
 
-    type ViewData = ();
-    type ItemData = ();
+    type ViewQuery = ();
+    type ItemQuery = ();
 
     fn render<'w>(
         _item: &P,
-        _view: ROQueryItem<'w, Self::ViewData>,
-        _entity: ROQueryItem<'w, Self::ItemData>,
+        _view: ROQueryItem<'w, Self::ViewQuery>,
+        _entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {

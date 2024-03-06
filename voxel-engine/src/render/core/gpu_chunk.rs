@@ -177,14 +177,13 @@ pub struct SetChunkBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetChunkBindGroup<I> {
     type Param = SRes<ChunkRenderDataStore>;
 
-    type ViewData = ();
-
-    type ItemData = ();
+    type ViewQuery = ();
+    type ItemQuery = ();
 
     fn render<'w>(
         item: &P,
-        _view: ROQueryItem<'w, Self::ViewData>,
-        _entity: ROQueryItem<'w, Self::ItemData>,
+        _view: ROQueryItem<'w, Self::ViewQuery>,
+        _entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {

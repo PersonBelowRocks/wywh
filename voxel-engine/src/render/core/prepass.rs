@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetServer, Handle},
+    asset::{AssetId, AssetServer, Handle},
     core_pipeline::{
         core_3d::CORE_3D_DEPTH_FORMAT,
         prepass::{
@@ -12,7 +12,7 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
-    log::error,
+    log::{error, info},
     pbr::{
         DrawMesh, MeshLayouts, MeshPipelineKey, PreviousViewProjection, RenderMeshInstances,
         SetMeshBindGroup, SetPrepassViewBindGroup,
@@ -366,12 +366,13 @@ pub fn queue_prepass_chunks(
 
             let distance =
                 rangefinder.distance_translation(&mesh_instance.transforms.transform.translation);
-
             phase.add(Opaque3dPrepass {
                 entity: *entity,
                 draw_function: draw_function,
                 pipeline_id,
-                distance,
+                // this asset ID is seemingly just for some sorting stuff bevy does, but we have our own
+                // logic so we don't care about what bevy would use this field for, so we set it to the default asset ID
+                asset_id: mesh_instance.mesh_asset_id,
                 batch_range: 0..1,
                 dynamic_offset: None,
             });

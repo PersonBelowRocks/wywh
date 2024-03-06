@@ -325,7 +325,7 @@ impl Mesher for GreedyMesher {
             current_idx += 4;
         }
 
-        mesh.set_indices(Some(Indices::U32(vertex_indices)));
+        mesh.insert_indices(Indices::U32(vertex_indices));
         mesh.insert_attribute(RenderCore::QUAD_INDEX_ATTR, quad_indices);
         // mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 

@@ -83,7 +83,7 @@ impl Plugin for VoxelPlugin {
         app.add_plugins(MippedArrayTexturePlugin::default());
 
         app.add_event::<GenerateChunk>();
-        app.add_state::<AppState>();
+        app.init_state::<AppState>();
 
         app.insert_resource(VariantFolders::new(self.variant_folders.clone()));
 

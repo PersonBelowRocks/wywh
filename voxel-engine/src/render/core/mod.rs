@@ -73,7 +73,7 @@ impl Plugin for RenderCore {
         render_app.add_systems(
             ExtractSchedule,
             (
-                extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>())),
+                extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
                 extract_chunk_render_data,
             ),
         );
@@ -81,7 +81,7 @@ impl Plugin for RenderCore {
             Render,
             (
                 (
-                    prepare_gpu_registry_data.run_if(not(resource_exists::<RegistryBindGroup>())),
+                    prepare_gpu_registry_data.run_if(not(resource_exists::<RegistryBindGroup>)),
                     prepare_chunk_render_data,
                 )
                     .in_set(RenderSet::PrepareResources),

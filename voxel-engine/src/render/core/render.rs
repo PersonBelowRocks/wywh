@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetServer, Handle},
+    asset::{AssetId, AssetServer, Handle},
     core_pipeline::{
         core_3d::Opaque3d,
         prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass},
@@ -286,7 +286,7 @@ pub fn queue_chunks(
                 entity: *entity,
                 draw_function: draw_chunk,
                 pipeline: pipeline_id,
-                distance,
+                asset_id: mesh_instance.mesh_asset_id,
                 batch_range: 0..1,
                 dynamic_offset: None,
             });
