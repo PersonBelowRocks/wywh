@@ -183,7 +183,7 @@ fn setup(
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             color: Color::WHITE,
-            illuminance: 100000.0,
+            illuminance: 10000.0,
             shadows_enabled: true,
 
             ..default()
@@ -220,7 +220,7 @@ fn setup(
                 SpotLightBundle {
                     spot_light: SpotLight {
                         color: Color::WHITE,
-                        intensity: 3000.0,
+                        intensity: 1000000.0,
                         shadows_enabled: true,
                         inner_angle: PI / 8.0 * 0.85,
                         outer_angle: PI / 8.0,

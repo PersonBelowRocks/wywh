@@ -6,7 +6,6 @@
 #import "shaders/utils.wgsl"::axis_from_face
 #import "shaders/utils.wgsl"::extract_face
 
-#import bevy_render::instance_index::get_instance_index
 #import bevy_pbr::{
     mesh_functions, 
     view_transformations::position_world_to_clip
@@ -33,7 +32,7 @@ fn vertex(
     out.world_position = mesh_functions::mesh_position_local_to_world(model, vec4<f32>(position, 1.0));
     out.position = position_world_to_clip(out.world_position.xyz);
 
-    out.instance_index = get_instance_index(instance_index);
+    out.instance_index = instance_index;
 
     return out;
 }

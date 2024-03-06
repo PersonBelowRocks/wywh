@@ -306,7 +306,7 @@ fn create_pbr_input(
         quad.magnitude - max(0, face_signum(face)),
     );
 
-    pbr_input.occlusion = vec3(1.0 - vis);
+    pbr_input.diffuse_occlusion = vec3(1.0 - vis);
 
     if (face_texture.flags & HAS_NORMAL_MAP_BIT) != 0u {
         pbr_input.N = apply_normal_mapping(
