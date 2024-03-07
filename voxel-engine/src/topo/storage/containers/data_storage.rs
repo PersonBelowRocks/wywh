@@ -35,16 +35,16 @@ impl<T> SyncLayeredChunkContainer<T> {
     }
 }
 
-pub struct SlccAccess<'a, T: Copy>(RwLockWriteGuard<'a, LayeredChunkStorage<T>>);
+pub struct SlccAccess<'a, T>(RwLockWriteGuard<'a, LayeredChunkStorage<T>>);
 
-impl<'a, T: Copy> ChunkBounds for SlccAccess<'a, T> {}
+impl<'a, T> ChunkBounds for SlccAccess<'a, T> {}
 
-impl<'a, T: Copy> ReadAccess for SlccAccess<'a, T> {
+impl<'a, T: 'a> ReadAccess for SlccAccess<'a, T> {
     type ReadErr = OutOfBounds;
-    type ReadType = Option<T>;
+    type ReadType = Option<&'a T>;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        self.0.get(pos)
+        todo!() // self.0.get(pos)
     }
 }
 
@@ -68,10 +68,10 @@ impl<'a, T: Copy> ChunkBounds for SlccReadAccess<'a, T> {}
 
 impl<'a, T: Copy> ReadAccess for SlccReadAccess<'a, T> {
     type ReadErr = OutOfBounds;
-    type ReadType = Option<T>;
+    type ReadType = Option<&'a T>;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        self.0.get(pos)
+        todo!() // self.0.get(pos)
     }
 }
 
@@ -99,10 +99,7 @@ impl<T: hash::Hash + Eq, S: BuildHasher> SyncIndexedChunkContainer<T, S> {
         SiccAccess(self.0.write())
     }
 
-    pub fn read_access(&self) -> SiccReadAccess<'_, T, S>
-    where
-        T: Copy,
-    {
+    pub fn read_access(&self) -> SiccReadAccess<'_, T, S> {
         SiccReadAccess(self.0.read())
     }
 }
@@ -132,12 +129,12 @@ impl<'a, T: hash::Hash + Eq, S: BuildHasher> WriteAccess for SiccAccess<'a, T, S
     }
 }
 
-impl<'a, T: hash::Hash + Eq + Copy, S: BuildHasher> ReadAccess for SiccAccess<'a, T, S> {
+impl<'a, T: hash::Hash + Eq, S: BuildHasher> ReadAccess for SiccAccess<'a, T, S> {
     type ReadErr = OutOfBounds;
-    type ReadType = Option<T>;
+    type ReadType = Option<&'a T>;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        Ok(self.0.get(pos)?.copied())
+        Ok(self.0.get(pos)?)
     }
 }
 
@@ -147,11 +144,11 @@ pub struct SiccReadAccess<'a, T: hash::Hash + Eq, S: BuildHasher>(
 
 impl<'a, T: hash::Hash + Eq, S: BuildHasher> ChunkBounds for SiccReadAccess<'a, T, S> {}
 
-impl<'a, T: hash::Hash + Eq + Copy, S: BuildHasher> ReadAccess for SiccReadAccess<'a, T, S> {
+impl<'a, T: hash::Hash + Eq, S: BuildHasher> ReadAccess for SiccReadAccess<'a, T, S> {
     type ReadErr = OutOfBounds;
-    type ReadType = Option<T>;
+    type ReadType = Option<&'a T>;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        Ok(self.0.get(pos)?.copied())
+        Ok(self.0.get(pos)?)
     }
 }

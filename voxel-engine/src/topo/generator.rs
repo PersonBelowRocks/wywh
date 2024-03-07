@@ -16,6 +16,7 @@ use crate::data::{
 
 use super::{
     access::{ChunkBounds, HasBounds, WriteAccess},
+    block::BlockVoxel,
     chunk::{Chunk, ChunkPos, VoxelVariantData},
     chunk_ref::ChunkVoxelInput,
     error::{ChunkAccessError, GeneratorError},
@@ -35,7 +36,7 @@ pub enum GeneratorChoice {
 }
 
 pub struct GeneratorInputAccess<'a> {
-    variants: &'a mut IndexedChunkStorage<VoxelVariantData>,
+    variants: &'a mut IndexedChunkStorage<BlockVoxel>,
 }
 
 impl<'a> ChunkBounds for GeneratorInputAccess<'a> {}
@@ -45,8 +46,7 @@ impl<'a> WriteAccess for GeneratorInputAccess<'a> {
     type WriteErr = ChunkAccessError;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.variants
-            .set(pos, VoxelVariantData::new(data.variant, data.rotation))?;
+        self.variants.set(pos, todo!())?;
 
         Ok(())
     }
@@ -54,7 +54,7 @@ impl<'a> WriteAccess for GeneratorInputAccess<'a> {
 
 pub struct GeneratorInput {
     transparency: DenseChunkContainer<Transparency>,
-    variants: IndexedChunkStorage<VoxelVariantData>,
+    variants: IndexedChunkStorage<BlockVoxel>,
 }
 
 impl GeneratorInput {

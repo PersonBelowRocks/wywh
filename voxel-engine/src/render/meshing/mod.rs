@@ -17,19 +17,19 @@ use self::error::MesherResult;
 use super::{occlusion::ChunkOcclusionMap, quad::ChunkQuads};
 
 pub trait Mesher: Clone + Send + Sync + 'static {
-    fn build<A, Nb>(
+    fn build<'reg, 'chunk, A, Nb>(
         &self,
         access: A,
-        context: Context<Nb>,
+        context: Context<'reg, 'chunk, Nb>,
     ) -> MesherResult<A::ReadErr, Nb::ReadErr>
     where
-        A: ChunkAccess,
-        Nb: ChunkAccess;
+        A: ChunkAccess<'chunk>,
+        Nb: ChunkAccess<'chunk>;
 }
 
-pub struct Context<'a, A: ChunkAccess> {
-    pub neighbors: Neighbors<A>,
-    pub registries: &'a Registries,
+pub struct Context<'reg, 'chunk, Nb: ChunkAccess<'chunk>> {
+    pub neighbors: Neighbors<'chunk, Nb>,
+    pub registries: &'reg Registries,
 }
 
 #[derive(Clone, Debug)]

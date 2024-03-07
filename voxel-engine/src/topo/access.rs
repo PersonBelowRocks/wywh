@@ -5,8 +5,14 @@ use super::bounding_box::BoundingBox;
 use super::chunk::Chunk;
 use super::chunk_ref::ChunkVoxelOutput;
 
-pub trait ChunkAccess: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
-impl<T> ChunkAccess for T where T: ReadAccess<ReadType = ChunkVoxelOutput> + ChunkBounds {}
+pub trait ChunkAccess<'a>
+where
+    Self: ReadAccess<ReadType = ChunkVoxelOutput<'a>>,
+    Self: ChunkBounds,
+{
+}
+
+impl<'a, T> ChunkAccess<'a> for T where T: ReadAccess<ReadType = ChunkVoxelOutput<'a>> + ChunkBounds {}
 
 pub trait ReadAccess {
     type ReadType;
@@ -33,17 +39,4 @@ impl<T: ChunkBounds> HasBounds for T {
     fn bounds(&self) -> BoundingBox {
         Chunk::BOUNDING_BOX
     }
-}
-
-pub trait GeneralAccess:
-    ReadAccess<ReadType = Self::DataType> + WriteAccess<WriteType = Self::DataType> + HasBounds
-{
-    type DataType;
-}
-
-impl<V, DT> GeneralAccess for V
-where
-    V: WriteAccess<WriteType = DT> + ReadAccess<ReadType = DT> + HasBounds,
-{
-    type DataType = DT;
 }

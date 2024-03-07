@@ -137,10 +137,7 @@ fn generate_debug_chunks(mut events: EventWriter<GenerateChunk>) {
 
 fn setup(mut cmds: Commands, registries: Res<Registries>) {
     let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
-    let void_cvo = ChunkVoxelOutput {
-        variant: varreg.get_id(&rpath("void")).unwrap(),
-        rotation: None,
-    };
+    let void_cvo = todo!();
 
     cmds.insert_resource(VoxelRealm::new(void_cvo));
     cmds.insert_resource(DefaultGenerator(Generator::new(

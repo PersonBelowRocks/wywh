@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use super::block::BlockVoxel;
 use super::bounding_box::BoundingBox;
 use super::storage::containers::data_storage::SyncIndexedChunkContainer;
 use crate::data::registries::block::BlockVariantRegistry;
@@ -44,7 +45,7 @@ pub struct VoxelVariantData {
 }
 
 pub struct Chunk {
-    pub variants: SyncIndexedChunkContainer<VoxelVariantData>,
+    pub variants: SyncIndexedChunkContainer<BlockVoxel>,
 }
 
 const CHUNK_SIZE: usize = 16;

@@ -30,38 +30,26 @@ impl<T> WriteAccess for DenseChunkStorage<T> {
     }
 }
 
-impl<T: Copy> ReadAccess for DenseChunkStorage<T> {
-    type ReadType = T;
-    type ReadErr = ChunkAccessError;
-
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        let idx = util::try_ivec3_to_usize_arr(pos).map_err(|_| ChunkAccessError::OutOfBounds)?;
-        self.get_ref(idx)
-            .ok_or(ChunkAccessError::OutOfBounds)
-            .cloned()
-    }
-}
-
 #[derive(Clone)]
 pub enum DenseChunkContainer<T> {
     Filled(Box<DenseChunkStorage<T>>),
     Empty,
 }
 
-pub struct AutoDenseContainerAccess<'a, T: Copy> {
+pub struct AutoDenseContainerAccess<'a, T> {
     container: &'a mut DenseChunkContainer<T>,
     default: T,
 }
 
-impl<'a, T: Copy> AutoDenseContainerAccess<'a, T> {
+impl<'a, T> AutoDenseContainerAccess<'a, T> {
     pub fn new(container: &'a mut DenseChunkContainer<T>, default: T) -> Self {
         Self { container, default }
     }
 }
 
-impl<'a, T: Copy> ReadAccess for AutoDenseContainerAccess<'a, T> {
+impl<'a, T> ReadAccess for AutoDenseContainerAccess<'a, T> {
     type ReadErr = ChunkAccessError;
-    type ReadType = T;
+    type ReadType = &'a T;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
         if !Chunk::BOUNDING_BOX.contains(pos) {
@@ -69,8 +57,8 @@ impl<'a, T: Copy> ReadAccess for AutoDenseContainerAccess<'a, T> {
         }
 
         match &self.container {
-            DenseChunkContainer::Empty => Ok(self.default),
-            DenseChunkContainer::Filled(storage) => storage.get(pos),
+            DenseChunkContainer::Empty => Ok(&self.default),
+            DenseChunkContainer::Filled(storage) => todo!(), // storage.get(pos),
         }
     }
 }
@@ -124,7 +112,7 @@ impl<T: Copy> DenseChunkContainer<T> {
     pub(crate) fn internal_get(&self, pos: IVec3) -> Result<T, ChunkAccessError> {
         match self {
             Self::Empty => Err(ChunkAccessError::NotInitialized),
-            Self::Filled(b) => b.get(pos),
+            Self::Filled(b) => todo!(), // b.get(pos),
         }
     }
 
@@ -157,39 +145,6 @@ impl<T: Copy> SyncDenseChunkContainer<T> {
 
     pub fn read_access(&self) -> SyncDenseContainerReadAccess<'_, T> {
         SyncDenseContainerReadAccess(self.0.read())
-    }
-}
-
-impl<'a, T: Copy> ReadAccess for SyncDenseContainerAccess<'a, T> {
-    type ReadType = T;
-    type ReadErr = <DenseChunkStorage<T> as ReadAccess>::ReadErr;
-
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        self.0.internal_get(pos)
-    }
-}
-
-impl<'a, T: Copy> WriteAccess for SyncDenseContainerAccess<'a, T> {
-    type WriteType = T;
-    type WriteErr = <DenseChunkStorage<T> as WriteAccess>::WriteErr;
-
-    fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.0.internal_set(pos, data)
-    }
-}
-
-impl<'a, T: Copy> HasBounds for SyncDenseContainerAccess<'a, T> {
-    fn bounds(&self) -> BoundingBox {
-        Chunk::BOUNDING_BOX
-    }
-}
-
-impl<'a, T: Copy> ReadAccess for SyncDenseContainerReadAccess<'a, T> {
-    type ReadType = T;
-    type ReadErr = <DenseChunkStorage<T> as ReadAccess>::ReadErr;
-
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        self.0.internal_get(pos)
     }
 }
 

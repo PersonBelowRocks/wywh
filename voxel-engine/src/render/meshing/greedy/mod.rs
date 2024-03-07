@@ -29,28 +29,30 @@ pub mod greedy_mesh;
 pub mod material;
 
 #[derive(Clone)]
-pub struct ChunkQuadSlice<'a, C: ChunkAccess, Nb: ChunkAccess> {
+pub struct ChunkQuadSlice<'a, 'chunk, C: ChunkAccess<'chunk>, Nb: ChunkAccess<'chunk>> {
     face: Face,
     mag: i32,
 
     access: &'a C,
-    neighbors: &'a Neighbors<Nb>,
+    neighbors: &'a Neighbors<'chunk, Nb>,
     registry: &'a RegistryRef<'a, BlockVariantRegistry>,
 }
 
 pub const MAX: IVec2 = IVec2::splat(Chunk::SIZE);
 
 #[allow(type_alias_bounds)]
-pub type CqsResult<T, C: ChunkAccess, Nb: ChunkAccess> =
+pub type CqsResult<T, C: for<'a> ChunkAccess<'a>, Nb: for<'a> ChunkAccess<'a>> =
     Result<T, CqsError<C::ReadErr, Nb::ReadErr>>;
 
-impl<'a, C: ChunkAccess, Nb: ChunkAccess> ChunkQuadSlice<'a, C, Nb> {
+impl<'a, 'chunk, C: ChunkAccess<'chunk>, Nb: ChunkAccess<'chunk>>
+    ChunkQuadSlice<'a, 'chunk, C, Nb>
+{
     #[inline]
     pub fn new(
         face: Face,
         magnitude: i32,
         access: &'a C,
-        neighbors: &'a Neighbors<Nb>,
+        neighbors: &'a Neighbors<'chunk, Nb>,
         registry: &'a RegistryRef<'a, BlockVariantRegistry>,
     ) -> Result<Self, OutOfBounds> {
         if 0 > magnitude && magnitude > Chunk::SIZE {

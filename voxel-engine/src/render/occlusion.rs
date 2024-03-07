@@ -95,6 +95,18 @@ impl ChunkOcclusionMap {
 
         buffer
     }
+
+    pub fn set(&mut self, pos: IVec3, data: BlockOcclusion) -> Result<(), OutOfBounds> {
+        let idx = ivec3_to_cmo_idx(pos)?;
+        self.0[idx] = data;
+
+        Ok(())
+    }
+
+    pub fn get(&self, pos: IVec3) -> Result<BlockOcclusion, OutOfBounds> {
+        let idx = ivec3_to_cmo_idx(pos)?;
+        Ok(self.0[idx])
+    }
 }
 
 pub(crate) fn ivec3_to_cmo_idx(mut pos: IVec3) -> Result<usize, OutOfBounds> {
@@ -110,28 +122,6 @@ pub(crate) fn ivec3_to_cmo_idx(mut pos: IVec3) -> Result<usize, OutOfBounds> {
 impl HasBounds for ChunkOcclusionMap {
     fn bounds(&self) -> BoundingBox {
         Self::BOUNDS
-    }
-}
-
-impl WriteAccess for ChunkOcclusionMap {
-    type WriteErr = OutOfBounds;
-    type WriteType = BlockOcclusion;
-
-    fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        let idx = ivec3_to_cmo_idx(pos)?;
-        self.0[idx] = data;
-
-        Ok(())
-    }
-}
-
-impl ReadAccess for ChunkOcclusionMap {
-    type ReadErr = OutOfBounds;
-    type ReadType = BlockOcclusion;
-
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
-        let idx = ivec3_to_cmo_idx(pos)?;
-        Ok(self.0[idx])
     }
 }
 

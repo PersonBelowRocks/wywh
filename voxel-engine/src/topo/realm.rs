@@ -12,6 +12,7 @@ use crate::util::{ivec3_to_1d, SyncHashMap};
 
 use super::{
     access::ReadAccess,
+    block::{BlockVoxel, FullBlock},
     chunk::{Chunk, ChunkPos},
     chunk_ref::{ChunkRef, ChunkRefVxlReadAccess, ChunkVoxelOutput},
     error::ChunkManagerError,
@@ -122,15 +123,15 @@ impl<'a, 'b> Iterator for ChangedChunks<'a, 'b> {
 pub struct ChunkManager {
     loaded_chunks: LoadedChunkContainer,
     pending_changes: PendingChunkChanges,
-    default_cvo: ChunkVoxelOutput,
+    default_block: FullBlock,
 }
 
 impl ChunkManager {
-    pub fn new(default_cvo: ChunkVoxelOutput) -> Self {
+    pub fn new(default_block: FullBlock) -> Self {
         Self {
             loaded_chunks: LoadedChunkContainer::default(),
             pending_changes: PendingChunkChanges::default(),
-            default_cvo,
+            default_block,
         }
     }
 
@@ -195,7 +196,7 @@ impl ChunkManager {
             });
         }
 
-        let neighbors = Neighbors::from_raw(accesses, self.default_cvo);
+        let neighbors = Neighbors::from_raw(accesses, BlockVoxel::Full(self.default_block));
         let result = f(neighbors);
 
         drop(refs);
@@ -223,9 +224,9 @@ pub struct VoxelRealm {
 }
 
 impl VoxelRealm {
-    pub fn new(default_cvo: ChunkVoxelOutput) -> Self {
+    pub fn new(default_block: FullBlock) -> Self {
         Self {
-            chunk_manager: Arc::new(ChunkManager::new(default_cvo)),
+            chunk_manager: Arc::new(ChunkManager::new(default_block)),
         }
     }
 }
