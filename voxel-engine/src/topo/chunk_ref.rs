@@ -1,9 +1,8 @@
 use std::{
-    hash::BuildHasher,
-    sync::{
+    fmt, hash::BuildHasher, sync::{
         atomic::{AtomicBool, Ordering},
         Weak,
-    },
+    }
 };
 
 use bevy::prelude::IVec3;
@@ -15,7 +14,7 @@ use crate::data::{
 
 use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
-    block::BlockVoxel,
+    block::{BlockVoxel, FullBlock, SubdividedBlock},
     chunk::{Chunk, ChunkPos, VoxelVariantData},
     error::{ChunkAccessError, ChunkManagerError},
     storage::containers::data_storage::{SiccAccess, SiccReadAccess},
@@ -75,14 +74,23 @@ pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher = ahash::RandomState> {
     pub(crate) variants: SiccReadAccess<'a, BlockVoxel, S>,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum CvoBlock<'a> {
+    Full(FullBlock),
+    Subdivided(&'a SubdividedBlock)
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ChunkVoxelOutput<'a> {
-    pub block: &'a BlockVoxel,
+    pub block: CvoBlock<'a>,
 }
 
 impl<'a> ChunkVoxelOutput<'a> {
     pub fn new(block: &'a BlockVoxel) -> Self {
-        Self { block }
+        match block {
+            BlockVoxel::Full(block) => Self { block: CvoBlock::Full(*block) },
+            BlockVoxel::Subdivided(subdiv) => Self { block: CvoBlock::Subdivided(subdiv)}
+        }
     }
 }
 

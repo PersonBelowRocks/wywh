@@ -144,35 +144,37 @@ impl<'a, 'chunk, C: ChunkAccess<'chunk>, Nb: ChunkAccess<'chunk>>
 
     #[inline(always)]
     pub fn get_quad(&self, pos: IVec2) -> CqsResult<Option<DataQuad>, C, Nb> {
-        let cvo = self.get(pos)?;
-        let transparency = self.registry.get_by_id(cvo.variant).options.transparency;
+        // let cvo = self.get(pos)?;
+        // let transparency = self.registry.get_by_id(cvo.variant).options.transparency;
 
-        let cvo_above = self.get_above(pos)?;
-        let transparency_above = self
-            .registry
-            .get_by_id(cvo_above.variant)
-            .options
-            .transparency;
+        // let cvo_above = self.get_above(pos)?;
+        // let transparency_above = self
+        //     .registry
+        //     .get_by_id(cvo_above.variant)
+        //     .options
+        //     .transparency;
 
-        if transparency.is_transparent() || transparency_above.is_opaque() {
-            // nothing to see here if we're either transparent or the block above is obscuring us
-            return Ok(None);
-        }
+        // if transparency.is_transparent() || transparency_above.is_opaque() {
+        //     // nothing to see here if we're either transparent or the block above is obscuring us
+        //     return Ok(None);
+        // }
 
-        let variant = self.registry.get_by_id(cvo.variant);
-        if let Some(model) = variant.model {
-            let submodel = match cvo.rotation {
-                Some(rotation) => model.submodel(rotation.front()),
-                None => model.default_submodel(),
-            };
+        // let variant = self.registry.get_by_id(cvo.variant);
+        // if let Some(model) = variant.model {
+        //     let submodel = match cvo.rotation {
+        //         Some(rotation) => model.submodel(rotation.front()),
+        //         None => model.default_submodel(),
+        //     };
 
-            let texture = submodel.texture(self.face);
-            let quad = DataQuad::new(Quad::ONE, texture);
+        //     let texture = submodel.texture(self.face);
+        //     let quad = DataQuad::new(Quad::ONE, texture);
 
-            Ok(Some(quad))
-        } else {
-            Ok(None)
-        }
+        //     Ok(Some(quad))
+        // } else {
+        //     Ok(None)
+        // }
+
+        todo!()
     }
 }
 

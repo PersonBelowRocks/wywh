@@ -3,6 +3,8 @@ use std::array;
 use bevy::math::UVec3;
 use slice_of_array::SliceFlatExt;
 
+use crate::topo::storage::error::OutOfBounds;
+
 use super::{uvec_to_usize_arr, CubicArray};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -30,23 +32,23 @@ impl<const S: usize, T> Cubic<S, T> {
         pos.cmplt(UVec3::splat(S as u32)).all()
     }
 
-    pub fn get(&self, pos: UVec3) -> Option<&T> {
+    pub fn get(&self, pos: UVec3) -> Result<&T, OutOfBounds> {
         if !Self::contains(pos) {
-            None
+            Err(OutOfBounds)
         } else {
             let [x, y, z] = uvec_to_usize_arr(pos);
 
-            Some(&self.0[x][y][z])
+            Ok(&self.0[x][y][z])
         }
     }
 
-    pub fn get_mut(&mut self, pos: UVec3) -> Option<&mut T> {
+    pub fn get_mut(&mut self, pos: UVec3) -> Result<&mut T, OutOfBounds> {
         if !Self::contains(pos) {
-            None
+            Err(OutOfBounds)
         } else {
             let [x, y, z] = uvec_to_usize_arr(pos);
 
-            Some(&mut self.0[x][y][z])
+            Ok(&mut self.0[x][y][z])
         }
     }
 
