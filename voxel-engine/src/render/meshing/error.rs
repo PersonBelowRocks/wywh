@@ -2,8 +2,8 @@ use std::error::Error;
 
 use crate::topo::{
     access::ReadAccess,
-    chunk_ref::ChunkRefVxlReadAccess,
-    error::{ChunkManagerError, NeighborAccessError},
+    chunk_ref::{ChunkRefVxlReadAccess, CrVra},
+    error::{ChunkAccessError, ChunkManagerError, NeighborAccessError},
 };
 
 use super::MesherOutput;
@@ -13,25 +13,25 @@ type ReadError = <ChunkRefVxlReadAccess<'static> as ReadAccess>::ReadErr;
 #[derive(te::Error, Debug)]
 pub enum ChunkMeshingError {
     #[error("Mesher error: '{0}'")]
-    MesherError(#[from] MesherError<ReadError, ReadError>),
+    MesherError(#[from] MesherError),
     #[error(transparent)]
     ChunkManagerError(#[from] ChunkManagerError),
 }
 
 #[derive(te::Error, Debug)]
-pub enum MesherError<A: Error, Nb: Error> {
+pub enum MesherError {
     #[error("Access returned an error during meshing: {0}")]
-    AccessError(A),
+    AccessError(ChunkAccessError),
     #[error("Neighbor access returned an error during meshing: {0}")]
-    NeighborAccessError(NeighborAccessError<Nb>),
+    NeighborAccessError(NeighborAccessError),
     #[error("Mesher ran into an internal error: '{0}'")]
     CustomError(Box<dyn Error + Send>),
 }
 
-impl<A: Error, Nb: Error> MesherError<A, Nb> {
+impl MesherError {
     pub fn custom<E: Error + Send + 'static>(error: E) -> Self {
         Self::CustomError(Box::new(error))
     }
 }
 
-pub type MesherResult<A, Nb> = Result<MesherOutput, MesherError<A, Nb>>;
+pub type MesherResult = Result<MesherOutput, MesherError>;

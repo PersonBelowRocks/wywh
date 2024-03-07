@@ -101,7 +101,7 @@ impl SubdividedBlock {
 
         Ok(Microblock {
             rotation: mem::replace(rot_slot, mblock.rotation),
-            block: mem::replace(block_slot, mblock.block)
+            block: mem::replace(block_slot, mblock.block),
         })
     }
 }

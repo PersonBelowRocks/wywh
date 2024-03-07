@@ -1,8 +1,10 @@
 use std::{
-    fmt, hash::BuildHasher, sync::{
+    fmt,
+    hash::BuildHasher,
+    sync::{
         atomic::{AtomicBool, Ordering},
         Weak,
-    }
+    },
 };
 
 use bevy::prelude::IVec3;
@@ -74,10 +76,12 @@ pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher = ahash::RandomState> {
     pub(crate) variants: SiccReadAccess<'a, BlockVoxel, S>,
 }
 
+pub type CrVra<'a> = ChunkRefVxlReadAccess<'a>;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CvoBlock<'a> {
     Full(FullBlock),
-    Subdivided(&'a SubdividedBlock)
+    Subdivided(&'a SubdividedBlock),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -88,8 +92,12 @@ pub struct ChunkVoxelOutput<'a> {
 impl<'a> ChunkVoxelOutput<'a> {
     pub fn new(block: &'a BlockVoxel) -> Self {
         match block {
-            BlockVoxel::Full(block) => Self { block: CvoBlock::Full(*block) },
-            BlockVoxel::Subdivided(subdiv) => Self { block: CvoBlock::Subdivided(subdiv)}
+            BlockVoxel::Full(block) => Self {
+                block: CvoBlock::Full(*block),
+            },
+            BlockVoxel::Subdivided(subdiv) => Self {
+                block: CvoBlock::Subdivided(subdiv),
+            },
         }
     }
 }
@@ -120,9 +128,9 @@ impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
 
 impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlAccess<'a, S> {
     type ReadErr = ChunkAccessError;
-    type ReadType = ChunkVoxelOutput<'a>;
+    type ReadType<'b> = ChunkVoxelOutput<'a> where Self: 'b;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         let variant_data = self
             .variants
             .get(pos)?
@@ -136,9 +144,9 @@ impl<'a, S: BuildHasher> ChunkBounds for ChunkRefVxlAccess<'a, S> {}
 
 impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlReadAccess<'a, S> {
     type ReadErr = ChunkAccessError;
-    type ReadType = ChunkVoxelOutput<'a>;
+    type ReadType<'b> = ChunkVoxelOutput<'a> where Self: 'b;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         let variant_data = self
             .variants
             .get(pos)?

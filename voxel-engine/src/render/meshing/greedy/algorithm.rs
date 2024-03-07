@@ -37,6 +37,7 @@ use crate::topo::access::ChunkAccess;
 use crate::topo::access::WriteAccess;
 use crate::topo::chunk::Chunk;
 
+use crate::topo::chunk_ref::CrVra;
 use crate::topo::ivec_project_to_3d;
 use crate::topo::neighbors::Neighbors;
 
@@ -63,15 +64,11 @@ impl SimplePbrMesher {
 
 // TODO: optimize the hell out of this little guy
 impl Mesher for SimplePbrMesher {
-    fn build<'chunk, A, Nb>(
+    fn build<'reg, 'chunk>(
         &self,
-        _access: A,
-        _cx: Context<'_, 'chunk, Nb>,
-    ) -> MesherResult<A::ReadErr, Nb::ReadErr>
-    where
-        A: ChunkAccess<'chunk>,
-        Nb: ChunkAccess<'chunk>,
-    {
+        _access: CrVra<'chunk>,
+        _cx: Context<'reg, 'chunk>,
+    ) -> MesherResult {
         todo!()
     }
 }
@@ -146,15 +143,11 @@ impl GreedyMesher {
     //     // Ok(occlusion)
     // }
 
-    fn calculate_slice_quads<'chunk, A, Nb>(
+    fn calculate_slice_quads<'chunk>(
         &self,
-        cqs: &ChunkQuadSlice<'_, 'chunk, A, Nb>,
+        cqs: &ChunkQuadSlice<'_, 'chunk>,
         buffer: &mut Vec<IsometrizedQuad>,
-    ) -> Result<(), CqsError<A::ReadErr, Nb::ReadErr>>
-    where
-        A: ChunkAccess<'chunk>,
-        Nb: ChunkAccess<'chunk>,
-    {
+    ) -> Result<(), CqsError> {
         let mut mask = ChunkSliceMask::default();
 
         for x in 0..Chunk::SIZE {
@@ -245,15 +238,11 @@ impl GreedyMesher {
 }
 
 impl Mesher for GreedyMesher {
-    fn build<'reg, 'chunk, A, Nb>(
+    fn build<'reg, 'chunk>(
         &self,
-        access: A,
-        cx: Context<'reg, 'chunk, Nb>,
-    ) -> MesherResult<A::ReadErr, Nb::ReadErr>
-    where
-        A: ChunkAccess<'chunk>,
-        Nb: ChunkAccess<'chunk>,
-    {
+        access: CrVra<'chunk>,
+        cx: Context<'reg, 'chunk>,
+    ) -> MesherResult {
         let varreg = cx
             .registries
             .get_registry::<BlockVariantRegistry>()

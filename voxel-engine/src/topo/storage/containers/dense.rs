@@ -49,9 +49,9 @@ impl<'a, T> AutoDenseContainerAccess<'a, T> {
 
 impl<'a, T> ReadAccess for AutoDenseContainerAccess<'a, T> {
     type ReadErr = ChunkAccessError;
-    type ReadType = &'a T;
+    type ReadType<'b> = &'b T where 'a: 'b;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         if !Chunk::BOUNDING_BOX.contains(pos) {
             Err(ChunkAccessError::OutOfBounds)?
         }

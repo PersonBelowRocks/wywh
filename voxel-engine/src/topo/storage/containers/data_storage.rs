@@ -41,9 +41,9 @@ impl<'a, T> ChunkBounds for SlccAccess<'a, T> {}
 
 impl<'a, T: 'a> ReadAccess for SlccAccess<'a, T> {
     type ReadErr = OutOfBounds;
-    type ReadType = Option<&'a T>;
+    type ReadType<'b> = Option<&'a T> where 'a: 'b;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         todo!() // self.0.get(pos)
     }
 }
@@ -68,9 +68,9 @@ impl<'a, T: Copy> ChunkBounds for SlccReadAccess<'a, T> {}
 
 impl<'a, T: Copy> ReadAccess for SlccReadAccess<'a, T> {
     type ReadErr = OutOfBounds;
-    type ReadType = Option<&'a T>;
+    type ReadType<'b> = Option<&'a T> where Self: 'b;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         todo!() // self.0.get(pos)
     }
 }
@@ -131,9 +131,9 @@ impl<'a, T: hash::Hash + Eq, S: BuildHasher> WriteAccess for SiccAccess<'a, T, S
 
 impl<'a, T: hash::Hash + Eq, S: BuildHasher> ReadAccess for SiccAccess<'a, T, S> {
     type ReadErr = OutOfBounds;
-    type ReadType = Option<&'a T>;
+    type ReadType<'b> = Option<&'b T> where 'a: 'b;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         Ok(self.0.get(pos)?)
     }
 }
@@ -146,9 +146,9 @@ impl<'a, T: hash::Hash + Eq, S: BuildHasher> ChunkBounds for SiccReadAccess<'a, 
 
 impl<'a, T: hash::Hash + Eq, S: BuildHasher> ReadAccess for SiccReadAccess<'a, T, S> {
     type ReadErr = OutOfBounds;
-    type ReadType = Option<&'a T>;
+    type ReadType<'b> = Option<&'b T> where Self: 'b;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr> {
+    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         Ok(self.0.get(pos)?)
     }
 }

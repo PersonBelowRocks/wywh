@@ -161,7 +161,7 @@ impl ChunkManager {
     // TODO: test
     pub fn with_neighbors<F, R>(&self, pos: ChunkPos, mut f: F) -> Result<R, ChunkManagerError>
     where
-        F: for<'a> FnMut(Neighbors<ChunkRefVxlReadAccess<'a, ahash::RandomState>>) -> R,
+        F: for<'a> FnMut(Neighbors<'a>) -> R,
     {
         // we need to make a map of the neighboring chunks so that the references are owned by the function scope
         let mut refs =

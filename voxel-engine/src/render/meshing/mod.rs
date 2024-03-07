@@ -9,7 +9,7 @@ pub use workers::MeshWorkerPool;
 
 use crate::{
     data::registries::Registries,
-    topo::{access::ChunkAccess, neighbors::Neighbors},
+    topo::{access::ChunkAccess, chunk_ref::CrVra, neighbors::Neighbors},
 };
 
 use self::error::MesherResult;
@@ -17,18 +17,15 @@ use self::error::MesherResult;
 use super::{occlusion::ChunkOcclusionMap, quad::ChunkQuads};
 
 pub trait Mesher: Clone + Send + Sync + 'static {
-    fn build<'reg, 'chunk, A, Nb>(
+    fn build<'reg, 'chunk>(
         &self,
-        access: A,
-        context: Context<'reg, 'chunk, Nb>,
-    ) -> MesherResult<A::ReadErr, Nb::ReadErr>
-    where
-        A: ChunkAccess<'chunk>,
-        Nb: ChunkAccess<'chunk>;
+        access: CrVra<'chunk>,
+        context: Context<'reg, 'chunk>,
+    ) -> MesherResult;
 }
 
-pub struct Context<'reg, 'chunk, Nb: ChunkAccess<'chunk>> {
-    pub neighbors: Neighbors<'chunk, Nb>,
+pub struct Context<'reg, 'chunk> {
+    pub neighbors: Neighbors<'chunk>,
     pub registries: &'reg Registries,
 }
 

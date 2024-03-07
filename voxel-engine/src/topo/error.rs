@@ -4,7 +4,7 @@ use crate::util::ConversionError;
 
 use super::storage::error::OutOfBounds;
 
-#[derive(te::Error, Debug, PartialEq, Eq)]
+#[derive(te::Error, Debug, PartialEq, Eq, Clone)]
 pub enum ChunkAccessError {
     /// Could not convert the position vector's components into [`usize`]. (Usually [`i32`] -> [`usize`])
     #[error("{0}")]
@@ -46,9 +46,9 @@ pub enum GeneratorError<E: Error> {
 }
 
 #[derive(te::Error, Debug, Clone)]
-pub enum NeighborAccessError<E: Error> {
+pub enum NeighborAccessError {
     #[error("Attempted to access out of bounds position")]
     OutOfBounds,
     #[error("Underlying access error: {0}")]
-    Internal(#[from] E),
+    Internal(#[from] ChunkAccessError),
 }

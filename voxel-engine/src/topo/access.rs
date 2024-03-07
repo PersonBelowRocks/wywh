@@ -5,21 +5,25 @@ use super::bounding_box::BoundingBox;
 use super::chunk::Chunk;
 use super::chunk_ref::ChunkVoxelOutput;
 
-pub trait ChunkAccess<'a>
+pub trait ChunkAccess<'access>
 where
-    Self: ReadAccess<ReadType = ChunkVoxelOutput<'a>>,
-    Self: ChunkBounds,
+    Self: ReadAccess<ReadType<'access> = ChunkVoxelOutput<'access>>,
+    Self: ChunkBounds + 'access,
 {
 }
 
-impl<'a, T> ChunkAccess<'a> for T where T: ReadAccess<ReadType = ChunkVoxelOutput<'a>> + ChunkBounds {}
+impl<'a, T: 'a> ChunkAccess<'a> for T where
+    T: ReadAccess<ReadType<'a> = ChunkVoxelOutput<'a>> + ChunkBounds
+{
+}
 
 pub trait ReadAccess {
-    type ReadType;
-    // TODO: create custom access error trait that lets a caller check if the access errored due to an out of bounds position
+    type ReadType<'a>
+    where
+        Self: 'a;
     type ReadErr: Error + 'static;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType, Self::ReadErr>;
+    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr>;
 }
 
 pub trait WriteAccess {

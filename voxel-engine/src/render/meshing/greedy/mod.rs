@@ -12,9 +12,9 @@ use crate::{
         isometric::{IsometrizedQuad, PositionedQuad, QuadIsometry},
     },
     topo::{
-        access::ChunkAccess,
+        access::{ChunkAccess, ReadAccess},
         chunk::Chunk,
-        chunk_ref::ChunkVoxelOutput,
+        chunk_ref::{ChunkVoxelOutput, CrVra},
         ivec_project_to_2d, ivec_project_to_3d,
         neighbors::{self, Neighbors},
         storage::error::OutOfBounds,
@@ -29,30 +29,26 @@ pub mod greedy_mesh;
 pub mod material;
 
 #[derive(Clone)]
-pub struct ChunkQuadSlice<'a, 'chunk, C: ChunkAccess<'chunk>, Nb: ChunkAccess<'chunk>> {
+pub struct ChunkQuadSlice<'a, 'chunk> {
     face: Face,
     mag: i32,
 
-    access: &'a C,
-    neighbors: &'a Neighbors<'chunk, Nb>,
+    access: &'a CrVra<'chunk>,
+    neighbors: &'a Neighbors<'chunk>,
     registry: &'a RegistryRef<'a, BlockVariantRegistry>,
 }
 
 pub const MAX: IVec2 = IVec2::splat(Chunk::SIZE);
 
-#[allow(type_alias_bounds)]
-pub type CqsResult<T, C: for<'a> ChunkAccess<'a>, Nb: for<'a> ChunkAccess<'a>> =
-    Result<T, CqsError<C::ReadErr, Nb::ReadErr>>;
+pub type CqsResult<T> = Result<T, CqsError>;
 
-impl<'a, 'chunk, C: ChunkAccess<'chunk>, Nb: ChunkAccess<'chunk>>
-    ChunkQuadSlice<'a, 'chunk, C, Nb>
-{
+impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     #[inline]
     pub fn new(
         face: Face,
         magnitude: i32,
-        access: &'a C,
-        neighbors: &'a Neighbors<'chunk, Nb>,
+        access: &'a CrVra<'chunk>,
+        neighbors: &'a Neighbors<'chunk>,
         registry: &'a RegistryRef<'a, BlockVariantRegistry>,
     ) -> Result<Self, OutOfBounds> {
         if 0 > magnitude && magnitude > Chunk::SIZE {
@@ -105,14 +101,14 @@ impl<'a, 'chunk, C: ChunkAccess<'chunk>, Nb: ChunkAccess<'chunk>>
     }
 
     #[inline]
-    pub fn get_3d(&self, pos: IVec3) -> CqsResult<ChunkVoxelOutput, C, Nb> {
+    pub fn get_3d(&self, pos: IVec3) -> CqsResult<ChunkVoxelOutput> {
         self.access.get(pos).map_err(|e| CqsError::AccessError(e))
     }
 
     /// `pos` is in localspace and can exceed the regular chunk bounds by 1 for any component of the vector.
     /// In this case the `ChunkVoxelOutput` is taken from a neighboring chunk.
     #[inline]
-    pub fn auto_neighboring_get(&self, pos: IVec3) -> CqsResult<ChunkVoxelOutput, C, Nb> {
+    pub fn auto_neighboring_get(&self, pos: IVec3) -> CqsResult<ChunkVoxelOutput> {
         if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
             self.get_3d(pos)
         } else if !Self::contains_3d(pos) && neighbors::is_in_bounds_3d(pos) {
@@ -123,7 +119,7 @@ impl<'a, 'chunk, C: ChunkAccess<'chunk>, Nb: ChunkAccess<'chunk>>
     }
 
     #[inline]
-    pub fn get(&self, pos: IVec2) -> CqsResult<ChunkVoxelOutput, C, Nb> {
+    pub fn get(&self, pos: IVec2) -> CqsResult<ChunkVoxelOutput> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
         }
@@ -133,7 +129,7 @@ impl<'a, 'chunk, C: ChunkAccess<'chunk>, Nb: ChunkAccess<'chunk>>
     }
 
     #[inline]
-    pub fn get_above(&self, pos: IVec2) -> CqsResult<ChunkVoxelOutput, C, Nb> {
+    pub fn get_above(&self, pos: IVec2) -> CqsResult<ChunkVoxelOutput> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
         }
@@ -143,7 +139,7 @@ impl<'a, 'chunk, C: ChunkAccess<'chunk>, Nb: ChunkAccess<'chunk>>
     }
 
     #[inline(always)]
-    pub fn get_quad(&self, pos: IVec2) -> CqsResult<Option<DataQuad>, C, Nb> {
+    pub fn get_quad(&self, pos: IVec2) -> CqsResult<Option<DataQuad>> {
         // let cvo = self.get(pos)?;
         // let transparency = self.registry.get_by_id(cvo.variant).options.transparency;
 

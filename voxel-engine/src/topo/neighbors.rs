@@ -15,7 +15,7 @@ use crate::{
     util::ivec3_to_1d,
 };
 
-use super::{access::ChunkAccess, block::BlockVoxel, error::NeighborAccessError};
+use super::{access::ChunkAccess, block::BlockVoxel, chunk_ref::CrVra, error::NeighborAccessError};
 
 fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
     ivec3(
@@ -34,12 +34,9 @@ fn localspace_to_neighbor_localspace(pos: IVec3) -> IVec3 {
 }
 
 // TODO: document what localspace, worldspace, chunkspace, and facespace are
-#[derive(Clone)]
-pub struct Neighbors<'a, C: ChunkAccess<'a>> {
-    chunks: [Option<C>; NEIGHBOR_ARRAY_SIZE],
+pub struct Neighbors<'a> {
+    chunks: [Option<CrVra<'a>>; NEIGHBOR_ARRAY_SIZE],
     default: BlockVoxel,
-
-    _ph: PhantomData<&'a ()>,
 }
 
 /// Test if the provided facespace vector is in bounds
@@ -58,22 +55,18 @@ pub fn is_in_bounds_3d(pos: IVec3) -> bool {
     pos.cmpge(min).all() && pos.cmplt(max).all() && localspace_to_chunk_pos(pos) != IVec3::ZERO
 }
 
-pub type NbResult<T, E> = Result<T, NeighborAccessError<E>>;
+pub type NbResult<'a> = Result<ChunkVoxelOutput<'a>, NeighborAccessError>;
 
 pub const NEIGHBOR_CUBIC_ARRAY_DIMENSIONS: usize = 3;
 pub const NEIGHBOR_ARRAY_SIZE: usize = NEIGHBOR_CUBIC_ARRAY_DIMENSIONS.pow(3);
 
-impl<'a, C: ChunkAccess<'a>> Neighbors<'a, C> {
-    pub fn from_raw(chunks: [Option<C>; NEIGHBOR_ARRAY_SIZE], default: BlockVoxel) -> Self {
-        Self {
-            chunks,
-            default,
-            _ph: PhantomData,
-        }
+impl<'a> Neighbors<'a> {
+    pub fn from_raw(chunks: [Option<CrVra<'a>>; NEIGHBOR_ARRAY_SIZE], default: BlockVoxel) -> Self {
+        Self { chunks, default }
     }
 
     /// `pos` is in localspace
-    fn internal_get(&self, pos: IVec3) -> NbResult<C::ReadType, C::ReadErr> {
+    fn internal_get(&self, pos: IVec3) -> NbResult<'_> {
         let chk_pos = localspace_to_chunk_pos(pos);
 
         if chk_pos == IVec3::ZERO {
@@ -98,7 +91,7 @@ impl<'a, C: ChunkAccess<'a>> Neighbors<'a, C> {
     }
 
     /// `pos` in facespace
-    pub fn get(&self, face: Face, pos: IVec2) -> NbResult<C::ReadType, C::ReadErr> {
+    pub fn get(&self, face: Face, pos: IVec2) -> NbResult<'_> {
         if !is_in_bounds(pos) {
             return Err(NeighborAccessError::OutOfBounds);
         }
@@ -116,7 +109,7 @@ impl<'a, C: ChunkAccess<'a>> Neighbors<'a, C> {
     }
 
     /// `pos` in localspace
-    pub fn get_3d(&self, pos: IVec3) -> NbResult<C::ReadType, C::ReadErr> {
+    pub fn get_3d(&self, pos: IVec3) -> NbResult<'_> {
         if !is_in_bounds_3d(pos) {
             return Err(NeighborAccessError::OutOfBounds);
         }
@@ -134,20 +127,14 @@ fn is_valid_neighbor_chunk_pos(pos: IVec3) -> bool {
     pos != IVec3::ZERO && BB.contains_inclusive(pos)
 }
 
-#[derive(Clone)]
-pub struct NeighborsBuilder<'a, C: ChunkAccess<'a>>(Neighbors<'a, C>);
+pub struct NeighborsBuilder<'a>(Neighbors<'a>);
 
-impl<'a, C: ChunkAccess<'a>> NeighborsBuilder<'a, C> {
+impl<'a> NeighborsBuilder<'a> {
     pub fn new(default: BlockVoxel) -> Self {
-        Self(Neighbors {
-            chunks: Default::default(),
-            default,
-
-            _ph: PhantomData,
-        })
+        Self(Neighbors::from_raw(Default::default(), default))
     }
 
-    pub fn set_neighbor(&mut self, pos: IVec3, access: C) -> Result<(), OutOfBounds> {
+    pub fn set_neighbor(&mut self, pos: IVec3, access: CrVra<'a>) -> Result<(), OutOfBounds> {
         if !is_valid_neighbor_chunk_pos(pos) {
             return Err(OutOfBounds);
         }
@@ -161,7 +148,7 @@ impl<'a, C: ChunkAccess<'a>> NeighborsBuilder<'a, C> {
         Ok(())
     }
 
-    pub fn build(self) -> Neighbors<'a, C> {
+    pub fn build(self) -> Neighbors<'a> {
         self.0
     }
 }

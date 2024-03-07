@@ -2,25 +2,24 @@ use std::error::Error;
 
 use crate::{
     render::meshing::error::MesherError,
-    topo::{error::NeighborAccessError, storage::error::OutOfBounds},
+    topo::{
+        error::{ChunkAccessError, NeighborAccessError},
+        storage::error::OutOfBounds,
+    },
 };
 
 #[derive(te::Error, Debug, Clone)]
-pub enum CqsError<E: Error, NbErr: Error> {
+pub enum CqsError {
     #[error(transparent)]
-    NeighborAccessError(#[from] NeighborAccessError<NbErr>),
+    NeighborAccessError(#[from] NeighborAccessError),
     #[error(transparent)]
-    AccessError(E),
+    AccessError(ChunkAccessError),
     #[error("Position was out of bounds")]
     OutOfBounds,
 }
 
-impl<E, NbErr> From<CqsError<E, NbErr>> for MesherError<E, NbErr>
-where
-    E: Error,
-    NbErr: Error,
-{
-    fn from(value: CqsError<E, NbErr>) -> Self {
+impl From<CqsError> for MesherError {
+    fn from(value: CqsError) -> Self {
         match value {
             CqsError::OutOfBounds => Self::custom(OutOfBounds),
             CqsError::AccessError(err) => Self::AccessError(err),
