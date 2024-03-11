@@ -1,7 +1,7 @@
 use core::fmt;
 use std::mem;
 
-use bevy::math::{uvec3, UVec3};
+use bevy::math::{uvec3, IVec2, UVec3};
 use itertools::Itertools;
 
 use crate::{
@@ -71,6 +71,7 @@ impl fmt::Debug for SubdividedBlock {
 impl SubdividedBlock {
     pub const SUBDIVISIONS: i32 = 4;
     pub const SUBDIVISIONS_USIZE: usize = Self::SUBDIVISIONS as usize;
+    pub const SUBDIVS_VEC: IVec2 = IVec2::splat(Self::SUBDIVISIONS);
 
     /// Test if all subblocks are the same in this block (i.e., it's basically a full block)
     #[inline]
