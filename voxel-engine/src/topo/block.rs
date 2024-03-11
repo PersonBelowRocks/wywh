@@ -12,10 +12,7 @@ use crate::{
     util::cubic::Cubic,
 };
 
-use super::storage::error::OutOfBounds;
-
-pub const SUBDIVISIONS: u32 = 4;
-pub const SUBDIVISIONS_USIZE: usize = SUBDIVISIONS as usize;
+use super::{chunk::Chunk, storage::error::OutOfBounds};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum BlockVoxel {
@@ -46,8 +43,8 @@ pub struct FullBlock {
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct SubdividedBlock {
-    pub rotations: Cubic<{ SUBDIVISIONS_USIZE }, Option<BlockModelRotation>>,
-    pub blocks: Cubic<{ SUBDIVISIONS_USIZE }, <BlockVariantRegistry as Registry>::Id>,
+    pub rotations: Cubic<{ Self::SUBDIVISIONS_USIZE }, Option<BlockModelRotation>>,
+    pub blocks: Cubic<{ Self::SUBDIVISIONS_USIZE }, <BlockVariantRegistry as Registry>::Id>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -72,6 +69,9 @@ impl fmt::Debug for SubdividedBlock {
 }
 
 impl SubdividedBlock {
+    pub const SUBDIVISIONS: i32 = 4;
+    pub const SUBDIVISIONS_USIZE: usize = Self::SUBDIVISIONS as usize;
+
     /// Test if all subblocks are the same in this block (i.e., it's basically a full block)
     #[inline]
     pub fn is_equichromatic(&self) -> bool {

@@ -1,11 +1,15 @@
 use bevy::{math::ivec2, prelude::IVec2};
 
-use crate::topo::chunk::Chunk;
+use crate::{topo::chunk::Chunk, util::SquareArray};
 
-#[derive(Default)]
-pub(crate) struct ChunkSliceMask([[bool; Chunk::USIZE]; Chunk::USIZE]);
+#[derive(Clone)]
+pub(crate) struct ChunkSliceMask(SquareArray<{ Chunk::SUBDIVIDED_CHUNK_USIZE }, bool>);
 
 impl ChunkSliceMask {
+    pub fn new() -> Self {
+        Self([[false; Chunk::SUBDIVIDED_CHUNK_USIZE]; Chunk::SUBDIVIDED_CHUNK_USIZE])
+    }
+
     pub fn contains(pos: IVec2) -> bool {
         pos.cmpge(ivec2(0, 0)).all() && pos.cmplt(ivec2(Chunk::SIZE, Chunk::SIZE)).all()
     }

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::block::BlockVoxel;
+use super::block::{BlockVoxel, SubdividedBlock};
 use super::bounding_box::BoundingBox;
 use super::storage::containers::data_storage::SyncIndexedChunkContainer;
 use crate::data::registries::block::BlockVariantRegistry;
@@ -54,6 +54,10 @@ const CHUNK_SIZE: usize = 16;
 impl Chunk {
     pub const USIZE: usize = CHUNK_SIZE;
     pub const SIZE: i32 = Self::USIZE as i32;
+
+    pub const SUBDIVIDED_CHUNK_SIZE: i32 = SubdividedBlock::SUBDIVISIONS * Self::SIZE;
+    pub const SUBDIVIDED_CHUNK_USIZE: usize = Self::SUBDIVIDED_CHUNK_SIZE as usize;
+
     pub const VEC: IVec3 = IVec3::splat(Self::SIZE);
 
     pub const BOUNDING_BOX: BoundingBox = BoundingBox {

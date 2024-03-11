@@ -81,74 +81,12 @@ impl GreedyMesher {
         Self {}
     }
 
-    // fn calculate_occlusion<A, Nb>(
-    //     &self,
-    //     access: &A,
-    //     neighbors: &Neighbors<Nb>,
-    //     registries: &Registries,
-    // ) -> Result<ChunkOcclusionMap, MesherError<A::ReadErr, Nb::ReadErr>>
-    // where
-    //     A: ChunkAccess,
-    //     Nb: ChunkAccess,
-    // {
-    //     let mut occlusion = ChunkOcclusionMap::new();
-    //     // let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
-    //     Ok(occlusion)
-
-    //     // occlusion for the actual chunk
-    //     // for x in 0..Chunk::SIZE {
-    //     //     for y in 0..Chunk::SIZE {
-    //     //         for z in 0..Chunk::SIZE {
-    //     //             let ls_pos = ivec3(x, y, z);
-
-    //     //             let cvo = access
-    //     //                 .get(ls_pos)
-    //     //                 .map_err(|e| MesherError::AccessError(e))?;
-
-    //     //             let variant = varreg.get_by_id(cvo.variant);
-    //     //             if let Some(model) = variant.model {
-    //     //                 todo!()
-    //     //             }
-    //     //         }
-    //     //     }
-    //     // }
-
-    //     // // occlusion for the neighbor chunks
-    //     // for face in Face::FACES {
-    //     //     for x in -1..=Chunk::SIZE {
-    //     //         for y in -1..=Chunk::SIZE {
-    //     //             let pos_on_face = ivec2(x, y);
-
-    //     //             let cvo = neighbors
-    //     //                 .get(face, pos_on_face)
-    //     //                 .map_err(MesherError::NeighborAccessError)?;
-
-    //     //             let variant = varreg.get_by_id(cvo.variant);
-    //     //             if let Some(model) = variant.model {
-    //     //                 let ls_pos = {
-    //     //                     let mut mag = face.axis_direction();
-    //     //                     if mag > 0 {
-    //     //                         mag = Chunk::SIZE;
-    //     //                     }
-
-    //     //                     ivec_project_to_3d(pos_on_face, face, mag)
-    //     //                 };
-
-    //     //                 todo!()
-    //     //             }
-    //     //         }
-    //     //     }
-    //     // }
-
-    //     // Ok(occlusion)
-    // }
-
     fn calculate_slice_quads<'chunk>(
         &self,
         cqs: &ChunkQuadSlice<'_, 'chunk>,
         buffer: &mut Vec<IsometrizedQuad>,
     ) -> Result<(), CqsError> {
-        let mut mask = ChunkSliceMask::default();
+        let mut mask = ChunkSliceMask::new();
 
         for x in 0..Chunk::SIZE {
             for y in 0..Chunk::SIZE {
