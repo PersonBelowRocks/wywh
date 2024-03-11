@@ -18,6 +18,7 @@ use data::{
 use mip_texture_array::MippedArrayTexturePlugin;
 use render::meshing::greedy::algorithm::SimplePbrMesher;
 use topo::{
+    block::FullBlock,
     chunk_ref::ChunkVoxelOutput,
     generator::{GenerateChunk, Generator, GeneratorChoice},
     realm::VoxelRealm,
@@ -137,9 +138,12 @@ fn generate_debug_chunks(mut events: EventWriter<GenerateChunk>) {
 
 fn setup(mut cmds: Commands, registries: Res<Registries>) {
     let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
-    let void_cvo = todo!();
+    let void = FullBlock {
+        rotation: None,
+        block: varreg.get_id(&rpath(BlockVariantRegistry::VOID)).unwrap(),
+    };
 
-    cmds.insert_resource(VoxelRealm::new(void_cvo));
+    cmds.insert_resource(VoxelRealm::new(void));
     cmds.insert_resource(DefaultGenerator(Generator::new(
         112456754,
         registries.as_ref(),

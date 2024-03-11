@@ -23,6 +23,15 @@ pub enum BlockVoxel {
     Subdivided(SubdividedBlock),
 }
 
+impl BlockVoxel {
+    pub fn new_full(block: <BlockVariantRegistry as Registry>::Id) -> Self {
+        Self::Full(FullBlock {
+            rotation: None,
+            block,
+        })
+    }
+}
+
 impl fmt::Debug for BlockVoxel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()

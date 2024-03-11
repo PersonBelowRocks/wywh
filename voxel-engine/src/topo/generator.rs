@@ -36,7 +36,7 @@ pub enum GeneratorChoice {
 }
 
 pub struct GeneratorInputAccess<'a> {
-    variants: &'a mut IndexedChunkStorage<BlockVoxel>,
+    block_variants: &'a mut IndexedChunkStorage<BlockVoxel>,
 }
 
 impl<'a> ChunkBounds for GeneratorInputAccess<'a> {}
@@ -46,7 +46,7 @@ impl<'a> WriteAccess for GeneratorInputAccess<'a> {
     type WriteErr = ChunkAccessError;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.variants.set(pos, todo!())?;
+        self.block_variants.set(pos, data.block)?;
 
         Ok(())
     }
@@ -67,7 +67,7 @@ impl GeneratorInput {
 
     pub fn access(&mut self) -> GeneratorInputAccess<'_> {
         GeneratorInputAccess {
-            variants: &mut self.variants,
+            block_variants: &mut self.variants,
         }
     }
 
@@ -152,10 +152,7 @@ impl Generator {
 
                     access.set(
                         ls_pos,
-                        ChunkVoxelInput {
-                            variant: self.palette.void,
-                            rotation: None,
-                        },
+                        ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.void)),
                     )?;
                 }
             }
@@ -169,10 +166,7 @@ impl Generator {
 
                         access.set(
                             ls_pos,
-                            ChunkVoxelInput {
-                                variant: self.palette.water,
-                                rotation: None,
-                            },
+                            ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.water)),
                         )?;
                     }
                 } else {
@@ -188,10 +182,7 @@ impl Generator {
                         if ws_pos.y <= height {
                             access.set(
                                 ls_pos,
-                                ChunkVoxelInput {
-                                    variant: self.palette.stone,
-                                    rotation: None,
-                                },
+                                ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.stone)),
                             )?;
                         }
                     }

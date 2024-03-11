@@ -63,17 +63,17 @@ impl ChunkRef {
     {
         let chunk = self.chunk.upgrade().ok_or(ChunkManagerError::Unloaded)?;
 
-        let variant_access = chunk.variants.read_access();
+        let block_variant_access = chunk.variants.read_access();
 
         let x = Ok(f(ChunkRefVxlReadAccess {
-            variants: variant_access,
+            block_variants: block_variant_access,
         }));
         x
     }
 }
 
 pub struct ChunkRefVxlReadAccess<'a, S: BuildHasher = ahash::RandomState> {
-    pub(crate) variants: SiccReadAccess<'a, BlockVoxel, S>,
+    pub(crate) block_variants: SiccReadAccess<'a, BlockVoxel, S>,
 }
 
 pub type CrVra<'a> = ChunkRefVxlReadAccess<'a>;
@@ -102,10 +102,9 @@ impl<'a> ChunkVoxelOutput<'a> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug, dm::Constructor)]
 pub struct ChunkVoxelInput {
-    pub variant: <BlockVariantRegistry as Registry>::Id,
-    pub rotation: Option<BlockModelRotation>,
+    pub block: BlockVoxel,
 }
 
 pub struct ChunkRefVxlAccess<'a, S: BuildHasher = ahash::RandomState> {
@@ -117,10 +116,7 @@ impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
     type WriteType = ChunkVoxelInput;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.variants.set(
-            pos,
-            todo!(), // Some(BlockVoxel::new(data.variant, data.rotation)),
-        )?;
+        self.variants.set(pos, Some(data.block))?;
 
         Ok(())
     }
@@ -128,15 +124,15 @@ impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
 
 impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlAccess<'a, S> {
     type ReadErr = ChunkAccessError;
-    type ReadType<'b> = ChunkVoxelOutput<'a> where Self: 'b;
+    type ReadType<'b> = ChunkVoxelOutput<'b> where Self: 'b;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
-        let variant_data = self
+        let block = self
             .variants
             .get(pos)?
             .ok_or(ChunkAccessError::NotInitialized)?;
 
-        Ok(todo!())
+        Ok(ChunkVoxelOutput::new(block))
     }
 }
 
@@ -144,15 +140,15 @@ impl<'a, S: BuildHasher> ChunkBounds for ChunkRefVxlAccess<'a, S> {}
 
 impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlReadAccess<'a, S> {
     type ReadErr = ChunkAccessError;
-    type ReadType<'b> = ChunkVoxelOutput<'a> where Self: 'b;
+    type ReadType<'b> = ChunkVoxelOutput<'b> where Self: 'b;
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
-        let variant_data = self
-            .variants
+        let block = self
+            .block_variants
             .get(pos)?
             .ok_or(ChunkAccessError::NotInitialized)?;
 
-        Ok(todo!())
+        Ok(ChunkVoxelOutput::new(block))
     }
 }
 

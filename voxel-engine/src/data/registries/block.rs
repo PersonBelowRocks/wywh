@@ -203,6 +203,10 @@ pub struct BlockVariantRegistry {
     map: IndexMap<ResourcePath, BlockVariant, ahash::RandomState>,
 }
 
+impl BlockVariantRegistry {
+    pub const VOID: &'static str = "void";
+}
+
 impl Registry for BlockVariantRegistry {
     type Item<'a> = BlockVariantRegistryEntry<'a>;
     type Id = BlockVariantId;
