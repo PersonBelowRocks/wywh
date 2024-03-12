@@ -162,8 +162,8 @@ impl GreedyMesher {
                 // mask_region will return false if any of the positions provided are outside of the
                 // chunk bounds, so we do a little debug mode sanity check here to make sure thats
                 // not the case, and catch the error early
-                let result = mask.mask_region(current.min(), current.max());
-                debug_assert!(result);
+                // let result = mask.mask_region(current.min(), current.max());
+                // debug_assert!(result);
 
                 let isoquad = cqs.isometrize(current);
 

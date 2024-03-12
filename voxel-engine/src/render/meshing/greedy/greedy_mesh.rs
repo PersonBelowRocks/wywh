@@ -5,7 +5,7 @@ use crate::{
     util::SquareArray,
 };
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
 pub(crate) enum TileMask {
     Full,
     #[default]
@@ -69,29 +69,6 @@ impl ChunkSliceMask {
         if min_rem == IVec2::ZERO && max_rem == IVec2::ZERO {
             self.mask_region_inclusive(min, max);
         } else {
-            /*
-            |-----------------------------------|
-            |[][][][]|[][][][]|[][][][]|[][][][]| <- pos_mb = (16, 12), pos = (4, 3) (max pos)
-            |[][][][]|[][][][]|[][][][]|[][][][]|    i.e., pos_mb = pos * 4
-            |[][][][]|[][][][]|[][][][]|P2[][][]|
-            2[][][][]|[][][][]|[][][][]|[][][][]|
-            |-----------------------------------|
-            |[][][][]|[][][][]|[][][][]|[][][][]|
-            |[][][][]|[][][][]|[][][][]|[][][][]| } y_mb = 12, y = 3
-            |[][][][]|[][][][]|[][][][]|[][][][]|
-            1[][][][]|[][][][]|[][][][]|[][][][]|
-            |-----------------------------------|
-            |[][]P1[]|[][][][]|[][][][]|[][][][]|
-            |[][][][]|[][][][]|[][][][]|[][][][]|
-            |[][][][]|[][][][]|[][][][]|[][][][]|
-            0[][][][]|[][][][]|[][][][]|[][][][]|
-            |0-------|1-------|2-------|3-------|
-                        x_mb = 16, x = 4
-
-            P1 = (2, 3) (min)
-            P2 = (13, 9) (max)
-            */
-
             // regular mask on the completely covered tiles, sort of a low-res mask
             self.mask_region_inclusive(min + IVec2::ONE, max - IVec2::ONE);
 
@@ -143,5 +120,59 @@ impl ChunkSliceMask {
         } else {
             Some(self.tiles[pos.x as usize][pos.y as usize])
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /*
+    |-----------------------------------|
+    |[][][][]|[][][][]|[][][][]|[][][][]| <- pos_mb = (16, 12), pos = (4, 3) (max pos)
+    |[][][][]|[][][][]|[][][][]|[][][][]|    i.e., pos_mb = pos * 4
+    |[][][][]|[][][][]|[][][][]|P2[][][]|
+    2[][][][]|[][][][]|[][][][]|[][][][]|
+    |-----------------------------------|
+    |[][][][]|[][][][]|[][][][]|[][][][]|
+    |[][][][]|[][][][]|[][][][]|[][][][]| } y_mb = 12, y = 3
+    |[][][][]|[][][][]|[][][][]|[][][][]|
+    1[][][][]|[][][][]|[][][][]|[][][][]|
+    |-----------------------------------|
+    |[][]P1[]|[][][][]|[][][][]|[][][][]|
+    |[][][][]|[][][][]|[][][][]|[][][][]|
+    |[][][][]|[][][][]|[][][][]|[][][][]|
+    0[][][][]|[][][][]|[][][][]|[][][][]|
+    |0-------|1-------|2-------|3-------|
+                x_mb = 16, x = 4
+
+    P1 = (2, 3) (min)
+    P2 = (13, 9) (max)
+    */
+
+    #[test]
+    fn mask_logic() {
+        let mut mask = ChunkSliceMask::new();
+
+        assert!(mask.mask_mb_region_inclusive(ivec2(2, 3), ivec2(13, 9)));
+        assert!(!mask.is_masked(ivec2(0, 1)).unwrap());
+        assert!(mask.is_masked(ivec2(1, 1)).unwrap());
+        assert!(mask.is_masked(ivec2(2, 1)).unwrap());
+        assert!(!mask.is_masked(ivec2(3, 1)).unwrap());
+
+        assert_eq!(Some(TileMask::Full), mask.get_tile_mask(ivec2(1, 1)));
+        assert_eq!(Some(TileMask::Full), mask.get_tile_mask(ivec2(2, 1)));
+
+        assert_eq!(Some(TileMask::Mosaic), mask.get_tile_mask(ivec2(0, 1)));
+        assert_eq!(Some(TileMask::Mosaic), mask.get_tile_mask(ivec2(3, 1)));
+        assert_eq!(Some(TileMask::Mosaic), mask.get_tile_mask(ivec2(1, 2)));
+        assert_eq!(Some(TileMask::Mosaic), mask.get_tile_mask(ivec2(1, 0)));
+        assert_eq!(Some(TileMask::Mosaic), mask.get_tile_mask(ivec2(0, 0)));
+
+        assert_eq!(Some(TileMask::None), mask.get_tile_mask(ivec2(1, 3)));
+        assert_eq!(Some(TileMask::None), mask.get_tile_mask(ivec2(4, 1)));
+
+        assert!(mask.is_masked_mb(ivec2(2, 3)).unwrap());
+        assert!(mask.is_masked_mb(ivec2(9, 6)).unwrap());
     }
 }
