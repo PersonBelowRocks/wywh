@@ -6,7 +6,7 @@ use crate::topo::{
     error::{ChunkAccessError, ChunkManagerError, NeighborAccessError},
 };
 
-use super::MesherOutput;
+use super::{greedy::error::CqsError, MesherOutput};
 
 type ReadError = <ChunkRefVxlReadAccess<'static> as ReadAccess>::ReadErr;
 
@@ -20,10 +20,8 @@ pub enum ChunkMeshingError {
 
 #[derive(te::Error, Debug)]
 pub enum MesherError {
-    #[error("Access returned an error during meshing: {0}")]
-    AccessError(ChunkAccessError),
-    #[error("Neighbor access returned an error during meshing: {0}")]
-    NeighborAccessError(NeighborAccessError),
+    #[error("CQS error in mesher: {0}")]
+    CqsError(#[from] CqsError),
     #[error("Mesher ran into an internal error: '{0}'")]
     CustomError(Box<dyn Error + Send>),
 }

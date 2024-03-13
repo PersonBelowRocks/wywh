@@ -140,7 +140,7 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
     let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
     let void = FullBlock {
         rotation: None,
-        block: varreg.get_id(&rpath(BlockVariantRegistry::VOID)).unwrap(),
+        id: varreg.get_id(&rpath(BlockVariantRegistry::VOID)).unwrap(),
     };
 
     cmds.insert_resource(VoxelRealm::new(void));

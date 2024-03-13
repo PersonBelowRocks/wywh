@@ -24,7 +24,7 @@ impl BlockVoxel {
     pub fn new_full(block: <BlockVariantRegistry as Registry>::Id) -> Self {
         Self::Full(FullBlock {
             rotation: None,
-            block,
+            id: block,
         })
     }
 }
@@ -38,26 +38,26 @@ impl fmt::Debug for BlockVoxel {
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct FullBlock {
     pub rotation: Option<BlockModelRotation>,
-    pub block: <BlockVariantRegistry as Registry>::Id,
+    pub id: <BlockVariantRegistry as Registry>::Id,
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct SubdividedBlock {
     pub rotations: Cubic<{ Self::SUBDIVISIONS_USIZE }, Option<BlockModelRotation>>,
-    pub blocks: Cubic<{ Self::SUBDIVISIONS_USIZE }, <BlockVariantRegistry as Registry>::Id>,
+    pub ids: Cubic<{ Self::SUBDIVISIONS_USIZE }, <BlockVariantRegistry as Registry>::Id>,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct Microblock {
     pub rotation: Option<BlockModelRotation>,
-    pub block: <BlockVariantRegistry as Registry>::Id,
+    pub id: <BlockVariantRegistry as Registry>::Id,
 }
 
 impl Microblock {
     pub fn as_full_block(&self) -> FullBlock {
         FullBlock {
             rotation: self.rotation,
-            block: self.block,
+            id: self.id,
         }
     }
 }
@@ -73,10 +73,14 @@ impl SubdividedBlock {
     pub const SUBDIVISIONS_USIZE: usize = Self::SUBDIVISIONS as usize;
     pub const SUBDIVS_VEC: IVec2 = IVec2::splat(Self::SUBDIVISIONS);
 
+    pub fn contains(pos: UVec3) -> bool {
+        Cubic::<{ Self::SUBDIVISIONS_USIZE }, ()>::contains(pos)
+    }
+
     /// Test if all subblocks are the same in this block (i.e., it's basically a full block)
     #[inline]
     pub fn is_equichromatic(&self) -> bool {
-        self.blocks.flattened().iter().all_equal() && self.rotations.flattened().iter().all_equal()
+        self.ids.flattened().iter().all_equal() && self.rotations.flattened().iter().all_equal()
     }
 
     /// Try to "merge" all the subblocks into a full block,
@@ -84,10 +88,13 @@ impl SubdividedBlock {
     #[inline]
     pub fn coalesce(&self) -> Option<FullBlock> {
         if self.is_equichromatic() {
-            let block = *self.blocks.get(uvec3(0, 0, 0)).unwrap();
+            let block = *self.ids.get(uvec3(0, 0, 0)).unwrap();
             let rotation = *self.rotations.get(uvec3(0, 0, 0)).unwrap();
 
-            Some(FullBlock { rotation, block })
+            Some(FullBlock {
+                rotation,
+                id: block,
+            })
         } else {
             None
         }
@@ -98,7 +105,7 @@ impl SubdividedBlock {
     pub fn get(&self, pos: UVec3) -> Result<Microblock, OutOfBounds> {
         Ok(Microblock {
             rotation: self.rotations.get(pos).copied()?,
-            block: self.blocks.get(pos).copied()?,
+            id: self.ids.get(pos).copied()?,
         })
     }
 
@@ -107,11 +114,11 @@ impl SubdividedBlock {
     #[inline]
     pub fn set(&mut self, pos: UVec3, mblock: Microblock) -> Result<Microblock, OutOfBounds> {
         let rot_slot = self.rotations.get_mut(pos)?;
-        let block_slot = self.blocks.get_mut(pos)?;
+        let block_slot = self.ids.get_mut(pos)?;
 
         Ok(Microblock {
             rotation: mem::replace(rot_slot, mblock.rotation),
-            block: mem::replace(block_slot, mblock.block),
+            id: mem::replace(block_slot, mblock.id),
         })
     }
 }

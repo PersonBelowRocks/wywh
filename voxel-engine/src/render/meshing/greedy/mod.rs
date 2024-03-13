@@ -3,8 +3,9 @@ use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 use crate::{
     data::{
         registries::{block::BlockVariantRegistry, Registry, RegistryRef},
+        texture::FaceTexture,
         tile::Face,
-        voxel::VoxelModel,
+        voxel::{rotations::BlockModelRotation, VoxelModel},
     },
     render::quad::{
         anon::Quad,
@@ -13,8 +14,9 @@ use crate::{
     },
     topo::{
         access::{ChunkAccess, ReadAccess},
+        block::SubdividedBlock,
         chunk::Chunk,
-        chunk_ref::{ChunkVoxelOutput, CrVra},
+        chunk_ref::{ChunkVoxelOutput, CrVra, CvoBlock},
         ivec_project_to_2d, ivec_project_to_3d,
         neighbors::{self, Neighbors},
         storage::error::OutOfBounds,
@@ -64,6 +66,19 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         })
     }
 
+    fn face_texture_for_variant(
+        &self,
+        variant_id: <BlockVariantRegistry as Registry>::Id,
+        rotation: Option<BlockModelRotation>,
+    ) -> Option<FaceTexture> {
+        let model = self.registry.get_by_id(variant_id).model?;
+        let submodel = rotation
+            .map(|r| model.submodel(r.front()))
+            .unwrap_or(model.default_submodel());
+
+        Some(submodel.texture(self.face))
+    }
+
     pub fn reposition(&mut self, face: Face, magnitude: i32) -> Result<(), OutOfBounds> {
         if 0 > magnitude && magnitude > Chunk::SIZE {
             return Err(OutOfBounds);
@@ -73,6 +88,10 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         self.mag = magnitude;
 
         Ok(())
+    }
+
+    pub fn contains_mb(pos: IVec2) -> bool {
+        Self::contains(pos.div_euclid(SubdividedBlock::SUBDIVS_VEC))
     }
 
     pub fn contains(pos: IVec2) -> bool {
@@ -92,6 +111,15 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     #[inline]
     pub fn pos_3d(&self, pos: IVec2) -> IVec3 {
         ivec_project_to_3d(pos, self.face, self.mag)
+    }
+
+    #[inline]
+    pub fn pos_3d_sd(&self, pos: IVec2) -> IVec3 {
+        ivec_project_to_3d(
+            pos,
+            self.face,
+            self.mag.rem_euclid(SubdividedBlock::SUBDIVISIONS),
+        )
     }
 
     /// Transforms a position from localspace to facespace
@@ -138,37 +166,45 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         self.auto_neighboring_get(pos_above)
     }
 
-    #[inline(always)]
-    pub fn get_quad(&self, pos: IVec2) -> CqsResult<Option<DataQuad>> {
-        // let cvo = self.get(pos)?;
-        // let transparency = self.registry.get_by_id(cvo.variant).options.transparency;
+    /// Get a quad for given position. This function operates on microblock resolution, so the relevant
+    /// block for the provided `pos_mb` is at position `pos_mb / 4` in chunkspace.
+    /// Returns `None` if the microblock at the position is obscured by a block "above" it
+    /// or if the block at the position doesn't have a model.
+    #[inline]
+    pub fn get_quad_mb(&self, pos_mb: IVec2) -> CqsResult<Option<DataQuad>> {
+        let pos = pos_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC);
+        let pos_sd = pos_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC);
 
-        // let cvo_above = self.get_above(pos)?;
-        // let transparency_above = self
-        //     .registry
-        //     .get_by_id(cvo_above.variant)
-        //     .options
-        //     .transparency;
+        // TODO: we need to be able to get individual microblocks for this to work, fix it!
+        let cvo = self.get(pos)?;
+        let cvo_above = self.get_above(pos)?;
 
-        // if transparency.is_transparent() || transparency_above.is_opaque() {
-        //     // nothing to see here if we're either transparent or the block above is obscuring us
-        //     return Ok(None);
-        // }
+        let transparent_above = match cvo_above.block {
+            CvoBlock::Full(block) => self
+                .registry
+                .get_by_id(block.id)
+                .options
+                .transparency
+                .is_transparent(),
 
-        // let variant = self.registry.get_by_id(cvo.variant);
-        // if let Some(model) = variant.model {
-        //     let submodel = match cvo.rotation {
-        //         Some(rotation) => model.submodel(rotation.front()),
-        //         None => model.default_submodel(),
-        //     };
+            CvoBlock::Subdivided(block) => {
+                let pos_sd_3d = self.pos_3d_sd(pos_sd).as_uvec3();
+                let microblock = block
+                    .get(pos_sd_3d)
+                    .map_err(|_| CqsError::SubdivBlockAccessOutOfBounds)?;
 
-        //     let texture = submodel.texture(self.face);
-        //     let quad = DataQuad::new(Quad::ONE, texture);
+                self.registry
+                    .get_by_id(microblock.id)
+                    .options
+                    .transparency
+                    .is_transparent()
+            }
+        };
 
-        //     Ok(Some(quad))
-        // } else {
-        //     Ok(None)
-        // }
+        match cvo.block {
+            CvoBlock::Full(block) => {}
+            CvoBlock::Subdivided(microblocks) => todo!(),
+        }
 
         todo!()
     }

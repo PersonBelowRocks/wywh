@@ -16,14 +16,8 @@ pub enum CqsError {
     AccessError(ChunkAccessError),
     #[error("Position was out of bounds")]
     OutOfBounds,
-}
-
-impl From<CqsError> for MesherError {
-    fn from(value: CqsError) -> Self {
-        match value {
-            CqsError::OutOfBounds => Self::custom(OutOfBounds),
-            CqsError::AccessError(err) => Self::AccessError(err),
-            CqsError::NeighborAccessError(err) => Self::NeighborAccessError(err),
-        }
-    }
+    #[error(
+        "Attempted to access a microblock in a subdivided block with an out-of-bounds position"
+    )]
+    SubdivBlockAccessOutOfBounds,
 }

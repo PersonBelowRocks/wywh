@@ -7,7 +7,7 @@ use std::{
     },
 };
 
-use bevy::prelude::IVec3;
+use bevy::{math::UVec3, prelude::IVec3};
 
 use crate::data::{
     registries::{block::BlockVariantRegistry, Registry},
@@ -16,10 +16,13 @@ use crate::data::{
 
 use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
-    block::{BlockVoxel, FullBlock, SubdividedBlock},
+    block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},
     chunk::{Chunk, ChunkPos, VoxelVariantData},
     error::{ChunkAccessError, ChunkManagerError},
-    storage::containers::data_storage::{SiccAccess, SiccReadAccess},
+    storage::{
+        containers::data_storage::{SiccAccess, SiccReadAccess},
+        error::OutOfBounds,
+    },
 };
 
 #[derive(Clone)]
@@ -82,6 +85,22 @@ pub type CrVra<'a> = ChunkRefVxlReadAccess<'a>;
 pub enum CvoBlock<'a> {
     Full(FullBlock),
     Subdivided(&'a SubdividedBlock),
+}
+
+impl<'a> CvoBlock<'a> {
+    pub fn get_microblock(&self, pos: UVec3) -> Result<Microblock, OutOfBounds> {
+        if SubdividedBlock::contains(pos) {
+            Ok(match self {
+                Self::Full(block) => Microblock {
+                    rotation: block.rotation,
+                    id: block.id,
+                },
+                Self::Subdivided(block) => block.get(pos)?,
+            })
+        } else {
+            Err(OutOfBounds)
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
