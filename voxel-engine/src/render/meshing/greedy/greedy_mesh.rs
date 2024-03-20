@@ -60,11 +60,11 @@ impl ChunkSliceMask {
         let min_mb = IVec2::min(pos1, pos2);
         let max_mb = IVec2::max(pos1, pos2);
 
-        let min_rem = min_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC);
-        let max_rem = max_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC);
+        let min_rem = min_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC2);
+        let max_rem = max_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC2);
 
-        let min = min_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC);
-        let max = max_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC);
+        let min = min_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC2);
+        let max = max_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC2);
 
         if min_rem == IVec2::ZERO && max_rem == IVec2::ZERO {
             self.mask_region_inclusive(min, max);
@@ -98,7 +98,7 @@ impl ChunkSliceMask {
             return None;
         }
 
-        let tile = pos.div_euclid(SubdividedBlock::SUBDIVS_VEC);
+        let tile = pos.div_euclid(SubdividedBlock::SUBDIVS_VEC2);
 
         Some(match self.tiles[tile.x as usize][tile.y as usize] {
             TileMask::Full => true,

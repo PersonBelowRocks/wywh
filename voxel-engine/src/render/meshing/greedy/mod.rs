@@ -5,7 +5,7 @@ use crate::{
         registries::{block::BlockVariantRegistry, Registry, RegistryRef},
         texture::FaceTexture,
         tile::Face,
-        voxel::{rotations::BlockModelRotation, VoxelModel},
+        voxel::{rotations::BlockModelRotation, BlockSubmodel, VoxelModel},
     },
     render::quad::{
         anon::Quad,
@@ -14,7 +14,7 @@ use crate::{
     },
     topo::{
         access::{ChunkAccess, ReadAccess},
-        block::SubdividedBlock,
+        block::{Microblock, SubdividedBlock},
         chunk::Chunk,
         chunk_ref::{ChunkVoxelOutput, CrVra, CvoBlock},
         ivec_project_to_2d, ivec_project_to_3d,
@@ -91,7 +91,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     pub fn contains_mb(pos: IVec2) -> bool {
-        Self::contains(pos.div_euclid(SubdividedBlock::SUBDIVS_VEC))
+        Self::contains(pos.div_euclid(SubdividedBlock::SUBDIVS_VEC2))
     }
 
     pub fn contains(pos: IVec2) -> bool {
@@ -107,10 +107,20 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         IsometrizedQuad::new(iso, quad)
     }
 
+    /// Transforms a position from micro-facespace to micro-localspace
+    #[inline]
+    pub fn pos_3d_mb(&self, pos: IVec2) -> IVec3 {
+        ivec_project_to_3d(pos, self.face, self.mag)
+    }
+
     /// Transforms a position from facespace to localspace
     #[inline]
     pub fn pos_3d(&self, pos: IVec2) -> IVec3 {
-        ivec_project_to_3d(pos, self.face, self.mag)
+        ivec_project_to_3d(
+            pos,
+            self.face,
+            self.mag.div_euclid(SubdividedBlock::SUBDIVISIONS),
+        )
     }
 
     #[inline]
@@ -133,6 +143,22 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         self.access.get(pos).map_err(|e| CqsError::AccessError(e))
     }
 
+    #[inline]
+    pub fn get_mb_3d(&self, pos_mb: IVec3) -> CqsResult<Microblock> {
+        let pos = pos_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC3);
+
+        Ok(match self.get_3d(pos)?.block {
+            CvoBlock::Full(block) => Microblock {
+                rotation: block.rotation,
+                id: block.id,
+            },
+            CvoBlock::Subdivided(block) => {
+                let pos_sd = pos_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC3).as_uvec3();
+                block.get(pos_sd).unwrap()
+            }
+        })
+    }
+
     /// `pos` is in localspace and can exceed the regular chunk bounds by 1 for any component of the vector.
     /// In this case the `ChunkVoxelOutput` is taken from a neighboring chunk.
     #[inline]
@@ -141,6 +167,30 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
             self.get_3d(pos)
         } else if !Self::contains_3d(pos) && neighbors::is_in_bounds_3d(pos) {
             Ok(self.neighbors.get_3d(pos)?)
+        } else {
+            return Err(CqsError::OutOfBounds);
+        }
+    }
+
+    #[inline]
+    pub fn auto_neighboring_get_mb(&self, pos_mb: IVec3) -> CqsResult<Microblock> {
+        let pos = pos_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC3);
+
+        if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
+            self.get_mb_3d(pos_mb)
+        } else if !Self::contains_3d(pos) && neighbors::is_in_bounds_3d(pos) {
+            let nb_block = self.neighbors.get_3d(pos)?.block;
+
+            Ok(match nb_block {
+                CvoBlock::Full(block) => Microblock {
+                    rotation: block.rotation,
+                    id: block.id,
+                },
+                CvoBlock::Subdivided(block) => {
+                    let pos_sd = pos_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC3).as_uvec3();
+                    block.get(pos_sd).unwrap()
+                }
+            })
         } else {
             return Err(CqsError::OutOfBounds);
         }
@@ -157,6 +207,16 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
+    pub fn get_mb(&self, pos_mb: IVec2) -> CqsResult<Microblock> {
+        if !Self::contains_mb(pos_mb) {
+            return Err(CqsError::OutOfBounds);
+        }
+
+        let pos_mb_3d = self.pos_3d_mb(pos_mb);
+        self.get_mb_3d(pos_mb_3d)
+    }
+
+    #[inline]
     pub fn get_above(&self, pos: IVec2) -> CqsResult<ChunkVoxelOutput> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
@@ -166,47 +226,63 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         self.auto_neighboring_get(pos_above)
     }
 
+    #[inline]
+    pub fn get_mb_above(&self, pos_mb: IVec2) -> CqsResult<Microblock> {
+        if !Self::contains_mb(pos_mb) {
+            return Err(CqsError::OutOfBounds);
+        }
+
+        let pos_mb_above = self.pos_3d_mb(pos_mb) + self.face.normal();
+        let pos_above = pos_mb_above.div_euclid(SubdividedBlock::SUBDIVS_VEC3);
+
+        let block = self.auto_neighboring_get(pos_above)?.block;
+
+        Ok(match block {
+            CvoBlock::Full(block) => Microblock {
+                rotation: block.rotation,
+                id: block.id,
+            },
+            CvoBlock::Subdivided(block) => {
+                let pos_sd_above = pos_mb_above
+                    .rem_euclid(SubdividedBlock::SUBDIVS_VEC3)
+                    .as_uvec3();
+                block.get(pos_sd_above).unwrap()
+            }
+        })
+    }
+
     /// Get a quad for given position. This function operates on microblock resolution, so the relevant
     /// block for the provided `pos_mb` is at position `pos_mb / 4` in chunkspace.
     /// Returns `None` if the microblock at the position is obscured by a block "above" it
     /// or if the block at the position doesn't have a model.
     #[inline]
     pub fn get_quad_mb(&self, pos_mb: IVec2) -> CqsResult<Option<DataQuad>> {
-        let pos = pos_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC);
-        let pos_sd = pos_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC);
+        let pos = pos_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC2);
 
-        // TODO: we need to be able to get individual microblocks for this to work, fix it!
-        let cvo = self.get(pos)?;
-        let cvo_above = self.get_above(pos)?;
+        let microblock = self.get_mb(pos)?;
+        let microblock_above = self.get_mb_above(pos)?;
 
-        let transparent_above = match cvo_above.block {
-            CvoBlock::Full(block) => self
-                .registry
-                .get_by_id(block.id)
-                .options
-                .transparency
-                .is_transparent(),
+        let entry = self.registry.get_by_id(microblock.id);
+        let entry_above = self.registry.get_by_id(microblock_above.id);
 
-            CvoBlock::Subdivided(block) => {
-                let pos_sd_3d = self.pos_3d_sd(pos_sd).as_uvec3();
-                let microblock = block
-                    .get(pos_sd_3d)
-                    .map_err(|_| CqsError::SubdivBlockAccessOutOfBounds)?;
-
-                self.registry
-                    .get_by_id(microblock.id)
-                    .options
-                    .transparency
-                    .is_transparent()
-            }
-        };
-
-        match cvo.block {
-            CvoBlock::Full(block) => {}
-            CvoBlock::Subdivided(microblocks) => todo!(),
+        if entry.options.transparency.is_transparent()
+            || entry_above.options.transparency.is_opaque()
+        {
+            return Ok(None);
         }
 
-        todo!()
+        let Some(model) = entry.model else {
+            return Ok(None);
+        };
+
+        let submodel = microblock
+            .rotation
+            .map(|r| model.submodel(r.front()))
+            .unwrap_or(model.default_submodel());
+
+        let texture = submodel.texture(self.face);
+
+        Ok(Some(DataQuad::new(Quad::ONE, texture)))
     }
 }
 

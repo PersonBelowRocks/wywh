@@ -1,7 +1,7 @@
 use core::fmt;
 use std::mem;
 
-use bevy::math::{uvec3, IVec2, UVec3};
+use bevy::math::{uvec3, IVec2, IVec3, UVec3};
 use itertools::Itertools;
 
 use crate::{
@@ -71,7 +71,8 @@ impl fmt::Debug for SubdividedBlock {
 impl SubdividedBlock {
     pub const SUBDIVISIONS: i32 = 4;
     pub const SUBDIVISIONS_USIZE: usize = Self::SUBDIVISIONS as usize;
-    pub const SUBDIVS_VEC: IVec2 = IVec2::splat(Self::SUBDIVISIONS);
+    pub const SUBDIVS_VEC2: IVec2 = IVec2::splat(Self::SUBDIVISIONS);
+    pub const SUBDIVS_VEC3: IVec3 = IVec3::splat(Self::SUBDIVISIONS);
 
     pub fn contains(pos: UVec3) -> bool {
         Cubic::<{ Self::SUBDIVISIONS_USIZE }, ()>::contains(pos)
