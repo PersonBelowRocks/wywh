@@ -2,11 +2,15 @@ use std::{ffi::OsStr, fs::File, io::Read, path::Path};
 
 use indexmap::IndexMap;
 
-use crate::data::{
-    error::BlockVariantFileLoaderError,
-    resourcepath::ResourcePath,
-    tile::Transparency,
-    voxel::{descriptor::BlockVariantDescriptor, BlockModel},
+use crate::{
+    data::{
+        error::BlockVariantFileLoaderError,
+        resourcepath::{rpath, ResourcePath},
+        texture::FaceTexture,
+        tile::Transparency,
+        voxel::{descriptor::BlockVariantDescriptor, rotations::BlockModelFaceMap, BlockModel},
+    },
+    util::FaceMap,
 };
 
 use super::{error::BlockVariantRegistryLoadError, texture::TextureRegistry, Registry};
@@ -194,7 +198,7 @@ impl BlockVariantId {
     }
 
     #[cfg(test)]
-    pub fn new(id: u32) -> Self {
+    pub const fn new(id: u32) -> Self {
         Self(id)
     }
 }
@@ -204,7 +208,62 @@ pub struct BlockVariantRegistry {
 }
 
 impl BlockVariantRegistry {
-    pub const VOID: &'static str = "void";
+    pub const RPATH_VOID: &'static str = "void";
+}
+
+#[cfg(test)]
+impl BlockVariantRegistry {
+    pub const VOID: BlockVariantId = BlockVariantId::new(0);
+
+    pub const RPATH_FULL: &'static str = "full";
+    pub const FULL: BlockVariantId = BlockVariantId::new(1);
+    pub const RPATH_SUBDIV: &'static str = "subdiv";
+    pub const SUBDIV: BlockVariantId = BlockVariantId::new(2);
+
+    pub fn new_mock(registry: &TextureRegistry) -> Self {
+        let mut map = IndexMap::with_hasher(ahash::RandomState::default());
+
+        map.insert(
+            rpath(Self::RPATH_VOID),
+            BlockVariant {
+                options: BlockOptions {
+                    transparency: Transparency::Transparent,
+                    subdividable: true,
+                },
+                model: None,
+            },
+        );
+
+        map.insert(
+            rpath(Self::RPATH_FULL),
+            BlockVariant {
+                options: BlockOptions {
+                    transparency: Transparency::Opaque,
+                    subdividable: false,
+                },
+                model: Some(BlockModel {
+                    directions: FaceMap::new(),
+                    model: BlockModelFaceMap::filled(FaceTexture::new(TextureRegistry::TEX1)),
+                }),
+            },
+        );
+
+        map.insert(
+            rpath(Self::RPATH_SUBDIV),
+            BlockVariant {
+                options: BlockOptions {
+                    transparency: Transparency::Opaque,
+                    subdividable: true,
+                },
+                model: Some(BlockModel {
+                    directions: FaceMap::new(),
+                    model: BlockModelFaceMap::filled(FaceTexture::new(TextureRegistry::TEX2)),
+                }),
+            },
+        );
+
+        Self { map }
+    }
 }
 
 impl Registry for BlockVariantRegistry {

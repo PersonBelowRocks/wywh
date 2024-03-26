@@ -249,6 +249,10 @@ impl<T: Eq + hash::Hash> IndexedChunkStorage<T, ahash::RandomState> {
     pub fn new() -> Self {
         Self::internal_new(ahash::RandomState::new())
     }
+
+    pub fn filled(value: T) -> Self {
+        Self::filled_with_random_state(value, ahash::RandomState::new())
+    }
 }
 
 impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
@@ -314,6 +318,16 @@ impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
 
     pub fn with_random_state(random_state: S) -> Self {
         Self::internal_new(random_state)
+    }
+
+    pub fn filled_with_random_state(filling: T, random_state: S) -> Self {
+        let mut new = Self::internal_new(random_state);
+
+        // all indices point to the first value in the value vector
+        new.indices = DenseChunkStorage::new(0);
+        new.values = vec![filling];
+
+        new
     }
 
     pub fn contains_pos(pos: IVec3) -> bool {

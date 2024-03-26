@@ -29,6 +29,9 @@ pub mod render;
 pub mod topo;
 pub mod util;
 
+#[cfg(test)]
+pub mod testing_utils;
+
 use crate::{
     data::{
         systems::{build_registries, check_textures, load_textures, VariantFolders},
@@ -140,7 +143,9 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
     let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
     let void = FullBlock {
         rotation: None,
-        id: varreg.get_id(&rpath(BlockVariantRegistry::VOID)).unwrap(),
+        id: varreg
+            .get_id(&rpath(BlockVariantRegistry::RPATH_VOID))
+            .unwrap(),
     };
 
     cmds.insert_resource(VoxelRealm::new(void));

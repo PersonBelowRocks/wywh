@@ -10,7 +10,10 @@ use indexmap::IndexMap;
 use mip_texture_array::asset::MippedArrayTexture;
 use mip_texture_array::MipArrayTextureBuilder;
 
-use crate::data::{resourcepath::ResourcePath, texture::GpuFaceTexture};
+use crate::data::{
+    resourcepath::{rpath, ResourcePath},
+    texture::GpuFaceTexture,
+};
 
 use super::{error::TextureRegistryError, Registry};
 
@@ -109,57 +112,7 @@ impl TextureRegistryLoader {
             map: registry_map,
             color_atlas: color_arr_tex,
             normal_atlas: normal_arr_tex,
-
-            #[cfg(test)]
-            colors: Vec::new(),
-            #[cfg(test)]
-            normals: Vec::new(),
         })
-    }
-}
-
-#[cfg(test)]
-pub struct TestTextureRegistryLoader {
-    map: IndexMap<ResourcePath, AtlasIdxBundle, ahash::RandomState>,
-
-    colors: Vec<Vec2>,
-    normals: Vec<Vec2>,
-}
-
-#[cfg(test)]
-impl TestTextureRegistryLoader {
-    pub fn new() -> Self {
-        Self {
-            map: Default::default(),
-            colors: Vec::new(),
-            normals: Vec::new(),
-        }
-    }
-
-    pub fn add(&mut self, rpath: ResourcePath, color: Vec2, normal: Option<Vec2>) {
-        let bundle = AtlasIdxBundle {
-            color: todo!(),
-            normal: todo!(),
-        };
-
-        self.colors.push(color);
-        if let Some(normal) = normal {
-            self.normals.push(normal);
-        }
-
-        self.map.insert(rpath, bundle);
-    }
-
-    pub fn build(self) -> TextureRegistry {
-        TextureRegistry {
-            map: self.map,
-
-            color_atlas: todo!(),
-            normal_atlas: todo!(),
-
-            colors: self.colors,
-            normals: self.normals,
-        }
     }
 }
 
@@ -171,16 +124,55 @@ pub struct TextureRegistry {
 
     color_atlas: Handle<MippedArrayTexture>,
     normal_atlas: Handle<MippedArrayTexture>,
-
-    #[cfg(test)]
-    colors: Vec<Vec2>,
-    #[cfg(test)]
-    normals: Vec<Vec2>,
 }
 
 pub(crate) struct AtlasIdxBundle {
     pub color: u32,
     pub normal: Option<u32>,
+}
+
+#[cfg(test)]
+impl TextureRegistry {
+    pub const RPATH_TEX1: &'static str = "tex1";
+    pub const TEX1: TextureId = TextureId::new(0);
+    pub const RPATH_TEX2: &'static str = "tex2";
+    pub const TEX2: TextureId = TextureId::new(1);
+    pub const RPATH_TEX3: &'static str = "tex3";
+    pub const TEX3: TextureId = TextureId::new(2);
+
+    pub fn new_mock() -> Self {
+        let mut map = IndexMap::with_hasher(ahash::RandomState::default());
+
+        map.insert(
+            rpath(Self::RPATH_TEX1),
+            AtlasIdxBundle {
+                color: 0,
+                normal: None,
+            },
+        );
+
+        map.insert(
+            rpath(Self::RPATH_TEX2),
+            AtlasIdxBundle {
+                color: 1,
+                normal: Some(0),
+            },
+        );
+
+        map.insert(
+            rpath(Self::RPATH_TEX3),
+            AtlasIdxBundle {
+                color: 2,
+                normal: Some(1),
+            },
+        );
+
+        Self {
+            map,
+            color_atlas: Handle::default(),
+            normal_atlas: Handle::default(),
+        }
+    }
 }
 
 impl TextureRegistry {

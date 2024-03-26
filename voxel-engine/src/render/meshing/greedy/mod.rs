@@ -287,4 +287,19 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 }
 
 #[cfg(test)]
-pub mod tests {}
+pub mod tests {
+    use crate::data::registries::block::BlockVariantId;
+
+    const VOID: BlockVariantId = BlockVariantId::new(0);
+    const FILL: BlockVariantId = BlockVariantId::new(1);
+
+    #[test]
+    fn cqs_get_quad_within_chunk() {
+        todo!()
+    }
+
+    #[test]
+    fn cqs_get_quad_mb_within_chunk() {
+        todo!()
+    }
+}

@@ -54,7 +54,7 @@ impl ChunkRef {
         let variant_access = chunk.variants.access();
 
         let x = Ok(f(ChunkRefVxlAccess {
-            variants: variant_access,
+            block_variants: variant_access,
         }));
         x
     }
@@ -127,7 +127,7 @@ pub struct ChunkVoxelInput {
 }
 
 pub struct ChunkRefVxlAccess<'a, S: BuildHasher = ahash::RandomState> {
-    variants: SiccAccess<'a, BlockVoxel, S>,
+    pub(crate) block_variants: SiccAccess<'a, BlockVoxel, S>,
 }
 
 impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
@@ -135,7 +135,7 @@ impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
     type WriteType = ChunkVoxelInput;
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.variants.set(pos, Some(data.block))?;
+        self.block_variants.set(pos, Some(data.block))?;
 
         Ok(())
     }
@@ -147,7 +147,7 @@ impl<'a, S: BuildHasher> ReadAccess for ChunkRefVxlAccess<'a, S> {
 
     fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         let block = self
-            .variants
+            .block_variants
             .get(pos)?
             .ok_or(ChunkAccessError::NotInitialized)?;
 

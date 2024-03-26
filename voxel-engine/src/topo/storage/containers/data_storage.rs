@@ -87,11 +87,20 @@ impl<T: hash::Hash + Eq> SyncIndexedChunkContainer<T, ahash::RandomState> {
     pub fn new() -> Self {
         Self::with_random_state(ahash::RandomState::new())
     }
+
+    pub fn filled(value: T) -> Self {
+        Self::filled_with_random_state(value, ahash::RandomState::new())
+    }
 }
 
 impl<T: hash::Hash + Eq, S: BuildHasher> SyncIndexedChunkContainer<T, S> {
     pub fn with_random_state(random_state: S) -> Self {
         let storage = IndexedChunkStorage::with_random_state(random_state);
+        Self(RwLock::new(storage))
+    }
+
+    pub fn filled_with_random_state(value: T, random_state: S) -> Self {
+        let storage = IndexedChunkStorage::filled_with_random_state(value, random_state);
         Self(RwLock::new(storage))
     }
 
