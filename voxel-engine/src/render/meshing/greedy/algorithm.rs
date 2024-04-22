@@ -86,90 +86,90 @@ impl GreedyMesher {
         cqs: &ChunkQuadSlice<'_, 'chunk>,
         buffer: &mut Vec<IsometrizedQuad>,
     ) -> Result<(), CqsError> {
-        let mut mask = ChunkSliceMask::new();
+        // let mut mask = ChunkSliceMask::new();
 
-        for x in 0..Chunk::SIZE {
-            for y in 0..Chunk::SIZE {
-                let fpos = ivec2(x, y);
-                if mask.is_masked(fpos).unwrap() {
-                    continue;
-                }
+        // for x in 0..Chunk::SIZE {
+        //     for y in 0..Chunk::SIZE {
+        //         let fpos = ivec2(x, y);
+        //         if mask.is_masked(fpos).unwrap() {
+        //             continue;
+        //         }
 
-                let Some(dataquad) = cqs.get_quad(fpos)? else {
-                    continue;
-                };
+        //         let Some(dataquad) = cqs.get_quad(fpos)? else {
+        //             continue;
+        //         };
 
-                let mut current = PositionedQuad::new(fpos, dataquad);
-                debug_assert!(current.height() > 0);
-                debug_assert!(current.width() > 0);
+        //         let mut current = PositionedQuad::new(fpos, dataquad);
+        //         debug_assert!(current.height() > 0);
+        //         debug_assert!(current.width() > 0);
 
-                // widen
-                let mut widen_by = 0;
-                for dx in 1..(Chunk::SIZE - x) {
-                    let candidate_pos = fpos + ivec2(dx, 0);
+        //         // widen
+        //         let mut widen_by = 0;
+        //         for dx in 1..(Chunk::SIZE - x) {
+        //             let candidate_pos = fpos + ivec2(dx, 0);
 
-                    if mask.is_masked(candidate_pos).unwrap() {
-                        break;
-                    }
+        //             if mask.is_masked(candidate_pos).unwrap() {
+        //                 break;
+        //             }
 
-                    match cqs.get_quad(candidate_pos)? {
-                        Some(merge_candidate) if merge_candidate == current.dataquad => {
-                            widen_by = dx
-                        }
-                        _ => break,
-                    }
+        //             match cqs.get_quad(candidate_pos)? {
+        //                 Some(merge_candidate) if merge_candidate == current.dataquad => {
+        //                     widen_by = dx
+        //                 }
+        //                 _ => break,
+        //             }
 
-                    let candidate_quad = cqs.get_quad(candidate_pos)?;
-                    if matches!(candidate_quad, None)
-                        || matches!(candidate_quad, Some(q) if q.texture != current.dataquad.texture)
-                    {
-                        break;
-                    }
-                }
+        //             let candidate_quad = cqs.get_quad(candidate_pos)?;
+        //             if matches!(candidate_quad, None)
+        //                 || matches!(candidate_quad, Some(q) if q.texture != current.dataquad.texture)
+        //             {
+        //                 break;
+        //             }
+        //         }
 
-                current.widen(widen_by).unwrap();
-                debug_assert!(current.width() > 0);
+        //         current.widen(widen_by).unwrap();
+        //         debug_assert!(current.width() > 0);
 
-                // heighten
-                let mut heighten_by = 0;
-                'heighten: for dy in 1..(Chunk::SIZE - y) {
-                    // sweep the width of the quad to test if all quads at this Y are the same
-                    // if the sweep stumbles into a quad at this Y that doesn't equal the current quad, it
-                    // will terminate the outer loop since we've heightened by as much as we can
-                    for hx in (current.min().x)..=(current.max().x) {
-                        let candidate_pos = ivec2(hx, dy + fpos.y);
+        //         // heighten
+        //         let mut heighten_by = 0;
+        //         'heighten: for dy in 1..(Chunk::SIZE - y) {
+        //             // sweep the width of the quad to test if all quads at this Y are the same
+        //             // if the sweep stumbles into a quad at this Y that doesn't equal the current quad, it
+        //             // will terminate the outer loop since we've heightened by as much as we can
+        //             for hx in (current.min().x)..=(current.max().x) {
+        //                 let candidate_pos = ivec2(hx, dy + fpos.y);
 
-                        if mask.is_masked(candidate_pos).unwrap() {
-                            break 'heighten;
-                        }
+        //                 if mask.is_masked(candidate_pos).unwrap() {
+        //                     break 'heighten;
+        //                 }
 
-                        let candidate_quad = cqs.get_quad(candidate_pos)?;
-                        if matches!(candidate_quad, None)
-                            || matches!(candidate_quad, Some(q) if q.texture != current.dataquad.texture)
-                        {
-                            break 'heighten;
-                        }
-                    }
+        //                 let candidate_quad = cqs.get_quad(candidate_pos)?;
+        //                 if matches!(candidate_quad, None)
+        //                     || matches!(candidate_quad, Some(q) if q.texture != current.dataquad.texture)
+        //                 {
+        //                     break 'heighten;
+        //                 }
+        //             }
 
-                    // if we reach this line, the sweep loop was successful and all quads at this Y
-                    // equaled the current quad, so we can heighten by at least this amount
-                    heighten_by = dy;
-                }
+        //             // if we reach this line, the sweep loop was successful and all quads at this Y
+        //             // equaled the current quad, so we can heighten by at least this amount
+        //             heighten_by = dy;
+        //         }
 
-                current.heighten(heighten_by).unwrap();
-                debug_assert!(current.height() > 0);
+        //         current.heighten(heighten_by).unwrap();
+        //         debug_assert!(current.height() > 0);
 
-                // mask_region will return false if any of the positions provided are outside of the
-                // chunk bounds, so we do a little debug mode sanity check here to make sure thats
-                // not the case, and catch the error early
-                // let result = mask.mask_region(current.min(), current.max());
-                // debug_assert!(result);
+        //         // mask_region will return false if any of the positions provided are outside of the
+        //         // chunk bounds, so we do a little debug mode sanity check here to make sure thats
+        //         // not the case, and catch the error early
+        //         // let result = mask.mask_region(current.min(), current.max());
+        //         // debug_assert!(result);
 
-                let isoquad = cqs.isometrize(current);
+        //         let isoquad = cqs.isometrize(current);
 
-                buffer.push(isoquad);
-            }
-        }
+        //         buffer.push(isoquad);
+        //     }
+        // }
 
         Ok(())
     }

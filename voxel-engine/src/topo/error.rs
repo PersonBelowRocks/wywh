@@ -45,7 +45,7 @@ pub enum GeneratorError<E: Error> {
     AccessError(#[from] E),
 }
 
-#[derive(te::Error, Debug, Clone)]
+#[derive(te::Error, Debug, Clone, PartialEq)]
 pub enum NeighborAccessError {
     #[error("Attempted to access out of bounds position")]
     OutOfBounds,

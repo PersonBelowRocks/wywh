@@ -74,6 +74,14 @@ impl SubdividedBlock {
     pub const SUBDIVS_VEC2: IVec2 = IVec2::splat(Self::SUBDIVISIONS);
     pub const SUBDIVS_VEC3: IVec3 = IVec3::splat(Self::SUBDIVISIONS);
 
+    pub fn new(microblock: Microblock) -> Self {
+        Self {
+            rotations: Cubic::new(microblock.rotation),
+            ids: Cubic::new(microblock.id),
+        }
+    }
+
+    #[inline]
     pub fn contains(pos: UVec3) -> bool {
         Cubic::<{ Self::SUBDIVISIONS_USIZE }, ()>::contains(pos)
     }

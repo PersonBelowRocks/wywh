@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-#[derive(te::Error, Debug, Clone)]
+#[derive(te::Error, Debug, Clone, PartialEq)]
 pub enum CqsError {
     #[error(transparent)]
     NeighborAccessError(#[from] NeighborAccessError),

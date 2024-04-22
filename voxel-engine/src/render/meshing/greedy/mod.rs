@@ -53,7 +53,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         neighbors: &'a Neighbors<'chunk>,
         registry: &'a RegistryRef<'a, BlockVariantRegistry>,
     ) -> Result<Self, OutOfBounds> {
-        if 0 > magnitude && magnitude > Chunk::SIZE {
+        if 0 > magnitude && magnitude > Chunk::SUBDIVIDED_CHUNK_SIZE {
             return Err(OutOfBounds);
         }
 
@@ -259,8 +259,8 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     pub fn get_quad_mb(&self, pos_mb: IVec2) -> CqsResult<Option<DataQuad>> {
         let pos = pos_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC2);
 
-        let microblock = self.get_mb(pos)?;
-        let microblock_above = self.get_mb_above(pos)?;
+        let microblock = self.get_mb(pos_mb)?;
+        let microblock_above = self.get_mb_above(pos_mb)?;
 
         let entry = self.registry.get_by_id(microblock.id);
         let entry_above = self.registry.get_by_id(microblock_above.id);
@@ -288,18 +288,146 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::data::registries::block::BlockVariantId;
+    use bevy::math::{uvec3, vec3};
+    use parking_lot::{RwLock, RwLockReadGuard};
+    use tests::neighbors::NeighborsBuilder;
 
-    const VOID: BlockVariantId = BlockVariantId::new(0);
-    const FILL: BlockVariantId = BlockVariantId::new(1);
+    use crate::{
+        data::registries::texture::TextureRegistry,
+        testing_utils::MockChunk,
+        topo::{
+            access::WriteAccess,
+            block::{BlockVoxel, FullBlock},
+            chunk_ref::ChunkVoxelInput,
+        },
+    };
+
+    use super::*;
+
+    fn testing_neighbors<'a>(chunk: &'a MockChunk) -> Neighbors<'a> {
+        let mut builder = NeighborsBuilder::new(BlockVoxel::new_full(BlockVariantRegistry::FULL));
+        for x in -1..=1 {
+            for y in -1..=1 {
+                for z in -1..=1 {
+                    let p = ivec3(x, y, z);
+                    if p == IVec3::ZERO {
+                        continue;
+                    }
+
+                    builder.set_neighbor(p, chunk.read_access()).unwrap();
+                }
+            }
+        }
+
+        builder.build()
+    }
+
+    fn testing_chunk() -> MockChunk {
+        let block = BlockVoxel::new_full(BlockVariantRegistry::FULL);
+
+        let mut chunk = MockChunk::new(BlockVoxel::new_full(BlockVariantRegistry::VOID));
+        let mut access = chunk.access();
+
+        access
+            .set(ivec3(4, 0, 4), ChunkVoxelInput::new(block.clone()))
+            .unwrap();
+        access
+            .set(ivec3(4, 0, 3), ChunkVoxelInput::new(block.clone()))
+            .unwrap();
+        access
+            .set(ivec3(4, 1, 4), ChunkVoxelInput::new(block.clone()))
+            .unwrap();
+        access
+            .set(ivec3(4, 2, 4), ChunkVoxelInput::new(block.clone()))
+            .unwrap();
+        access
+            .set(ivec3(4, 1, 2), ChunkVoxelInput::new(block.clone()))
+            .unwrap();
+
+        let mut subdiv_block = SubdividedBlock::new(Microblock {
+            id: BlockVariantRegistry::VOID,
+            rotation: None,
+        });
+
+        let mb = Microblock {
+            id: BlockVariantRegistry::SUBDIV,
+            rotation: None,
+        };
+
+        for z in 0..4 {
+            subdiv_block.set(uvec3(0, 0, z), mb).unwrap();
+        }
+
+        access
+            .set(
+                ivec3(4, 1, 3),
+                ChunkVoxelInput::new(BlockVoxel::Subdivided(subdiv_block)),
+            )
+            .unwrap();
+
+        drop(access);
+        chunk
+    }
 
     #[test]
-    fn cqs_get_quad_within_chunk() {
-        todo!()
+    fn cqs_can_read() {
+        let texreg = TextureRegistry::new_mock();
+        let varreg = RwLock::new(BlockVariantRegistry::new_mock(&texreg));
+        let neighbor_chunk = MockChunk::new(BlockVoxel::new_full(BlockVariantRegistry::VOID));
+        let chunk = testing_chunk();
+        let neighbors = testing_neighbors(&neighbor_chunk);
+
+        let access = chunk.read_access();
+        let guard = RwLockReadGuard::map(varreg.read(), |g| g);
+
+        let mut cqs = ChunkQuadSlice::new(Face::Top, 11, &access, &neighbors, &guard).unwrap();
+
+        assert_eq!(
+            BlockVariantRegistry::FULL,
+            cqs.get_mb(ivec2(16, 16)).unwrap().id
+        );
+        assert!(cqs.get_quad_mb(ivec2(16, 16)).unwrap().is_some());
     }
 
     #[test]
     fn cqs_get_quad_mb_within_chunk() {
-        todo!()
+        let texreg = TextureRegistry::new_mock();
+        let varreg = RwLock::new(BlockVariantRegistry::new_mock(&texreg));
+        let neighbor_chunk = MockChunk::new(BlockVoxel::new_full(BlockVariantRegistry::VOID));
+        let chunk = testing_chunk();
+        let neighbors = testing_neighbors(&neighbor_chunk);
+
+        let access = chunk.read_access();
+        let guard = RwLockReadGuard::map(varreg.read(), |g| g);
+
+        let mut cqs = ChunkQuadSlice::new(Face::Top, 3, &access, &neighbors, &guard).unwrap();
+
+        let subdiv_texture = FaceTexture::new(TextureRegistry::TEX2);
+        let full_texture = FaceTexture::new(TextureRegistry::TEX1);
+
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(16, 16)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(17, 17)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(18, 18)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(19, 19)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(12, 12)));
+        assert_eq!(
+            BlockVariantRegistry::FULL,
+            cqs.get_mb(ivec2(16, 12)).unwrap().id
+        );
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(16, 12)));
+        assert_eq!(
+            Ok(Some(DataQuad::new(Quad::ONE, full_texture))),
+            cqs.get_quad_mb(ivec2(17, 12))
+        );
+
+        cqs.reposition(Face::Top, 4).unwrap();
+
+        for z in 0..4 {
+            assert_eq!(
+                Ok(Some(DataQuad::new(Quad::ONE, subdiv_texture))),
+                cqs.get_quad_mb(ivec2(16, 12 + z))
+            );
+        }
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(17, 12)));
     }
 }
