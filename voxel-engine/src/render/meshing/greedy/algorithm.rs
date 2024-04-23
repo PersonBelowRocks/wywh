@@ -230,8 +230,7 @@ impl Mesher for GreedyMesher {
         // The index buffer
         let mut vertex_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 6);
         // Vertex attribute for what quad the vertex is a part of
-        let mut quad_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 6);
-        let mut positions = Vec::<Vec3>::with_capacity(gpu_quads.len() * 6);
+        let mut quad_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 4);
 
         let mut current_idx = 0;
         for (i, quad) in gpu_quads.iter().enumerate() {
@@ -254,8 +253,6 @@ impl Mesher for GreedyMesher {
 
                 let face = quad.bitfields.get_face();
                 let layer = quad.magnitude as f32;
-
-                positions.push(project_to_3d(pos_2d, face, layer));
             }
 
             current_idx += 4;

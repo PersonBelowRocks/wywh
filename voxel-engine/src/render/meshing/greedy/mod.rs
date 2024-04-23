@@ -21,6 +21,7 @@ use crate::{
         neighbors::{self, Neighbors},
         storage::error::OutOfBounds,
     },
+    util,
 };
 
 use self::error::CqsError;
@@ -30,10 +31,40 @@ pub mod error;
 pub mod greedy_mesh;
 pub mod material;
 
+pub const fn microblock_to_full_block(mb: IVec2) -> IVec2 {
+    ivec2(
+        util::floored_div_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
+        util::floored_div_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
+    )
+}
+
+pub const fn microblock_to_full_block_3d(mb: IVec3) -> IVec3 {
+    ivec3(
+        util::floored_div_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
+        util::floored_div_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
+        util::floored_div_2_pow_n(mb.z, SubdividedBlock::SUBDIVISIONS_LOG2),
+    )
+}
+
+pub const fn microblock_to_subdiv_pos(mb: IVec2) -> IVec2 {
+    ivec2(
+        util::rem_euclid_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
+        util::rem_euclid_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
+    )
+}
+
+pub const fn microblock_to_subdiv_pos_3d(mb: IVec3) -> IVec3 {
+    ivec3(
+        util::rem_euclid_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
+        util::rem_euclid_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
+        util::rem_euclid_2_pow_n(mb.z, SubdividedBlock::SUBDIVISIONS_LOG2),
+    )
+}
+
 #[derive(Clone)]
 pub struct ChunkQuadSlice<'a, 'chunk> {
-    face: Face,
-    mag: i32,
+    pub face: Face,
+    pub mag: i32,
 
     access: &'a CrVra<'chunk>,
     neighbors: &'a Neighbors<'chunk>,
@@ -91,7 +122,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     pub fn contains_mb(pos: IVec2) -> bool {
-        Self::contains(pos.div_euclid(SubdividedBlock::SUBDIVS_VEC2))
+        Self::contains(microblock_to_full_block(pos))
     }
 
     pub fn contains(pos: IVec2) -> bool {
@@ -119,7 +150,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         ivec_project_to_3d(
             pos,
             self.face,
-            self.mag.div_euclid(SubdividedBlock::SUBDIVISIONS),
+            util::floored_div_2_pow_n(self.mag, SubdividedBlock::SUBDIVISIONS_LOG2),
         )
     }
 
@@ -128,7 +159,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         ivec_project_to_3d(
             pos,
             self.face,
-            self.mag.rem_euclid(SubdividedBlock::SUBDIVISIONS),
+            util::rem_euclid_2_pow_n(self.mag, SubdividedBlock::SUBDIVISIONS_LOG2),
         )
     }
 
@@ -145,7 +176,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
     #[inline]
     pub fn get_mb_3d(&self, pos_mb: IVec3) -> CqsResult<Microblock> {
-        let pos = pos_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC3);
+        let pos = microblock_to_full_block_3d(pos_mb);
 
         Ok(match self.get_3d(pos)?.block {
             CvoBlock::Full(block) => Microblock {
@@ -153,7 +184,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
                 id: block.id,
             },
             CvoBlock::Subdivided(block) => {
-                let pos_sd = pos_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC3).as_uvec3();
+                let pos_sd = microblock_to_subdiv_pos_3d(pos_mb).as_uvec3();
                 block.get(pos_sd).unwrap()
             }
         })
@@ -174,7 +205,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
     #[inline]
     pub fn auto_neighboring_get_mb(&self, pos_mb: IVec3) -> CqsResult<Microblock> {
-        let pos = pos_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC3);
+        let pos = microblock_to_full_block_3d(pos_mb);
 
         if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
             self.get_mb_3d(pos_mb)
@@ -187,7 +218,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
                     id: block.id,
                 },
                 CvoBlock::Subdivided(block) => {
-                    let pos_sd = pos_mb.rem_euclid(SubdividedBlock::SUBDIVS_VEC3).as_uvec3();
+                    let pos_sd = microblock_to_subdiv_pos_3d(pos_mb).as_uvec3();
                     block.get(pos_sd).unwrap()
                 }
             })
@@ -233,7 +264,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         }
 
         let pos_mb_above = self.pos_3d_mb(pos_mb) + self.face.normal();
-        let pos_above = pos_mb_above.div_euclid(SubdividedBlock::SUBDIVS_VEC3);
+        let pos_above = microblock_to_full_block_3d(pos_mb_above);
 
         let block = self.auto_neighboring_get(pos_above)?.block;
 
@@ -257,8 +288,6 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     /// or if the block at the position doesn't have a model.
     #[inline]
     pub fn get_quad_mb(&self, pos_mb: IVec2) -> CqsResult<Option<DataQuad>> {
-        let pos = pos_mb.div_euclid(SubdividedBlock::SUBDIVS_VEC2);
-
         let microblock = self.get_mb(pos_mb)?;
         let microblock_above = self.get_mb_above(pos_mb)?;
 

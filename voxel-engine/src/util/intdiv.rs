@@ -1,11 +1,11 @@
 #[inline]
-pub fn rem_euclid_2_pow_n(x: i32, n: u32) -> i32 {
+pub const fn rem_euclid_2_pow_n(x: i32, n: u32) -> i32 {
     let pow = 0b1 << n;
     x & ((pow - 1) as i32)
 }
 
 #[inline]
-pub fn floored_div_2_pow_n(x: i32, n: u32) -> i32 {
+pub const fn floored_div_2_pow_n(x: i32, n: u32) -> i32 {
     x >> n as i32
 }
 

@@ -74,6 +74,7 @@ impl fmt::Debug for SubdividedBlock {
 
 impl SubdividedBlock {
     pub const SUBDIVISIONS: i32 = 4;
+    pub const SUBDIVISIONS_LOG2: u32 = Self::SUBDIVISIONS.ilog2();
     pub const SUBDIVISIONS_USIZE: usize = Self::SUBDIVISIONS as usize;
     pub const SUBDIVS_VEC2: IVec2 = IVec2::splat(Self::SUBDIVISIONS);
     pub const SUBDIVS_VEC3: IVec3 = IVec3::splat(Self::SUBDIVISIONS);
