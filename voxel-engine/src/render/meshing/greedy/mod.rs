@@ -328,6 +328,47 @@ pub mod tests {
         let mut chunk = MockChunk::new(BlockVoxel::new_full(BlockVariantRegistry::VOID));
         let mut access = chunk.access();
 
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // blocks on top chunk border for neighbor quad test
+
+        access
+            .set(ivec3(9, 15, 8), ChunkVoxelInput::new(block.clone()))
+            .unwrap();
+
+        access
+            .set(ivec3(8, 15, 8), ChunkVoxelInput::new(block.clone()))
+            .unwrap();
+
+        let edge_subdiv = {
+            let mut block = SubdividedBlock::new(Microblock::new(BlockVariantRegistry::VOID));
+
+            let mb = Microblock::new(BlockVariantRegistry::SUBDIV);
+
+            for x in 0..2 {
+                for z in 0..2 {
+                    block.set(uvec3(x, 3, z), mb).unwrap();
+                }
+            }
+
+            block
+        };
+
+        access
+            .set(
+                ivec3(8, 15, 9),
+                ChunkVoxelInput::new(BlockVoxel::Subdivided(edge_subdiv.clone())),
+            )
+            .unwrap();
+        access
+            .set(
+                ivec3(8, 15, 7),
+                ChunkVoxelInput::new(BlockVoxel::Subdivided(edge_subdiv.clone())),
+            )
+            .unwrap();
+
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // various blocks placed nicely inside the chunk for quad within chunk test
+
         access
             .set(ivec3(4, 0, 4), ChunkVoxelInput::new(block.clone()))
             .unwrap();
@@ -344,15 +385,9 @@ pub mod tests {
             .set(ivec3(4, 1, 2), ChunkVoxelInput::new(block.clone()))
             .unwrap();
 
-        let mut subdiv_block = SubdividedBlock::new(Microblock {
-            id: BlockVariantRegistry::VOID,
-            rotation: None,
-        });
+        let mut subdiv_block = SubdividedBlock::new(Microblock::new(BlockVariantRegistry::VOID));
 
-        let mb = Microblock {
-            id: BlockVariantRegistry::SUBDIV,
-            rotation: None,
-        };
+        let mb = Microblock::new(BlockVariantRegistry::SUBDIV);
 
         for z in 0..4 {
             subdiv_block.set(uvec3(0, 0, z), mb).unwrap();
@@ -364,6 +399,8 @@ pub mod tests {
                 ChunkVoxelInput::new(BlockVoxel::Subdivided(subdiv_block)),
             )
             .unwrap();
+
+        ////////////////////////////////////////////////////////////////////////////////////////////
 
         drop(access);
         chunk
@@ -429,5 +466,91 @@ pub mod tests {
             );
         }
         assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(17, 12)));
+    }
+
+    #[test]
+    fn cqs_get_quad_mb_across_chunks() {
+        let texreg = TextureRegistry::new_mock();
+        let varreg = RwLock::new(BlockVariantRegistry::new_mock(&texreg));
+
+        // sets up some blocks and microblocks on the bottom edge of the neighboring chunk
+        let neighbor_chunk = {
+            let chunk = MockChunk::new(BlockVoxel::new_full(BlockVariantRegistry::VOID));
+            let mut access = chunk.access();
+
+            let full = BlockVoxel::new_full(BlockVariantRegistry::FULL);
+            let subdiv = {
+                let mut block = SubdividedBlock::new(Microblock::new(BlockVariantRegistry::VOID));
+
+                for x in 0..4 {
+                    block
+                        .set(
+                            uvec3(x, 0, 0),
+                            Microblock::new(BlockVariantRegistry::SUBDIV),
+                        )
+                        .unwrap();
+                }
+
+                BlockVoxel::Subdivided(block)
+            };
+
+            access
+                .set(ivec3(8, 0, 9), ChunkVoxelInput::new(full.clone()))
+                .unwrap();
+            access
+                .set(ivec3(8, 0, 8), ChunkVoxelInput::new(full.clone()))
+                .unwrap();
+            access
+                .set(ivec3(8, 0, 7), ChunkVoxelInput::new(subdiv))
+                .unwrap();
+
+            drop(access);
+            chunk
+        };
+
+        let chunk = testing_chunk();
+        let neighbors = testing_neighbors(&neighbor_chunk);
+
+        let access = chunk.read_access();
+        let guard = RwLockReadGuard::map(varreg.read(), |g| g);
+
+        let mut cqs =
+            ChunkQuadSlice::new(Face::Top, (4 * 15) + 3, &access, &neighbors, &guard).unwrap();
+
+        let subdiv_texture = FaceTexture::new(TextureRegistry::TEX2);
+        let full_texture = FaceTexture::new(TextureRegistry::TEX1);
+
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(32, 32)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(33, 33)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(34, 34)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(35, 35)));
+        assert_eq!(
+            Ok(Some(DataQuad::new(Quad::ONE, full_texture))),
+            cqs.get_quad_mb(ivec2(36, 32))
+        );
+
+        for d in 0..4 {
+            assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(32 + d, 36 + d)));
+        }
+
+        for x in 0..4 {
+            assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(32 + x, 28)));
+        }
+
+        assert_eq!(
+            Ok(Some(DataQuad::new(Quad::ONE, subdiv_texture))),
+            cqs.get_quad_mb(ivec2(32, 29))
+        );
+        assert_eq!(
+            Ok(Some(DataQuad::new(Quad::ONE, subdiv_texture))),
+            cqs.get_quad_mb(ivec2(33, 29))
+        );
+
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(34, 29)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(35, 29)));
+
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(32, 30)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(33, 30)));
+        assert_eq!(Ok(None), cqs.get_quad_mb(ivec2(34, 30)));
     }
 }

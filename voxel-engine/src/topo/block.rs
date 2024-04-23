@@ -54,6 +54,10 @@ pub struct Microblock {
 }
 
 impl Microblock {
+    pub fn new(id: <BlockVariantRegistry as Registry>::Id) -> Self {
+        Self { rotation: None, id }
+    }
+
     pub fn as_full_block(&self) -> FullBlock {
         FullBlock {
             rotation: self.rotation,
