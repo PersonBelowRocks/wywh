@@ -1,6 +1,8 @@
 pub mod cubic;
+pub mod intdiv;
 pub mod notnan;
 pub mod result;
+pub use intdiv::*;
 
 use bevy::prelude::*;
 use dashmap::DashMap;
