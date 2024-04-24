@@ -1,6 +1,6 @@
 [options]
 transparency = "opaque"
-subdividable = false
+subdividable = true
 
 [model.root]
 up = "stone"

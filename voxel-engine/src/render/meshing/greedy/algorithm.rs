@@ -3,6 +3,7 @@ use bevy::math::ivec2;
 use bevy::math::ivec3;
 use bevy::math::vec2;
 
+use bevy::math::IVec2;
 use bevy::math::Vec2;
 use bevy::math::Vec3;
 use bevy::pbr::ExtendedMaterial;
@@ -35,9 +36,11 @@ use crate::render::quad::GpuQuad;
 use crate::render::quad::GpuQuadBitfields;
 use crate::topo::access::ChunkAccess;
 use crate::topo::access::WriteAccess;
+use crate::topo::block::SubdividedBlock;
 use crate::topo::chunk::Chunk;
 
 use crate::topo::chunk_ref::CrVra;
+use crate::topo::chunk_ref::CvoBlock;
 use crate::topo::ivec_project_to_3d;
 use crate::topo::neighbors::Neighbors;
 
@@ -45,6 +48,7 @@ use super::error::CqsError;
 use super::greedy_mesh::ChunkSliceMask;
 use super::material::GreedyMeshMaterial;
 use super::ChunkQuadSlice;
+use super::CqsResult;
 
 #[derive(Clone, Resource)]
 pub struct SimplePbrMesher {
@@ -73,6 +77,72 @@ impl Mesher for SimplePbrMesher {
     }
 }
 
+fn widen_quad<'reg, 'chunk>(
+    fpos: IVec2,
+    quad: &mut PositionedQuad,
+    cqs: &ChunkQuadSlice<'reg, 'chunk>,
+    mask: &ChunkSliceMask,
+) -> CqsResult<()> {
+    let mut widen_by = 0;
+    for dx in 1..(Chunk::SUBDIVIDED_CHUNK_SIZE - fpos.x) {
+        let candidate_pos = fpos + ivec2(dx, 0);
+
+        if mask.is_masked_mb(candidate_pos).unwrap() {
+            break;
+        }
+
+        match cqs.get_quad_mb(candidate_pos)? {
+            Some(merge_candidate) if merge_candidate == quad.dataquad => widen_by = dx,
+            _ => break,
+        }
+
+        let candidate_quad = cqs.get_quad_mb(candidate_pos)?;
+        if matches!(candidate_quad, None)
+            || matches!(candidate_quad, Some(q) if q.texture != quad.dataquad.texture)
+        {
+            break;
+        }
+    }
+
+    quad.widen(widen_by).unwrap();
+    Ok(())
+}
+
+fn heighten_quad<'reg, 'chunk>(
+    fpos: IVec2,
+    quad: &mut PositionedQuad,
+    cqs: &ChunkQuadSlice<'reg, 'chunk>,
+    mask: &ChunkSliceMask,
+) -> CqsResult<()> {
+    let mut heighten_by = 0;
+    'heighten: for dy in 1..(Chunk::SUBDIVIDED_CHUNK_SIZE - fpos.y) {
+        // sweep the width of the quad to test if all quads at this Y are the same
+        // if the sweep stumbles into a quad at this Y that doesn't equal the current quad, it
+        // will terminate the outer loop since we've heightened by as much as we can
+        for hx in (quad.min().x)..=(quad.max().x) {
+            let candidate_pos = ivec2(hx, dy + fpos.y);
+
+            if mask.is_masked_mb(candidate_pos).unwrap() {
+                break 'heighten;
+            }
+
+            let candidate_quad = cqs.get_quad_mb(candidate_pos)?;
+            if matches!(candidate_quad, None)
+                || matches!(candidate_quad, Some(q) if q.texture != quad.dataquad.texture)
+            {
+                break 'heighten;
+            }
+        }
+
+        // if we reach this line, the sweep loop was successful and all quads at this Y
+        // equaled the current quad, so we can heighten by at least this amount
+        heighten_by = dy;
+    }
+
+    quad.heighten(heighten_by).unwrap();
+    Ok(())
+}
+
 #[derive(Clone, Resource)]
 pub struct GreedyMesher {}
 
@@ -85,89 +155,75 @@ impl GreedyMesher {
         &self,
         cqs: &ChunkQuadSlice<'_, 'chunk>,
         buffer: &mut Vec<IsometrizedQuad>,
-    ) -> Result<(), CqsError> {
+    ) -> CqsResult<()> {
         let mut mask = ChunkSliceMask::new();
 
-        for x in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
-            for y in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
-                let fpos = ivec2(x, y);
-                if mask.is_masked_mb(fpos).unwrap() {
-                    continue;
-                }
+        for cs_x in 0..Chunk::SIZE {
+            for cs_y in 0..Chunk::SIZE {
+                let cs_pos = ivec2(cs_x, cs_y);
 
-                let Some(dataquad) = cqs.get_quad_mb(fpos)? else {
-                    continue;
-                };
+                let block = cqs.get(cs_pos)?.block;
+                let above = cqs.get_above(cs_pos)?.block;
 
-                let mut current = PositionedQuad::new(fpos, dataquad);
-                debug_assert!(current.height() > 0);
-                debug_assert!(current.width() > 0);
-
-                // widen
-                let mut widen_by = 0;
-                for dx in 1..(Chunk::SUBDIVIDED_CHUNK_SIZE - x) {
-                    let candidate_pos = fpos + ivec2(dx, 0);
-
-                    if mask.is_masked_mb(candidate_pos).unwrap() {
-                        break;
-                    }
-
-                    match cqs.get_quad_mb(candidate_pos)? {
-                        Some(merge_candidate) if merge_candidate == current.dataquad => {
-                            widen_by = dx
-                        }
-                        _ => break,
-                    }
-
-                    let candidate_quad = cqs.get_quad_mb(candidate_pos)?;
-                    if matches!(candidate_quad, None)
-                        || matches!(candidate_quad, Some(q) if q.texture != current.dataquad.texture)
+                if let CvoBlock::Full(above) = above {
+                    if cqs
+                        .registry
+                        .get_by_id(above.id)
+                        .options
+                        .transparency
+                        .is_opaque()
                     {
-                        break;
+                        continue;
                     }
                 }
 
-                current.widen(widen_by).unwrap();
-                debug_assert!(current.width() > 0);
-
-                // heighten
-                let mut heighten_by = 0;
-                'heighten: for dy in 1..(Chunk::SUBDIVIDED_CHUNK_SIZE - y) {
-                    // sweep the width of the quad to test if all quads at this Y are the same
-                    // if the sweep stumbles into a quad at this Y that doesn't equal the current quad, it
-                    // will terminate the outer loop since we've heightened by as much as we can
-                    for hx in (current.min().x)..=(current.max().x) {
-                        let candidate_pos = ivec2(hx, dy + fpos.y);
-
-                        if mask.is_masked_mb(candidate_pos).unwrap() {
-                            break 'heighten;
-                        }
-
-                        let candidate_quad = cqs.get_quad_mb(candidate_pos)?;
-                        if matches!(candidate_quad, None)
-                            || matches!(candidate_quad, Some(q) if q.texture != current.dataquad.texture)
-                        {
-                            break 'heighten;
-                        }
+                if let CvoBlock::Full(block) = block {
+                    if cqs.registry.get_by_id(block.id).model.is_none() {
+                        continue;
                     }
-
-                    // if we reach this line, the sweep loop was successful and all quads at this Y
-                    // equaled the current quad, so we can heighten by at least this amount
-                    heighten_by = dy;
                 }
 
-                current.heighten(heighten_by).unwrap();
-                debug_assert!(current.height() > 0);
+                if mask.is_masked(cs_pos).unwrap() {
+                    continue;
+                }
 
-                // mask_region will return false if any of the positions provided are outside of the
-                // chunk bounds, so we do a little debug mode sanity check here to make sure thats
-                // not the case, and catch the error early
-                let result = mask.mask_mb_region_inclusive(current.min(), current.max());
-                debug_assert!(result);
+                for sd_x in 0..SubdividedBlock::SUBDIVISIONS {
+                    for sd_y in 0..SubdividedBlock::SUBDIVISIONS {
+                        let fpos = ivec2(sd_x, sd_y) + (cs_pos * SubdividedBlock::SUBDIVISIONS);
 
-                let isoquad = cqs.isometrize(current);
+                        if mask.is_masked_mb(fpos).unwrap() {
+                            continue;
+                        }
 
-                buffer.push(isoquad);
+                        let Some(dataquad) = cqs.get_quad_mb(fpos)? else {
+                            continue;
+                        };
+
+                        let mut current = PositionedQuad::new(fpos, dataquad);
+                        debug_assert!(current.height() > 0);
+                        debug_assert!(current.width() > 0);
+
+                        // First we try to extend the quad perpendicular to the direction we are iterating...
+                        widen_quad(fpos, &mut current, cqs, &mask)?;
+                        debug_assert!(current.width() > 0);
+
+                        // Then we extend it in the same direction we are iterating.
+                        // This supposedly leads to a higher quality mesh? I'm not sure where I read it but
+                        // it doesn't hurt to do it this way so why not.
+                        heighten_quad(fpos, &mut current, cqs, &mask)?;
+                        debug_assert!(current.height() > 0);
+
+                        // mask_region will return false if any of the positions provided are outside of the
+                        // chunk bounds, so we do a little debug mode sanity check here to make sure thats
+                        // not the case, and catch the error early
+                        let result = mask.mask_mb_region_inclusive(current.min(), current.max());
+                        debug_assert!(result);
+
+                        let isoquad = cqs.isometrize(current);
+
+                        buffer.push(isoquad);
+                    }
+                }
             }
         }
 
