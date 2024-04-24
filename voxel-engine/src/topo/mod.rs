@@ -13,6 +13,9 @@ pub mod neighbors;
 pub mod realm;
 pub mod storage;
 pub mod systems;
+pub mod util;
+
+pub use util::*;
 
 #[inline]
 pub fn ivec_project_to_3d(pos: IVec2, face: Face, mag: i32) -> IVec3 {

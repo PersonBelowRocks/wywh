@@ -1,3 +1,7 @@
+use bevy::math::{ivec2, ivec3, IVec2, IVec3};
+
+use crate::topo::block::SubdividedBlock;
+
 #[inline]
 pub const fn rem_euclid_2_pow_n(x: i32, n: u32) -> i32 {
     let pow = 0b1 << n;
@@ -7,6 +11,40 @@ pub const fn rem_euclid_2_pow_n(x: i32, n: u32) -> i32 {
 #[inline]
 pub const fn floored_div_2_pow_n(x: i32, n: u32) -> i32 {
     x >> n as i32
+}
+
+#[inline]
+pub const fn microblock_to_full_block(mb: IVec2) -> IVec2 {
+    ivec2(
+        floored_div_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
+        floored_div_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
+    )
+}
+
+#[inline]
+pub const fn microblock_to_full_block_3d(mb: IVec3) -> IVec3 {
+    ivec3(
+        floored_div_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
+        floored_div_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
+        floored_div_2_pow_n(mb.z, SubdividedBlock::SUBDIVISIONS_LOG2),
+    )
+}
+
+#[inline]
+pub const fn microblock_to_subdiv_pos(mb: IVec2) -> IVec2 {
+    ivec2(
+        rem_euclid_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
+        rem_euclid_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
+    )
+}
+
+#[inline]
+pub const fn microblock_to_subdiv_pos_3d(mb: IVec3) -> IVec3 {
+    ivec3(
+        rem_euclid_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
+        rem_euclid_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
+        rem_euclid_2_pow_n(mb.z, SubdividedBlock::SUBDIVISIONS_LOG2),
+    )
 }
 
 #[cfg(test)]

@@ -41,13 +41,19 @@ pub struct FullBlock {
     pub id: <BlockVariantRegistry as Registry>::Id,
 }
 
+impl FullBlock {
+    pub fn new(id: <BlockVariantRegistry as Registry>::Id) -> Self {
+        Self { rotation: None, id }
+    }
+}
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct SubdividedBlock {
     pub rotations: Cubic<{ Self::SUBDIVISIONS_USIZE }, Option<BlockModelRotation>>,
     pub ids: Cubic<{ Self::SUBDIVISIONS_USIZE }, <BlockVariantRegistry as Registry>::Id>,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Microblock {
     pub rotation: Option<BlockModelRotation>,
     pub id: <BlockVariantRegistry as Registry>::Id,

@@ -401,6 +401,18 @@ impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
         Ok(Some(&self.values[idx]))
     }
 
+    pub fn get_mut(&mut self, pos: IVec3) -> Result<Option<&mut T>, OutOfBounds> {
+        if !Self::contains_pos(pos) {
+            return Err(OutOfBounds);
+        }
+
+        let Some(idx) = self.get_idx(pos) else {
+            return Ok(None);
+        };
+
+        Ok(Some(&mut self.values[idx]))
+    }
+
     pub fn values(&self) -> usize {
         self.values.len()
     }

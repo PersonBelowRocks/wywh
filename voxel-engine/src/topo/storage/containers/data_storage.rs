@@ -113,10 +113,15 @@ impl<T: hash::Hash + Eq, S: BuildHasher> SyncIndexedChunkContainer<T, S> {
     }
 }
 
-// Does not implement read access due to type system and borrowck shenanigans
 pub struct SiccAccess<'a, T: hash::Hash + Eq, S: BuildHasher>(
     RwLockWriteGuard<'a, IndexedChunkStorage<T, S>>,
 );
+
+impl<'a, T: hash::Hash + Eq, S: BuildHasher> SiccAccess<'a, T, S> {
+    pub(crate) fn get_mut(&mut self, pos: IVec3) -> Result<Option<&mut T>, OutOfBounds> {
+        self.0.get_mut(pos)
+    }
+}
 
 impl<'a, T: hash::Hash + Eq, S: BuildHasher> ChunkBounds for SiccAccess<'a, T, S> {}
 

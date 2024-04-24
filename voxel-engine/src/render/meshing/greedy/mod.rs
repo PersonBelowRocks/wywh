@@ -21,7 +21,9 @@ use crate::{
         neighbors::{self, Neighbors},
         storage::error::OutOfBounds,
     },
-    util,
+    util::{
+        self, microblock_to_full_block, microblock_to_full_block_3d, microblock_to_subdiv_pos_3d,
+    },
 };
 
 use self::error::CqsError;
@@ -30,40 +32,6 @@ pub mod algorithm;
 pub mod error;
 pub mod greedy_mesh;
 pub mod material;
-
-#[inline]
-pub const fn microblock_to_full_block(mb: IVec2) -> IVec2 {
-    ivec2(
-        util::floored_div_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
-        util::floored_div_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
-    )
-}
-
-#[inline]
-pub const fn microblock_to_full_block_3d(mb: IVec3) -> IVec3 {
-    ivec3(
-        util::floored_div_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
-        util::floored_div_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
-        util::floored_div_2_pow_n(mb.z, SubdividedBlock::SUBDIVISIONS_LOG2),
-    )
-}
-
-#[inline]
-pub const fn microblock_to_subdiv_pos(mb: IVec2) -> IVec2 {
-    ivec2(
-        util::rem_euclid_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
-        util::rem_euclid_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
-    )
-}
-
-#[inline]
-pub const fn microblock_to_subdiv_pos_3d(mb: IVec3) -> IVec3 {
-    ivec3(
-        util::rem_euclid_2_pow_n(mb.x, SubdividedBlock::SUBDIVISIONS_LOG2),
-        util::rem_euclid_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
-        util::rem_euclid_2_pow_n(mb.z, SubdividedBlock::SUBDIVISIONS_LOG2),
-    )
-}
 
 #[derive(Clone)]
 pub struct ChunkQuadSlice<'a, 'chunk> {

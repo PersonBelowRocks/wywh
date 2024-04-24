@@ -103,6 +103,11 @@ impl<'a> CvoBlock<'a> {
     }
 }
 
+pub enum MutCvoBlock<'a> {
+    Full(&'a mut FullBlock),
+    Subdivided(&'a mut SubdividedBlock),
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ChunkVoxelOutput<'a> {
     pub block: CvoBlock<'a>,
@@ -126,8 +131,31 @@ pub struct ChunkVoxelInput {
     pub block: BlockVoxel,
 }
 
+pub struct MutChunkVxlOutput<'a> {
+    pub block: MutCvoBlock<'a>,
+}
+
 pub struct ChunkRefVxlAccess<'a, S: BuildHasher = ahash::RandomState> {
     pub(crate) block_variants: SiccAccess<'a, BlockVoxel, S>,
+}
+
+impl<'a, S: BuildHasher> ChunkRefVxlAccess<'a, S> {
+    pub(crate) fn get_mutable_output(
+        &mut self,
+        pos: IVec3,
+    ) -> Result<MutChunkVxlOutput<'_>, ChunkAccessError> {
+        let block = self
+            .block_variants
+            .get_mut(pos)?
+            .ok_or(ChunkAccessError::NotInitialized)?;
+
+        let output = match block {
+            BlockVoxel::Full(full) => MutCvoBlock::Full(full),
+            BlockVoxel::Subdivided(subdiv) => MutCvoBlock::Subdivided(subdiv),
+        };
+
+        Ok(MutChunkVxlOutput { block: output })
+    }
 }
 
 impl<'a, S: BuildHasher> WriteAccess for ChunkRefVxlAccess<'a, S> {
