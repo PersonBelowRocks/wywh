@@ -66,16 +66,9 @@ impl Chunk {
     };
 
     #[inline]
-    pub fn new() -> Self {
+    pub fn new(filling: BlockVoxel) -> Self {
         Self {
-            variants: SyncIndexedChunkContainer::new(),
-        }
-    }
-
-    #[inline]
-    pub fn new_from_container() -> Self {
-        Self {
-            variants: SyncIndexedChunkContainer::new(),
+            variants: SyncIndexedChunkContainer::filled(filling),
         }
     }
 

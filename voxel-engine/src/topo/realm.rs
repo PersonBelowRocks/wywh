@@ -209,6 +209,19 @@ impl ChunkManager {
         self.pending_changes.update_or_create(pos, true);
     }
 
+    pub fn initialize_new_chunk(&self, pos: ChunkPos) -> Result<ChunkRef, ChunkManagerError> {
+        let chunk = Chunk::new(BlockVoxel::Full(self.default_block));
+
+        if self.loaded_chunks.get(pos).is_some() {
+            return Err(ChunkManagerError::AlreadyInitialized);
+        }
+
+        self.loaded_chunks.set(pos, Arc::new(chunk));
+        self.pending_changes.update_or_create(pos, true);
+
+        self.get_loaded_chunk(pos)
+    }
+
     pub(crate) fn changed_chunks(&self) -> ChangedChunks<'_, '_> {
         ChangedChunks {
             changed_positions: self.pending_changes.pending_changes(),

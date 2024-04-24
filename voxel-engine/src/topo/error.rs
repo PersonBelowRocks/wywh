@@ -29,6 +29,8 @@ pub enum ChunkManagerError {
     Unloaded,
     #[error("Chunk doesn't exist")]
     DoesntExist,
+    #[error("Tried to initialize already existing chunk")]
+    AlreadyInitialized,
 }
 
 #[derive(te::Error, Debug, PartialEq, Eq)]

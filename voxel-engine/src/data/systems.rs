@@ -222,7 +222,7 @@ fn create_block_variant_registry(
         BlockVariantDescriptor {
             options: BlockOptions {
                 transparency: Transparency::Transparent,
-                subdividable: false,
+                subdividable: true,
             },
             model: None,
         },

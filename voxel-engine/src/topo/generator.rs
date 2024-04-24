@@ -7,18 +7,24 @@ use bevy::{
 use noise::{NoiseFn, Perlin};
 use parking_lot::RwLock;
 
-use crate::data::{
-    registries::{block::BlockVariantRegistry, Registries, Registry},
-    resourcepath::{rpath, ResourcePath},
-    tile::{Face, Transparency},
-    voxel::rotations::BlockModelRotation,
+use crate::{
+    data::{
+        registries::{block::BlockVariantRegistry, Registries, Registry},
+        resourcepath::{rpath, ResourcePath},
+        tile::{Face, Transparency},
+        voxel::rotations::BlockModelRotation,
+    },
+    topo::{
+        block::{Microblock, SubdividedBlock},
+        MbWriteBehaviour, SubdivAccess,
+    },
 };
 
 use super::{
     access::{ChunkBounds, HasBounds, WriteAccess},
     block::BlockVoxel,
     chunk::{Chunk, ChunkPos, VoxelVariantData},
-    chunk_ref::ChunkVoxelInput,
+    chunk_ref::{ChunkRefVxlAccess, ChunkVoxelInput},
     error::{ChunkAccessError, GeneratorError},
     storage::{
         containers::{
@@ -94,6 +100,7 @@ struct GeneratorPalette {
 
 #[derive(Clone)]
 pub struct Generator {
+    registries: Registries,
     palette: GeneratorPalette,
     default_rotation: BlockModelRotation,
     noise: Perlin,
@@ -113,6 +120,7 @@ impl Generator {
         };
 
         Self {
+            registries: registries.clone(),
             palette,
             default_rotation: BlockModelRotation::new(Face::North, Face::Top).unwrap(),
             noise: Perlin::new(seed),
@@ -128,76 +136,67 @@ impl Generator {
     }
 
     #[inline]
-    pub fn write_to_chunk<Acc>(
+    pub fn write_to_chunk<'chunk>(
         &self,
         cs_pos: ChunkPos,
-        access: &mut Acc,
-    ) -> Result<(), GeneratorError<Acc::WriteErr>>
-    where
-        Acc: WriteAccess<WriteType = ChunkVoxelInput> + ChunkBounds,
-    {
+        mut access: ChunkRefVxlAccess<'chunk>,
+    ) -> Result<(), GeneratorError<ChunkAccessError>> {
         const THRESHOLD: f64 = 0.5;
 
-        if !access.bounds().is_chunk() {
-            Err(GeneratorError::AccessNotChunk)?
-        }
+        let varreg = self
+            .registries
+            .get_registry::<BlockVariantRegistry>()
+            .unwrap();
+
+        let mut sd_access = SubdivAccess::new(
+            varreg,
+            access,
+            MbWriteBehaviour::Ignore,
+            Microblock::new(self.palette.void),
+        );
 
         let ws_min = cs_pos.worldspace_min();
+        let ws_min_sd = ws_min * 4;
         let ws_max = cs_pos.worldspace_max();
 
-        for (ls_x, _ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
-            for (ls_y, _ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
-                for (ls_z, _ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
-                    let ls_pos = ivec3(ls_x, ls_y, ls_z);
-
-                    access.set(
-                        ls_pos,
-                        ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.void)),
-                    )?;
-                }
-            }
-        }
-
-        for (ls_x, ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
-            for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
-                if cs_pos.y < 0 {
-                    for (ls_y, _ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
-                        let ls_pos = ivec3(ls_x, ls_y, ls_z);
-
-                        access.set(
-                            ls_pos,
+        if cs_pos.y < 0 {
+            for x in 0..Chunk::SIZE {
+                for y in 0..Chunk::SIZE {
+                    for z in 0..Chunk::SIZE {
+                        sd_access.set(
+                            ivec3(x, y, z),
                             ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.water)),
                         )?;
                     }
-                } else {
-                    let noise_pos = ivec2(ws_x, ws_z).as_dvec2() * self.scale;
-                    let noise = self.noise.get([noise_pos.x, noise_pos.y]);
-
-                    let height = (noise * 32.0) as i32;
-
-                    for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
-                        let ls_pos = ivec3(ls_x, ls_y, ls_z);
-                        let ws_pos = ivec3(ws_x, ws_y, ws_z);
-
-                        if ws_pos.y <= height {
-                            access.set(
-                                ls_pos,
-                                ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.stone)),
-                            )?;
-                        }
-                    }
                 }
             }
+
+            return Ok(());
         }
 
-        for (ls_x, ws_x) in Self::zipped_coordinate_iter(ws_min.x, ws_max.x) {
-            for (ls_y, ws_y) in Self::zipped_coordinate_iter(ws_min.y, ws_max.y) {
-                for (ls_z, ws_z) in Self::zipped_coordinate_iter(ws_min.z, ws_max.z) {
-                    let noise_pos = ivec3(ws_x, ws_y, ws_z).as_dvec3() * self.scale;
-                    let _ls_pos = ivec3(ls_x, ls_y, ls_z);
-                    let _ws_pos = ivec3(ws_x, ws_y, ws_z);
+        sd_access.set(
+            ivec3(0, 0, 0),
+            ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.stone)),
+        )?;
 
-                    let _noise = self.noise.get([noise_pos.x, noise_pos.z]);
+        for sd_x in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
+            for sd_y in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
+                for sd_z in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
+                    let ls_pos_sd = ivec3(sd_x, sd_y, sd_z);
+
+                    if ls_pos_sd.cmplt(IVec3::splat(4)).all() {
+                        continue;
+                    }
+
+                    let ws_pos_sd = ws_min_sd + ls_pos_sd;
+
+                    let noise_pos = ivec3(ws_pos_sd.x, ws_pos_sd.y, ws_pos_sd.z).as_dvec3()
+                        * (self.scale / 4.0);
+                    let noise = self.noise.get([noise_pos.x, noise_pos.y, noise_pos.z]);
+
+                    if noise > THRESHOLD {
+                        sd_access.set_mb(ls_pos_sd, Microblock::new(self.palette.stone))?;
+                    }
                 }
             }
         }
