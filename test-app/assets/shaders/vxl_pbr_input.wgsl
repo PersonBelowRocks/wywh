@@ -326,8 +326,6 @@ fn create_pbr_input(
     return pbr_input;
 }
 
-// TODO: theres a lot of yapping about mikktspace and whatever here, find out if we care about
-// what mikktspace is doing in our case.
 fn apply_normal_mapping(
     standard_material_flags: u32,
     world_normal: vec3<f32>,
