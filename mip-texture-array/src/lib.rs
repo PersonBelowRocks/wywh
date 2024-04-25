@@ -80,20 +80,27 @@ pub struct MipArrayTextureBuilder {
     empty_pixel_data: Vec<u8>,
     format: TextureFormat,
     dims: u32,
+    srgb: bool,
 }
 
 impl MipArrayTextureBuilder {
-    pub fn new(dims: u32) -> Self {
-        Self::new_with_format(dims, vec![0; 4], TextureFormat::Rgba8UnormSrgb)
+    pub fn new(dims: u32, srgb: bool) -> Self {
+        Self::new_with_format(dims, srgb, vec![0; 4], TextureFormat::Rgba8UnormSrgb)
     }
 
-    fn new_with_format(dims: u32, empty_pixel_data: Vec<u8>, format: TextureFormat) -> Self {
+    fn new_with_format(
+        dims: u32,
+        srgb: bool,
+        empty_pixel_data: Vec<u8>,
+        format: TextureFormat,
+    ) -> Self {
         Self {
             label: None,
             handles: Vec::new(),
             empty_pixel_data,
             format,
             dims,
+            srgb,
         }
     }
 
@@ -164,6 +171,7 @@ impl MipArrayTextureBuilder {
             image: arr_texture,
             array_layers: total_imgs as _,
             dims: self.dims,
+            srgb: self.srgb,
         };
 
         let manual_id = AssetId::Uuid {

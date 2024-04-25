@@ -349,7 +349,7 @@ fn apply_normal_mapping(
     // vertex tangent! Do not change this code unless you really know what you are doing.
     // http://www.mikktspace.com/
     var T: vec3<f32> = world_tangent.xyz;
-    var B: vec3<f32> = world_tangent.w * cross(N, T);
+    var B: vec3<f32> = 1.0 * cross(N, T);
 
     // Nt is the tangent-space normal.
     var Nt = textureSampleLevel(

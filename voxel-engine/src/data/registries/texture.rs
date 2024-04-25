@@ -57,7 +57,7 @@ impl TextureRegistryLoader {
         let mut color_id_to_idx = hb::HashMap::<AssetId<Image>, u32>::new();
 
         let color_arr_tex = {
-            let mut builder = MipArrayTextureBuilder::new(TEXTURE_DIMENSIONS);
+            let mut builder = MipArrayTextureBuilder::new(TEXTURE_DIMENSIONS, true);
             builder.set_label(Some("color_array_texture"));
 
             for id in self.textures.values().cloned() {
@@ -73,7 +73,7 @@ impl TextureRegistryLoader {
         let mut normal_id_to_idx = hb::HashMap::<AssetId<Image>, u32>::new();
 
         let normal_arr_tex = {
-            let mut builder = MipArrayTextureBuilder::new(TEXTURE_DIMENSIONS);
+            let mut builder = MipArrayTextureBuilder::new(TEXTURE_DIMENSIONS, false);
             builder.set_label(Some("normal_array_texture"));
 
             for id in self.textures.values().cloned() {

@@ -74,7 +74,7 @@ fn insert_example(
     _std_materials: ResMut<Assets<StandardMaterial>>,
     mut array_textures: ResMut<Assets<MippedArrayTexture>>,
 ) {
-    let mut builder = MipArrayTextureBuilder::new(16);
+    let mut builder = MipArrayTextureBuilder::new(16, true);
 
     for handle in handles.0.iter() {
         builder

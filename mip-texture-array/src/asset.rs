@@ -25,6 +25,7 @@ pub struct MippedArrayTexture {
     pub image: Image,
     pub dims: u32,
     pub array_layers: u32,
+    pub srgb: bool,
 }
 
 impl MippedArrayTexture {
@@ -56,12 +57,12 @@ fn create_array_texture_with_filled_mip_level_0(
         usage: TextureUsages::COPY_DST
             | TextureUsages::STORAGE_BINDING
             | TextureUsages::TEXTURE_BINDING,
-        view_formats: &[TEXTURE_FORMAT],
+        view_formats: &[TEXTURE_FORMAT, STORAGE_TEXTURE_FORMAT],
     };
 
     let texture = gpu.create_texture(&desc);
 
-    let block_size = TEXTURE_FORMAT.block_size(None).unwrap_or(4);
+    let block_size = TEXTURE_FORMAT.block_copy_size(None).unwrap_or(4);
     let (block_width, block_height) = desc.format.block_dimensions();
     let layers = asset.array_layers;
 
@@ -246,7 +247,11 @@ impl RenderAsset for MippedArrayTexture {
 
         let main_view = texture.create_view(&TextureViewDescriptor {
             label: Some("mipped_array_texture_main_view"),
-            format: Some(TEXTURE_FORMAT),
+            format: Some(if self.srgb {
+                TEXTURE_FORMAT
+            } else {
+                STORAGE_TEXTURE_FORMAT
+            }),
             dimension: Some(TextureViewDimension::D2Array),
             aspect: TextureAspect::All,
             base_mip_level: 0,
