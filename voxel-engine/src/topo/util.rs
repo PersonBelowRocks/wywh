@@ -224,6 +224,7 @@ mod tests {
             .unwrap();
 
         drop(sd_access);
+        drop(access);
 
         let read_access = chunk.read_access();
         let sd_access = SubdivReadAccess::new(read_access);
