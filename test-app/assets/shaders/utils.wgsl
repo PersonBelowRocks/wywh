@@ -75,8 +75,12 @@ fn uv_coords_from_fs_pos_and_params(
     // origin is in the bottom left
     raw_uv.y = 1.0 - raw_uv.y;
 
-    if face == FACE_NORTH || face == FACE_WEST {
+    if face == FACE_NORTH || face == FACE_WEST || face == FACE_TOP {
         raw_uv.x = 1.0 - raw_uv.x;
+    }
+
+    if face == FACE_WEST || face == FACE_EAST {
+        raw_uv = vec2(1.0) - raw_uv;
     }
 
     if flip_x {

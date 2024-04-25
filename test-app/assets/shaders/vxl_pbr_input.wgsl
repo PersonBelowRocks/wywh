@@ -247,7 +247,6 @@ fn create_pbr_input(
 
     let uv_rotation_matrix = create_rotation_matrix(texture_rot);
 
-    // TODO: UV calculation is a bit more complicated than this, fix it!!
     let uv = uv_coords_from_fs_pos_and_params(
         fs_pos,
         uv_rotation_matrix,

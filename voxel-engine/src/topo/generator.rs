@@ -176,7 +176,7 @@ impl Generator {
 
         sd_access.set(
             ivec3(0, 0, 0),
-            ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.stone)),
+            ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.debug)),
         )?;
 
         for sd_x in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
