@@ -139,7 +139,7 @@ impl Generator {
     pub fn write_to_chunk<'chunk>(
         &self,
         cs_pos: ChunkPos,
-        mut access: ChunkRefVxlAccess<'chunk>,
+        access: &mut ChunkRefVxlAccess<'chunk>,
     ) -> Result<(), GeneratorError<ChunkAccessError>> {
         const THRESHOLD: f64 = 0.5;
 

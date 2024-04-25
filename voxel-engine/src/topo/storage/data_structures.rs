@@ -245,6 +245,29 @@ pub struct IndexedChunkStorage<T: Eq + hash::Hash, S: BuildHasher = ahash::Rando
     random_state: S,
 }
 
+fn optimize_by_copying<T: Eq + hash::Hash + Clone, S: BuildHasher + Clone>(
+    old: &IndexedChunkStorage<T, S>,
+) -> IndexedChunkStorage<T, S> {
+    let mut new = IndexedChunkStorage::with_random_state(old.random_state.clone());
+
+    for x in 0..Chunk::SIZE {
+        for y in 0..Chunk::SIZE {
+            for z in 0..Chunk::SIZE {
+                let pos = ivec3(x, y, z);
+                if let Some(vxl) = old.get(pos).unwrap() {
+                    new.set(pos, vxl.clone()).unwrap();
+                }
+            }
+        }
+    }
+
+    new.values.shrink_to_fit();
+    new.idx_table
+        .shrink_to_fit(|i| new.random_state.hash_one(&new.values[*i]));
+
+    new
+}
+
 impl<T: Eq + hash::Hash> IndexedChunkStorage<T, ahash::RandomState> {
     pub fn new() -> Self {
         Self::internal_new(ahash::RandomState::new())
@@ -330,6 +353,14 @@ impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
         new
     }
 
+    pub fn values(&self) -> &[T] {
+        &self.values
+    }
+
+    pub fn values_mut(&mut self) -> &mut [T] {
+        &mut self.values
+    }
+
     pub fn contains_pos(pos: IVec3) -> bool {
         Chunk::BOUNDING_BOX.contains(pos)
     }
@@ -413,99 +444,20 @@ impl<T: Eq + hash::Hash, S: BuildHasher> IndexedChunkStorage<T, S> {
         Ok(Some(&mut self.values[idx]))
     }
 
-    pub fn values(&self) -> usize {
-        self.values.len()
+    pub fn values_len(&self) -> usize {
+        self.values().len()
     }
+}
 
+impl<T: hash::Hash + Eq + Clone, S: BuildHasher + Clone> IndexedChunkStorage<T, S> {
     pub fn optimize(&mut self) -> usize {
-        // if the capacity of self.idx_table is this much greater than the length of self.idx_table,
-        // we call shrink_to_fit() to clear up memory
-        const IDX_TABLE_CAPACITY_THRESHOLD: usize = 8;
+        let old_values = self.values_len();
 
-        let old_value_count = self.values.len();
+        let new = optimize_by_copying(self);
+        let new_values = new.values_len();
 
-        let mut present_values = hb::HashSet::<usize>::with_capacity(self.values());
-
-        // Pass 1: discover all indices currently accessible
-        for x in 0..Chunk::SIZE {
-            for y in 0..Chunk::SIZE {
-                for z in 0..Chunk::SIZE {
-                    let pos = ivec3(x, y, z);
-
-                    if let Some(idx) = self.get_idx(pos) {
-                        present_values.insert(idx);
-                    }
-                }
-            }
-        }
-
-        // find which values have no accessible index pointing to it
-        let mut removed_values = hb::HashSet::<usize>::new();
-        for (i, _) in self.values.iter().enumerate() {
-            if !present_values.contains(&i) {
-                removed_values.insert(i);
-            }
-        }
-
-        // optimization being ran is the perfect excuse for us to shrink our index table to clear up even more memory!
-        if self.idx_table.capacity() - self.idx_table.len() > IDX_TABLE_CAPACITY_THRESHOLD {
-            self.idx_table
-                .shrink_to_fit(|i: &_| self.random_state.hash_one(&self.values[*i]));
-        }
-
-        // nothing more to optimize!
-        if removed_values.len() <= 0 {
-            return 0;
-        }
-
-        let total_values = present_values.len() - removed_values.len();
-
-        // ???
-        let mut old2new = hb::HashMap::<usize, usize>::with_capacity(total_values);
-        for (i, &val) in present_values.iter().enumerate() {
-            old2new.insert(val, i);
-        }
-
-        // remove and remap all our stuff in the index map
-        self.idx_table.retain(|idx| {
-            if present_values.contains(idx) {
-                let new_index = old2new[idx];
-                *idx = new_index;
-                true
-            } else {
-                false
-            }
-        });
-
-        // reinitialize our values
-        let mut new_values = Vec::from_iter((0..present_values.len()).map(|_| None));
-        let old_values = mem::replace(&mut self.values, Vec::new());
-        for (i, value) in old_values.into_iter().enumerate() {
-            if present_values.contains(&i) {
-                let new_index = old2new[&i];
-                new_values[new_index] = Some(value);
-            }
-        }
-
-        self.values
-            .extend(new_values.into_iter().map(Option::unwrap));
-
-        // Pass 2: remap all indices to the new ones
-        for x in 0..Chunk::SIZE {
-            for y in 0..Chunk::SIZE {
-                for z in 0..Chunk::SIZE {
-                    let pos = ivec3(x, y, z);
-
-                    if let Some(idx) = self.get_idx(pos) {
-                        let new_index = old2new[&idx];
-                        self.set_idx(pos, new_index);
-                    }
-                }
-            }
-        }
-
-        let new_value_count = self.values.len();
-        old_value_count - new_value_count
+        *self = new;
+        old_values - new_values
     }
 }
 
@@ -609,13 +561,13 @@ mod tests {
         assert_eq!(None, ics.get(ivec3(0, 1, 0)).unwrap());
         assert_eq!(Some(&11), ics.get(ivec3(15, 15, 15)).unwrap());
 
-        assert_eq!(2, ics.values());
+        assert_eq!(2, ics.values_len());
 
         ics.clear(ivec3(0, 0, 0)).unwrap();
 
         assert_eq!(None, ics.get(ivec3(0, 0, 0)).unwrap());
 
-        assert_eq!(2, ics.values());
+        assert_eq!(2, ics.values_len());
     }
 
     #[test]
@@ -637,7 +589,7 @@ mod tests {
 
         ics.set(ivec3(0, 1, 0), 10).unwrap();
 
-        assert_eq!(2, ics.values());
+        assert_eq!(2, ics.values_len());
 
         // we clear out only '11' in the storage
         ics.clear(ivec3(0, 2, 0)).unwrap();
@@ -646,7 +598,7 @@ mod tests {
         assert_eq!(1, ics.optimize());
 
         // we should only have a '10' left in here
-        assert_eq!(1, ics.values());
+        assert_eq!(1, ics.values_len());
     }
 
     #[test]
@@ -664,7 +616,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(1, ics.values());
+        assert_eq!(1, ics.values_len());
         assert_eq!(Some(&10), ics.get(ivec3(0, 4, 0)).unwrap());
         assert_eq!(Some(&10), ics.get(ivec3(1, 4, 0)).unwrap());
         assert_eq!(Some(&10), ics.get(ivec3(2, 4, 0)).unwrap());
@@ -682,7 +634,7 @@ mod tests {
             )
             .is_err());
 
-        assert_eq!(1, ics.values());
+        assert_eq!(1, ics.values_len());
     }
 
     #[test]
@@ -698,11 +650,11 @@ mod tests {
         // overwrite our first value
         ics.set(ivec3(2, 2, 2), 11).unwrap();
 
-        assert_eq!(2, ics.values());
+        assert_eq!(2, ics.values_len());
 
         assert_eq!(1, ics.optimize());
 
-        assert_eq!(1, ics.values());
+        assert_eq!(1, ics.values_len());
 
         assert_eq!(Some(&11), ics.get(ivec3(2, 2, 2)).unwrap());
         assert_eq!(Some(&11), ics.get(ivec3(2, 3, 2)).unwrap());
@@ -723,13 +675,13 @@ mod tests {
 
         ics.clear(ivec3(0, 0, 0)).unwrap();
 
-        assert_eq!(2, ics.values());
+        assert_eq!(2, ics.values_len());
 
         assert_eq!(None, ics.get(ivec3(0, 0, 0)).unwrap());
 
         assert_eq!(1, ics.optimize());
 
-        assert_eq!(1, ics.values());
+        assert_eq!(1, ics.values_len());
 
         assert_eq!(None, ics.get(ivec3(0, 0, 0)).unwrap());
 
@@ -756,11 +708,11 @@ mod tests {
         assert_eq!(None, ics.get(ivec3(0, 1, 0)).unwrap());
         assert_eq!(None, ics.get(ivec3(0, 2, 0)).unwrap());
 
-        assert_eq!(4, ics.values());
+        assert_eq!(4, ics.values_len());
 
         assert_eq!(2, ics.optimize());
 
-        assert_eq!(2, ics.values());
+        assert_eq!(2, ics.values_len());
 
         assert_eq!(Some(&10), ics.get(ivec3(0, 0, 0)).unwrap());
         assert_eq!(Some(&13), ics.get(ivec3(0, 3, 0)).unwrap());

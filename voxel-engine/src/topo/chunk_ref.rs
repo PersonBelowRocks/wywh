@@ -139,7 +139,7 @@ pub struct ChunkRefVxlAccess<'a, S: BuildHasher = ahash::RandomState> {
     pub(crate) block_variants: SiccAccess<'a, BlockVoxel, S>,
 }
 
-impl<'a, S: BuildHasher> ChunkRefVxlAccess<'a, S> {
+impl<'a, S: BuildHasher + Clone> ChunkRefVxlAccess<'a, S> {
     pub(crate) fn get_mutable_output(
         &mut self,
         pos: IVec3,
@@ -155,6 +155,25 @@ impl<'a, S: BuildHasher> ChunkRefVxlAccess<'a, S> {
         };
 
         Ok(MutChunkVxlOutput { block: output })
+    }
+
+    pub fn coalesce_microblocks(&mut self) -> usize {
+        let mut coalesced = 0;
+
+        for value in self.block_variants.values_mut() {
+            if let BlockVoxel::Subdivided(subdiv) = value {
+                if let Some(full) = subdiv.coalesce() {
+                    coalesced += 1;
+                    *value = BlockVoxel::Full(full);
+                }
+            }
+        }
+
+        coalesced
+    }
+
+    pub fn optimize_internal_storage(&mut self) -> usize {
+        self.block_variants.optimize_storage()
     }
 }
 

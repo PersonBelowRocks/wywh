@@ -65,17 +65,17 @@ pub enum MbWriteBehaviour {
             //  should be used instead when they are attempted to be subdivided?
 }
 
-pub struct SubdivAccess<'reg, 'chunk> {
-    access: ChunkRefVxlAccess<'chunk>,
+pub struct SubdivAccess<'reg, 'chunk, 'acc> {
+    access: &'acc mut ChunkRefVxlAccess<'chunk>,
     registry: RegistryRef<'reg, BlockVariantRegistry>,
     mb_write_behaviour: MbWriteBehaviour,
     default: Microblock,
 }
 
-impl<'reg, 'chunk> SubdivAccess<'reg, 'chunk> {
+impl<'reg, 'chunk, 'acc> SubdivAccess<'reg, 'chunk, 'acc> {
     pub fn new(
         registry: RegistryRef<'reg, BlockVariantRegistry>,
-        access: ChunkRefVxlAccess<'chunk>,
+        access: &'acc mut ChunkRefVxlAccess<'chunk>,
         mb_write_behaviour: MbWriteBehaviour,
         default: Microblock,
     ) -> Self {
@@ -194,10 +194,10 @@ mod tests {
         let guard = varreg.read();
         let chunk = MockChunk::new(BlockVoxel::new_full(BlockVariantRegistry::VOID));
 
-        let access = chunk.access();
+        let mut access = chunk.access();
         let mut sd_access = SubdivAccess::new(
             RwLockReadGuard::map(guard, |g| g),
-            access,
+            &mut access,
             MbWriteBehaviour::Ignore,
             Microblock::new(BlockVariantRegistry::VOID),
         );

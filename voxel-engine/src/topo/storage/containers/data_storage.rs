@@ -121,6 +121,20 @@ impl<'a, T: hash::Hash + Eq, S: BuildHasher> SiccAccess<'a, T, S> {
     pub(crate) fn get_mut(&mut self, pos: IVec3) -> Result<Option<&mut T>, OutOfBounds> {
         self.0.get_mut(pos)
     }
+
+    pub fn values(&self) -> &[T] {
+        self.0.values()
+    }
+
+    pub fn values_mut(&mut self) -> &mut [T] {
+        self.0.values_mut()
+    }
+}
+
+impl<'a, T: hash::Hash + Eq + Clone, S: BuildHasher + Clone> SiccAccess<'a, T, S> {
+    pub fn optimize_storage(&mut self) -> usize {
+        self.0.optimize()
+    }
 }
 
 impl<'a, T: hash::Hash + Eq, S: BuildHasher> ChunkBounds for SiccAccess<'a, T, S> {}
