@@ -163,23 +163,25 @@ impl GreedyMesher {
                 let cs_pos = ivec2(cs_x, cs_y);
 
                 let block = cqs.get(cs_pos)?.block;
-                let above = cqs.get_above(cs_pos)?.block;
-
-                if let CvoBlock::Full(above) = above {
-                    if cqs
-                        .registry
-                        .get_by_id(above.id)
-                        .options
-                        .transparency
-                        .is_opaque()
-                    {
-                        continue;
-                    }
-                }
 
                 if let CvoBlock::Full(block) = block {
                     if cqs.registry.get_by_id(block.id).model.is_none() {
                         continue;
+                    }
+                }
+
+                if cqs.mag_at_block_edge() {
+                    let above = cqs.get_above(cs_pos)?.block;
+                    if let CvoBlock::Full(above) = above {
+                        if cqs
+                            .registry
+                            .get_by_id(above.id)
+                            .options
+                            .transparency
+                            .is_opaque()
+                        {
+                            continue;
+                        }
                     }
                 }
 

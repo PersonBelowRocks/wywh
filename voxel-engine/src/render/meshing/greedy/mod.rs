@@ -23,6 +23,7 @@ use crate::{
     },
     util::{
         self, microblock_to_full_block, microblock_to_full_block_3d, microblock_to_subdiv_pos_3d,
+        rem_euclid_2_pow_n,
     },
 };
 
@@ -91,6 +92,13 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         self.mag = magnitude;
 
         Ok(())
+    }
+
+    pub fn mag_at_block_edge(&self) -> bool {
+        rem_euclid_2_pow_n(
+            self.mag + i32::clamp(self.face.axis_direction(), -1, 0),
+            SubdividedBlock::SUBDIVISIONS_LOG2,
+        ) == SubdividedBlock::SUBDIVISIONS - 1
     }
 
     pub fn contains_mb(pos: IVec2) -> bool {
@@ -405,6 +413,31 @@ pub mod tests {
 
         drop(access);
         chunk
+    }
+
+    #[test]
+    fn cqs_mag_at_block_edge() {
+        let texreg = TextureRegistry::new_mock();
+        let varreg = RwLock::new(BlockVariantRegistry::new_mock(&texreg));
+        let neighbor_chunk = MockChunk::new(BlockVoxel::new_full(BlockVariantRegistry::VOID));
+        let chunk = testing_chunk();
+        let neighbors = testing_neighbors(&neighbor_chunk);
+
+        let access = chunk.read_access();
+        let guard = RwLockReadGuard::map(varreg.read(), |g| g);
+
+        let mut cqs = ChunkQuadSlice::new(Face::Top, 0, &access, &neighbors, &guard).unwrap();
+
+        assert!(!cqs.mag_at_block_edge());
+
+        cqs.reposition(Face::Top, 3).unwrap();
+        assert!(cqs.mag_at_block_edge());
+
+        cqs.reposition(Face::Bottom, 0).unwrap();
+        assert!(cqs.mag_at_block_edge());
+
+        cqs.reposition(Face::Bottom, 1).unwrap();
+        assert!(!cqs.mag_at_block_edge());
     }
 
     #[test]
