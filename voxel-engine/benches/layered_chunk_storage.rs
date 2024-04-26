@@ -1,6 +1,6 @@
 use bevy::math::ivec3;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use voxel_engine::topo::{chunk::Chunk, storage::data_structures::LayeredChunkStorage};
+use voxel_engine::topo::{storage::data_structures::LayeredChunkStorage, world::Chunk};
 
 fn prefill_storage(storage: &mut LayeredChunkStorage<u32>) {
     for x in 0..Chunk::SIZE {

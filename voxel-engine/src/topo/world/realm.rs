@@ -8,15 +8,18 @@ use bevy::{
     prelude::Resource,
 };
 
-use crate::util::{ivec3_to_1d, SyncHashMap};
+use crate::{
+    topo::{
+        block::{BlockVoxel, FullBlock},
+        neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
+    },
+    util::{ivec3_to_1d, SyncHashMap},
+};
 
 use super::{
-    access::ReadAccess,
-    block::{BlockVoxel, FullBlock},
     chunk::{Chunk, ChunkPos},
-    chunk_ref::{ChunkRef, ChunkRefVxlReadAccess},
+    chunk_ref::{ChunkRef, ChunkRefReadAccess},
     error::ChunkManagerError,
-    neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
 };
 
 #[derive(Default)]
@@ -191,7 +194,7 @@ impl ChunkManager {
                 continue;
             };
 
-            accesses[i] = Some(ChunkRefVxlReadAccess {
+            accesses[i] = Some(ChunkRefReadAccess {
                 block_variants: cref.variants.read_access(),
             });
         }

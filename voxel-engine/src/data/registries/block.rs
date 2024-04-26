@@ -2,14 +2,16 @@ use std::{fs::File, io::Read, path::Path};
 
 use indexmap::IndexMap;
 
+use crate::data::{
+    error::BlockVariantFileLoaderError,
+    resourcepath::ResourcePath,
+    tile::Transparency,
+    voxel::{descriptor::BlockVariantDescriptor, BlockModel},
+};
+
+#[cfg(test)]
 use crate::{
-    data::{
-        error::BlockVariantFileLoaderError,
-        resourcepath::{rpath, ResourcePath},
-        texture::FaceTexture,
-        tile::Transparency,
-        voxel::{descriptor::BlockVariantDescriptor, rotations::BlockModelFaceMap, BlockModel},
-    },
+    data::{resourcepath::rpath, texture::FaceTexture, voxel::rotations::BlockModelFaceMap},
     util::FaceMap,
 };
 

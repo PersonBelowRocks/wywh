@@ -1,12 +1,6 @@
-use std::{
-    fmt::Write,
-    path::{Path},
-};
+use std::{fmt::Write, path::Path};
 
-use super::{
-    error::{FromPathError, FromStrError},
-    ResourcePath,
-};
+use super::{error::FromPathError, ResourcePath};
 
 impl<'a> TryFrom<&'a Path> for ResourcePath {
     type Error = FromPathError;
@@ -66,6 +60,8 @@ impl From<ResourcePath> for String {
 #[cfg(test)]
 mod tests {
     use std::{path::PathBuf, str::FromStr};
+
+    use crate::data::resourcepath::error::FromStrError;
 
     use super::*;
 

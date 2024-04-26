@@ -1,11 +1,11 @@
-use bevy::math::{ivec2, ivec3, IVec2, IVec3};
+use bevy::math::{IVec2, IVec3};
 
 use crate::{
     data::{
         registries::{block::BlockVariantRegistry, Registry, RegistryRef},
         texture::FaceTexture,
         tile::Face,
-        voxel::{rotations::BlockModelRotation},
+        voxel::rotations::BlockModelRotation,
     },
     render::quad::{
         anon::Quad,
@@ -13,13 +13,12 @@ use crate::{
         isometric::{IsometrizedQuad, PositionedQuad, QuadIsometry},
     },
     topo::{
-        access::{ReadAccess},
+        access::ReadAccess,
         block::{Microblock, SubdividedBlock},
-        chunk::Chunk,
-        chunk_ref::{ChunkVoxelOutput, CrVra, CvoBlock},
         ivec_project_to_2d, ivec_project_to_3d,
         neighbors::{self, Neighbors},
         storage::error::OutOfBounds,
+        world::{CaoBlock, Chunk, ChunkAccessOutput, Crra},
     },
     util::{
         self, microblock_to_full_block, microblock_to_full_block_3d, microblock_to_subdiv_pos_3d,
@@ -39,7 +38,7 @@ pub struct ChunkQuadSlice<'a, 'chunk> {
     pub face: Face,
     pub mag: i32,
 
-    access: &'a CrVra<'chunk>,
+    access: &'a Crra<'chunk>,
     neighbors: &'a Neighbors<'chunk>,
     registry: &'a RegistryRef<'a, BlockVariantRegistry>,
 }
@@ -53,7 +52,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     pub fn new(
         face: Face,
         magnitude: i32,
-        access: &'a CrVra<'chunk>,
+        access: &'a Crra<'chunk>,
         neighbors: &'a Neighbors<'chunk>,
         registry: &'a RegistryRef<'a, BlockVariantRegistry>,
     ) -> Result<Self, OutOfBounds> {
@@ -150,7 +149,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get_3d(&self, pos: IVec3) -> CqsResult<ChunkVoxelOutput> {
+    pub fn get_3d(&self, pos: IVec3) -> CqsResult<ChunkAccessOutput> {
         self.access.get(pos).map_err(|e| CqsError::AccessError(e))
     }
 
@@ -159,11 +158,11 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         let pos = microblock_to_full_block_3d(pos_mb);
 
         Ok(match self.get_3d(pos)?.block {
-            CvoBlock::Full(block) => Microblock {
+            CaoBlock::Full(block) => Microblock {
                 rotation: block.rotation,
                 id: block.id,
             },
-            CvoBlock::Subdivided(block) => {
+            CaoBlock::Subdivided(block) => {
                 let pos_sd = microblock_to_subdiv_pos_3d(pos_mb).as_uvec3();
                 block.get(pos_sd).unwrap()
             }
@@ -171,9 +170,9 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     /// `pos` is in localspace and can exceed the regular chunk bounds by 1 for any component of the vector.
-    /// In this case the `ChunkVoxelOutput` is taken from a neighboring chunk.
+    /// In this case the `ChunkAccessOutput` is taken from a neighboring chunk.
     #[inline]
-    pub fn auto_neighboring_get(&self, pos: IVec3) -> CqsResult<ChunkVoxelOutput> {
+    pub fn auto_neighboring_get(&self, pos: IVec3) -> CqsResult<ChunkAccessOutput> {
         if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
             self.get_3d(pos)
         } else if !Self::contains_3d(pos) && neighbors::is_in_bounds_3d(pos) {
@@ -193,11 +192,11 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
             let nb_block = self.neighbors.get_3d(pos)?.block;
 
             Ok(match nb_block {
-                CvoBlock::Full(block) => Microblock {
+                CaoBlock::Full(block) => Microblock {
                     rotation: block.rotation,
                     id: block.id,
                 },
-                CvoBlock::Subdivided(block) => {
+                CaoBlock::Subdivided(block) => {
                     let pos_sd = microblock_to_subdiv_pos_3d(pos_mb).as_uvec3();
                     block.get(pos_sd).unwrap()
                 }
@@ -208,7 +207,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get(&self, pos: IVec2) -> CqsResult<ChunkVoxelOutput> {
+    pub fn get(&self, pos: IVec2) -> CqsResult<ChunkAccessOutput> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
         }
@@ -228,7 +227,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get_above(&self, pos: IVec2) -> CqsResult<ChunkVoxelOutput> {
+    pub fn get_above(&self, pos: IVec2) -> CqsResult<ChunkAccessOutput> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
         }
@@ -249,11 +248,11 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         let block = self.auto_neighboring_get(pos_above)?.block;
 
         Ok(match block {
-            CvoBlock::Full(block) => Microblock {
+            CaoBlock::Full(block) => Microblock {
                 rotation: block.rotation,
                 id: block.id,
             },
-            CvoBlock::Subdivided(block) => {
+            CaoBlock::Subdivided(block) => {
                 let pos_sd_above = pos_mb_above
                     .rem_euclid(SubdividedBlock::SUBDIVS_VEC3)
                     .as_uvec3();
@@ -297,18 +296,14 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
 #[cfg(test)]
 pub mod tests {
-    use bevy::math::{uvec3};
+    use bevy::math::{ivec2, ivec3, uvec3};
     use parking_lot::{RwLock, RwLockReadGuard};
     use tests::neighbors::NeighborsBuilder;
 
     use crate::{
         data::registries::texture::TextureRegistry,
         testing_utils::MockChunk,
-        topo::{
-            access::WriteAccess,
-            block::{BlockVoxel},
-            chunk_ref::ChunkVoxelInput,
-        },
+        topo::{access::WriteAccess, block::BlockVoxel, world::ChunkAccessInput},
     };
 
     use super::*;
@@ -341,11 +336,11 @@ pub mod tests {
         // blocks on top chunk border for neighbor quad test
 
         access
-            .set(ivec3(9, 15, 8), ChunkVoxelInput::new(block.clone()))
+            .set(ivec3(9, 15, 8), ChunkAccessInput::new(block.clone()))
             .unwrap();
 
         access
-            .set(ivec3(8, 15, 8), ChunkVoxelInput::new(block.clone()))
+            .set(ivec3(8, 15, 8), ChunkAccessInput::new(block.clone()))
             .unwrap();
 
         let edge_subdiv = {
@@ -365,13 +360,13 @@ pub mod tests {
         access
             .set(
                 ivec3(8, 15, 9),
-                ChunkVoxelInput::new(BlockVoxel::Subdivided(edge_subdiv.clone())),
+                ChunkAccessInput::new(BlockVoxel::Subdivided(edge_subdiv.clone())),
             )
             .unwrap();
         access
             .set(
                 ivec3(8, 15, 7),
-                ChunkVoxelInput::new(BlockVoxel::Subdivided(edge_subdiv.clone())),
+                ChunkAccessInput::new(BlockVoxel::Subdivided(edge_subdiv.clone())),
             )
             .unwrap();
 
@@ -379,19 +374,19 @@ pub mod tests {
         // various blocks placed nicely inside the chunk for quad within chunk test
 
         access
-            .set(ivec3(4, 0, 4), ChunkVoxelInput::new(block.clone()))
+            .set(ivec3(4, 0, 4), ChunkAccessInput::new(block.clone()))
             .unwrap();
         access
-            .set(ivec3(4, 0, 3), ChunkVoxelInput::new(block.clone()))
+            .set(ivec3(4, 0, 3), ChunkAccessInput::new(block.clone()))
             .unwrap();
         access
-            .set(ivec3(4, 1, 4), ChunkVoxelInput::new(block.clone()))
+            .set(ivec3(4, 1, 4), ChunkAccessInput::new(block.clone()))
             .unwrap();
         access
-            .set(ivec3(4, 2, 4), ChunkVoxelInput::new(block.clone()))
+            .set(ivec3(4, 2, 4), ChunkAccessInput::new(block.clone()))
             .unwrap();
         access
-            .set(ivec3(4, 1, 2), ChunkVoxelInput::new(block.clone()))
+            .set(ivec3(4, 1, 2), ChunkAccessInput::new(block.clone()))
             .unwrap();
 
         let mut subdiv_block = SubdividedBlock::new(Microblock::new(BlockVariantRegistry::VOID));
@@ -405,7 +400,7 @@ pub mod tests {
         access
             .set(
                 ivec3(4, 1, 3),
-                ChunkVoxelInput::new(BlockVoxel::Subdivided(subdiv_block)),
+                ChunkAccessInput::new(BlockVoxel::Subdivided(subdiv_block)),
             )
             .unwrap();
 
@@ -529,13 +524,13 @@ pub mod tests {
             };
 
             access
-                .set(ivec3(8, 0, 9), ChunkVoxelInput::new(full.clone()))
+                .set(ivec3(8, 0, 9), ChunkAccessInput::new(full.clone()))
                 .unwrap();
             access
-                .set(ivec3(8, 0, 8), ChunkVoxelInput::new(full.clone()))
+                .set(ivec3(8, 0, 8), ChunkAccessInput::new(full.clone()))
                 .unwrap();
             access
-                .set(ivec3(8, 0, 7), ChunkVoxelInput::new(subdiv))
+                .set(ivec3(8, 0, 7), ChunkAccessInput::new(subdiv))
                 .unwrap();
 
             drop(access);

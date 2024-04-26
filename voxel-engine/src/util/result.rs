@@ -4,6 +4,7 @@ pub(crate) trait Sealed {}
 
 impl<T, E> Sealed for Result<T, E> {}
 
+#[allow(private_bounds)]
 pub trait ResultFlattening: Sealed {
     type Ok;
 

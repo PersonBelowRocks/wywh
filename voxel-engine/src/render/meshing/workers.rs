@@ -17,27 +17,24 @@ use dashmap::DashMap;
 
 use crate::{
     data::registries::Registries,
-    render::{
-        meshing::{error::ChunkMeshingError, Context, MesherOutput},
-    },
-    topo::{chunk::ChunkPos, realm::ChunkManager},
+    render::meshing::{error::ChunkMeshingError, Context, MesherOutput},
+    topo::world::{ChunkManager, ChunkPos},
     util::result::ResultFlattening,
 };
 
-use super::Mesher;
+use super::{greedy::algorithm::GreedyMesher, Mesher};
 
-pub struct Worker<M: Mesher> {
+pub struct Worker {
     task: Task<()>,
     interrupt: Arc<AtomicBool>,
     label: String,
-    mesher: PhantomData<M>,
 }
 
 #[derive(Clone)]
-pub struct WorkerParams<M: Mesher> {
+pub struct WorkerParams {
     pub registries: Registries,
     pub chunk_manager: Arc<ChunkManager>,
-    pub mesher: M,
+    pub mesher: GreedyMesher,
 
     pub finished: FinishedChunks,
     pub cmds: Receiver<MeshCommand>,
@@ -52,10 +49,10 @@ pub struct MeshCommand {
     id: MeshCommandId,
 }
 
-impl<M: Mesher> Worker<M> {
+impl Worker {
     pub fn new(
         pool: &TaskPool,
-        params: WorkerParams<M>,
+        params: WorkerParams,
         channel_timeout: Duration,
         label: String,
     ) -> Self {
@@ -103,7 +100,6 @@ impl<M: Mesher> Worker<M> {
             interrupt: atomic_interrupt,
             task,
             label: label.clone(),
-            mesher: PhantomData,
         }
     }
 
@@ -117,23 +113,23 @@ impl<M: Mesher> Worker<M> {
 pub struct FinishedChunks(Arc<DashMap<ChunkPos, MesherOutput>>);
 
 #[derive(Resource)]
-pub struct MeshWorkerPool<M: Mesher> {
-    workers: Vec<Worker<M>>,
+pub struct MeshWorkerPool {
+    workers: Vec<Worker>,
     cmds: Sender<MeshCommand>,
     finished: FinishedChunks,
 }
 
-impl<M: Mesher> MeshWorkerPool<M> {
+impl MeshWorkerPool {
     pub fn new(
         worker_count: usize,
         pool: &TaskPool,
-        mesher: M,
+        mesher: GreedyMesher,
         registries: Registries,
         cm: Arc<ChunkManager>,
     ) -> Self {
         let finished = FinishedChunks::default();
         let (cmd_sender, cmd_recver) = channel::unbounded::<MeshCommand>();
-        let mut workers = Vec::<Worker<M>>::with_capacity(worker_count);
+        let mut workers = Vec::<Worker>::with_capacity(worker_count);
 
         let default_channel_timeout_duration = Duration::from_millis(500);
 

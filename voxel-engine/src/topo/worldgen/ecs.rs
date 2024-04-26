@@ -3,7 +3,7 @@ use bevy::{
     tasks::{TaskPool, TaskPoolBuilder},
 };
 
-use crate::{data::registries::Registries, topo::realm::VoxelRealm};
+use crate::{data::registries::Registries, topo::world::VoxelRealm};
 
 use super::{generator::GenerateChunk, GeneratorWorkerPool};
 
@@ -13,7 +13,7 @@ pub struct GeneratorSeed(pub u32);
 #[derive(Resource, Deref)]
 pub struct GeneratorWorkerTaskPool(TaskPool);
 
-pub fn setup_terrain_generator(
+pub fn setup_terrain_generator_workers(
     mut cmds: Commands,
     seed: Res<GeneratorSeed>,
     registries: Res<Registries>,

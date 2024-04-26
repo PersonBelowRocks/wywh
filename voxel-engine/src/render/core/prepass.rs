@@ -12,7 +12,7 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
-    log::{error},
+    log::error,
     pbr::{
         DrawMesh, MeshLayouts, MeshPipelineKey, PreviousViewProjection, RenderMeshInstances,
         SetMeshBindGroup, SetPrepassViewBindGroup,

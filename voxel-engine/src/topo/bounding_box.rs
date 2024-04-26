@@ -3,7 +3,7 @@ use std::any::type_name;
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
 
-use super::chunk::Chunk;
+use super::world::Chunk;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct BoundingBox {

@@ -7,7 +7,7 @@ use bevy::math::{ivec3, IVec3};
 use hashbrown::HashTable;
 
 use crate::{
-    topo::{access::ReadAccess, chunk::Chunk},
+    topo::world::Chunk,
     util::{self, CubicArray, SquareArray},
 };
 

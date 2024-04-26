@@ -9,7 +9,7 @@ pub use workers::MeshWorkerPool;
 
 use crate::{
     data::registries::Registries,
-    topo::{chunk_ref::CrVra, neighbors::Neighbors},
+    topo::{neighbors::Neighbors, world::Crra},
 };
 
 use self::error::MesherResult;
@@ -19,7 +19,7 @@ use super::{occlusion::ChunkOcclusionMap, quad::ChunkQuads};
 pub trait Mesher: Clone + Send + Sync + 'static {
     fn build<'reg, 'chunk>(
         &self,
-        access: CrVra<'chunk>,
+        access: Crra<'chunk>,
         context: Context<'reg, 'chunk>,
     ) -> MesherResult;
 }

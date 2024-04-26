@@ -1,14 +1,8 @@
 use std::error::Error;
 
-use crate::topo::{
-    access::ReadAccess,
-    chunk_ref::{ChunkRefVxlReadAccess},
-    error::{ChunkManagerError},
-};
+use crate::topo::world::ChunkManagerError;
 
 use super::{greedy::error::CqsError, MesherOutput};
-
-type ReadError = <ChunkRefVxlReadAccess<'static> as ReadAccess>::ReadErr;
 
 #[derive(te::Error, Debug)]
 pub enum ChunkMeshingError {

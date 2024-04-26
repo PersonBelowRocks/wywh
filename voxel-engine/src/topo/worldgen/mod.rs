@@ -17,7 +17,7 @@ use crate::data::registries::Registries;
 
 use self::generator::Generator;
 
-use super::{chunk::ChunkPos, realm::ChunkManager};
+use super::world::{ChunkManager, ChunkPos};
 
 pub mod ecs;
 pub mod error;

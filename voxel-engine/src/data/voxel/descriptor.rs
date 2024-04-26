@@ -5,12 +5,10 @@ use crate::{
         error::{
             BlockModelCreationError, FaceTextureDescParseError, SubmodelFaceTextureDescParseError,
         },
-        registries::{
-            block::BlockOptions, texture::TextureRegistry, Registry,
-        },
+        registries::{block::BlockOptions, texture::TextureRegistry, Registry},
         resourcepath::ResourcePath,
         texture::{FaceTexture, FaceTextureRotation},
-        tile::{Face},
+        tile::Face,
         voxel::SubmodelFaceTexture,
     },
     util::FaceMap,

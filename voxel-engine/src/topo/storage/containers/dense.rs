@@ -5,8 +5,8 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::topo::access::{HasBounds, ReadAccess, WriteAccess};
 use crate::topo::bounding_box::BoundingBox;
-use crate::topo::chunk::Chunk;
 use crate::topo::error::ChunkAccessError;
+use crate::topo::world::Chunk;
 use crate::util;
 
 use super::super::data_structures::DenseChunkStorage;

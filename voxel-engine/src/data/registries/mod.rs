@@ -1,6 +1,6 @@
 use std::{
     fmt::{Debug, Display},
-    hash::{Hash},
+    hash::Hash,
     sync::Arc,
 };
 

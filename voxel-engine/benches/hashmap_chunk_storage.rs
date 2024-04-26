@@ -1,6 +1,6 @@
 use bevy::math::ivec3;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use voxel_engine::topo::{chunk::Chunk, storage::data_structures::HashmapChunkStorage};
+use voxel_engine::topo::{storage::data_structures::HashmapChunkStorage, world::Chunk};
 
 // TODO: dont duplicate so much code
 fn prefill_storage(storage: &mut HashmapChunkStorage<u32>) {

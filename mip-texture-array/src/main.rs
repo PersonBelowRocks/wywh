@@ -1,9 +1,7 @@
 use bevy::{
     math::vec3,
     prelude::*,
-    render::{
-        render_resource::{AsBindGroup, ShaderRef},
-    },
+    render::render_resource::{AsBindGroup, ShaderRef},
 };
 use mip_texture_array::{
     asset::MippedArrayTexture, MipArrayTextureBuilder, MippedArrayTexturePlugin,

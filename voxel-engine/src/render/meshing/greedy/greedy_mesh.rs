@@ -1,7 +1,7 @@
 use bevy::{math::ivec2, prelude::IVec2};
 
 use crate::{
-    topo::{block::SubdividedBlock, chunk::Chunk},
+    topo::{block::SubdividedBlock, world::Chunk},
     util::SquareArray,
 };
 

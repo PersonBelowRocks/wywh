@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use bevy::prelude::*;
 
-use crate::topo::chunk::ChunkPos;
+use crate::topo::world::ChunkPos;
 
 #[derive(Debug)]
 pub struct ChunkMesh {

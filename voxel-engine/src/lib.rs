@@ -10,16 +10,13 @@ extern crate num_derive;
 
 use std::{path::PathBuf, sync::Arc};
 
-use bevy::{
-    prelude::*,
-};
+use bevy::prelude::*;
 use data::{
     registries::{block::BlockVariantRegistry, Registries, Registry},
     resourcepath::rpath,
 };
 use mip_texture_array::MippedArrayTexturePlugin;
-use render::meshing::greedy::algorithm::SimplePbrMesher;
-use topo::{block::FullBlock, realm::VoxelRealm};
+use topo::{block::FullBlock, world::VoxelRealm};
 
 pub mod data;
 pub mod render;
@@ -30,21 +27,15 @@ pub mod util;
 pub mod testing_utils;
 
 use crate::{
-    data::{
-        systems::{build_registries, check_textures, load_textures, VariantFolders},
-    },
+    data::systems::{build_registries, check_textures, load_textures, VariantFolders},
     render::{
         core::RenderCore,
-        meshing::{
-            ecs::{
-                insert_chunk_meshes, queue_chunk_meshing_tasks, setup_chunk_meshing_workers,
-                setup_meshers,
-            },
-            greedy::algorithm::GreedyMesher,
+        meshing::ecs::{
+            insert_chunk_meshes, queue_chunk_meshing_tasks, setup_chunk_meshing_workers,
         },
     },
     topo::worldgen::{
-        ecs::{generate_chunks_from_events, setup_terrain_generator, GeneratorSeed},
+        ecs::{generate_chunks_from_events, setup_terrain_generator_workers, GeneratorSeed},
         generator::GenerateChunk,
     },
 };
@@ -64,9 +55,6 @@ impl VoxelPlugin {
 #[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct VoxelSystemSet;
 
-#[derive(Component)]
-pub struct ChunkEntity;
-
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash, States)]
 pub enum AppState {
     #[default]
@@ -76,9 +64,6 @@ pub enum AppState {
 
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
-        type Hqm = GreedyMesher;
-        type Lqm = SimplePbrMesher;
-
         app.add_plugins(RenderCore);
         app.add_plugins(MippedArrayTexturePlugin::default());
 
@@ -95,10 +80,9 @@ impl Plugin for VoxelPlugin {
             OnEnter(AppState::Finished),
             (
                 build_registries,
-                setup_meshers,
                 setup,
-                setup_terrain_generator,
-                setup_chunk_meshing_workers::<Hqm>,
+                setup_terrain_generator_workers,
+                setup_chunk_meshing_workers,
                 generate_debug_chunks,
             )
                 .chain(),
@@ -106,14 +90,11 @@ impl Plugin for VoxelPlugin {
 
         app.add_systems(
             PreUpdate,
-            insert_chunk_meshes::<Hqm>.run_if(in_state(AppState::Finished)),
+            insert_chunk_meshes.run_if(in_state(AppState::Finished)),
         );
         app.add_systems(
             PostUpdate,
-            (
-                generate_chunks_from_events,
-                queue_chunk_meshing_tasks::<Hqm>,
-            )
+            (generate_chunks_from_events, queue_chunk_meshing_tasks)
                 .chain()
                 .run_if(in_state(AppState::Finished)),
         );

@@ -1,5 +1,3 @@
-pub mod mat;
-
 mod gpu_chunk;
 mod gpu_registries;
 mod impls;

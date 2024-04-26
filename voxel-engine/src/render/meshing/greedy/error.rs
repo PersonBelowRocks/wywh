@@ -1,10 +1,4 @@
-
-
-use crate::{
-    topo::{
-        error::{ChunkAccessError, NeighborAccessError},
-    },
-};
+use crate::topo::error::{ChunkAccessError, NeighborAccessError};
 
 #[derive(te::Error, Debug, Clone, PartialEq)]
 pub enum CqsError {

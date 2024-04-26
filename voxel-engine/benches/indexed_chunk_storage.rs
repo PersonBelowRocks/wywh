@@ -3,7 +3,7 @@ use std::{array, time::Duration};
 use bevy::math::{ivec3, IVec3};
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use rand::{thread_rng, Rng, RngCore};
-use voxel_engine::topo::{chunk::Chunk, storage::data_structures::IndexedChunkStorage};
+use voxel_engine::topo::{storage::data_structures::IndexedChunkStorage, world::Chunk};
 
 fn random_chunk_pos<R: Rng>(rng: &mut R) -> IVec3 {
     ivec3(

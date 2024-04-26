@@ -1,21 +1,19 @@
-
-
 use bevy::math::{ivec3, IVec2, IVec3};
 
 use crate::{
     data::tile::Face,
     topo::{
-        access::{ReadAccess},
-        bounding_box::BoundingBox,
-        chunk::Chunk,
-        chunk_ref::ChunkVoxelOutput,
-        ivec_project_to_3d,
+        access::ReadAccess, bounding_box::BoundingBox, ivec_project_to_3d,
         storage::error::OutOfBounds,
     },
     util::ivec3_to_1d,
 };
 
-use super::{block::BlockVoxel, chunk_ref::CrVra, error::NeighborAccessError};
+use super::{
+    block::BlockVoxel,
+    error::NeighborAccessError,
+    world::{chunk_ref::Crra, Chunk, ChunkAccessOutput},
+};
 
 fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
     ivec3(
@@ -35,7 +33,7 @@ fn localspace_to_neighbor_localspace(pos: IVec3) -> IVec3 {
 
 // TODO: document what localspace, worldspace, chunkspace, and facespace are
 pub struct Neighbors<'a> {
-    chunks: [Option<CrVra<'a>>; NEIGHBOR_ARRAY_SIZE],
+    chunks: [Option<Crra<'a>>; NEIGHBOR_ARRAY_SIZE],
     default: BlockVoxel,
 }
 
@@ -55,13 +53,13 @@ pub fn is_in_bounds_3d(pos: IVec3) -> bool {
     pos.cmpge(min).all() && pos.cmplt(max).all() && localspace_to_chunk_pos(pos) != IVec3::ZERO
 }
 
-pub type NbResult<'a> = Result<ChunkVoxelOutput<'a>, NeighborAccessError>;
+pub type NbResult<'a> = Result<ChunkAccessOutput<'a>, NeighborAccessError>;
 
 pub const NEIGHBOR_CUBIC_ARRAY_DIMENSIONS: usize = 3;
 pub const NEIGHBOR_ARRAY_SIZE: usize = NEIGHBOR_CUBIC_ARRAY_DIMENSIONS.pow(3);
 
 impl<'a> Neighbors<'a> {
-    pub fn from_raw(chunks: [Option<CrVra<'a>>; NEIGHBOR_ARRAY_SIZE], default: BlockVoxel) -> Self {
+    pub fn from_raw(chunks: [Option<Crra<'a>>; NEIGHBOR_ARRAY_SIZE], default: BlockVoxel) -> Self {
         Self { chunks, default }
     }
 
@@ -86,7 +84,7 @@ impl<'a> Neighbors<'a> {
                 let neighbor_local = localspace_to_neighbor_localspace(pos);
                 Ok(access.get(neighbor_local)?)
             }
-            None => Ok(ChunkVoxelOutput::new(&self.default)),
+            None => Ok(ChunkAccessOutput::new(&self.default)),
         }
     }
 
@@ -134,7 +132,7 @@ impl<'a> NeighborsBuilder<'a> {
         Self(Neighbors::from_raw(Default::default(), default))
     }
 
-    pub fn set_neighbor(&mut self, pos: IVec3, access: CrVra<'a>) -> Result<(), OutOfBounds> {
+    pub fn set_neighbor(&mut self, pos: IVec3, access: Crra<'a>) -> Result<(), OutOfBounds> {
         if !is_valid_neighbor_chunk_pos(pos) {
             return Err(OutOfBounds);
         }

@@ -2,7 +2,10 @@ use bevy::{
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
-use voxel_engine::{data::tile::Face, topo::chunk::Chunk, ChunkEntity};
+use voxel_engine::{
+    data::tile::Face,
+    topo::world::{Chunk, ChunkEntity},
+};
 
 use crate::camera::PlayerCamController;
 

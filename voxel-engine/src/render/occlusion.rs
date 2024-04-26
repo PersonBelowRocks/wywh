@@ -5,10 +5,7 @@ use bevy::{ecs::component::Component, math::IVec3};
 use crate::{
     data::tile::Face,
     topo::{
-        access::{HasBounds, ReadAccess, WriteAccess},
-        bounding_box::BoundingBox,
-        chunk::Chunk,
-        storage::error::OutOfBounds,
+        access::HasBounds, bounding_box::BoundingBox, storage::error::OutOfBounds, world::Chunk,
     },
     util::ivec3_to_1d,
 };

@@ -22,7 +22,7 @@ use crate::{
         occlusion::ChunkOcclusionMap,
         quad::{ChunkQuads, GpuQuad},
     },
-    ChunkEntity,
+    topo::world::ChunkEntity,
 };
 
 use super::render::ChunkPipeline;

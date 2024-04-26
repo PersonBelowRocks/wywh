@@ -1,24 +1,20 @@
-use std::{iter::Zip, ops::RangeInclusive};
-
 use bevy::{
-    math::{ivec3},
+    math::ivec3,
     prelude::{Event, IVec3},
 };
 use noise::{NoiseFn, Perlin};
 
-
 use crate::{
     data::{
         registries::{block::BlockVariantRegistry, Registries, Registry},
-        resourcepath::{rpath},
-        tile::{Face},
+        resourcepath::rpath,
+        tile::Face,
         voxel::rotations::BlockModelRotation,
     },
     topo::{
         block::{BlockVoxel, Microblock},
-        chunk::{Chunk, ChunkPos},
-        chunk_ref::{ChunkRefVxlAccess, ChunkVoxelInput},
         error::ChunkAccessError,
+        world::{chunk_ref::ChunkRefAccess, Chunk, ChunkAccessInput, ChunkPos},
         MbWriteBehaviour, SubdivAccess,
     },
 };
@@ -74,18 +70,11 @@ impl Generator {
         }
     }
 
-    fn zipped_coordinate_iter(
-        ws_min: i32,
-        ws_max: i32,
-    ) -> Zip<RangeInclusive<i32>, RangeInclusive<i32>> {
-        (0..=(Chunk::SIZE - 1)).zip(ws_min..=ws_max)
-    }
-
     #[inline]
     pub fn write_to_chunk<'chunk>(
         &self,
         cs_pos: ChunkPos,
-        access: &mut ChunkRefVxlAccess<'chunk>,
+        access: &mut ChunkRefAccess<'chunk>,
     ) -> Result<(), GeneratorError<ChunkAccessError>> {
         const THRESHOLD: f64 = 0.5;
 
@@ -111,7 +100,7 @@ impl Generator {
                     for z in 0..Chunk::SIZE {
                         sd_access.set(
                             ivec3(x, y, z),
-                            ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.water)),
+                            ChunkAccessInput::new(BlockVoxel::new_full(self.palette.water)),
                         )?;
                     }
                 }
@@ -122,7 +111,7 @@ impl Generator {
 
         sd_access.set(
             ivec3(0, 0, 0),
-            ChunkVoxelInput::new(BlockVoxel::new_full(self.palette.debug)),
+            ChunkAccessInput::new(BlockVoxel::new_full(self.palette.debug)),
         )?;
 
         for sd_x in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {

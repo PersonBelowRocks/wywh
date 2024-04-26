@@ -1,8 +1,3 @@
-
-
-
-
-
 use self::error::FromStrError;
 
 pub mod error;

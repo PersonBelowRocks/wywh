@@ -1,25 +1,15 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use bevy::prelude::*;
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
-use bevy::{prelude::*};
-
-use crate::topo::chunk::Chunk;
 
 use crate::{
     data::registries::Registries,
-    topo::{chunk::ChunkPos, realm::VoxelRealm},
-    ChunkEntity,
+    topo::world::{Chunk, ChunkEntity, ChunkPos, VoxelRealm},
 };
 
-use super::greedy::algorithm::{GreedyMesher, SimplePbrMesher};
-use super::{MeshWorkerPool, Mesher};
-
-// TODO: the whole "meshers as resources" thing does not makes sense
-// anymore, so get rid of the last remains of it to clean up the codebase
-pub(crate) fn setup_meshers(mut cmds: Commands) {
-    cmds.insert_resource(GreedyMesher::new());
-    cmds.insert_resource(SimplePbrMesher::new());
-}
+use super::greedy::algorithm::GreedyMesher;
+use super::MeshWorkerPool;
 
 #[derive(Component)]
 pub struct ShouldExtract(AtomicBool);
@@ -47,17 +37,18 @@ impl Default for ShouldExtract {
 #[derive(Resource, Deref)]
 pub struct MeshWorkerTaskPool(TaskPool);
 
-pub fn setup_chunk_meshing_workers<M: Mesher + Resource>(
+pub fn setup_chunk_meshing_workers(
     mut cmds: Commands,
     registries: Res<Registries>,
     realm: Res<VoxelRealm>,
-    mesher: Res<M>,
 ) {
+    let mesher = GreedyMesher::new();
+
     let task_pool = TaskPoolBuilder::new()
         .thread_name("Mesh Worker Task Pool".into())
         .build();
 
-    let worker_pool = MeshWorkerPool::<M>::new(
+    let worker_pool = MeshWorkerPool::new(
         task_pool.thread_num(),
         &task_pool,
         mesher.clone(),
@@ -69,11 +60,11 @@ pub fn setup_chunk_meshing_workers<M: Mesher + Resource>(
     cmds.insert_resource(MeshWorkerTaskPool(task_pool));
 }
 
-pub fn queue_chunk_meshing_tasks<M: Mesher>(
+pub fn queue_chunk_meshing_tasks(
     mut cmds: Commands,
     chunks: Query<&ChunkPos, With<ChunkEntity>>,
     realm: Res<VoxelRealm>,
-    workers: Res<MeshWorkerPool<M>>,
+    workers: Res<MeshWorkerPool>,
 ) {
     let mut changed = hb::HashMap::new();
     for chunk in realm.chunk_manager.changed_chunks() {
@@ -106,10 +97,10 @@ pub fn queue_chunk_meshing_tasks<M: Mesher>(
     }
 }
 
-pub fn insert_chunk_meshes<M: Mesher>(
+pub fn insert_chunk_meshes(
     chunks: Query<(Entity, &ChunkPos, Option<&Handle<Mesh>>), With<ChunkEntity>>,
     mut cmds: Commands,
-    workers: Res<MeshWorkerPool<M>>,
+    workers: Res<MeshWorkerPool>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     for (entity, &chunk_pos, mesh_handle) in &chunks {

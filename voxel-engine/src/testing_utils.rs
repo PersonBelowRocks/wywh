@@ -1,7 +1,7 @@
 use crate::topo::{
     block::BlockVoxel,
-    chunk_ref::{ChunkRefVxlAccess, CrVra},
     storage::containers::data_storage::SyncIndexedChunkContainer,
+    world::{Crra, Crwa},
 };
 
 pub struct MockChunk {
@@ -15,14 +15,14 @@ impl MockChunk {
         }
     }
 
-    pub fn access(&self) -> ChunkRefVxlAccess<'_> {
-        ChunkRefVxlAccess {
+    pub fn access(&self) -> Crwa<'_> {
+        Crwa {
             block_variants: self.variants.access(),
         }
     }
 
-    pub fn read_access(&self) -> CrVra<'_> {
-        CrVra {
+    pub fn read_access(&self) -> Crra<'_> {
+        Crra {
             block_variants: self.variants.read_access(),
         }
     }

@@ -6,11 +6,6 @@ use bevy::math::vec2;
 use bevy::math::IVec2;
 use bevy::math::Vec2;
 
-
-use bevy::prelude::default;
-use bevy::prelude::Color;
-
-use bevy::prelude::StandardMaterial;
 use bevy::render::mesh::Indices;
 use bevy::render::mesh::Mesh;
 use bevy::render::render_asset::RenderAssetUsages;
@@ -35,47 +30,15 @@ use crate::render::quad::ChunkQuads;
 use crate::render::quad::GpuQuad;
 use crate::render::quad::GpuQuadBitfields;
 
-
 use crate::topo::block::SubdividedBlock;
-use crate::topo::chunk::Chunk;
-
-use crate::topo::chunk_ref::CrVra;
-use crate::topo::chunk_ref::CvoBlock;
-
-
-
+use crate::topo::world::CaoBlock;
+use crate::topo::world::Chunk;
+use crate::topo::world::Crra;
 
 use super::greedy_mesh::ChunkSliceMask;
 
 use super::ChunkQuadSlice;
 use super::CqsResult;
-
-#[derive(Clone, Resource)]
-pub struct SimplePbrMesher {
-    material: StandardMaterial,
-}
-
-impl SimplePbrMesher {
-    pub fn new() -> Self {
-        Self {
-            material: StandardMaterial {
-                base_color: Color::GRAY,
-                ..default()
-            },
-        }
-    }
-}
-
-// TODO: optimize the hell out of this little guy
-impl Mesher for SimplePbrMesher {
-    fn build<'reg, 'chunk>(
-        &self,
-        _access: CrVra<'chunk>,
-        _cx: Context<'reg, 'chunk>,
-    ) -> MesherResult {
-        todo!()
-    }
-}
 
 fn widen_quad<'reg, 'chunk>(
     fpos: IVec2,
@@ -143,7 +106,7 @@ fn heighten_quad<'reg, 'chunk>(
     Ok(())
 }
 
-#[derive(Clone, Resource)]
+#[derive(Clone)]
 pub struct GreedyMesher {}
 
 impl GreedyMesher {
@@ -164,7 +127,7 @@ impl GreedyMesher {
 
                 let block = cqs.get(cs_pos)?.block;
 
-                if let CvoBlock::Full(block) = block {
+                if let CaoBlock::Full(block) = block {
                     if cqs.registry.get_by_id(block.id).model.is_none() {
                         continue;
                     }
@@ -172,7 +135,7 @@ impl GreedyMesher {
 
                 if cqs.mag_at_block_edge() {
                     let above = cqs.get_above(cs_pos)?.block;
-                    if let CvoBlock::Full(above) = above {
+                    if let CaoBlock::Full(above) = above {
                         if cqs
                             .registry
                             .get_by_id(above.id)
@@ -234,11 +197,7 @@ impl GreedyMesher {
 }
 
 impl Mesher for GreedyMesher {
-    fn build<'reg, 'chunk>(
-        &self,
-        access: CrVra<'chunk>,
-        cx: Context<'reg, 'chunk>,
-    ) -> MesherResult {
+    fn build<'reg, 'chunk>(&self, access: Crra<'chunk>, cx: Context<'reg, 'chunk>) -> MesherResult {
         let varreg = cx
             .registries
             .get_registry::<BlockVariantRegistry>()

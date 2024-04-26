@@ -1,5 +1,3 @@
-
-
 use crate::util::ConversionError;
 
 use super::storage::error::OutOfBounds;
@@ -21,16 +19,6 @@ impl From<OutOfBounds> for ChunkAccessError {
     fn from(_value: OutOfBounds) -> Self {
         Self::OutOfBounds
     }
-}
-
-#[derive(te::Error, Debug, PartialEq, Eq)]
-pub enum ChunkManagerError {
-    #[error("Chunk not loaded")]
-    Unloaded,
-    #[error("Chunk doesn't exist")]
-    DoesntExist,
-    #[error("Tried to initialize already existing chunk")]
-    AlreadyInitialized,
 }
 
 #[derive(te::Error, Debug, PartialEq, Eq)]

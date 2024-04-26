@@ -1,19 +1,20 @@
 use bevy::prelude::*;
 use std::error::Error;
 
-use super::bounding_box::BoundingBox;
-use super::chunk::Chunk;
-use super::chunk_ref::ChunkVoxelOutput;
+use super::{
+    bounding_box::BoundingBox,
+    world::{chunk_ref::ChunkAccessOutput, Chunk},
+};
 
 pub trait ChunkAccess<'access>
 where
-    Self: ReadAccess<ReadType<'access> = ChunkVoxelOutput<'access>>,
+    Self: ReadAccess<ReadType<'access> = ChunkAccessOutput<'access>>,
     Self: ChunkBounds + 'access,
 {
 }
 
 impl<'a, T: 'a> ChunkAccess<'a> for T where
-    T: ReadAccess<ReadType<'a> = ChunkVoxelOutput<'a>> + ChunkBounds
+    T: ReadAccess<ReadType<'a> = ChunkAccessOutput<'a>> + ChunkBounds
 {
 }
 

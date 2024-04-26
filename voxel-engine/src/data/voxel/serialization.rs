@@ -1,10 +1,6 @@
-use std::{marker::PhantomData};
+use std::marker::PhantomData;
 
-
-
-use super::{
-    rotations::{BlockModelFace, BlockModelFaceMap},
-};
+use super::rotations::{BlockModelFace, BlockModelFaceMap};
 
 impl<T: serde::Serialize> serde::Serialize for BlockModelFaceMap<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

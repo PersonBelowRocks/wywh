@@ -8,8 +8,11 @@ use crate::{
 use super::{
     access::{ReadAccess, WriteAccess},
     block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},
-    chunk_ref::{ChunkRefVxlAccess, ChunkVoxelInput, ChunkVoxelOutput, CrVra, CvoBlock},
-    error::{ChunkAccessError},
+    error::ChunkAccessError,
+    world::{
+        chunk_ref::{ChunkRefAccess, Crra},
+        CaoBlock, ChunkAccessInput, ChunkAccessOutput,
+    },
 };
 
 fn is_subdividable<'a>(
@@ -25,18 +28,18 @@ pub enum SubdivReadAccessOutput {
     Micro(Microblock),
 }
 
-pub struct SubdivReadAccess<'chunk>(CrVra<'chunk>);
+pub struct SubdivReadAccess<'chunk>(Crra<'chunk>);
 
 impl<'chunk> SubdivReadAccess<'chunk> {
-    pub fn new(access: CrVra<'chunk>) -> Self {
+    pub fn new(access: Crra<'chunk>) -> Self {
         Self(access)
     }
 
-    pub fn access(&self) -> &CrVra<'chunk> {
+    pub fn access(&self) -> &Crra<'chunk> {
         &self.0
     }
 
-    pub fn get(&self, pos: IVec3) -> Result<ChunkVoxelOutput<'_>, ChunkAccessError> {
+    pub fn get(&self, pos: IVec3) -> Result<ChunkAccessOutput<'_>, ChunkAccessError> {
         self.0.get(pos)
     }
 
@@ -44,8 +47,8 @@ impl<'chunk> SubdivReadAccess<'chunk> {
         let pos = microblock_to_full_block_3d(pos_mb);
 
         Ok(match self.get(pos)?.block {
-            CvoBlock::Full(block) => SubdivReadAccessOutput::Full(block),
-            CvoBlock::Subdivided(block) => {
+            CaoBlock::Full(block) => SubdivReadAccessOutput::Full(block),
+            CaoBlock::Subdivided(block) => {
                 let pos_sd = microblock_to_subdiv_pos_3d(pos_mb).as_uvec3();
                 SubdivReadAccessOutput::Micro(block.get(pos_sd).unwrap())
             }
@@ -65,7 +68,7 @@ pub enum MbWriteBehaviour {
 }
 
 pub struct SubdivAccess<'reg, 'chunk, 'acc> {
-    access: &'acc mut ChunkRefVxlAccess<'chunk>,
+    access: &'acc mut ChunkRefAccess<'chunk>,
     registry: RegistryRef<'reg, BlockVariantRegistry>,
     mb_write_behaviour: MbWriteBehaviour,
     default: Microblock,
@@ -74,7 +77,7 @@ pub struct SubdivAccess<'reg, 'chunk, 'acc> {
 impl<'reg, 'chunk, 'acc> SubdivAccess<'reg, 'chunk, 'acc> {
     pub fn new(
         registry: RegistryRef<'reg, BlockVariantRegistry>,
-        access: &'acc mut ChunkRefVxlAccess<'chunk>,
+        access: &'acc mut ChunkRefAccess<'chunk>,
         mb_write_behaviour: MbWriteBehaviour,
         default: Microblock,
     ) -> Self {
@@ -86,7 +89,7 @@ impl<'reg, 'chunk, 'acc> SubdivAccess<'reg, 'chunk, 'acc> {
         }
     }
 
-    pub fn access(&self) -> &ChunkRefVxlAccess<'chunk> {
+    pub fn access(&self) -> &ChunkRefAccess<'chunk> {
         &self.access
     }
 
@@ -98,7 +101,7 @@ impl<'reg, 'chunk, 'acc> SubdivAccess<'reg, 'chunk, 'acc> {
         self.mb_write_behaviour = new
     }
 
-    pub fn get(&self, pos: IVec3) -> Result<ChunkVoxelOutput<'_>, ChunkAccessError> {
+    pub fn get(&self, pos: IVec3) -> Result<ChunkAccessOutput<'_>, ChunkAccessError> {
         self.access.get(pos)
     }
 
@@ -106,15 +109,15 @@ impl<'reg, 'chunk, 'acc> SubdivAccess<'reg, 'chunk, 'acc> {
         let pos = microblock_to_full_block_3d(pos_mb);
 
         Ok(match self.get(pos)?.block {
-            CvoBlock::Full(block) => SubdivReadAccessOutput::Full(block),
-            CvoBlock::Subdivided(block) => {
+            CaoBlock::Full(block) => SubdivReadAccessOutput::Full(block),
+            CaoBlock::Subdivided(block) => {
                 let pos_sd = microblock_to_subdiv_pos_3d(pos_mb).as_uvec3();
                 SubdivReadAccessOutput::Micro(block.get(pos_sd).unwrap())
             }
         })
     }
 
-    pub fn set(&mut self, pos: IVec3, vxl: ChunkVoxelInput) -> Result<(), ChunkAccessError> {
+    pub fn set(&mut self, pos: IVec3, vxl: ChunkAccessInput) -> Result<(), ChunkAccessError> {
         self.access.set(pos, vxl)
     }
 
@@ -130,7 +133,7 @@ impl<'reg, 'chunk, 'acc> SubdivAccess<'reg, 'chunk, 'acc> {
 
         let out = self.access.get(pos)?;
         match out.block {
-            CvoBlock::Full(full) if is_subdividable(registry, full.id) => {
+            CaoBlock::Full(full) if is_subdividable(registry, full.id) => {
                 let filling = Microblock {
                     rotation: full.rotation,
                     id: full.id,
@@ -141,17 +144,17 @@ impl<'reg, 'chunk, 'acc> SubdivAccess<'reg, 'chunk, 'acc> {
                 subdiv.set(pos_sd, microblock).unwrap();
 
                 self.access
-                    .set(pos, ChunkVoxelInput::new(BlockVoxel::Subdivided(subdiv)))?;
+                    .set(pos, ChunkAccessInput::new(BlockVoxel::Subdivided(subdiv)))?;
             }
-            CvoBlock::Subdivided(subdiv) => {
+            CaoBlock::Subdivided(subdiv) => {
                 let mut subdiv = subdiv.clone();
                 let pos_sd = microblock_to_subdiv_pos_3d(pos_mb).as_uvec3();
                 subdiv.set(pos_sd, microblock).unwrap();
 
                 self.access
-                    .set(pos, ChunkVoxelInput::new(BlockVoxel::Subdivided(subdiv)))?;
+                    .set(pos, ChunkAccessInput::new(BlockVoxel::Subdivided(subdiv)))?;
             }
-            CvoBlock::Full(full) if !is_subdividable(registry, full.id) => {
+            CaoBlock::Full(full) if !is_subdividable(registry, full.id) => {
                 match self.mb_write_behaviour {
                     MbWriteBehaviour::Ignore => (),
                     MbWriteBehaviour::Replace => {
@@ -160,7 +163,7 @@ impl<'reg, 'chunk, 'acc> SubdivAccess<'reg, 'chunk, 'acc> {
                         subdiv.set(pos_sd, microblock).unwrap();
 
                         self.access
-                            .set(pos, ChunkVoxelInput::new(BlockVoxel::Subdivided(subdiv)))?;
+                            .set(pos, ChunkAccessInput::new(BlockVoxel::Subdivided(subdiv)))?;
                     }
                 }
             }
@@ -206,12 +209,12 @@ mod tests {
         let microblock = Microblock::new(BlockVariantRegistry::VOID);
 
         sd_access
-            .set(ivec3(4, 4, 4), ChunkVoxelInput::new(full_block.clone()))
+            .set(ivec3(4, 4, 4), ChunkAccessInput::new(full_block.clone()))
             .unwrap();
         sd_access
             .set(
                 ivec3(4, 5, 4),
-                ChunkVoxelInput::new(full_subdividable_block.clone()),
+                ChunkAccessInput::new(full_subdividable_block.clone()),
             )
             .unwrap();
 
@@ -229,13 +232,13 @@ mod tests {
         let sd_access = SubdivReadAccess::new(read_access);
 
         assert_eq!(
-            CvoBlock::Full(FullBlock::new(BlockVariantRegistry::FULL)),
+            CaoBlock::Full(FullBlock::new(BlockVariantRegistry::FULL)),
             sd_access.get(ivec3(4, 4, 4)).unwrap().block
         );
 
         let subdiv = sd_access.get(ivec3(4, 5, 4)).unwrap().block;
 
-        let CvoBlock::Subdivided(subdiv) = subdiv else {
+        let CaoBlock::Subdivided(subdiv) = subdiv else {
             panic!("expected block to be subdivided")
         };
 
