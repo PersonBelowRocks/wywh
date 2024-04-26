@@ -10,7 +10,6 @@ use std::{
 use bevy::{
     ecs::system::Resource,
     log::{error, info, warn},
-    render::mesh::Mesh,
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
 use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender};
@@ -20,8 +19,6 @@ use crate::{
     data::registries::Registries,
     render::{
         meshing::{error::ChunkMeshingError, Context, MesherOutput},
-        occlusion::ChunkOcclusionMap,
-        quad::ChunkQuads,
     },
     topo::{chunk::ChunkPos, realm::ChunkManager},
     util::result::ResultFlattening,

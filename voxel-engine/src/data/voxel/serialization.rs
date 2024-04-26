@@ -1,17 +1,9 @@
-use std::{marker::PhantomData, str::FromStr};
+use std::{marker::PhantomData};
 
-use crate::{
-    data::{
-        resourcepath::{rpath, ResourcePath},
-        texture::FaceTextureRotation,
-        tile::Face,
-    },
-    util::FaceMap,
-};
+
 
 use super::{
-    descriptor::{BlockVariantDescriptor, FaceTextureDescriptor},
-    rotations::{BlockModelFace, BlockModelFaceMap, BlockModelRotation},
+    rotations::{BlockModelFace, BlockModelFaceMap},
 };
 
 impl<T: serde::Serialize> serde::Serialize for BlockModelFaceMap<T> {

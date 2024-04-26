@@ -1,12 +1,12 @@
-use crate::{data::registries::Registry, render::occlusion::BlockOcclusion, util::FaceMap};
+use crate::{render::occlusion::BlockOcclusion, util::FaceMap};
 
 use self::{
-    descriptor::{BlockVariantDescriptor, FaceTextureDescriptor},
+    descriptor::{BlockVariantDescriptor},
     rotations::{BlockModelFace, BlockModelFaceMap, BlockModelRotation},
 };
 
 use super::{
-    registries::{error::TextureNotFound, texture::TextureRegistry},
+    registries::{texture::TextureRegistry},
     texture::{FaceTexture, FaceTextureRotation},
     tile::{Face, Transparency},
 };
@@ -28,8 +28,8 @@ pub struct BlockModel {
 
 impl BlockModel {
     pub fn from_descriptor(
-        descriptor: &BlockVariantDescriptor,
-        registry: &TextureRegistry,
+        _descriptor: &BlockVariantDescriptor,
+        _registry: &TextureRegistry,
     ) -> Result<Self, ()> {
         todo!()
     }

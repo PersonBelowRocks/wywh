@@ -1,6 +1,6 @@
 use std::ops;
 
-use bevy::{log::info, math::Vec2, render::render_resource::ShaderType};
+use bevy::{log::info, render::render_resource::ShaderType};
 
 use super::{
     error::FaceTextureRotationParseError,

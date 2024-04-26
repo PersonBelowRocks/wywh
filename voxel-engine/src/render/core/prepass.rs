@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetId, AssetServer, Handle},
+    asset::{AssetServer, Handle},
     core_pipeline::{
         core_3d::CORE_3D_DEPTH_FORMAT,
         prepass::{
@@ -12,7 +12,7 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
-    log::{error, info},
+    log::{error},
     pbr::{
         DrawMesh, MeshLayouts, MeshPipelineKey, PreviousViewProjection, RenderMeshInstances,
         SetMeshBindGroup, SetPrepassViewBindGroup,
@@ -364,7 +364,7 @@ pub fn queue_prepass_chunks(
                 }
             };
 
-            let distance =
+            let _distance =
                 rangefinder.distance_translation(&mesh_instance.transforms.transform.translation);
             phase.add(Opaque3dPrepass {
                 entity: *entity,

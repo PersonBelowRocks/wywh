@@ -5,7 +5,7 @@ use crate::{
         registries::{block::BlockVariantRegistry, Registry, RegistryRef},
         texture::FaceTexture,
         tile::Face,
-        voxel::{rotations::BlockModelRotation, BlockSubmodel, VoxelModel},
+        voxel::{rotations::BlockModelRotation},
     },
     render::quad::{
         anon::Quad,
@@ -13,7 +13,7 @@ use crate::{
         isometric::{IsometrizedQuad, PositionedQuad, QuadIsometry},
     },
     topo::{
-        access::{ChunkAccess, ReadAccess},
+        access::{ReadAccess},
         block::{Microblock, SubdividedBlock},
         chunk::Chunk,
         chunk_ref::{ChunkVoxelOutput, CrVra, CvoBlock},
@@ -297,7 +297,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
 #[cfg(test)]
 pub mod tests {
-    use bevy::math::{uvec3, vec3};
+    use bevy::math::{uvec3};
     use parking_lot::{RwLock, RwLockReadGuard};
     use tests::neighbors::NeighborsBuilder;
 
@@ -306,7 +306,7 @@ pub mod tests {
         testing_utils::MockChunk,
         topo::{
             access::WriteAccess,
-            block::{BlockVoxel, FullBlock},
+            block::{BlockVoxel},
             chunk_ref::ChunkVoxelInput,
         },
     };
@@ -334,7 +334,7 @@ pub mod tests {
     fn testing_chunk() -> MockChunk {
         let block = BlockVoxel::new_full(BlockVariantRegistry::FULL);
 
-        let mut chunk = MockChunk::new(BlockVoxel::new_full(BlockVariantRegistry::VOID));
+        let chunk = MockChunk::new(BlockVoxel::new_full(BlockVariantRegistry::VOID));
         let mut access = chunk.access();
 
         ////////////////////////////////////////////////////////////////////////////////////////////
@@ -451,7 +451,7 @@ pub mod tests {
         let access = chunk.read_access();
         let guard = RwLockReadGuard::map(varreg.read(), |g| g);
 
-        let mut cqs = ChunkQuadSlice::new(Face::Top, 11, &access, &neighbors, &guard).unwrap();
+        let cqs = ChunkQuadSlice::new(Face::Top, 11, &access, &neighbors, &guard).unwrap();
 
         assert_eq!(
             BlockVariantRegistry::FULL,
@@ -548,7 +548,7 @@ pub mod tests {
         let access = chunk.read_access();
         let guard = RwLockReadGuard::map(varreg.read(), |g| g);
 
-        let mut cqs =
+        let cqs =
             ChunkQuadSlice::new(Face::Top, (4 * 15) + 3, &access, &neighbors, &guard).unwrap();
 
         let subdiv_texture = FaceTexture::new(TextureRegistry::TEX2);

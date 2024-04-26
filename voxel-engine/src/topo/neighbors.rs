@@ -1,11 +1,11 @@
-use std::marker::PhantomData;
+
 
 use bevy::math::{ivec3, IVec2, IVec3};
 
 use crate::{
     data::tile::Face,
     topo::{
-        access::{ChunkBounds, ReadAccess},
+        access::{ReadAccess},
         bounding_box::BoundingBox,
         chunk::Chunk,
         chunk_ref::ChunkVoxelOutput,
@@ -15,7 +15,7 @@ use crate::{
     util::ivec3_to_1d,
 };
 
-use super::{access::ChunkAccess, block::BlockVoxel, chunk_ref::CrVra, error::NeighborAccessError};
+use super::{block::BlockVoxel, chunk_ref::CrVra, error::NeighborAccessError};
 
 fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
     ivec3(

@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use bevy::tasks::{TaskPool, TaskPoolBuilder};
-use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
+use bevy::{prelude::*};
 
 use crate::topo::chunk::Chunk;
 

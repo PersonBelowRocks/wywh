@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, fs::File, io::Read, path::Path};
+use std::{fs::File, io::Read, path::Path};
 
 use indexmap::IndexMap;
 
@@ -220,7 +220,7 @@ impl BlockVariantRegistry {
     pub const RPATH_SUBDIV: &'static str = "subdiv";
     pub const SUBDIV: BlockVariantId = BlockVariantId::new(2);
 
-    pub fn new_mock(registry: &TextureRegistry) -> Self {
+    pub fn new_mock(_registry: &TextureRegistry) -> Self {
         let mut map = IndexMap::with_hasher(ahash::RandomState::default());
 
         map.insert(

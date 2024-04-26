@@ -12,7 +12,7 @@ use crate::{
     util::cubic::Cubic,
 };
 
-use super::{chunk::Chunk, storage::error::OutOfBounds};
+use super::{storage::error::OutOfBounds};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum BlockVoxel {
@@ -30,7 +30,7 @@ impl BlockVoxel {
 }
 
 impl fmt::Debug for BlockVoxel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }

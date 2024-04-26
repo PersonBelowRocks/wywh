@@ -19,7 +19,7 @@ pub use error::*;
 use crate::mipmap::{MipGeneratorPipeline, MipGeneratorPipelineMeta, MIPMAP_COMPUTE_SHADER_HANDLE};
 
 pub mod asset;
-pub use asset::*;
+
 pub mod mipmap;
 
 pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;

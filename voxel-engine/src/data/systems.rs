@@ -148,7 +148,7 @@ pub(crate) fn check_textures(
 
 fn create_texture_registry(
     folders: Res<Assets<LoadedFolder>>,
-    mut images: ResMut<Assets<Image>>,
+    images: ResMut<Assets<Image>>,
     mut array_textures: ResMut<Assets<MippedArrayTexture>>,
     texture_folder: Res<VoxelTextureFolder>,
     normalmap_folder: Res<VoxelNormalMapFolder>,

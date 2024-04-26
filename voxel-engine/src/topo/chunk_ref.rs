@@ -1,5 +1,4 @@
 use std::{
-    fmt,
     hash::BuildHasher,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -9,15 +8,12 @@ use std::{
 
 use bevy::{math::UVec3, prelude::IVec3};
 
-use crate::data::{
-    registries::{block::BlockVariantRegistry, Registry},
-    voxel::rotations::BlockModelRotation,
-};
+
 
 use super::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
     block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},
-    chunk::{Chunk, ChunkPos, VoxelVariantData},
+    chunk::{Chunk, ChunkPos},
     error::{ChunkAccessError, ChunkManagerError},
     storage::{
         containers::data_storage::{SiccAccess, SiccReadAccess},

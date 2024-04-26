@@ -43,7 +43,7 @@ impl<'a, T: 'a> ReadAccess for SlccAccess<'a, T> {
     type ReadErr = OutOfBounds;
     type ReadType<'b> = Option<&'a T> where 'a: 'b;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
+    fn get(&self, _pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         todo!() // self.0.get(pos)
     }
 }
@@ -70,7 +70,7 @@ impl<'a, T: Copy> ReadAccess for SlccReadAccess<'a, T> {
     type ReadErr = OutOfBounds;
     type ReadType<'b> = Option<&'a T> where Self: 'b;
 
-    fn get(&self, pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
+    fn get(&self, _pos: IVec3) -> Result<Self::ReadType<'_>, Self::ReadErr> {
         todo!() // self.0.get(pos)
     }
 }

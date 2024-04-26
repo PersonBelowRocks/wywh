@@ -1,11 +1,11 @@
 use std::{
     fmt::Write,
-    path::{Path, MAIN_SEPARATOR},
+    path::{Path},
 };
 
 use super::{
     error::{FromPathError, FromStrError},
-    ResourcePath, ResourcePathPart,
+    ResourcePath,
 };
 
 impl<'a> TryFrom<&'a Path> for ResourcePath {

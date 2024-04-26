@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use super::{
-    resourcepath::{error::FromPathError, ResourcePath},
+    resourcepath::{ResourcePath},
     tile::Face,
     voxel::rotations::BlockModelFace,
 };

@@ -2,7 +2,6 @@ use bevy::math::IVec3;
 
 use crate::{
     data::registries::{block::BlockVariantRegistry, Registry, RegistryRef},
-    topo::chunk_ref::{MutChunkVxlOutput, MutCvoBlock},
     util::{microblock_to_full_block_3d, microblock_to_subdiv_pos_3d},
 };
 
@@ -10,7 +9,7 @@ use super::{
     access::{ReadAccess, WriteAccess},
     block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},
     chunk_ref::{ChunkRefVxlAccess, ChunkVoxelInput, ChunkVoxelOutput, CrVra, CvoBlock},
-    error::{ChunkAccessError, ChunkRefAccessError},
+    error::{ChunkAccessError},
 };
 
 fn is_subdividable<'a>(

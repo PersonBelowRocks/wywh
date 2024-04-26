@@ -18,7 +18,7 @@ use bevy::{
         mesh::MeshVertexAttribute,
         render_phase::AddRenderCommand,
         render_resource::{
-            binding_types::{sampler, storage_buffer_read_only, texture_2d, texture_2d_array},
+            binding_types::{sampler, storage_buffer_read_only, texture_2d_array},
             BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderDefVal,
             ShaderStages, SpecializedMeshPipelines, TextureSampleType, VertexFormat,
         },

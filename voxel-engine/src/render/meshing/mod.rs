@@ -9,7 +9,7 @@ pub use workers::MeshWorkerPool;
 
 use crate::{
     data::registries::Registries,
-    topo::{access::ChunkAccess, chunk_ref::CrVra, neighbors::Neighbors},
+    topo::{chunk_ref::CrVra, neighbors::Neighbors},
 };
 
 use self::error::MesherResult;

@@ -1,12 +1,12 @@
 use bevy::ecs::system::Resource;
 use bevy::math::ivec2;
-use bevy::math::ivec3;
+
 use bevy::math::vec2;
 
 use bevy::math::IVec2;
 use bevy::math::Vec2;
-use bevy::math::Vec3;
-use bevy::pbr::ExtendedMaterial;
+
+
 use bevy::prelude::default;
 use bevy::prelude::Color;
 
@@ -17,12 +17,12 @@ use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
 
 use crate::data::registries::block::BlockVariantRegistry;
-use crate::data::registries::Registries;
+
 use crate::data::registries::Registry;
 use crate::data::tile::Face;
 
 use crate::render::core::RenderCore;
-use crate::render::meshing::error::MesherError;
+
 use crate::render::meshing::error::MesherResult;
 use crate::render::meshing::Context;
 use crate::render::meshing::Mesher;
@@ -30,23 +30,23 @@ use crate::render::meshing::MesherOutput;
 use crate::render::occlusion::ChunkOcclusionMap;
 use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
-use crate::render::quad::project_to_3d;
+
 use crate::render::quad::ChunkQuads;
 use crate::render::quad::GpuQuad;
 use crate::render::quad::GpuQuadBitfields;
-use crate::topo::access::ChunkAccess;
-use crate::topo::access::WriteAccess;
+
+
 use crate::topo::block::SubdividedBlock;
 use crate::topo::chunk::Chunk;
 
 use crate::topo::chunk_ref::CrVra;
 use crate::topo::chunk_ref::CvoBlock;
-use crate::topo::ivec_project_to_3d;
-use crate::topo::neighbors::Neighbors;
 
-use super::error::CqsError;
+
+
+
 use super::greedy_mesh::ChunkSliceMask;
-use super::material::GreedyMeshMaterial;
+
 use super::ChunkQuadSlice;
 use super::CqsResult;
 
@@ -301,7 +301,7 @@ impl Mesher for GreedyMesher {
             quad_indices.extend_from_slice(&[i as u32; 4]);
 
             for vi in 0..4 {
-                let pos_2d = match vi {
+                let _pos_2d = match vi {
                     0 => vec2(quad.min.x, quad.max.y),
                     1 => vec2(quad.max.x, quad.max.y),
                     2 => vec2(quad.min.x, quad.min.y),
@@ -309,8 +309,8 @@ impl Mesher for GreedyMesher {
                     _ => unreachable!(),
                 };
 
-                let face = quad.bitfields.get_face();
-                let layer = quad.magnitude as f32;
+                let _face = quad.bitfields.get_face();
+                let _layer = quad.magnitude as f32;
             }
 
             current_idx += 4;

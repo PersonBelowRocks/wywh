@@ -6,11 +6,11 @@ use crate::{
             BlockModelCreationError, FaceTextureDescParseError, SubmodelFaceTextureDescParseError,
         },
         registries::{
-            block::BlockOptions, error::TextureNotFound, texture::TextureRegistry, Registry,
+            block::BlockOptions, texture::TextureRegistry, Registry,
         },
         resourcepath::ResourcePath,
         texture::{FaceTexture, FaceTextureRotation},
-        tile::{Face, Transparency},
+        tile::{Face},
         voxel::SubmodelFaceTexture,
     },
     util::FaceMap,
@@ -331,11 +331,11 @@ mod tests {
         type Id = TextureId;
         type Item<'a> = ();
 
-        fn get_by_id(&self, id: Self::Id) -> Self::Item<'_> {
+        fn get_by_id(&self, _id: Self::Id) -> Self::Item<'_> {
             unreachable!()
         }
 
-        fn get_by_label(&self, label: &ResourcePath) -> Option<Self::Item<'_>> {
+        fn get_by_label(&self, _label: &ResourcePath) -> Option<Self::Item<'_>> {
             unreachable!()
         }
 

@@ -2,7 +2,6 @@ use bevy::{
     math::vec3,
     prelude::*,
     render::{
-        mesh::shape::{Plane, Quad},
         render_resource::{AsBindGroup, ShaderRef},
     },
 };

@@ -14,7 +14,7 @@ use super::{
     access::ReadAccess,
     block::{BlockVoxel, FullBlock},
     chunk::{Chunk, ChunkPos},
-    chunk_ref::{ChunkRef, ChunkRefVxlReadAccess, ChunkVoxelOutput},
+    chunk_ref::{ChunkRef, ChunkRefVxlReadAccess},
     error::ChunkManagerError,
     neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
 };

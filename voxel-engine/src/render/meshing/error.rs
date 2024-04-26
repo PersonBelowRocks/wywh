@@ -2,8 +2,8 @@ use std::error::Error;
 
 use crate::topo::{
     access::ReadAccess,
-    chunk_ref::{ChunkRefVxlReadAccess, CrVra},
-    error::{ChunkAccessError, ChunkManagerError, NeighborAccessError},
+    chunk_ref::{ChunkRefVxlReadAccess},
+    error::{ChunkManagerError},
 };
 
 use super::{greedy::error::CqsError, MesherOutput};

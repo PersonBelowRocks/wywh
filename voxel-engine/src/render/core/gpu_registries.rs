@@ -11,7 +11,6 @@ use bevy::{
             BindGroup, BindGroupEntries, BindingResource, BufferBinding, StorageBuffer,
         },
         renderer::{RenderDevice, RenderQueue},
-        texture::Image,
         Extract,
     },
 };

@@ -12,7 +12,6 @@ use std::{path::PathBuf, sync::Arc};
 
 use bevy::{
     prelude::*,
-    tasks::{TaskPool, TaskPoolBuilder},
 };
 use data::{
     registries::{block::BlockVariantRegistry, Registries, Registry},
@@ -20,7 +19,7 @@ use data::{
 };
 use mip_texture_array::MippedArrayTexturePlugin;
 use render::meshing::greedy::algorithm::SimplePbrMesher;
-use topo::{block::FullBlock, chunk_ref::ChunkVoxelOutput, realm::VoxelRealm};
+use topo::{block::FullBlock, realm::VoxelRealm};
 
 pub mod data;
 pub mod render;
@@ -33,7 +32,6 @@ pub mod testing_utils;
 use crate::{
     data::{
         systems::{build_registries, check_textures, load_textures, VariantFolders},
-        tile::Transparency,
     },
     render::{
         core::RenderCore,

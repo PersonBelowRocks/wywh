@@ -58,7 +58,7 @@ impl<'a, T> ReadAccess for AutoDenseContainerAccess<'a, T> {
 
         match &self.container {
             DenseChunkContainer::Empty => Ok(&self.default),
-            DenseChunkContainer::Filled(storage) => todo!(), // storage.get(pos),
+            DenseChunkContainer::Filled(_storage) => todo!(), // storage.get(pos),
         }
     }
 }
@@ -109,10 +109,10 @@ impl<T: Copy> DenseChunkContainer<T> {
         }
     }
 
-    pub(crate) fn internal_get(&self, pos: IVec3) -> Result<T, ChunkAccessError> {
+    pub(crate) fn internal_get(&self, _pos: IVec3) -> Result<T, ChunkAccessError> {
         match self {
             Self::Empty => Err(ChunkAccessError::NotInitialized),
-            Self::Filled(b) => todo!(), // b.get(pos),
+            Self::Filled(_b) => todo!(), // b.get(pos),
         }
     }
 

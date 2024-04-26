@@ -1,25 +1,24 @@
 use std::{iter::Zip, ops::RangeInclusive};
 
 use bevy::{
-    math::{ivec2, ivec3},
+    math::{ivec3},
     prelude::{Event, IVec3},
 };
 use noise::{NoiseFn, Perlin};
-use parking_lot::RwLock;
+
 
 use crate::{
     data::{
         registries::{block::BlockVariantRegistry, Registries, Registry},
-        resourcepath::{rpath, ResourcePath},
-        tile::{Face, Transparency},
+        resourcepath::{rpath},
+        tile::{Face},
         voxel::rotations::BlockModelRotation,
     },
     topo::{
-        block::{BlockVoxel, Microblock, SubdividedBlock},
+        block::{BlockVoxel, Microblock},
         chunk::{Chunk, ChunkPos},
         chunk_ref::{ChunkRefVxlAccess, ChunkVoxelInput},
         error::ChunkAccessError,
-        storage::data_structures::IndexedChunkStorage,
         MbWriteBehaviour, SubdivAccess,
     },
 };
@@ -104,7 +103,7 @@ impl Generator {
 
         let ws_min = cs_pos.worldspace_min();
         let ws_min_sd = ws_min * 4;
-        let ws_max = cs_pos.worldspace_max();
+        let _ws_max = cs_pos.worldspace_max();
 
         if cs_pos.y < 0 {
             for x in 0..Chunk::SIZE {

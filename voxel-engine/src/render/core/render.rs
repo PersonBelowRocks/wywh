@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetId, AssetServer, Handle},
+    asset::{AssetServer, Handle},
     core_pipeline::{
         core_3d::Opaque3d,
         prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass},
@@ -278,7 +278,7 @@ pub fn queue_chunks(
                 }
             };
 
-            let distance =
+            let _distance =
                 rangefinder.distance_translation(&mesh_instance.transforms.transform.translation);
 
             // queue this entity for rendering
