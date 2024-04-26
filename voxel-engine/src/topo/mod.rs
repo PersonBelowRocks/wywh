@@ -7,13 +7,13 @@ pub mod block;
 pub mod bounding_box;
 pub mod chunk;
 pub mod chunk_ref;
+pub mod ecs;
 pub mod error;
-pub mod generator;
 pub mod neighbors;
 pub mod realm;
 pub mod storage;
-pub mod systems;
 pub mod util;
+pub mod worldgen;
 
 pub use util::*;
 

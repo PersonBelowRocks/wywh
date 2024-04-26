@@ -16,8 +16,6 @@ use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, FpsText, PositionText};
 
-use ve::topo::generator::{GenerateChunk, GeneratorChoice};
-
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.4, 0.75, 0.9)))
@@ -62,23 +60,11 @@ fn main() {
 }
 
 fn setup(
-    mut writer: EventWriter<GenerateChunk>,
     _wireframe_config: ResMut<WireframeConfig>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for x in -1..=1 {
-        for y in -1..=1 {
-            for z in -1..=1 {
-                writer.send(GenerateChunk {
-                    pos: IVec3::new(x, y, z).into(),
-                    generator: GeneratorChoice::Default,
-                });
-            }
-        }
-    }
-
     // wireframe_config.global = true;
 
     commands.spawn((

@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use bevy::tasks::{TaskPool, TaskPoolBuilder};
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::topo::chunk::Chunk;
@@ -13,6 +14,8 @@ use crate::{
 use super::greedy::algorithm::{GreedyMesher, SimplePbrMesher};
 use super::{MeshWorkerPool, Mesher};
 
+// TODO: the whole "meshers as resources" thing does not makes sense
+// anymore, so get rid of the last remains of it to clean up the codebase
 pub(crate) fn setup_meshers(mut cmds: Commands) {
     cmds.insert_resource(GreedyMesher::new());
     cmds.insert_resource(SimplePbrMesher::new());
@@ -41,25 +44,29 @@ impl Default for ShouldExtract {
     }
 }
 
+#[derive(Resource, Deref)]
+pub struct MeshWorkerTaskPool(TaskPool);
+
 pub fn setup_chunk_meshing_workers<M: Mesher + Resource>(
     mut cmds: Commands,
     registries: Res<Registries>,
     realm: Res<VoxelRealm>,
     mesher: Res<M>,
 ) {
-    let pool = AsyncComputeTaskPool::get();
-
-    let worker_count = pool.thread_num();
+    let task_pool = TaskPoolBuilder::new()
+        .thread_name("Mesh Worker Task Pool".into())
+        .build();
 
     let worker_pool = MeshWorkerPool::<M>::new(
-        worker_count,
-        pool,
+        task_pool.thread_num(),
+        &task_pool,
         mesher.clone(),
         registries.clone(),
         realm.chunk_manager.clone(),
     );
 
     cmds.insert_resource(worker_pool);
+    cmds.insert_resource(MeshWorkerTaskPool(task_pool));
 }
 
 pub fn queue_chunk_meshing_tasks<M: Mesher>(

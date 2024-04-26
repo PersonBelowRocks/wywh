@@ -15,25 +15,16 @@ use crate::{
         voxel::rotations::BlockModelRotation,
     },
     topo::{
-        block::{Microblock, SubdividedBlock},
+        block::{BlockVoxel, Microblock, SubdividedBlock},
+        chunk::{Chunk, ChunkPos},
+        chunk_ref::{ChunkRefVxlAccess, ChunkVoxelInput},
+        error::ChunkAccessError,
+        storage::data_structures::IndexedChunkStorage,
         MbWriteBehaviour, SubdivAccess,
     },
 };
 
-use super::{
-    access::{ChunkBounds, HasBounds, WriteAccess},
-    block::BlockVoxel,
-    chunk::{Chunk, ChunkPos, VoxelVariantData},
-    chunk_ref::{ChunkRefVxlAccess, ChunkVoxelInput},
-    error::{ChunkAccessError, GeneratorError},
-    storage::{
-        containers::{
-            data_storage::SyncIndexedChunkContainer,
-            dense::{AutoDenseContainerAccess, DenseChunkContainer, SyncDenseChunkContainer},
-        },
-        data_structures::IndexedChunkStorage,
-    },
-};
+use super::error::GeneratorError;
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -41,53 +32,9 @@ pub enum GeneratorChoice {
     Default,
 }
 
-pub struct GeneratorInputAccess<'a> {
-    block_variants: &'a mut IndexedChunkStorage<BlockVoxel>,
-}
-
-impl<'a> ChunkBounds for GeneratorInputAccess<'a> {}
-
-impl<'a> WriteAccess for GeneratorInputAccess<'a> {
-    type WriteType = ChunkVoxelInput;
-    type WriteErr = ChunkAccessError;
-
-    fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
-        self.block_variants.set(pos, data.block)?;
-
-        Ok(())
-    }
-}
-
-pub struct GeneratorInput {
-    transparency: DenseChunkContainer<Transparency>,
-    variants: IndexedChunkStorage<BlockVoxel>,
-}
-
-impl GeneratorInput {
-    pub fn new() -> Self {
-        Self {
-            transparency: DenseChunkContainer::Empty,
-            variants: IndexedChunkStorage::new(),
-        }
-    }
-
-    pub fn access(&mut self) -> GeneratorInputAccess<'_> {
-        GeneratorInputAccess {
-            block_variants: &mut self.variants,
-        }
-    }
-
-    pub fn to_chunk(self) -> Chunk {
-        Chunk {
-            variants: SyncIndexedChunkContainer(RwLock::new(self.variants)),
-        }
-    }
-}
-
 #[derive(Event, Debug)]
 pub struct GenerateChunk {
     pub pos: ChunkPos,
-    pub generator: GeneratorChoice,
 }
 
 #[derive(Copy, Clone)]
