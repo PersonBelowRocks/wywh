@@ -17,7 +17,7 @@ use crate::data::registries::Registries;
 
 use self::generator::Generator;
 
-use super::world::{ChunkManager, ChunkPos};
+use super::world::{chunk::ChunkFlags, ChunkManager, ChunkPos};
 
 pub mod ecs;
 pub mod error;
@@ -51,7 +51,10 @@ fn generate_chunk(generator: &Generator, cmd: GeneratorCommand, cm: &ChunkManage
 
     match cm.initialize_new_chunk(cpos) {
         Ok(cref) => {
-            let access_result = cref.with_access(|mut access| {
+            cref.update_flags(|flags| flags.insert(ChunkFlags::GENERATING))
+                .unwrap();
+
+            let access_result = cref.with_access(true, |mut access| {
                 let gen_result = generator.write_to_chunk(cpos, &mut access);
 
                 if let Err(error) = gen_result {
@@ -61,6 +64,12 @@ fn generate_chunk(generator: &Generator, cmd: GeneratorCommand, cm: &ChunkManage
                     access.optimize_internal_storage();
                 }
             });
+
+            cref.update_flags(|flags| {
+                flags.remove(ChunkFlags::GENERATING);
+                flags.insert(ChunkFlags::FRESH | ChunkFlags::EDGE_UPDATED | ChunkFlags::UPDATED);
+            })
+            .unwrap();
 
             if let Err(error) = access_result {
                 error!("Error getting write access to chunk '{cpos}': {error}");

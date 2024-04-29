@@ -19,8 +19,9 @@ use crate::topo::{
 };
 
 use super::{
-    chunk::{Chunk, ChunkPos},
-    ChunkManagerError,
+    chunk::{Chunk, ChunkFlags, ChunkPos},
+    realm::{ChunkManagerStats, LccRef, PendingChunkChanges},
+    ChunkFlagError, ChunkManagerError,
 };
 
 /// Chunk reference read access
@@ -28,48 +29,94 @@ pub type Crra<'a> = ChunkRefReadAccess<'a>;
 /// Chunk reference (write) access
 pub type Crwa<'a> = ChunkRefAccess<'a>;
 
-#[derive(Clone)]
-pub struct ChunkRef {
-    pub(crate) chunk: Weak<Chunk>,
-    pub(crate) changed: Weak<AtomicBool>,
-    pub(crate) pos: ChunkPos,
+pub struct ChunkRef<'a> {
+    pub(super) chunk: LccRef<'a>,
+    pub(super) changes: &'a PendingChunkChanges,
+    pub(super) stats: &'a ChunkManagerStats,
+    pub(super) pos: ChunkPos,
 }
 
-impl ChunkRef {
+impl<'a> ChunkRef<'a> {
     pub fn pos(&self) -> ChunkPos {
         self.pos
     }
 
-    pub fn treat_as_changed(&self) -> Result<(), ChunkManagerError> {
-        let changed = self.changed.upgrade().ok_or(ChunkManagerError::Unloaded)?;
-        changed.store(true, Ordering::SeqCst);
+    pub fn flags(&self) -> Result<ChunkFlags, ChunkFlagError> {
+        let raw = self.chunk.flags.load(Ordering::Acquire);
+        ChunkFlags::from_bits(raw).ok_or(ChunkFlagError::UnknownFlags(raw))
+    }
+
+    fn set_flags(&self, flags: ChunkFlags) {
+        self.chunk.flags.store(flags.bits(), Ordering::Release);
+    }
+
+    pub fn update_flags<F>(&self, f: F) -> Result<(), ChunkFlagError>
+    where
+        F: for<'flags> FnOnce(&'flags mut ChunkFlags),
+    {
+        let old_flags = self.flags()?;
+        let mut new_flags = old_flags;
+        f(&mut new_flags);
+
+        if !old_flags.contains(ChunkFlags::FRESH) && new_flags.contains(ChunkFlags::FRESH) {
+            self.stats.fresh.fetch_add(1, Ordering::Acquire);
+        }
+
+        if old_flags.contains(ChunkFlags::FRESH) && !new_flags.contains(ChunkFlags::FRESH) {
+            self.stats.fresh.fetch_sub(1, Ordering::Acquire);
+        }
+
+        if !old_flags.contains(ChunkFlags::GENERATING) && new_flags.contains(ChunkFlags::GENERATING)
+        {
+            self.stats.generating.fetch_add(1, Ordering::Acquire);
+        }
+
+        if old_flags.contains(ChunkFlags::GENERATING) && !new_flags.contains(ChunkFlags::GENERATING)
+        {
+            self.stats.fresh.fetch_sub(1, Ordering::Acquire);
+        }
+
+        if new_flags.contains(ChunkFlags::UPDATED) {
+            self.changes.set(self.pos());
+        }
+
+        self.set_flags(new_flags);
+
         Ok(())
     }
 
-    #[allow(clippy::let_and_return)] // We need do to this little crime so the borrowchecker doesn't yell at us
-    pub fn with_access<F, U>(&self, f: F) -> Result<U, ChunkManagerError>
+    pub fn with_access<F, U>(&self, manual_update_ctrl: bool, f: F) -> Result<U, ChunkManagerError>
     where
-        F: for<'a> FnOnce(ChunkRefAccess<'a, ahash::RandomState>) -> U,
+        F: for<'access> FnOnce(ChunkRefAccess<'access, ahash::RandomState>) -> U,
     {
-        let chunk = self.chunk.upgrade().ok_or(ChunkManagerError::Unloaded)?;
-        self.treat_as_changed()?;
+        let variant_access = self.chunk.variants.access();
 
-        let variant_access = chunk.variants.access();
-
-        let x = Ok(f(ChunkRefAccess {
+        let mut wrote_to_edge = false;
+        let result = Ok(f(ChunkRefAccess {
+            wrote_to_edge: Some(&mut wrote_to_edge),
             block_variants: variant_access,
         }));
-        x
+
+        if !manual_update_ctrl {
+            self.update_flags(|flags| {
+                flags.insert(ChunkFlags::UPDATED);
+
+                if wrote_to_edge {
+                    flags.insert(ChunkFlags::EDGE_UPDATED);
+                }
+            })
+            .unwrap();
+        }
+
+        result
     }
 
-    #[allow(clippy::let_and_return)]
+    #[allow(clippy::let_and_return)] // We need do to this little crime so the borrowchecker doesn't yell at us
     pub fn with_read_access<F, U>(&self, f: F) -> Result<U, ChunkManagerError>
     where
-        F: for<'a> FnOnce(ChunkRefReadAccess<'a, ahash::RandomState>) -> U,
+        F: for<'access> FnOnce(ChunkRefReadAccess<'access, ahash::RandomState>) -> U,
     {
-        let chunk = self.chunk.upgrade().ok_or(ChunkManagerError::Unloaded)?;
-
-        let block_variant_access = chunk.variants.read_access();
+        let block_variant_access = self.chunk.variants.read_access();
 
         let x = Ok(f(ChunkRefReadAccess {
             block_variants: block_variant_access,
@@ -137,6 +184,7 @@ pub struct MutChunkAccOutput<'a> {
 }
 
 pub struct ChunkRefAccess<'a, S: BuildHasher = ahash::RandomState> {
+    pub(crate) wrote_to_edge: Option<&'a mut bool>,
     pub(crate) block_variants: SiccAccess<'a, BlockVoxel, S>,
 }
 
@@ -184,6 +232,10 @@ impl<'a, S: BuildHasher> WriteAccess for ChunkRefAccess<'a, S> {
 
     fn set(&mut self, pos: IVec3, data: Self::WriteType) -> Result<(), Self::WriteErr> {
         self.block_variants.set(pos, Some(data.block))?;
+
+        if pos.cmple(IVec3::ZERO).any() || pos.cmpge(Chunk::VEC - IVec3::ONE).any() {
+            self.wrote_to_edge.as_deref_mut().map(|v| *v = true);
+        }
 
         Ok(())
     }

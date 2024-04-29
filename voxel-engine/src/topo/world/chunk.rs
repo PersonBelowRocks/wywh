@@ -1,4 +1,8 @@
+use std::sync::atomic::AtomicU32;
+
 use bevy::prelude::*;
+use bitflags::bitflags;
+use crossbeam::epoch::Atomic;
 
 use crate::data::registries::block::BlockVariantRegistry;
 use crate::data::registries::Registry;
@@ -23,6 +27,17 @@ use crate::topo::storage::containers::data_storage::SyncIndexedChunkContainer;
 )]
 pub struct ChunkPos(IVec3);
 
+bitflags! {
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub struct ChunkFlags: u32 {
+        const GENERATING = 0b1 << 0;
+        const UPDATED = 0b1 << 1;
+        // TODO: have flags for each edge that was updated
+        const EDGE_UPDATED = 0b1 << 2;
+        const FRESH = 0b1 << 3;
+    }
+}
+
 #[derive(Copy, Clone, Debug, Component, PartialEq, Eq)]
 pub struct ChunkEntity;
 
@@ -45,6 +60,7 @@ pub struct VoxelVariantData {
 }
 
 pub struct Chunk {
+    pub flags: AtomicU32,
     pub variants: SyncIndexedChunkContainer<BlockVoxel>,
 }
 
@@ -68,6 +84,7 @@ impl Chunk {
     #[inline]
     pub fn new(filling: BlockVoxel) -> Self {
         Self {
+            flags: AtomicU32::new(ChunkFlags::empty().bits()),
             variants: SyncIndexedChunkContainer::filled(filling),
         }
     }
@@ -75,6 +92,7 @@ impl Chunk {
     #[inline]
     pub fn empty() -> Self {
         Self {
+            flags: AtomicU32::new(ChunkFlags::empty().bits()),
             variants: SyncIndexedChunkContainer::new(),
         }
     }

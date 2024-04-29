@@ -17,6 +17,7 @@ impl MockChunk {
 
     pub fn access(&self) -> Crwa<'_> {
         Crwa {
+            wrote_to_edge: None,
             block_variants: self.variants.access(),
         }
     }

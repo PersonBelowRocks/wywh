@@ -1,17 +1,19 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Weak,
+    atomic::{AtomicU32, Ordering},
+    Arc,
 };
 
 use bevy::{
     math::{ivec3, IVec3},
     prelude::Resource,
 };
+use dashmap::{mapref::one::Ref, DashSet};
 
 use crate::{
     topo::{
         block::{BlockVoxel, FullBlock},
         neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
+        world::chunk::ChunkFlags,
     },
     util::{ivec3_to_1d, SyncHashMap},
 };
@@ -23,23 +25,21 @@ use super::{
 };
 
 #[derive(Default)]
-pub struct LoadedChunkContainer(pub(crate) SyncHashMap<ChunkPos, Arc<Chunk>>);
+pub struct LoadedChunkContainer(pub(crate) SyncHashMap<ChunkPos, Chunk>);
 
-pub struct LoadedChunkIterator<'a>(pub(crate) hb::hash_map::Iter<'a, ChunkPos, Arc<Chunk>>);
+pub type LccRef<'a> = Ref<'a, ChunkPos, Chunk, ahash::RandomState>;
+
+pub struct LoadedChunkIterator<'a>(pub(crate) hb::hash_map::Iter<'a, ChunkPos, Chunk>);
 
 pub type StrongChunkRef<'a> =
     dashmap::mapref::one::Ref<'a, ChunkPos, Arc<Chunk>, ahash::RandomState>;
 
 impl LoadedChunkContainer {
-    pub fn get(&self, pos: ChunkPos) -> Option<Weak<Chunk>> {
-        self.0.get(&pos).as_deref().map(Arc::downgrade)
-    }
-
-    pub fn get_strong(&self, pos: ChunkPos) -> Option<StrongChunkRef<'_>> {
+    pub fn get(&self, pos: ChunkPos) -> Option<LccRef<'_>> {
         self.0.get(&pos)
     }
 
-    pub fn set(&self, pos: ChunkPos, chunk: Arc<Chunk>) {
+    pub fn set(&self, pos: ChunkPos, chunk: Chunk) {
         self.0.insert(pos, chunk);
     }
 
@@ -47,85 +47,50 @@ impl LoadedChunkContainer {
         self.0.remove(&pos).is_some()
     }
 
-    pub(crate) fn internal_map(&self) -> &'_ SyncHashMap<ChunkPos, Arc<Chunk>> {
+    pub(crate) fn internal_map(&self) -> &'_ SyncHashMap<ChunkPos, Chunk> {
         &self.0
     }
 }
 
 #[derive(Default)]
-pub struct PendingChunkChanges(pub(crate) SyncHashMap<ChunkPos, Arc<AtomicBool>>);
+pub struct PendingChunkChanges(DashSet<ChunkPos, ahash::RandomState>);
 
 impl PendingChunkChanges {
-    pub fn get(&self, pos: ChunkPos) -> Option<Weak<AtomicBool>> {
-        self.0.get(&pos).as_deref().map(Arc::downgrade)
+    pub fn new() -> Self {
+        Self(DashSet::with_hasher(ahash::RandomState::new()))
     }
 
-    pub fn get_or_create(&self, pos: ChunkPos, initial_status: bool) -> Weak<AtomicBool> {
-        self.get(pos)
-            .unwrap_or_else(|| self.create(pos, initial_status))
+    pub fn clear(&self) {
+        self.0.clear();
     }
 
-    pub fn update_or_create(&self, pos: ChunkPos, changed: bool) -> Weak<AtomicBool> {
-        let weak = self.get_or_create(pos, changed);
-
-        if let Some(b) = weak.upgrade() {
-            b.store(changed, Ordering::SeqCst)
-        }
-
-        weak
+    pub fn has_changed(&self, pos: ChunkPos) -> bool {
+        self.0.contains(&pos)
     }
 
-    pub fn create(&self, pos: ChunkPos, initial_status: bool) -> Weak<AtomicBool> {
-        let atomic_bool = Arc::new(AtomicBool::new(initial_status));
-        let weak = Arc::downgrade(&atomic_bool);
-
-        self.0.insert(pos, atomic_bool);
-
-        weak
+    pub fn set(&self, pos: ChunkPos) {
+        self.0.insert(pos);
     }
 
-    pub fn remove(&self, pos: ChunkPos) -> bool {
-        self.0.remove(&pos).is_some()
+    pub fn remove(&self, pos: ChunkPos) {
+        self.0.remove(&pos);
     }
 
-    pub(crate) fn internal_map(&self) -> &'_ SyncHashMap<ChunkPos, Arc<AtomicBool>> {
-        &self.0
-    }
-
-    pub(crate) fn pending_changes(&self) -> Vec<ChunkPos> {
-        self.0
-            .iter()
-            .filter(|m| m.value().swap(false, Ordering::SeqCst))
-            .map(|m| *m.key())
-            .collect::<Vec<_>>()
+    pub fn iter(&self) -> impl Iterator<Item = ChunkPos> + '_ {
+        self.0.iter().map(|r| r.clone())
     }
 }
 
-pub(crate) struct ChangedChunks<'a, 'b> {
-    changed_positions: Vec<ChunkPos>,
-    changes: &'a SyncHashMap<ChunkPos, Arc<AtomicBool>>,
-    chunks: &'b SyncHashMap<ChunkPos, Arc<Chunk>>,
-}
-
-impl<'a, 'b> Iterator for ChangedChunks<'a, 'b> {
-    type Item = ChunkRef;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        const ERROR_MSG: &str = "All the positions in this iterator should be ensured to lead to actual loaded chunks because the state of the realm should be frozen when this iterator is obtained";
-
-        let pos = self.changed_positions.pop()?;
-
-        Some(ChunkRef {
-            pos,
-            chunk: Arc::downgrade(self.chunks.get(&pos).as_deref().expect(ERROR_MSG)),
-            changed: Arc::downgrade(self.changes.get(&pos).as_deref().expect(ERROR_MSG)),
-        })
-    }
+#[derive(Default)]
+pub struct ChunkManagerStats {
+    pub fresh: AtomicU32,
+    pub generating: AtomicU32,
 }
 
 pub struct ChunkManager {
     loaded_chunks: LoadedChunkContainer,
     pending_changes: PendingChunkChanges,
+    stats: ChunkManagerStats,
     default_block: FullBlock,
 }
 
@@ -134,31 +99,27 @@ impl ChunkManager {
         Self {
             loaded_chunks: LoadedChunkContainer::default(),
             pending_changes: PendingChunkChanges::default(),
+            stats: ChunkManagerStats::default(),
             default_block,
         }
     }
 
-    pub fn get_loaded_chunk(&self, pos: ChunkPos) -> Result<ChunkRef, ChunkManagerError> {
+    pub fn get_loaded_chunk(&self, pos: ChunkPos) -> Result<ChunkRef<'_>, ChunkManagerError> {
         let chunk = self
             .loaded_chunks
-            .get(pos)
-            .ok_or(ChunkManagerError::Unloaded)?;
-        let changed = self
-            .pending_changes
             .get(pos)
             .ok_or(ChunkManagerError::Unloaded)?;
 
         Ok(ChunkRef {
             chunk,
-            changed,
+            changes: &self.pending_changes,
+            stats: &self.stats,
             pos,
         })
     }
 
-    pub(crate) fn get_chunk(&self, pos: ChunkPos) -> Result<StrongChunkRef<'_>, ChunkManagerError> {
-        self.loaded_chunks
-            .get_strong(pos)
-            .ok_or(ChunkManagerError::Unloaded)
+    pub fn has_loaded_chunk(&self, pos: ChunkPos) -> bool {
+        self.loaded_chunks.get(pos).is_some()
     }
 
     // TODO: test
@@ -168,7 +129,7 @@ impl ChunkManager {
     {
         // we need to make a map of the neighboring chunks so that the references are owned by the function scope
         let mut refs =
-            std::array::from_fn::<Option<StrongChunkRef>, { NEIGHBOR_ARRAY_SIZE }, _>(|_| None);
+            std::array::from_fn::<Option<ChunkRef>, { NEIGHBOR_ARRAY_SIZE }, _>(|_| None);
 
         for x in -1..=1 {
             for y in -1..=1 {
@@ -179,7 +140,7 @@ impl ChunkManager {
                     }
 
                     let nbrpos_ws = ChunkPos::from(nbrpos + IVec3::from(pos));
-                    if let Ok(chunk_ref) = self.get_chunk(nbrpos_ws) {
+                    if let Ok(chunk_ref) = self.get_loaded_chunk(nbrpos_ws) {
                         refs[ivec3_to_1d(nbrpos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
                             .unwrap()] = Some(chunk_ref)
                     }
@@ -190,12 +151,12 @@ impl ChunkManager {
         let mut accesses = std::array::from_fn(|_| None);
 
         for i in 0..NEIGHBOR_ARRAY_SIZE {
-            let Some(cref) = refs[i].as_deref() else {
+            let Some(cref) = &refs[i] else {
                 continue;
             };
 
             accesses[i] = Some(ChunkRefReadAccess {
-                block_variants: cref.variants.read_access(),
+                block_variants: cref.chunk.variants.read_access(),
             });
         }
 
@@ -208,8 +169,7 @@ impl ChunkManager {
     }
 
     pub fn set_loaded_chunk(&self, pos: ChunkPos, chunk: Chunk) {
-        self.loaded_chunks.set(pos, Arc::new(chunk));
-        self.pending_changes.update_or_create(pos, true);
+        self.loaded_chunks.set(pos, chunk);
     }
 
     pub fn initialize_new_chunk(&self, pos: ChunkPos) -> Result<ChunkRef, ChunkManagerError> {
@@ -219,18 +179,43 @@ impl ChunkManager {
             return Err(ChunkManagerError::AlreadyInitialized);
         }
 
-        self.loaded_chunks.set(pos, Arc::new(chunk));
-        self.pending_changes.update_or_create(pos, true);
+        self.loaded_chunks.set(pos, chunk);
 
         self.get_loaded_chunk(pos)
     }
 
-    pub(crate) fn changed_chunks(&self) -> ChangedChunks<'_, '_> {
-        ChangedChunks {
-            changed_positions: self.pending_changes.pending_changes(),
-            changes: self.pending_changes.internal_map(),
-            chunks: self.loaded_chunks.internal_map(),
+    pub fn updated_chunks(&self) -> UpdatedChunks<'_> {
+        UpdatedChunks { manager: &self }
+    }
+}
+
+pub struct UpdatedChunks<'a> {
+    manager: &'a ChunkManager,
+}
+
+impl<'a> UpdatedChunks<'a> {
+    pub fn num_fresh_chunks(&self) -> u32 {
+        self.manager.stats.fresh.load(Ordering::Acquire)
+    }
+
+    pub fn num_generating_chunks(&self) -> u32 {
+        self.manager.stats.generating.load(Ordering::Acquire)
+    }
+
+    pub fn iter_chunks<F>(&self, mut f: F) -> Result<(), ChunkManagerError>
+    where
+        F: for<'cref> FnMut(ChunkRef<'cref>),
+    {
+        for chunk_pos in self.manager.pending_changes.iter() {
+            let cref = self.manager.get_loaded_chunk(chunk_pos)?;
+            f(cref);
         }
+
+        Ok(())
+    }
+
+    pub fn acknowledge_change(&self, pos: ChunkPos) {
+        self.manager.pending_changes.remove(pos);
     }
 }
 
