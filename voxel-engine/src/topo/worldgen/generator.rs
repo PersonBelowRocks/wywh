@@ -76,7 +76,7 @@ impl Generator {
         cs_pos: ChunkPos,
         access: &mut ChunkRefAccess<'chunk>,
     ) -> Result<(), GeneratorError<ChunkAccessError>> {
-        const THRESHOLD: f64 = 0.5;
+        const THRESHOLD: f64 = 0.25;
 
         let varreg = self
             .registries

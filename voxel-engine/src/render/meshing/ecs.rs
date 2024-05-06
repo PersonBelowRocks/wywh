@@ -89,14 +89,16 @@ pub fn queue_chunk_meshing_tasks(
     }
 
     let result = changes.iter_chunks(|cref| {
-        let flags = cref.flags().unwrap();
+        let flags = cref.flags();
         if flags.contains(ChunkFlags::FRESH) && !should_queue_fresh {
             return;
         }
 
+        info!("Queuing {} for remeshing", cref.pos());
         queued.insert(cref.pos());
 
-        if flags.contains(ChunkFlags::EDGE_UPDATED) {
+        if flags.contains(ChunkFlags::REMESH_NEIGHBORS) {
+            info!("Queuing neighbors of {} for remeshing", cref.pos());
             for x in -1..=1 {
                 for y in -1..=1 {
                     for z in -1..=1 {
@@ -112,7 +114,7 @@ pub fn queue_chunk_meshing_tasks(
                             && realm.chunk_manager.has_loaded_chunk(neighbor_pos)
                         {
                             if let Ok(cref) = realm.chunk_manager.get_loaded_chunk(neighbor_pos) {
-                                if !cref.flags().unwrap().contains(ChunkFlags::GENERATING) {
+                                if !cref.flags().contains(ChunkFlags::GENERATING) {
                                     extra_queued.insert(neighbor_pos);
                                 }
                             }
@@ -122,10 +124,11 @@ pub fn queue_chunk_meshing_tasks(
             }
         }
 
+        info!("Updating flags for {}", cref.pos());
         cref.update_flags(|flags| {
-            flags.remove(ChunkFlags::UPDATED | ChunkFlags::FRESH | ChunkFlags::EDGE_UPDATED);
-        })
-        .unwrap();
+            flags.remove(ChunkFlags::REMESH | ChunkFlags::FRESH | ChunkFlags::REMESH_NEIGHBORS);
+        });
+        info!("Flags updated for {}", cref.pos());
     });
 
     if let Err(error) = result {
@@ -155,7 +158,7 @@ pub fn queue_chunk_meshing_tasks(
         }
 
         workers.queue_job(chunk_pos);
-        changes.acknowledge_change(chunk_pos);
+        extra_queued.swap_remove(&chunk_pos);
     }
 
     for &chunk_pos in extra_queued.iter() {

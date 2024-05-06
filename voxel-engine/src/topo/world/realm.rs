@@ -82,15 +82,15 @@ impl PendingChunkChanges {
 }
 
 #[derive(Default)]
-pub struct ChunkManagerStats {
-    pub fresh: AtomicU32,
-    pub generating: AtomicU32,
+pub struct ChunkStatuses {
+    pub updated: DashSet<ChunkPos>,
+    pub generating: DashSet<ChunkPos>,
+    pub fresh: DashSet<ChunkPos>,
 }
 
 pub struct ChunkManager {
     loaded_chunks: LoadedChunkContainer,
-    pending_changes: PendingChunkChanges,
-    stats: ChunkManagerStats,
+    status: ChunkStatuses,
     default_block: FullBlock,
 }
 
@@ -98,8 +98,7 @@ impl ChunkManager {
     pub fn new(default_block: FullBlock) -> Self {
         Self {
             loaded_chunks: LoadedChunkContainer::default(),
-            pending_changes: PendingChunkChanges::default(),
-            stats: ChunkManagerStats::default(),
+            status: ChunkStatuses::default(),
             default_block,
         }
     }
@@ -112,8 +111,7 @@ impl ChunkManager {
 
         Ok(ChunkRef {
             chunk,
-            changes: &self.pending_changes,
-            stats: &self.stats,
+            stats: &self.status,
             pos,
         })
     }
@@ -172,8 +170,18 @@ impl ChunkManager {
         self.loaded_chunks.set(pos, chunk);
     }
 
-    pub fn initialize_new_chunk(&self, pos: ChunkPos) -> Result<ChunkRef, ChunkManagerError> {
-        let chunk = Chunk::new(BlockVoxel::Full(self.default_block));
+    pub fn initialize_new_chunk(
+        &self,
+        pos: ChunkPos,
+        generating: bool,
+    ) -> Result<ChunkRef, ChunkManagerError> {
+        let flags = if generating {
+            ChunkFlags::GENERATING
+        } else {
+            ChunkFlags::empty()
+        };
+
+        let chunk = Chunk::new(BlockVoxel::Full(self.default_block), flags);
 
         if self.loaded_chunks.get(pos).is_some() {
             return Err(ChunkManagerError::AlreadyInitialized);
@@ -194,28 +202,24 @@ pub struct UpdatedChunks<'a> {
 }
 
 impl<'a> UpdatedChunks<'a> {
-    pub fn num_fresh_chunks(&self) -> u32 {
-        self.manager.stats.fresh.load(Ordering::Acquire)
+    pub fn num_fresh_chunks(&self) -> usize {
+        self.manager.status.fresh.len()
     }
 
-    pub fn num_generating_chunks(&self) -> u32 {
-        self.manager.stats.generating.load(Ordering::Acquire)
+    pub fn num_generating_chunks(&self) -> usize {
+        self.manager.status.generating.len()
     }
 
     pub fn iter_chunks<F>(&self, mut f: F) -> Result<(), ChunkManagerError>
     where
         F: for<'cref> FnMut(ChunkRef<'cref>),
     {
-        for chunk_pos in self.manager.pending_changes.iter() {
-            let cref = self.manager.get_loaded_chunk(chunk_pos)?;
+        for chunk_pos in self.manager.status.updated.iter() {
+            let cref = self.manager.get_loaded_chunk(*chunk_pos)?;
             f(cref);
         }
 
         Ok(())
-    }
-
-    pub fn acknowledge_change(&self, pos: ChunkPos) {
-        self.manager.pending_changes.remove(pos);
     }
 }
 

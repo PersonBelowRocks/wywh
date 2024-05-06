@@ -49,11 +49,8 @@ pub struct GeneratorCommand {
 fn generate_chunk(generator: &Generator, cmd: GeneratorCommand, cm: &ChunkManager) {
     let cpos = cmd.pos;
 
-    match cm.initialize_new_chunk(cpos) {
+    match cm.initialize_new_chunk(cpos, true) {
         Ok(cref) => {
-            cref.update_flags(|flags| flags.insert(ChunkFlags::GENERATING))
-                .unwrap();
-
             let access_result = cref.with_access(true, |mut access| {
                 let gen_result = generator.write_to_chunk(cpos, &mut access);
 
@@ -67,9 +64,8 @@ fn generate_chunk(generator: &Generator, cmd: GeneratorCommand, cm: &ChunkManage
 
             cref.update_flags(|flags| {
                 flags.remove(ChunkFlags::GENERATING);
-                flags.insert(ChunkFlags::FRESH | ChunkFlags::EDGE_UPDATED | ChunkFlags::UPDATED);
-            })
-            .unwrap();
+                flags.insert(ChunkFlags::FRESH | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::REMESH);
+            });
 
             if let Err(error) = access_result {
                 error!("Error getting write access to chunk '{cpos}': {error}");

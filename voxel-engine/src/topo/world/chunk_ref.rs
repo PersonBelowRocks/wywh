@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use bevy::{math::UVec3, prelude::IVec3};
+use bevy::{log::info, math::UVec3, prelude::IVec3};
 
 use crate::topo::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
@@ -20,7 +20,7 @@ use crate::topo::{
 
 use super::{
     chunk::{Chunk, ChunkFlags, ChunkPos},
-    realm::{ChunkManagerStats, LccRef, PendingChunkChanges},
+    realm::{ChunkStatuses, LccRef, PendingChunkChanges},
     ChunkFlagError, ChunkManagerError,
 };
 
@@ -31,8 +31,7 @@ pub type Crwa<'a> = ChunkRefAccess<'a>;
 
 pub struct ChunkRef<'a> {
     pub(super) chunk: LccRef<'a>,
-    pub(super) changes: &'a PendingChunkChanges,
-    pub(super) stats: &'a ChunkManagerStats,
+    pub(super) stats: &'a ChunkStatuses,
     pub(super) pos: ChunkPos,
 }
 
@@ -41,48 +40,48 @@ impl<'a> ChunkRef<'a> {
         self.pos
     }
 
-    pub fn flags(&self) -> Result<ChunkFlags, ChunkFlagError> {
-        let raw = self.chunk.flags.load(Ordering::Acquire);
-        ChunkFlags::from_bits(raw).ok_or(ChunkFlagError::UnknownFlags(raw))
+    pub fn flags(&self) -> ChunkFlags {
+        *self.chunk.flags.read()
     }
 
-    fn set_flags(&self, flags: ChunkFlags) {
-        self.chunk.flags.store(flags.bits(), Ordering::Release);
+    fn set_flags(&self, new_flags: ChunkFlags) {
+        let mut old_flags = self.chunk.flags.write();
+        *old_flags = new_flags
     }
 
-    pub fn update_flags<F>(&self, f: F) -> Result<(), ChunkFlagError>
+    pub fn update_flags<F>(&self, f: F)
     where
         F: for<'flags> FnOnce(&'flags mut ChunkFlags),
     {
-        let old_flags = self.flags()?;
+        let old_flags = self.flags();
         let mut new_flags = old_flags;
         f(&mut new_flags);
 
         if !old_flags.contains(ChunkFlags::FRESH) && new_flags.contains(ChunkFlags::FRESH) {
-            self.stats.fresh.fetch_add(1, Ordering::Acquire);
-        }
-
-        if old_flags.contains(ChunkFlags::FRESH) && !new_flags.contains(ChunkFlags::FRESH) {
-            self.stats.fresh.fetch_sub(1, Ordering::Acquire);
+            self.stats.fresh.insert(self.pos);
+        } else if old_flags.contains(ChunkFlags::FRESH) && !new_flags.contains(ChunkFlags::FRESH) {
+            self.stats.fresh.remove(&self.pos);
         }
 
         if !old_flags.contains(ChunkFlags::GENERATING) && new_flags.contains(ChunkFlags::GENERATING)
         {
-            self.stats.generating.fetch_add(1, Ordering::Acquire);
-        }
-
-        if old_flags.contains(ChunkFlags::GENERATING) && !new_flags.contains(ChunkFlags::GENERATING)
+            self.stats.generating.insert(self.pos);
+        } else if old_flags.contains(ChunkFlags::GENERATING)
+            && !new_flags.contains(ChunkFlags::GENERATING)
         {
-            self.stats.fresh.fetch_sub(1, Ordering::Acquire);
+            self.stats.fresh.remove(&self.pos);
         }
 
-        if new_flags.contains(ChunkFlags::UPDATED) {
-            self.changes.set(self.pos());
+        if new_flags.contains(ChunkFlags::REMESH) && !old_flags.contains(ChunkFlags::REMESH) {
+            self.stats.updated.insert(self.pos);
+        } else if !new_flags.contains(ChunkFlags::REMESH) && old_flags.contains(ChunkFlags::REMESH)
+        {
+            self.stats.updated.remove(&self.pos);
         }
 
+        info!("setting new flags for {}", self.pos);
         self.set_flags(new_flags);
-
-        Ok(())
+        info!("set new flags for {}", self.pos);
     }
 
     pub fn with_access<F, U>(&self, manual_update_ctrl: bool, f: F) -> Result<U, ChunkManagerError>
@@ -99,13 +98,12 @@ impl<'a> ChunkRef<'a> {
 
         if !manual_update_ctrl {
             self.update_flags(|flags| {
-                flags.insert(ChunkFlags::UPDATED);
+                flags.insert(ChunkFlags::REMESH);
 
                 if wrote_to_edge {
-                    flags.insert(ChunkFlags::EDGE_UPDATED);
+                    flags.insert(ChunkFlags::REMESH_NEIGHBORS);
                 }
-            })
-            .unwrap();
+            });
         }
 
         result
