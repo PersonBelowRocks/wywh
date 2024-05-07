@@ -1,10 +1,15 @@
+use std::{num::NonZeroU64, sync::Arc};
+
 use bevy::{
     ecs::{
         entity::{Entity, EntityHashMap},
         query::{ROQueryItem, With},
-        system::{lifetimeless::SRes, Local, Query, Res, ResMut, Resource, SystemParamItem},
+        system::{
+            lifetimeless::SRes, Commands, Local, Query, Res, ResMut, Resource, SystemParamItem,
+        },
         world::{FromWorld, World},
     },
+    prelude::Deref,
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
@@ -18,60 +23,35 @@ use bevy::{
 
 use crate::{
     render::{
-        meshing::ecs::ShouldExtract,
+        meshing::controller::{ChunkRenderPermits, TimedChunkMeshData},
         occlusion::ChunkOcclusionMap,
         quad::{ChunkQuads, GpuQuad},
     },
-    topo::world::ChunkEntity,
+    topo::world::{ChunkEntity, ChunkPos},
+    util::SyncChunkMap,
 };
 
 use super::render::ChunkPipeline;
 
-pub fn extract_chunk_render_data(
-    mut last_count: Local<usize>,
-    mut render_data: ResMut<ChunkRenderDataStore>,
-    q_chunks: Extract<
-        Query<(Entity, &ChunkQuads, &ChunkOcclusionMap, &ShouldExtract), With<ChunkEntity>>,
-    >,
+#[derive(Resource, Default, Deref)]
+pub struct ChunkMeshDataMap(Arc<SyncChunkMap<TimedChunkMeshData>>);
+
+pub fn extract_chunk_mesh_data(
+    mut cmds: Commands,
+    permits: Extract<Option<Res<ChunkRenderPermits>>>,
 ) {
-    for (entity, quads, occlusion, should_extract) in q_chunks.iter() {
-        if should_extract.get() {
-            render_data.map.insert(
-                entity,
-                ChunkRenderData::Cpu(CpuChunkRenderData {
-                    quads: quads.quads.clone(),
-                    occlusion: occlusion.clone(),
-                }),
-            );
-
-            // don't extract this entity again until it updates in the main world
-            should_extract.set(false);
-        }
-    }
-
-    if render_data.map.len() != *last_count {
-        *last_count = render_data.map.len();
-        // TODO: keep track of this somehow
+    if let Some(permits) = permits.as_ref() {
+        cmds.insert_resource(ChunkMeshDataMap(permits.filled_permit_map().clone()))
     }
 }
 
-pub fn prepare_chunk_render_data(
+pub fn prepare_chunk_mesh_data(
     mut chunk_data_store: ResMut<ChunkRenderDataStore>,
     pipeline: Res<ChunkPipeline>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
-    let mut count = 0;
-
-    for data in chunk_data_store.map.values_mut() {
-        if data.move_to_gpu(gpu.as_ref(), queue.as_ref(), &pipeline.chunk_layout) {
-            count += 1;
-        }
-    }
-
-    if count > 0 {
-        // TODO: keep track of this
-    }
+    todo!()
 }
 
 #[derive(Resource)]
@@ -84,13 +64,19 @@ impl FromWorld for ChunkRenderDataStore {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
 
+        let vec3f_size = NonZeroU64::new(4 * 3).unwrap();
+
         let layout = gpu.create_bind_group_layout(
             Some("chunk_bind_group_layout"),
             &BindGroupLayoutEntries::with_indices(
                 ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                 (
-                    (0, binding_types::storage_buffer_read_only::<GpuQuad>(false)),
-                    (1, binding_types::storage_buffer_read_only::<u32>(false)),
+                    (
+                        0,
+                        binding_types::uniform_buffer_sized(false, Some(vec3f_size)),
+                    ),
+                    (1, binding_types::storage_buffer_read_only::<GpuQuad>(false)),
+                    (2, binding_types::storage_buffer_read_only::<u32>(false)),
                 ),
             ),
         );
@@ -152,6 +138,7 @@ impl ChunkRenderData {
 
         *self = Self::BindGroup(ChunkBindGroup {
             bind_group,
+            position: todo!(),
             quad_buffer: quads.buffer().unwrap().clone(),
             occlusion_buffer: quads.buffer().unwrap().clone(),
         });
@@ -169,6 +156,7 @@ pub struct CpuChunkRenderData {
 #[derive(Clone)]
 pub struct ChunkBindGroup {
     pub bind_group: BindGroup,
+    pub position: Buffer,
     pub quad_buffer: Buffer,
     pub occlusion_buffer: Buffer,
 }

@@ -57,6 +57,9 @@ pub enum AppState {
     Finished,
 }
 
+#[derive(Default, Copy, Clone, PartialEq, Eq, Hash, Debug, SystemSet)]
+pub struct CoreEngineSetup;
+
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MeshController);
@@ -79,7 +82,8 @@ impl Plugin for VoxelPlugin {
                 setup_terrain_generator_workers,
                 generate_debug_chunks,
             )
-                .chain(),
+                .chain()
+                .in_set(CoreEngineSetup),
         );
 
         app.add_systems(

@@ -31,7 +31,9 @@ use crate::data::{
 };
 
 use self::{
-    gpu_chunk::{extract_chunk_render_data, prepare_chunk_render_data, ChunkRenderDataStore},
+    gpu_chunk::{
+        extract_chunk_mesh_data, prepare_chunk_mesh_data, ChunkMeshDataMap, ChunkRenderDataStore,
+    },
     gpu_registries::{
         extract_texreg_faces, prepare_gpu_registry_data, ExtractedTexregFaces, RegistryBindGroup,
     },
@@ -72,7 +74,7 @@ impl Plugin for RenderCore {
             ExtractSchedule,
             (
                 extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
-                extract_chunk_render_data,
+                extract_chunk_mesh_data.run_if(not(resource_exists::<ChunkMeshDataMap>)),
             ),
         );
         render_app.add_systems(
@@ -80,7 +82,7 @@ impl Plugin for RenderCore {
             (
                 (
                     prepare_gpu_registry_data.run_if(not(resource_exists::<RegistryBindGroup>)),
-                    prepare_chunk_render_data,
+                    prepare_chunk_mesh_data,
                 )
                     .in_set(RenderSet::PrepareResources),
                 (queue_chunks, queue_prepass_chunks, queue_shadows).in_set(RenderSet::QueueMeshes),

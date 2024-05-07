@@ -3,26 +3,30 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bevy::{prelude::*, render::extract_resource::ExtractResource};
+use bevy::{
+    prelude::*,
+    render::extract_resource::ExtractResource,
+    tasks::{TaskPool, TaskPoolBuilder},
+};
+use dashmap::DashSet;
 
 use crate::{
-    data::tile::Face,
+    data::{registries::Registries, tile::Face},
+    render::meshing::greedy::algorithm::GreedyMesher,
     topo::world::{chunk::ChunkFlags, ChunkPos, VoxelRealm},
     util::{ChunkMap, SyncChunkMap},
 };
 
-use super::{workers::MeshWorkerPool, ChunkMeshData};
+use super::{workers::MeshWorkerPool, ChunkMeshData, ChunkRenderPermits, TimedChunkMeshData};
+
+#[derive(Resource, Deref)]
+pub struct MeshWorkerTaskPool(TaskPool);
 
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct MeshGeneration(u64);
 
 #[derive(Resource, ExtractResource, Deref, Default, Clone)]
 pub struct ChunkMeshStorage(Arc<SyncChunkMap<TimedChunkMeshData>>);
-
-pub struct TimedChunkMeshData {
-    pub generation: u64,
-    pub data: ChunkMeshData,
-}
 
 #[derive(Event, Clone)]
 pub struct RemeshChunk {
@@ -33,23 +37,6 @@ pub struct RemeshChunk {
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct ChunkRenderPermit {
     lod: (), // TODO: LODs!
-}
-
-#[derive(Resource, Default)]
-pub struct ChunkRenderPermits(ChunkMap<ChunkRenderPermit>);
-
-impl ChunkRenderPermits {
-    pub fn grant_permit(&mut self, pos: ChunkPos) {
-        self.0.set(pos, ChunkRenderPermit { lod: () });
-    }
-
-    pub fn has_permit(&self, pos: ChunkPos) -> bool {
-        self.0.contains(pos)
-    }
-
-    pub fn revoke_permit(&mut self, pos: ChunkPos) {
-        self.0.remove(pos);
-    }
 }
 
 pub fn queue_chunk_mesh_jobs(workers: Res<MeshWorkerPool>, mut events: EventReader<RemeshChunk>) {
@@ -119,49 +106,74 @@ pub fn remesh_chunks(
     // We need this to keep track of queued chunks, we don't want to queue chunks for remeshing twice!
     let mut queued = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
 
-    updated.iter_chunks(|cref| {
-        // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
-        if permits.has_permit(cref.pos()) && !queued.contains(&cref.pos()) {
-            if cref.flags().contains(ChunkFlags::FRESH) && !should_queue_fresh {
-                return;
-            }
+    updated
+        .iter_chunks(|cref| {
+            // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
+            if permits.has_permit(cref.pos()) && !queued.contains(&cref.pos()) {
+                if cref.flags().contains(ChunkFlags::FRESH) && !should_queue_fresh {
+                    return;
+                }
 
-            writer.send(RemeshChunk {
-                pos: cref.pos(),
-                generation: **current_generation,
-            });
-            queued.insert(cref.pos());
+                writer.send(RemeshChunk {
+                    pos: cref.pos(),
+                    generation: **current_generation,
+                });
+                queued.insert(cref.pos());
 
-            // This chunk was updated in such a way that we need to remesh its neighbors too!
-            if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
-                for face in Face::FACES {
-                    let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.pos()));
+                // This chunk was updated in such a way that we need to remesh its neighbors too!
+                if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
+                    for face in Face::FACES {
+                        let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.pos()));
 
-                    // We only remesh the neighbor if it's neither generating or fresh.
-                    // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
-                    // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
-                    if permits.has_permit(neighbor_pos)
+                        // We only remesh the neighbor if it's neither generating or fresh.
+                        // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
+                        // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
+                        if permits.has_permit(neighbor_pos)
                         && cm.chunk_flags(neighbor_pos).is_some_and(|flags| {
                             !flags.contains(ChunkFlags::GENERATING | ChunkFlags::FRESH)
                         })
                         // We also shouldn't remesh already queued neighboring chunks.
                         && !queued.contains(&neighbor_pos)
-                    {
-                        writer.send(RemeshChunk {
-                            pos: neighbor_pos,
-                            generation: **current_generation,
-                        });
-                        queued.insert(neighbor_pos);
+                        {
+                            writer.send(RemeshChunk {
+                                pos: neighbor_pos,
+                                generation: **current_generation,
+                            });
+                            queued.insert(neighbor_pos);
+                        }
                     }
                 }
-            }
 
-            did_queue = true;
-        }
-    });
+                did_queue = true;
+            }
+        })
+        .unwrap();
 
     // We only update our generation if we actually queued any chunks this run.
     if did_queue {
         current_generation.0 += 1;
     }
+}
+
+pub fn setup_chunk_meshing_workers(
+    mut cmds: Commands,
+    registries: Res<Registries>,
+    realm: Res<VoxelRealm>,
+) {
+    let mesher = GreedyMesher::new();
+
+    let task_pool = TaskPoolBuilder::new()
+        .thread_name("Mesh Worker Task Pool".into())
+        .build();
+
+    let worker_pool = MeshWorkerPool::new(
+        task_pool.thread_num(),
+        &task_pool,
+        mesher.clone(),
+        registries.clone(),
+        realm.chunk_manager.clone(),
+    );
+
+    cmds.insert_resource(worker_pool);
+    cmds.insert_resource(MeshWorkerTaskPool(task_pool));
 }
