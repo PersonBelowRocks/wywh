@@ -4,7 +4,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use bevy::{
@@ -17,12 +17,14 @@ use dashmap::DashMap;
 
 use crate::{
     data::registries::Registries,
-    render::meshing::{error::ChunkMeshingError, Context, MesherOutput},
+    render::meshing::{
+        error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context, Mesher, MesherOutput,
+    },
     topo::world::{ChunkManager, ChunkPos},
-    util::result::ResultFlattening,
+    util::{result::ResultFlattening, SyncChunkMap},
 };
 
-use super::{greedy::algorithm::GreedyMesher, Mesher};
+use super::ChunkMeshData;
 
 pub struct Worker {
     task: Task<()>,
@@ -36,17 +38,14 @@ pub struct WorkerParams {
     pub chunk_manager: Arc<ChunkManager>,
     pub mesher: GreedyMesher,
 
-    pub finished: FinishedChunks,
+    pub finished: Sender<FinishedChunkData>,
     pub cmds: Receiver<MeshCommand>,
 }
-
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, dm::Constructor)]
-pub struct MeshCommandId(u32);
 
 #[derive(Clone)]
 pub struct MeshCommand {
     pos: ChunkPos,
-    id: MeshCommandId,
+    generation: u64,
 }
 
 impl Worker {
@@ -80,7 +79,14 @@ impl Worker {
 
                         match result {
                             Ok(output) => {
-                                params.finished.0.insert(cmd.pos, output);
+                                params.finished.send(FinishedChunkData {
+                                    data: ChunkMeshData {
+                                        index_buffer: todo!(),
+                                        quads: output.quads,
+                                    },
+                                    pos: cmd.pos,
+                                    generation: cmd.generation
+                                }).unwrap();
                             }
                             Err(err) => error!("Error in worker '{task_label}' building chunk mesh: {err}"),
                         }
@@ -109,14 +115,17 @@ impl Worker {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct FinishedChunks(Arc<DashMap<ChunkPos, MesherOutput>>);
+pub struct FinishedChunkData {
+    pub pos: ChunkPos,
+    pub data: ChunkMeshData,
+    pub generation: u64,
+}
 
 #[derive(Resource)]
 pub struct MeshWorkerPool {
     workers: Vec<Worker>,
     cmds: Sender<MeshCommand>,
-    finished: FinishedChunks,
+    finished: Receiver<FinishedChunkData>,
 }
 
 impl MeshWorkerPool {
@@ -127,8 +136,8 @@ impl MeshWorkerPool {
         registries: Registries,
         cm: Arc<ChunkManager>,
     ) -> Self {
-        let finished = FinishedChunks::default();
         let (cmd_sender, cmd_recver) = channel::unbounded::<MeshCommand>();
+        let (mesh_sender, mesh_recver) = channel::unbounded::<FinishedChunkData>();
         let mut workers = Vec::<Worker>::with_capacity(worker_count);
 
         let default_channel_timeout_duration = Duration::from_millis(500);
@@ -137,7 +146,7 @@ impl MeshWorkerPool {
             registries,
             chunk_manager: cm,
             mesher,
-            finished: finished.clone(),
+            finished: mesh_sender,
             cmds: cmd_recver,
         };
 
@@ -155,7 +164,7 @@ impl MeshWorkerPool {
         Self {
             workers,
             cmds: cmd_sender,
-            finished,
+            finished: mesh_recver,
         }
     }
 
@@ -165,22 +174,17 @@ impl MeshWorkerPool {
         }
     }
 
-    pub fn get_new_mesh(&self, pos: ChunkPos) -> Option<MesherOutput> {
-        self.finished.0.remove(&pos).map(|t| t.1)
+    pub fn get_finished_meshes(&self) -> Vec<FinishedChunkData> {
+        let mut vec = Vec::with_capacity(self.finished.len());
+
+        while let Ok(finished) = self.finished.try_recv() {
+            vec.push(finished);
+        }
+
+        vec
     }
 
-    pub fn queue_job(&self, pos: ChunkPos) {
-        self.finished.0.remove(&pos);
-
-        self.cmds
-            .send(MeshCommand {
-                pos,
-                id: MeshCommandId::new(0), // TODO: meshing task ID tracking
-            })
-            .unwrap();
-    }
-
-    pub fn optimize_finished_chunk_buffer(&self) {
-        self.finished.0.shrink_to_fit()
+    pub fn queue_job(&self, pos: ChunkPos, generation: u64) {
+        self.cmds.send(MeshCommand { pos, generation }).unwrap();
     }
 }

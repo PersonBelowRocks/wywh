@@ -13,7 +13,6 @@ use crate::{
 };
 
 use super::greedy::algorithm::GreedyMesher;
-use super::MeshWorkerPool;
 
 #[derive(Component)]
 pub struct ShouldExtract(AtomicBool);

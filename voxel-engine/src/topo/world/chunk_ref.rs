@@ -57,31 +57,25 @@ impl<'a> ChunkRef<'a> {
         let mut new_flags = old_flags;
         f(&mut new_flags);
 
-        if !old_flags.contains(ChunkFlags::FRESH) && new_flags.contains(ChunkFlags::FRESH) {
+        if new_flags.contains(ChunkFlags::FRESH) {
             self.stats.fresh.insert(self.pos);
-        } else if old_flags.contains(ChunkFlags::FRESH) && !new_flags.contains(ChunkFlags::FRESH) {
+        } else {
             self.stats.fresh.remove(&self.pos);
         }
 
-        if !old_flags.contains(ChunkFlags::GENERATING) && new_flags.contains(ChunkFlags::GENERATING)
-        {
+        if new_flags.contains(ChunkFlags::GENERATING) {
             self.stats.generating.insert(self.pos);
-        } else if old_flags.contains(ChunkFlags::GENERATING)
-            && !new_flags.contains(ChunkFlags::GENERATING)
-        {
-            self.stats.fresh.remove(&self.pos);
+        } else {
+            self.stats.generating.remove(&self.pos);
         }
 
-        if new_flags.contains(ChunkFlags::REMESH) && !old_flags.contains(ChunkFlags::REMESH) {
+        if new_flags.contains(ChunkFlags::REMESH) {
             self.stats.updated.insert(self.pos);
-        } else if !new_flags.contains(ChunkFlags::REMESH) && old_flags.contains(ChunkFlags::REMESH)
-        {
+        } else {
             self.stats.updated.remove(&self.pos);
         }
 
-        info!("setting new flags for {}", self.pos);
         self.set_flags(new_flags);
-        info!("set new flags for {}", self.pos);
     }
 
     pub fn with_access<F, U>(&self, manual_update_ctrl: bool, f: F) -> Result<U, ChunkManagerError>

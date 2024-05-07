@@ -1,0 +1,123 @@
+use dashmap::{
+    mapref::{entry::Entry as DashMapEntry, one::Ref as DashMapRef},
+    DashMap,
+};
+use fxhash::FxBuildHasher;
+use hb::hash_map::Entry as HashbrownEntry;
+
+use crate::topo::world::ChunkPos;
+
+#[derive(Clone)]
+pub struct SyncChunkMap<T>(DashMap<ChunkPos, T, fxhash::FxBuildHasher>);
+
+impl<T> Default for SyncChunkMap<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> SyncChunkMap<T> {
+    pub fn new() -> Self {
+        Self(DashMap::with_hasher(FxBuildHasher::default()))
+    }
+
+    pub fn set(&self, pos: ChunkPos, data: T) -> Option<T> {
+        self.0.insert(pos, data)
+    }
+
+    pub fn get(&self, pos: ChunkPos) -> Option<DashMapRef<ChunkPos, T, fxhash::FxBuildHasher>> {
+        self.0.get(&pos)
+    }
+
+    pub fn remove(&self, pos: ChunkPos) -> Option<T> {
+        self.0.remove(&pos).map(|(_, data)| data)
+    }
+
+    pub fn contains(&self, pos: ChunkPos) -> bool {
+        self.0.contains_key(&pos)
+    }
+
+    pub fn entry(&self, pos: ChunkPos) -> DashMapEntry<'_, ChunkPos, T, fxhash::FxBuildHasher> {
+        self.0.entry(pos)
+    }
+
+    pub fn for_each_key<F>(&self, mut f: F)
+    where
+        F: FnMut(ChunkPos),
+    {
+        for entry in self.0.iter().map(|e| e) {
+            f(*entry.key())
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
+    pub fn shrink_to_fit(&self) {
+        self.0.shrink_to_fit()
+    }
+}
+
+#[derive(Clone)]
+pub struct ChunkMap<T>(hb::HashMap<ChunkPos, T, fxhash::FxBuildHasher>);
+
+impl<T> Default for ChunkMap<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> ChunkMap<T> {
+    pub fn new() -> Self {
+        Self(hb::HashMap::with_hasher(fxhash::FxBuildHasher::default()))
+    }
+
+    pub fn set(&mut self, pos: ChunkPos, data: T) -> Option<T> {
+        self.0.insert(pos, data)
+    }
+
+    pub fn get(&self, pos: ChunkPos) -> Option<&T> {
+        self.0.get(&pos)
+    }
+
+    pub fn remove(&mut self, pos: ChunkPos) -> Option<T> {
+        self.0.remove(&pos)
+    }
+
+    pub fn contains(&self, pos: ChunkPos) -> bool {
+        self.0.contains_key(&pos)
+    }
+
+    pub fn entry(
+        &mut self,
+        pos: ChunkPos,
+    ) -> HashbrownEntry<'_, ChunkPos, T, fxhash::FxBuildHasher> {
+        self.0.entry(pos)
+    }
+
+    pub fn for_each_key<F>(&self, mut f: F)
+    where
+        F: FnMut(ChunkPos),
+    {
+        for &key in self.0.keys() {
+            f(key)
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
+    pub fn shrink_to_fit(&mut self) {
+        self.0.shrink_to_fit()
+    }
+}

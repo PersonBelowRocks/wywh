@@ -28,12 +28,7 @@ pub mod testing_utils;
 
 use crate::{
     data::systems::{build_registries, check_textures, load_textures, VariantFolders},
-    render::{
-        core::RenderCore,
-        meshing::ecs::{
-            insert_chunk_meshes, queue_chunk_meshing_tasks, setup_chunk_meshing_workers,
-        },
-    },
+    render::{core::RenderCore, meshing::controller::MeshController},
     topo::worldgen::{
         ecs::{generate_chunks_from_events, setup_terrain_generator_workers, GeneratorSeed},
         generator::GenerateChunk,
@@ -64,6 +59,7 @@ pub enum AppState {
 
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(MeshController);
         app.add_plugins(RenderCore);
         app.add_plugins(MippedArrayTexturePlugin::default());
 
@@ -73,7 +69,6 @@ impl Plugin for VoxelPlugin {
         app.insert_resource(VariantFolders::new(self.variant_folders.clone()));
         app.insert_resource(GeneratorSeed(140));
 
-        // app.add_systems(Startup, setup);
         app.add_systems(OnEnter(AppState::Setup), load_textures);
         app.add_systems(Update, check_textures.run_if(in_state(AppState::Setup)));
         app.add_systems(
@@ -82,19 +77,14 @@ impl Plugin for VoxelPlugin {
                 build_registries,
                 setup,
                 setup_terrain_generator_workers,
-                setup_chunk_meshing_workers,
                 generate_debug_chunks,
             )
                 .chain(),
         );
 
         app.add_systems(
-            PreUpdate,
-            insert_chunk_meshes.run_if(in_state(AppState::Finished)),
-        );
-        app.add_systems(
             PostUpdate,
-            (generate_chunks_from_events, queue_chunk_meshing_tasks)
+            generate_chunks_from_events
                 .chain()
                 .run_if(in_state(AppState::Finished)),
         );

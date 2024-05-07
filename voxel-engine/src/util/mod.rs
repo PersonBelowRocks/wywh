@@ -4,6 +4,9 @@ pub mod notnan;
 pub mod result;
 pub use intdiv::*;
 
+pub mod chunks;
+pub use chunks::*;
+
 use bevy::prelude::*;
 use dashmap::DashMap;
 use ordered_float::NotNan;

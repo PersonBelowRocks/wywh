@@ -83,9 +83,9 @@ impl PendingChunkChanges {
 
 #[derive(Default)]
 pub struct ChunkStatuses {
-    pub updated: DashSet<ChunkPos>,
-    pub generating: DashSet<ChunkPos>,
-    pub fresh: DashSet<ChunkPos>,
+    pub updated: DashSet<ChunkPos, fxhash::FxBuildHasher>,
+    pub generating: DashSet<ChunkPos, fxhash::FxBuildHasher>,
+    pub fresh: DashSet<ChunkPos, fxhash::FxBuildHasher>,
 }
 
 pub struct ChunkManager {
@@ -114,6 +114,10 @@ impl ChunkManager {
             stats: &self.status,
             pos,
         })
+    }
+
+    pub fn chunk_flags(&self, pos: ChunkPos) -> Option<ChunkFlags> {
+        self.get_loaded_chunk(pos).map(|cref| cref.flags()).ok()
     }
 
     pub fn has_loaded_chunk(&self, pos: ChunkPos) -> bool {
