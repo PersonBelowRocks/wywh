@@ -5,11 +5,12 @@ use std::sync::Arc;
 
 use bevy::prelude::*;
 use dashmap::DashSet;
+use movecell::MoveCell;
 
 use crate::{
     render::quad::{ChunkQuads, GpuQuad},
     topo::world::ChunkPos,
-    util::SyncChunkMap,
+    util::{ChunkMap, SyncChunkMap},
     AppState, CoreEngineSetup,
 };
 
@@ -28,6 +29,11 @@ pub struct ChunkMeshData {
 pub struct TimedChunkMeshData {
     pub generation: u64,
     pub data: ChunkMeshData,
+}
+
+#[derive(Resource, Default)]
+pub struct ExtractableChunkMeshData {
+    pub map: SyncChunkMap<TimedChunkMeshData>,
 }
 
 #[derive(Resource, Default)]

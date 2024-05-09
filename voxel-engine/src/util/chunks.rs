@@ -4,6 +4,7 @@ use dashmap::{
 };
 use fxhash::FxBuildHasher;
 use hb::hash_map::Entry as HashbrownEntry;
+use itertools::Itertools;
 
 use crate::topo::world::ChunkPos;
 
@@ -48,6 +49,10 @@ impl<T> SyncChunkMap<T> {
         for entry in self.0.iter().map(|e| e) {
             f(*entry.key())
         }
+    }
+
+    pub fn keys(&self) -> Vec<ChunkPos> {
+        self.0.iter().map(|e| *e.key()).collect_vec()
     }
 
     pub fn len(&self) -> usize {

@@ -32,7 +32,8 @@ use crate::data::{
 
 use self::{
     gpu_chunk::{
-        extract_chunk_mesh_data, prepare_chunk_mesh_data, ChunkMeshDataMap, ChunkRenderDataStore,
+        extract_chunk_entities, extract_chunk_mesh_data, prepare_chunk_mesh_data,
+        ChunkRenderDataStore,
     },
     gpu_registries::{
         extract_texreg_faces, prepare_gpu_registry_data, ExtractedTexregFaces, RegistryBindGroup,
@@ -63,18 +64,21 @@ impl Plugin for RenderCore {
         // Render app logic
         let render_app = app.sub_app_mut(RenderApp);
 
-        render_app.add_render_command::<Opaque3d, DrawVoxelChunk>();
-        render_app.add_render_command::<Opaque3dPrepass, DrawVoxelChunkPrepass>();
-        render_app.add_render_command::<Shadow, DrawVoxelChunkPrepass>();
+        render_app
+            .add_render_command::<Opaque3d, DrawVoxelChunk>()
+            .add_render_command::<Opaque3dPrepass, DrawVoxelChunkPrepass>()
+            .add_render_command::<Shadow, DrawVoxelChunkPrepass>();
 
-        render_app.init_resource::<SpecializedMeshPipelines<ChunkPipeline>>();
-        render_app.init_resource::<SpecializedMeshPipelines<ChunkPrepassPipeline>>();
+        render_app
+            .init_resource::<SpecializedMeshPipelines<ChunkPipeline>>()
+            .init_resource::<SpecializedMeshPipelines<ChunkPrepassPipeline>>()
+            .init_resource::<ChunkRenderDataStore>();
 
         render_app.add_systems(
             ExtractSchedule,
             (
                 extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
-                extract_chunk_mesh_data.run_if(not(resource_exists::<ChunkMeshDataMap>)),
+                (extract_chunk_entities, extract_chunk_mesh_data).chain(),
             ),
         );
         render_app.add_systems(
@@ -92,8 +96,6 @@ impl Plugin for RenderCore {
 
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
-
-        render_app.init_resource::<ChunkRenderDataStore>();
 
         render_app.init_resource::<DefaultBindGroupLayouts>();
 
