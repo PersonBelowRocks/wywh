@@ -104,36 +104,6 @@ pub struct ChunkRenderDataStore {
     pub map: ChunkMap<TimedChunkRenderData>,
 }
 
-#[derive(Resource)]
-pub struct ChunkBindGroupLayout {
-    layout: BindGroupLayout,
-}
-
-impl FromWorld for ChunkBindGroupLayout {
-    fn from_world(world: &mut World) -> Self {
-        let gpu = world.resource::<RenderDevice>();
-
-        let vec3f_size = NonZeroU64::new(4 * 3).unwrap();
-
-        let layout = gpu.create_bind_group_layout(
-            Some("chunk_bind_group_layout"),
-            &BindGroupLayoutEntries::with_indices(
-                ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                (
-                    (
-                        0,
-                        binding_types::uniform_buffer_sized(false, Some(vec3f_size)),
-                    ),
-                    (1, binding_types::storage_buffer_read_only::<GpuQuad>(false)),
-                    (2, binding_types::storage_buffer_read_only::<u32>(false)),
-                ),
-            ),
-        );
-
-        Self { layout }
-    }
-}
-
 #[derive(Clone)]
 pub enum ChunkRenderData {
     /// Raw chunk data in CPU memory, should be uploaded to GPU memory

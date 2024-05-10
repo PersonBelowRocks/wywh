@@ -6,6 +6,8 @@ mod render;
 mod shadows;
 mod utils;
 
+use std::num::NonZeroU64;
+
 use bevy::{
     app::{App, Plugin},
     core_pipeline::{core_3d::Opaque3d, prepass::Opaque3dPrepass},
@@ -17,10 +19,10 @@ use bevy::{
         mesh::MeshVertexAttribute,
         render_phase::AddRenderCommand,
         render_resource::{
-            binding_types::{sampler, storage_buffer_read_only, texture_2d_array},
+            binding_types::{self, sampler, storage_buffer_read_only, texture_2d_array},
             BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderDefVal,
-            ShaderStages, SpecializedMeshPipelines, SpecializedRenderPipelines, TextureSampleType,
-            VertexFormat,
+            ShaderStages, ShaderType, SpecializedMeshPipelines, SpecializedRenderPipelines,
+            TextureSampleType, VertexFormat,
         },
         renderer::RenderDevice,
         Render, RenderApp, RenderSet,
@@ -122,21 +124,25 @@ impl FromWorld for DefaultBindGroupLayouts {
                 &BindGroupLayoutEntries::sequential(
                     ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     (
-                        storage_buffer_read_only::<GpuFaceTexture>(false),
-                        texture_2d_array(TextureSampleType::default()),
-                        sampler(SamplerBindingType::NonFiltering),
-                        texture_2d_array(TextureSampleType::default()),
-                        sampler(SamplerBindingType::NonFiltering),
+                        binding_types::storage_buffer_read_only::<GpuFaceTexture>(false),
+                        binding_types::texture_2d_array(TextureSampleType::default()),
+                        binding_types::sampler(SamplerBindingType::NonFiltering),
+                        binding_types::texture_2d_array(TextureSampleType::default()),
+                        binding_types::sampler(SamplerBindingType::NonFiltering),
                     ),
                 ),
             ),
             chunk_bg_layout: gpu.create_bind_group_layout(
-                Some("registry_bind_group_layout"),
+                Some("chunk_bind_group_layout"),
                 &BindGroupLayoutEntries::sequential(
                     ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     (
-                        storage_buffer_read_only::<GpuQuad>(false),
-                        storage_buffer_read_only::<u32>(false),
+                        binding_types::uniform_buffer_sized(
+                            false,
+                            Some(<Vec3 as ShaderType>::min_size()),
+                        ),
+                        binding_types::storage_buffer_read_only::<GpuQuad>(false),
+                        binding_types::storage_buffer_read_only::<u32>(false),
                     ),
                 ),
             ),
