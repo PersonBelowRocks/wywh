@@ -1,4 +1,5 @@
 use bevy::{
+    ecs::query::QueryEntityError,
     pbr::{
         CascadesVisibleEntities, CubemapVisibleEntities, ExtractedDirectionalLight,
         ExtractedPointLight, LightEntity, MeshPipelineKey, RenderMeshInstances, Shadow,
@@ -6,34 +7,39 @@ use bevy::{
     },
     prelude::*,
     render::{
+        mesh::PrimitiveTopology,
         render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase},
-        render_resource::{PipelineCache, SpecializedMeshPipelines},
+        render_resource::{
+            PipelineCache, SpecializedMeshPipelines, SpecializedRenderPipeline,
+            SpecializedRenderPipelines,
+        },
         view::VisibleEntities,
     },
 };
+
+use crate::topo::world::{ChunkEntity, ChunkPos};
 
 use super::{
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore},
     prepass::{ChunkPrepassPipeline, DrawVoxelChunkPrepass},
     render::ChunkPipelineKey,
+    utils::{iter_visible_chunks, ChunkDataParams},
 };
 
 // largely taken from
 // https://github.com/bevyengine/bevy/blob/main/crates/bevy_pbr/src/render/light.rs#L1590
 pub fn queue_shadows(
-    chunk_data_store: Res<ChunkRenderDataStore>,
     shadow_draw_functions: Res<DrawFunctions<Shadow>>,
     prepass_pipeline: Res<ChunkPrepassPipeline>,
-    render_meshes: Res<RenderAssets<Mesh>>,
-    mut render_mesh_instances: ResMut<RenderMeshInstances>,
-    mut pipelines: ResMut<SpecializedMeshPipelines<ChunkPrepassPipeline>>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<ChunkPrepassPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     view_lights: Query<(Entity, &ViewLightEntities)>,
     mut view_light_shadow_phases: Query<(&LightEntity, &mut RenderPhase<Shadow>)>,
     point_light_entities: Query<&CubemapVisibleEntities, With<ExtractedPointLight>>,
     directional_light_entities: Query<&CascadesVisibleEntities, With<ExtractedDirectionalLight>>,
     spot_light_entities: Query<&VisibleEntities, With<ExtractedPointLight>>,
+    chunks: ChunkDataParams,
 ) {
     for (entity, view_lights) in &view_lights {
         let shadow_function = shadow_draw_functions.read().id::<DrawVoxelChunkPrepass>();
@@ -66,28 +72,9 @@ pub fn queue_shadows(
                     .expect("Failed to get spot light visible entities"),
             };
 
-            for entity in &visible_entities.entities {
-                // skip all entities that dont have chunk render data
-                if !chunk_data_store
-                    .map
-                    .get(entity)
-                    .is_some_and(|data| matches!(data, ChunkRenderData::BindGroup(_)))
-                {
-                    continue;
-                }
-
-                let Some(mesh_instance) = render_mesh_instances.get_mut(entity) else {
-                    continue;
-                };
-                if !mesh_instance.shadow_caster {
-                    continue;
-                }
-                let Some(mesh) = render_meshes.get(mesh_instance.mesh_asset_id) else {
-                    continue;
-                };
-
+            iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
                 let mut mesh_key =
-                    MeshPipelineKey::from_primitive_topology(mesh.primitive_topology)
+                    MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList)
                         | MeshPipelineKey::DEPTH_PREPASS;
 
                 if is_directional_light {
@@ -98,26 +85,17 @@ pub fn queue_shadows(
                     &pipeline_cache,
                     &prepass_pipeline,
                     ChunkPipelineKey { mesh_key },
-                    &mesh.layout,
                 );
-
-                let pipeline_id = match pipeline_id {
-                    Ok(id) => id,
-                    Err(err) => {
-                        error!("{}", err);
-                        continue;
-                    }
-                };
 
                 phase.add(Shadow {
                     draw_function: shadow_function,
                     pipeline: pipeline_id,
-                    entity: *entity,
+                    entity: entity,
                     distance: 0.0, // TODO: (bevy todo) sort front-to-back
                     batch_range: 0..1,
                     dynamic_offset: None,
                 });
-            }
+            });
         }
     }
 }

@@ -4,6 +4,7 @@ mod impls;
 mod prepass;
 mod render;
 mod shadows;
+mod utils;
 
 use bevy::{
     app::{App, Plugin},
@@ -18,7 +19,8 @@ use bevy::{
         render_resource::{
             binding_types::{sampler, storage_buffer_read_only, texture_2d_array},
             BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderDefVal,
-            ShaderStages, SpecializedMeshPipelines, TextureSampleType, VertexFormat,
+            ShaderStages, SpecializedMeshPipelines, SpecializedRenderPipelines, TextureSampleType,
+            VertexFormat,
         },
         renderer::RenderDevice,
         Render, RenderApp, RenderSet,
@@ -70,8 +72,8 @@ impl Plugin for RenderCore {
             .add_render_command::<Shadow, DrawVoxelChunkPrepass>();
 
         render_app
-            .init_resource::<SpecializedMeshPipelines<ChunkPipeline>>()
-            .init_resource::<SpecializedMeshPipelines<ChunkPrepassPipeline>>()
+            .init_resource::<SpecializedRenderPipelines<ChunkPipeline>>()
+            .init_resource::<SpecializedRenderPipelines<ChunkPrepassPipeline>>()
             .init_resource::<ChunkRenderDataStore>();
 
         render_app.add_systems(

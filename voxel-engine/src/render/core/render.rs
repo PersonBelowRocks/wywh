@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{AssetServer, Handle},
+    asset::{AssetId, AssetServer, Handle},
     core_pipeline::{
         core_3d::Opaque3d,
         prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass},
@@ -18,12 +18,13 @@ use bevy::{
     },
     render::{
         camera::{Projection, TemporalJitter},
-        mesh::{Mesh, MeshVertexBufferLayout},
+        mesh::{Mesh, MeshVertexBufferLayout, PrimitiveTopology},
         render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
             BindGroupLayout, Face, FrontFace, PipelineCache, RenderPipelineDescriptor, Shader,
             SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
+            SpecializedRenderPipeline, SpecializedRenderPipelines,
         },
         view::{ExtractedView, VisibleEntities},
     },
@@ -37,7 +38,9 @@ use crate::{
 use super::{
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
-    u32_shader_def, DefaultBindGroupLayouts, RenderCore,
+    u32_shader_def,
+    utils::{iter_visible_chunks, ChunkDataParams},
+    DefaultBindGroupLayouts, RenderCore,
 };
 
 #[derive(Resource, Clone)]
@@ -70,23 +73,17 @@ impl FromWorld for ChunkPipeline {
     }
 }
 
-impl SpecializedMeshPipeline for ChunkPipeline {
+impl SpecializedRenderPipeline for ChunkPipeline {
     type Key = ChunkPipelineKey;
 
-    fn specialize(
-        &self,
-        key: Self::Key,
-        layout: &MeshVertexBufferLayout,
-    ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
-        let mut descriptor = self.mesh_pipeline.specialize(key.mesh_key, layout)?;
+    fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        let mut descriptor: RenderPipelineDescriptor = todo!(); // self.mesh_pipeline.specialize(key.mesh_key)?;
         descriptor.label = Some("chunk_pipeline".into());
 
         descriptor.primitive.cull_mode = Some(Face::Back);
         descriptor.primitive.front_face = FrontFace::Ccw;
 
         descriptor.vertex.shader = self.vert.clone();
-        descriptor.vertex.buffers =
-            vec![layout.get_layout(&[RenderCore::QUAD_INDEX_ATTR.at_shader_location(0)])?];
         descriptor.fragment.as_mut().unwrap().shader = self.frag.clone();
 
         let shader_constants = [
@@ -128,7 +125,7 @@ impl SpecializedMeshPipeline for ChunkPipeline {
             self.chunk_layout.clone(),
         ];
 
-        Ok(descriptor)
+        descriptor
     }
 }
 
@@ -150,11 +147,9 @@ pub const fn tonemapping_pipeline_key(tonemapping: Tonemapping) -> MeshPipelineK
 pub fn queue_chunks(
     functions: Res<DrawFunctions<Opaque3d>>,
     pipeline: Res<ChunkPipeline>,
-    mut pipelines: ResMut<SpecializedMeshPipelines<ChunkPipeline>>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<ChunkPipeline>>,
     pipeline_cache: Res<PipelineCache>,
-    mut render_mesh_instances: ResMut<RenderMeshInstances>,
-    render_meshes: Res<RenderAssets<Mesh>>,
-    chunk_data_store: Res<ChunkRenderDataStore>,
+    chunks: ChunkDataParams,
     mut views: Query<(
         &ExtractedView,
         &VisibleEntities,
@@ -244,61 +239,35 @@ pub fn queue_chunks(
         }
 
         let rangefinder = view.rangefinder3d();
-        for entity in &visible_entities.entities {
-            // skip all entities that dont have chunk render data
-            if !chunk_data_store
-                .map
-                .get(entity)
-                .is_some_and(|data| matches!(data, ChunkRenderData::BindGroup(_)))
-            {
-                continue;
-            }
 
-            let Some(mesh_instance) = render_mesh_instances.get_mut(entity) else {
-                continue;
-            };
-            let Some(mesh) = render_meshes.get(mesh_instance.mesh_asset_id) else {
-                continue;
-            };
-
+        iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
             let mut mesh_key = view_key;
 
-            mesh_key |= MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
+            mesh_key |= MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList);
 
-            let pipeline_id = match pipelines.specialize(
+            let pipeline_id = pipelines.specialize(
                 pipeline_cache.as_ref(),
                 pipeline.as_ref(),
                 ChunkPipelineKey { mesh_key },
-                &mesh.layout,
-            ) {
-                Ok(id) => id,
-                Err(err) => {
-                    error!("Error during voxel chunk pipeline specialization: {err}");
-                    continue;
-                }
-            };
-
-            let _distance =
-                rangefinder.distance_translation(&mesh_instance.transforms.transform.translation);
+            );
 
             // queue this entity for rendering
             phase.add(Opaque3d {
-                entity: *entity,
+                entity: entity,
                 draw_function: draw_chunk,
                 pipeline: pipeline_id,
-                asset_id: mesh_instance.mesh_asset_id,
+                asset_id: AssetId::default(),
                 batch_range: 0..1,
                 dynamic_offset: None,
             });
-        }
+        });
     }
 }
 
 pub type DrawVoxelChunk = (
     SetItemPipeline,
     SetMeshViewBindGroup<0>,
-    SetMeshBindGroup<1>,
-    SetRegistryBindGroup<2>,
-    SetChunkBindGroup<3>,
+    SetRegistryBindGroup<1>,
+    SetChunkBindGroup<2>,
     DrawMesh,
 );

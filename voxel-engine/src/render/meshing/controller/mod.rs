@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use bevy::prelude::*;
 use dashmap::DashSet;
-use movecell::MoveCell;
 
 use crate::{
     render::quad::{ChunkQuads, GpuQuad},
