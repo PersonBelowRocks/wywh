@@ -57,7 +57,9 @@ pub fn handle_incoming_permits(
 ) {
     let permits = &mut permits_r.permits;
 
+    let mut revoked = 0;
     for event in revocations.read() {
+        revoked += 1;
         if let Some(permit) = permits.get(event.pos) {
             if permit.granted < event.generation {
                 permits.remove(event.pos);
@@ -65,29 +67,54 @@ pub fn handle_incoming_permits(
         }
     }
 
+    let mut granted = 0;
     for event in grants.read() {
+        granted += 1;
         let existing = permits.get(event.pos);
 
         if existing.is_none() || existing.is_some_and(|e| e.granted < event.generation) {
             permits.set(event.pos, ChunkRenderPermit::new(event.generation));
         }
     }
+
+    if revoked > 0 || granted > 0 {
+        debug!(
+            "Handled {} revoked permits, and {} granted permits.",
+            revoked, granted
+        );
+        debug!("Total active permits is now: {}", permits.len());
+    }
 }
 
 pub fn queue_chunk_mesh_jobs(workers: Res<MeshWorkerPool>, mut events: EventReader<RemeshChunk>) {
+    let mut total = 0;
     for event in events.read() {
+        total += 1;
         workers.queue_job(event.pos, event.generation);
+    }
+
+    if total > 0 {
+        debug!("Queued {} chunks for remeshing from events", total);
     }
 }
 
 pub fn insert_chunks(workers: Res<MeshWorkerPool>, meshes: Res<ChunkMeshStorage>) {
+    let mut total = 0;
+
     let finished = workers.get_finished_meshes();
+
+    if finished.len() > 0 {
+        debug!("Inserting finished chunk meshes");
+    }
+
+    let mut insert = ChunkMap::<TimedChunkMeshData>::new();
     for mesh in finished.into_iter() {
+        total += 1;
         let existing = meshes.get(mesh.pos);
 
         match existing {
             Some(existing) if existing.generation < mesh.generation => {
-                meshes.set(
+                insert.set(
                     mesh.pos,
                     TimedChunkMeshData {
                         generation: mesh.generation,
@@ -97,7 +124,7 @@ pub fn insert_chunks(workers: Res<MeshWorkerPool>, meshes: Res<ChunkMeshStorage>
             }
 
             None => {
-                meshes.set(
+                insert.set(
                     mesh.pos,
                     TimedChunkMeshData {
                         generation: mesh.generation,
@@ -109,6 +136,14 @@ pub fn insert_chunks(workers: Res<MeshWorkerPool>, meshes: Res<ChunkMeshStorage>
             _ => (),
         }
     }
+
+    insert.for_each_entry(|pos, chunk_data| {
+        meshes.set(pos, chunk_data.clone());
+    });
+
+    if total > 0 {
+        debug!("Inserted {} chunks", total);
+    }
 }
 
 pub fn voxel_realm_remesh_updated_chunks(
@@ -119,6 +154,9 @@ pub fn voxel_realm_remesh_updated_chunks(
     mut current_generation: ResMut<MeshGeneration>,
     mut last_queued_fresh: Local<Duration>,
 ) {
+    let mut remeshings_issued = 0;
+    let mut neighbor_remeshings_issued = 0;
+
     let cm = realm.chunk_manager.as_ref();
 
     let updated = cm.updated_chunks();
@@ -155,6 +193,8 @@ pub fn voxel_realm_remesh_updated_chunks(
                 });
                 queued.insert(cref.pos());
 
+                remeshings_issued += 1;
+
                 // This chunk was updated in such a way that we need to remesh its neighbors too!
                 if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
                     for face in Face::FACES {
@@ -175,6 +215,8 @@ pub fn voxel_realm_remesh_updated_chunks(
                                 generation: **current_generation,
                             });
                             queued.insert(neighbor_pos);
+
+                            neighbor_remeshings_issued += 1;
                         }
                     }
                 }
@@ -183,6 +225,34 @@ pub fn voxel_realm_remesh_updated_chunks(
             }
         })
         .unwrap();
+
+    for pos in queued {
+        let Ok(cref) = cm.get_loaded_chunk(pos) else {
+            continue;
+        };
+
+        cref.update_flags(|flags| {
+            flags.remove(ChunkFlags::REMESH | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::FRESH)
+        })
+    }
+
+    if remeshings_issued > 0 || neighbor_remeshings_issued > 0 {
+        debug!("===Remeshing report===");
+        debug!(
+            "Issued {} primary remeshing events based on voxel realm updates",
+            remeshings_issued
+        );
+        debug!(
+            "Issued {} remeshing events for relevant neighbors of primary remeshing events",
+            neighbor_remeshings_issued
+        );
+        debug!(
+            "Total issued remeshing events: {}",
+            remeshings_issued + neighbor_remeshings_issued
+        );
+        debug!("Current mesh generation: {}", current_generation.0);
+        debug!("======================\n")
+    }
 
     // We only update our generation if we actually queued any chunks this run.
     if did_queue {
@@ -195,6 +265,8 @@ pub fn setup_chunk_meshing_workers(
     registries: Res<Registries>,
     realm: Res<VoxelRealm>,
 ) {
+    debug!("Setting up chunk meshing workers");
+
     let mesher = GreedyMesher::new();
 
     let task_pool = TaskPoolBuilder::new()

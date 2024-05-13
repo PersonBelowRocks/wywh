@@ -3,11 +3,13 @@ extern crate voxel_engine as ve;
 mod camera;
 mod debug_info;
 
+use std::env;
 use std::f32::consts::PI;
 
 use bevy::core_pipeline::experimental::taa::{TemporalAntiAliasBundle, TemporalAntiAliasPlugin};
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 
+use bevy::log::{self, LogPlugin};
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::pbr::ScreenSpaceAmbientOcclusionBundle;
 use bevy::prelude::*;
@@ -17,6 +19,11 @@ use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, FpsText, PositionText};
 
 fn main() {
+    println!(
+        "RUNNING IN WORKING DIRECTORY: {}",
+        env::current_dir().unwrap().to_string_lossy()
+    );
+
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.4, 0.75, 0.9)))
         .add_plugins((
@@ -31,6 +38,11 @@ fn main() {
                 })
                 .set(AssetPlugin {
                     mode: AssetMode::Unprocessed,
+                    ..default()
+                })
+                .set(LogPlugin {
+                    filter: "info,test_app=debug,voxel_engine=debug".into(),
+                    level: log::Level::DEBUG,
                     ..default()
                 }),
             WireframePlugin,
@@ -66,6 +78,8 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // wireframe_config.global = true;
+
+    debug!("Setting up test-app");
 
     commands.spawn((
         TextBundle::from_sections([

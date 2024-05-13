@@ -19,6 +19,8 @@ pub fn setup_terrain_generator_workers(
     registries: Res<Registries>,
     realm: Res<VoxelRealm>,
 ) {
+    debug!("Setting up terrain generator workers");
+
     let task_pool = TaskPoolBuilder::new()
         .thread_name("Generator Worker Task Pool".into())
         .build();
@@ -39,7 +41,13 @@ pub fn generate_chunks_from_events(
     mut reader: EventReader<GenerateChunk>,
     workers: Res<GeneratorWorkerPool>,
 ) {
+    let mut total = 0;
     for event in reader.read() {
         workers.queue_job(event.pos);
+        total += 1;
+    }
+
+    if total > 0 {
+        debug!("Queued {} generation jobs from events", total);
     }
 }

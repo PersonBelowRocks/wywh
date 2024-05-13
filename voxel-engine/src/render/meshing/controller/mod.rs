@@ -68,6 +68,8 @@ pub struct MeshController;
 
 impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
+        debug!("Setting up mesh controller");
+
         app.init_resource::<ChunkMeshStorage>()
             .init_resource::<ChunkRenderPermits>()
             .init_resource::<MeshGeneration>()

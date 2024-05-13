@@ -63,6 +63,8 @@ pub struct CoreEngineSetup;
 
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
+        debug!("Building voxel plugin");
+
         app.add_plugins(MeshController);
         app.add_plugins(RenderCore);
         app.add_plugins(MippedArrayTexturePlugin::default());
@@ -101,7 +103,9 @@ fn generate_debug_chunks(
     mut permits: EventWriter<GrantPermit>,
     generation: Res<MeshGeneration>,
 ) {
-    const DIMS: i32 = 4;
+    debug!("Generating debugging chunks");
+
+    const DIMS: i32 = 1;
 
     let generation = **generation;
 
