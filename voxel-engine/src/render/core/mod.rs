@@ -148,7 +148,6 @@ impl FromWorld for DefaultBindGroupLayouts {
                             Some(<Vec3 as ShaderType>::min_size()),
                         ),
                         binding_types::storage_buffer_read_only::<GpuQuad>(false),
-                        binding_types::storage_buffer_read_only::<u32>(false),
                     ),
                 ),
             ),

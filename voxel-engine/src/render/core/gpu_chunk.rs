@@ -15,7 +15,7 @@ use bevy::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
             binding_types, BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
-            Buffer, ShaderStages, StorageBuffer,
+            Buffer, BufferUsages, BufferVec, ShaderStages, StorageBuffer, UniformBuffer,
         },
         renderer::{RenderDevice, RenderQueue},
         view::Visibility,
@@ -38,7 +38,7 @@ use crate::{
     util::{ChunkMap, SyncChunkMap},
 };
 
-use super::render::ChunkPipeline;
+use super::{render::ChunkPipeline, DefaultBindGroupLayouts};
 
 pub fn extract_chunk_entities(
     mut cmds: Commands,
@@ -99,11 +99,59 @@ pub fn extract_chunk_mesh_data(
 
 pub fn prepare_chunk_mesh_data(
     mut chunk_data_store: ResMut<ChunkRenderDataStore>,
-    pipeline: Res<ChunkPipeline>,
+    default_layouts: Res<DefaultBindGroupLayouts>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
-    todo!()
+    let gpu = gpu.as_ref();
+    let queue = queue.as_ref();
+
+    chunk_data_store.map.for_each_entry_mut(|pos, timed_data| {
+        if matches!(timed_data.data, ChunkRenderData::Cpu(_)) {
+            let ChunkRenderData::Cpu(ref data) = timed_data.data else {
+                unreachable!();
+            };
+
+            let quads = {
+                let mut buffer = StorageBuffer::from(data.quads.quads.clone());
+                buffer.set_label(Some("chunk_quad_buffer"));
+                buffer.write_buffer(gpu, queue);
+                buffer
+            };
+
+            let indices = {
+                let mut buffer =
+                    BufferVec::<u32>::new(BufferUsages::COPY_DST | BufferUsages::INDEX);
+                buffer.set_label(Some("chunk_index_buffer"));
+                buffer.extend(data.index_buffer.iter().copied());
+                buffer.write_buffer(gpu, queue);
+                buffer
+            };
+
+            let position = {
+                let mut buffer = UniformBuffer::from(pos.as_vec3());
+                buffer.set_label(Some("chunk_position_buffer"));
+                buffer.write_buffer(gpu, queue);
+                buffer
+            };
+
+            let bind_group = gpu.create_bind_group(
+                Some("chunk_bind_group"),
+                &default_layouts.chunk_bg_layout,
+                &BindGroupEntries::sequential((
+                    position.binding().unwrap(),
+                    quads.binding().unwrap(),
+                )),
+            );
+
+            timed_data.data = ChunkRenderData::Gpu(GpuChunkMeshData {
+                bind_group,
+                position: position.buffer().unwrap().clone(),
+                index_buffer: indices.buffer().unwrap().clone(),
+                quad_buffer: quads.buffer().unwrap().clone(),
+            })
+        }
+    });
 }
 
 #[derive(Resource, Default)]

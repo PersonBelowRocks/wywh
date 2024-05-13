@@ -123,6 +123,15 @@ impl<T> ChunkMap<T> {
         }
     }
 
+    pub fn for_each_entry<F>(&self, mut f: F)
+    where
+        F: FnMut(ChunkPos, &T),
+    {
+        for (&pos, item) in self.0.iter() {
+            f(pos, item)
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }

@@ -6,7 +6,11 @@ pub mod isometric;
 use std::{fmt::Debug, mem::size_of};
 
 pub use anon::*;
-use bevy::{ecs::component::Component, math::Vec2, render::render_resource::ShaderType};
+use bevy::{
+    ecs::component::Component,
+    math::Vec2,
+    render::render_resource::{ShaderSize, ShaderType},
+};
 pub use data::*;
 pub use error::*;
 pub use isometric::*;
@@ -79,7 +83,7 @@ impl GpuQuadBitfields {
     }
 }
 
-#[derive(Clone, Component)]
+#[derive(Clone)]
 pub struct ChunkQuads {
     pub quads: Vec<GpuQuad>,
 }
