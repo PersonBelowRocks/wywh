@@ -105,12 +105,21 @@ impl<T> ChunkMap<T> {
         self.0.entry(pos)
     }
 
-    pub fn for_each_key<F>(&self, mut f: F)
+    pub fn for_each_pos<F>(&self, mut f: F)
     where
         F: FnMut(ChunkPos),
     {
         for &key in self.0.keys() {
             f(key)
+        }
+    }
+
+    pub fn for_each_entry_mut<F>(&mut self, mut f: F)
+    where
+        F: FnMut(ChunkPos, &mut T),
+    {
+        for (&pos, item) in self.0.iter_mut() {
+            f(pos, item)
         }
     }
 

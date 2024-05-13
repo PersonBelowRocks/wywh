@@ -45,9 +45,10 @@ use self::{
     prepass::{queue_prepass_chunks, ChunkPrepassPipeline, DrawVoxelChunkPrepass},
     render::{queue_chunks, ChunkPipeline, DrawVoxelChunk},
     shadows::queue_shadows,
+    utils::main_world_res_exists,
 };
 
-use super::quad::GpuQuad;
+use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
 
 pub(crate) fn u32_shader_def(name: &str, value: u32) -> ShaderDefVal {
     ShaderDefVal::UInt(name.into(), value)
@@ -82,7 +83,12 @@ impl Plugin for RenderCore {
             ExtractSchedule,
             (
                 extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
-                (extract_chunk_entities, extract_chunk_mesh_data).chain(),
+                (
+                    extract_chunk_entities,
+                    extract_chunk_mesh_data
+                        .run_if(main_world_res_exists::<ExtractableChunkMeshData>),
+                )
+                    .chain(),
             ),
         );
         render_app.add_systems(

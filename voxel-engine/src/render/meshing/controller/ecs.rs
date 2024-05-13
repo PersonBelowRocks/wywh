@@ -17,7 +17,10 @@ use crate::{
     util::{ChunkMap, SyncChunkMap},
 };
 
-use super::{workers::MeshWorkerPool, ChunkMeshData, ChunkRenderPermits, TimedChunkMeshData};
+use super::{
+    workers::MeshWorkerPool, ChunkMeshData, ChunkMeshStatus, ChunkRenderPermit, ChunkRenderPermits,
+    TimedChunkMeshData,
+};
 
 #[derive(Resource, Deref)]
 pub struct MeshWorkerTaskPool(TaskPool);
@@ -34,9 +37,41 @@ pub struct RemeshChunk {
     pub generation: u64,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct ChunkRenderPermit {
-    lod: (), // TODO: LODs!
+#[derive(Event, Clone)]
+pub struct GrantPermit {
+    pub pos: ChunkPos,
+    pub generation: u64,
+}
+
+#[derive(Event, Clone)]
+pub struct RevokePermit {
+    pub pos: ChunkPos,
+    pub generation: u64,
+}
+
+// TODO: queue new permits for remeshing
+pub fn handle_incoming_permits(
+    mut grants: EventReader<GrantPermit>,
+    mut revocations: EventReader<RevokePermit>,
+    mut permits_r: ResMut<ChunkRenderPermits>,
+) {
+    let permits = &mut permits_r.permits;
+
+    for event in revocations.read() {
+        if let Some(permit) = permits.get(event.pos) {
+            if permit.granted < event.generation {
+                permits.remove(event.pos);
+            }
+        }
+    }
+
+    for event in grants.read() {
+        let existing = permits.get(event.pos);
+
+        if existing.is_none() || existing.is_some_and(|e| e.granted < event.generation) {
+            permits.set(event.pos, ChunkRenderPermit::new(event.generation));
+        }
+    }
 }
 
 pub fn queue_chunk_mesh_jobs(workers: Res<MeshWorkerPool>, mut events: EventReader<RemeshChunk>) {
@@ -56,7 +91,7 @@ pub fn insert_chunks(workers: Res<MeshWorkerPool>, meshes: Res<ChunkMeshStorage>
                     mesh.pos,
                     TimedChunkMeshData {
                         generation: mesh.generation,
-                        data: mesh.data,
+                        data: ChunkMeshStatus::Filled(mesh.data),
                     },
                 );
             }
@@ -66,7 +101,7 @@ pub fn insert_chunks(workers: Res<MeshWorkerPool>, meshes: Res<ChunkMeshStorage>
                     mesh.pos,
                     TimedChunkMeshData {
                         generation: mesh.generation,
-                        data: mesh.data,
+                        data: ChunkMeshStatus::Filled(mesh.data),
                     },
                 );
             }
@@ -76,7 +111,7 @@ pub fn insert_chunks(workers: Res<MeshWorkerPool>, meshes: Res<ChunkMeshStorage>
     }
 }
 
-pub fn remesh_chunks(
+pub fn voxel_realm_remesh_updated_chunks(
     time: Res<Time>,
     realm: Res<VoxelRealm>,
     permits: Res<ChunkRenderPermits>,

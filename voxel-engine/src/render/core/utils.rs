@@ -1,6 +1,7 @@
 use bevy::ecs::query::QueryEntityError;
 use bevy::ecs::system::lifetimeless::Read;
 use bevy::prelude::*;
+use bevy::render::Extract;
 use bevy::{ecs::system::SystemParam, render::view::VisibleEntities};
 
 use crate::topo::world::{ChunkEntity, ChunkPos};
@@ -25,10 +26,7 @@ pub fn iter_visible_chunks<'w, 's, F>(
         let chunk_pos = match chunk_data_params.chunk_entities.get(*entity) {
             Ok(chunk_pos) => *chunk_pos,
             Err(QueryEntityError::QueryDoesNotMatch(_)) => continue,
-            Err(QueryEntityError::NoSuchEntity(entity)) => {
-                error!("Entity {entity:?} seemingly doesn't exist in render world");
-                continue;
-            }
+            Err(QueryEntityError::NoSuchEntity(_)) => continue,
 
             _ => panic!("Unexpected result when getting chunk position from entity"),
         };
@@ -45,4 +43,8 @@ pub fn iter_visible_chunks<'w, 's, F>(
 
         f(*entity, chunk_pos);
     }
+}
+
+pub fn main_world_res_exists<T: Resource>(res: Extract<Option<Res<T>>>) -> bool {
+    res.is_some()
 }

@@ -1,4 +1,4 @@
-use std::{num::NonZeroU64, sync::Arc};
+use std::{mem, num::NonZeroU64, sync::Arc};
 
 use bevy::{
     ecs::{
@@ -8,7 +8,7 @@ use bevy::{
             lifetimeless::{self, Read, SRes},
             Commands, Local, Query, Res, ResMut, Resource, SystemParamItem,
         },
-        world::{FromWorld, World},
+        world::{FromWorld, Mut, World},
     },
     prelude::Deref,
     render::{
@@ -19,15 +19,17 @@ use bevy::{
         },
         renderer::{RenderDevice, RenderQueue},
         view::Visibility,
-        Extract,
+        Extract, MainWorld,
     },
 };
+use hashbrown::hash_map::Entry;
 use itertools::Itertools;
 
 use crate::{
     render::{
         meshing::controller::{
-            ChunkMeshData, ChunkRenderPermits, ExtractableChunkMeshData, TimedChunkMeshData,
+            ChunkMeshData, ChunkMeshStatus, ChunkRenderPermits, ExtractableChunkMeshData,
+            TimedChunkMeshData,
         },
         occlusion::ChunkOcclusionMap,
         quad::{ChunkQuads, GpuQuad},
@@ -56,38 +58,43 @@ pub fn extract_chunk_entities(
 
 pub fn extract_chunk_mesh_data(
     mut render_meshes: ResMut<ChunkRenderDataStore>,
-    main_world_meshes: Extract<Option<Res<ExtractableChunkMeshData>>>,
+    mut main_world: ResMut<MainWorld>,
 ) {
-    if let Some(meshes) = main_world_meshes.as_ref() {
-        for pos in meshes.map.keys().into_iter() {
-            if let Some(main_world_mesh) = meshes.map.remove(pos) {
-                match render_meshes.map.get(pos) {
-                    // Insert the mesh if it didn't exist before
-                    None => {
-                        render_meshes.map.set(
-                            pos,
-                            TimedChunkRenderData {
-                                data: ChunkRenderData::Cpu(main_world_mesh.data),
-                                generation: main_world_mesh.generation,
-                            },
-                        );
-                    }
-                    // Overwrite the existing mesh if the new mesh is of a later generation
-                    Some(render_mesh) if main_world_mesh.generation > render_mesh.generation => {
-                        render_meshes.map.set(
-                            pos,
-                            TimedChunkRenderData {
-                                data: ChunkRenderData::Cpu(main_world_mesh.data),
-                                generation: main_world_mesh.generation,
-                            },
-                        );
-                    }
+    main_world.resource_scope(
+        |world, mut extractable_meshes: Mut<ExtractableChunkMeshData>| {
+            extractable_meshes
+                .map
+                .for_each_entry_mut(|pos, timed_mesh_data| {
+                    // We only care about the filled chunk meshes here in the render world.
+                    if matches!(timed_mesh_data.data, ChunkMeshStatus::Filled(_)) {
+                        let ChunkMeshStatus::Filled(data) =
+                            mem::replace(&mut timed_mesh_data.data, ChunkMeshStatus::Extracted)
+                        else {
+                            // We just checked that the ChunkMeshStatus enum matched above
+                            unreachable!();
+                        };
 
-                    _ => (),
-                }
-            }
-        }
-    }
+                        // Insert the chunk render data if it doesn't exist, and update it
+                        // if this is a newer version
+                        match render_meshes.map.entry(pos) {
+                            Entry::Occupied(mut entry) => {
+                                let tcrd = entry.get_mut();
+                                if tcrd.generation < timed_mesh_data.generation {
+                                    tcrd.generation = timed_mesh_data.generation;
+                                    tcrd.data = ChunkRenderData::Cpu(data)
+                                }
+                            }
+                            Entry::Vacant(entry) => {
+                                entry.insert(TimedChunkRenderData {
+                                    data: ChunkRenderData::Cpu(data),
+                                    generation: timed_mesh_data.generation,
+                                });
+                            }
+                        }
+                    }
+                });
+        },
+    );
 }
 
 pub fn prepare_chunk_mesh_data(
@@ -115,59 +122,6 @@ pub enum ChunkRenderData {
 pub struct TimedChunkRenderData {
     pub data: ChunkRenderData,
     pub generation: u64,
-}
-
-impl ChunkRenderData {
-    pub fn move_to_gpu(
-        &mut self,
-        gpu: &RenderDevice,
-        queue: &RenderQueue,
-        layout: &BindGroupLayout,
-    ) -> bool {
-        // let Self::Cpu(data) = self else {
-        //     return false;
-        // };
-
-        // let quads = {
-        //     // TODO: figure out a way to not do a clone here
-        //     let mut buffer = StorageBuffer::from(data.quads.clone());
-        //     buffer.set_label(Some("chunk_quad_buffer"));
-        //     buffer.write_buffer(gpu, queue);
-        //     buffer
-        // };
-
-        // let occlusion = {
-        //     // TODO: figure out a way to not do a clone here
-        //     let mut buffer = StorageBuffer::from(
-        //         data.occlusion
-        //             .clone()
-        //             .as_buffer()
-        //             .into_iter()
-        //             .map(u32::from_le_bytes)
-        //             .collect::<Vec<_>>(),
-        //     );
-        //     buffer.set_label(Some("chunk_occlusion_buffer"));
-        //     buffer.write_buffer(gpu, queue);
-        //     buffer
-        // };
-
-        // let bind_group = gpu.create_bind_group(
-        //     Some("chunk_bind_group"),
-        //     layout,
-        //     &BindGroupEntries::sequential((quads.binding().unwrap(), occlusion.binding().unwrap())),
-        // );
-
-        // *self = Self::BindGroup(GpuChunkMeshData {
-        //     bind_group,
-        //     index_buffer: todo!(),
-        //     position: todo!(),
-        //     quad_buffer: quads.buffer().unwrap().clone(),
-        // });
-
-        // return true;
-
-        todo!()
-    }
 }
 
 #[derive(Clone)]
