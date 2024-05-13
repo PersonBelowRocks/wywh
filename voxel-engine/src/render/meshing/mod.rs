@@ -30,7 +30,6 @@ pub struct Context<'reg, 'chunk> {
 
 #[derive(Clone, Debug)]
 pub struct MesherOutput {
-    pub mesh: Mesh,
-    pub occlusion: ChunkOcclusionMap,
+    pub indices: Vec<u32>,
     pub quads: ChunkQuads,
 }

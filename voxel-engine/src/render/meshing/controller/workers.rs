@@ -81,7 +81,7 @@ impl Worker {
                             Ok(output) => {
                                 params.finished.send(FinishedChunkData {
                                     data: ChunkMeshData {
-                                        index_buffer: todo!(),
+                                        index_buffer: output.indices,
                                         quads: output.quads,
                                     },
                                     pos: cmd.pos,

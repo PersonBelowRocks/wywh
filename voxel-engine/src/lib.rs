@@ -10,12 +10,13 @@ extern crate num_derive;
 
 use std::{path::PathBuf, sync::Arc};
 
-use bevy::prelude::*;
+use bevy::{math::ivec3, prelude::*};
 use data::{
     registries::{block::BlockVariantRegistry, Registries, Registry},
     resourcepath::rpath,
 };
 use mip_texture_array::MippedArrayTexturePlugin;
+use render::meshing::controller::{GrantPermit, MeshGeneration};
 use topo::{block::FullBlock, world::VoxelRealm};
 
 pub mod data;
@@ -95,14 +96,25 @@ impl Plugin for VoxelPlugin {
     }
 }
 
-fn generate_debug_chunks(mut events: EventWriter<GenerateChunk>) {
+fn generate_debug_chunks(
+    mut events: EventWriter<GenerateChunk>,
+    mut permits: EventWriter<GrantPermit>,
+    generation: Res<MeshGeneration>,
+) {
     const DIMS: i32 = 4;
+
+    let generation = **generation;
 
     for x in -DIMS..=DIMS {
         for y in -DIMS..=DIMS {
             for z in -DIMS..=DIMS {
-                events.send(GenerateChunk {
-                    pos: IVec3::new(x, y, z).into(),
+                let pos = ivec3(x, y, z);
+
+                events.send(GenerateChunk { pos: pos.into() });
+
+                permits.send(GrantPermit {
+                    pos: pos.into(),
+                    generation,
                 });
             }
         }

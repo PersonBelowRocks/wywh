@@ -15,9 +15,10 @@ use crate::{
 
 use self::ecs::{
     handle_incoming_permits, insert_chunks, queue_chunk_mesh_jobs, setup_chunk_meshing_workers,
-    voxel_realm_remesh_updated_chunks, ChunkMeshStorage, GrantPermit, MeshGeneration, RemeshChunk,
-    RevokePermit,
+    voxel_realm_remesh_updated_chunks,
 };
+
+pub use self::ecs::{ChunkMeshStorage, GrantPermit, MeshGeneration, RemeshChunk, RevokePermit};
 
 #[derive(Clone)]
 pub struct ChunkMeshData {
