@@ -15,7 +15,8 @@ use crate::{
 
 use self::ecs::{
     handle_incoming_permits, insert_chunks, queue_chunk_mesh_jobs, setup_chunk_meshing_workers,
-    voxel_realm_remesh_updated_chunks, ChunkMeshStorage, RemeshChunk,
+    voxel_realm_remesh_updated_chunks, ChunkMeshStorage, GrantPermit, MeshGeneration, RemeshChunk,
+    RevokePermit,
 };
 
 #[derive(Clone)]
@@ -67,7 +68,11 @@ pub struct MeshController;
 impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChunkMeshStorage>()
-            .add_event::<RemeshChunk>();
+            .init_resource::<ChunkRenderPermits>()
+            .init_resource::<MeshGeneration>()
+            .add_event::<RemeshChunk>()
+            .add_event::<GrantPermit>()
+            .add_event::<RevokePermit>();
 
         app.add_systems(
             OnEnter(AppState::Finished),
