@@ -130,6 +130,9 @@ fn generate_debug_chunks(
                     ChunkPos::from(pos),
                     VisibilityBundle::default(),
                     Chunk::BOUNDING_BOX.to_aabb(),
+                    TransformBundle::from_transform(Transform::from_translation(
+                        pos.as_vec3() * Chunk::SIZE as f32,
+                    )),
                     ChunkEntity,
                 ));
             }
