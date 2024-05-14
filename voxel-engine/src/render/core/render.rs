@@ -120,7 +120,6 @@ impl SpecializedRenderPipeline for ChunkPipeline {
             self.mesh_pipeline
                 .get_view_layout(key.mesh_key.into())
                 .clone(),
-            self.mesh_pipeline.mesh_layouts.model_only.clone(),
             self.registry_layout.clone(),
             self.chunk_layout.clone(),
         ];

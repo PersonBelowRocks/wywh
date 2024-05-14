@@ -37,12 +37,10 @@
 #import "shaders/constants.wgsl"::ROTATION_SHIFT
 
 #import bevy_pbr::{
-    mesh_bindings::mesh,
     mesh_view_bindings::view,
     pbr_types,
     mesh_view_bindings as view_bindings,
     prepass_utils,
-    mesh_functions,
 }
 
 fn standard_material_new() -> pbr_types::StandardMaterial {
@@ -255,16 +253,13 @@ fn create_pbr_input(
         flipped_uv_y(quad),
     );
 
-    pbr_input.flags = mesh[in.instance_index].flags;
+    pbr_input.flags = 0;
     pbr_input.is_orthographic = view.projection[3].w == 1.0;
     pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
     pbr_input.frag_coord = in.position;
     pbr_input.world_position = in.world_position;
 
-    pbr_input.world_normal = mesh_functions::mesh_normal_local_to_world(
-        raw_normal,
-        in.instance_index
-    );
+    pbr_input.world_normal = raw_normal;
 
 #ifdef LOAD_PREPASS_NORMALS
     pbr_input.N = prepass_utils::prepass_normal(in.position, 0u);

@@ -126,7 +126,6 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
         }];
 
         bind_group_layouts.extend_from_slice(&[
-            self.mesh_layouts.model_only.clone(),
             self.layouts.registry_bg_layout.clone(),
             self.layouts.chunk_bg_layout.clone(),
         ]);
@@ -321,8 +320,6 @@ pub fn queue_prepass_chunks(
         if motion_vector_prepass {
             view_key |= MeshPipelineKey::MOTION_VECTOR_PREPASS;
         }
-
-        let rangefinder = view.rangefinder3d();
 
         iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
             let mesh_key =

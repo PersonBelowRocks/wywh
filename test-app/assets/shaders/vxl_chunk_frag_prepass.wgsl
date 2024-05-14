@@ -1,7 +1,6 @@
 #import "shaders/vxl_chunk_io.wgsl"::PrepassOutput
 #import bevy_pbr::{
     prepass_io::FragmentOutput,
-    mesh_functions,
     prepass_bindings,
     mesh_view_bindings::{view, previous_view_proj},
 }
@@ -22,10 +21,7 @@ fn fragment(
 
     let face = extract_face(quad);
 
-    let world_normal = mesh_functions::mesh_normal_local_to_world(
-        normal_from_face(face),
-        in.instance_index
-    );
+    let world_normal = normal_from_face(face);
 
 #ifdef NORMAL_PREPASS
     // not sure why this happens but we need to do this little funny operation on the normal otherwise rendering is all
