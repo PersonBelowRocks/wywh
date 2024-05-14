@@ -116,14 +116,12 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
     type Key = ChunkPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
-        let mut bind_group_layouts = vec![if key
-            .mesh_key
-            .contains(MeshPipelineKey::MOTION_VECTOR_PREPASS)
-        {
-            self.view_layout_motion_vectors.clone()
-        } else {
-            self.view_layout_no_motion_vectors.clone()
-        }];
+        let mut bind_group_layouts =
+            vec![if key.contains(MeshPipelineKey::MOTION_VECTOR_PREPASS) {
+                self.view_layout_motion_vectors.clone()
+            } else {
+                self.view_layout_no_motion_vectors.clone()
+            }];
 
         bind_group_layouts.extend_from_slice(&[
             self.layouts.registry_bg_layout.clone(),
@@ -152,36 +150,29 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
             u32_shader_def("HAS_NORMAL_MAP_BIT", GpuFaceTexture::HAS_NORMAL_MAP_BIT),
         ];
 
-        if key.mesh_key.contains(MeshPipelineKey::DEPTH_PREPASS) {
+        if key.contains(MeshPipelineKey::DEPTH_PREPASS) {
             shader_defs.push("DEPTH_PREPASS".into());
         }
 
-        if key.mesh_key.contains(MeshPipelineKey::NORMAL_PREPASS) {
+        if key.contains(MeshPipelineKey::NORMAL_PREPASS) {
             shader_defs.push("NORMAL_PREPASS".into());
         }
 
-        if key
-            .mesh_key
-            .intersects(MeshPipelineKey::NORMAL_PREPASS | MeshPipelineKey::DEFERRED_PREPASS)
-        {
+        if key.intersects(MeshPipelineKey::NORMAL_PREPASS | MeshPipelineKey::DEFERRED_PREPASS) {
             shader_defs.push("NORMAL_PREPASS_OR_DEFERRED_PREPASS".into());
         }
 
         if key
-            .mesh_key
             .intersects(MeshPipelineKey::MOTION_VECTOR_PREPASS | MeshPipelineKey::DEFERRED_PREPASS)
         {
             shader_defs.push("MOTION_VECTOR_PREPASS_OR_DEFERRED_PREPASS".into());
         }
 
-        if key
-            .mesh_key
-            .contains(MeshPipelineKey::MOTION_VECTOR_PREPASS)
-        {
+        if key.contains(MeshPipelineKey::MOTION_VECTOR_PREPASS) {
             shader_defs.push("MOTION_VECTOR_PREPASS".into());
         }
 
-        if key.mesh_key.intersects(
+        if key.intersects(
             MeshPipelineKey::NORMAL_PREPASS
                 | MeshPipelineKey::MOTION_VECTOR_PREPASS
                 | MeshPipelineKey::DEFERRED_PREPASS,
@@ -189,7 +180,7 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
             shader_defs.push("PREPASS_FRAGMENT".into());
         }
 
-        if key.mesh_key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO) {
+        if key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO) {
             shader_defs.push("DEPTH_CLAMP_ORTHO".into());
             // PERF: This line forces the "prepass fragment shader" to always run in
             // common scenarios like "directional light calculation". Doing so resolves
@@ -201,16 +192,14 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
         }
 
         let mut targets = vec![
-            key.mesh_key
-                .contains(MeshPipelineKey::NORMAL_PREPASS)
+            key.contains(MeshPipelineKey::NORMAL_PREPASS)
                 .then_some(ColorTargetState {
                     format: NORMAL_PREPASS_FORMAT,
                     // BlendState::REPLACE is not needed here, and None will be potentially much faster in some cases.
                     blend: None,
                     write_mask: ColorWrites::ALL,
                 }),
-            key.mesh_key
-                .contains(MeshPipelineKey::MOTION_VECTOR_PREPASS)
+            key.contains(MeshPipelineKey::MOTION_VECTOR_PREPASS)
                 .then_some(ColorTargetState {
                     format: MOTION_VECTOR_PREPASS_FORMAT,
                     // BlendState::REPLACE is not needed here, and None will be potentially much faster in some cases.
@@ -230,8 +219,8 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
         }
 
         let fragment_required = !targets.is_empty()
-            || key.mesh_key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO)
-            || key.mesh_key.contains(MeshPipelineKey::MAY_DISCARD);
+            || key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO)
+            || key.contains(MeshPipelineKey::MAY_DISCARD);
 
         let fragment = fragment_required.then(|| {
             // Use the fragment shader from the material
@@ -255,7 +244,7 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
                 buffers: vec![],
             },
             primitive: PrimitiveState {
-                topology: key.mesh_key.primitive_topology(),
+                topology: key.primitive_topology(),
                 strip_index_format: None,
                 front_face: FrontFace::Ccw,
                 cull_mode: Some(Face::Back),
@@ -322,14 +311,14 @@ pub fn queue_prepass_chunks(
         }
 
         iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
-            let mesh_key =
-                MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList)
-                    | view_key;
-
             let pipeline_id = pipelines.specialize(
                 &pipeline_cache,
                 &prepass_pipeline,
-                ChunkPipelineKey { mesh_key },
+                ChunkPipelineKey {
+                    inner: MeshPipelineKey::from_primitive_topology(
+                        PrimitiveTopology::TriangleList,
+                    ) | view_key,
+                },
             );
             phase.add(Opaque3dPrepass {
                 entity: entity,

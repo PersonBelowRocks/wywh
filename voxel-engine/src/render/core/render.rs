@@ -16,6 +16,7 @@ use bevy::{
         ScreenSpaceAmbientOcclusionSettings, SetMeshBindGroup, SetMeshViewBindGroup,
         ShadowFilteringMethod,
     },
+    prelude::Deref,
     render::{
         camera::{Projection, TemporalJitter},
         mesh::{Mesh, MeshVertexBufferLayout, PrimitiveTopology},
@@ -52,9 +53,9 @@ pub struct ChunkPipeline {
     pub frag: Handle<Shader>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deref)]
 pub struct ChunkPipelineKey {
-    pub mesh_key: MeshPipelineKey,
+    pub inner: MeshPipelineKey,
 }
 
 impl FromWorld for ChunkPipeline {
@@ -117,9 +118,7 @@ impl SpecializedRenderPipeline for ChunkPipeline {
             .extend_from_slice(&shader_constants);
 
         descriptor.layout = vec![
-            self.mesh_pipeline
-                .get_view_layout(key.mesh_key.into())
-                .clone(),
+            self.mesh_pipeline.get_view_layout(key.inner.into()).clone(),
             self.registry_layout.clone(),
             self.chunk_layout.clone(),
         ];
@@ -238,14 +237,13 @@ pub fn queue_chunks(
         }
 
         iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
-            let mut mesh_key = view_key;
-
-            mesh_key |= MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList);
-
             let pipeline_id = pipelines.specialize(
                 pipeline_cache.as_ref(),
                 pipeline.as_ref(),
-                ChunkPipelineKey { mesh_key },
+                ChunkPipelineKey {
+                    inner: view_key
+                        | MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList),
+                },
             );
 
             // queue this entity for rendering
