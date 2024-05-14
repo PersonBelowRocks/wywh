@@ -18,7 +18,7 @@ use self::ecs::{
     voxel_realm_remesh_updated_chunks,
 };
 
-pub use self::ecs::{ChunkMeshStorage, GrantPermit, MeshGeneration, RemeshChunk, RevokePermit};
+pub use self::ecs::{GrantPermit, MeshGeneration, RemeshChunk, RevokePermit};
 
 #[derive(Clone)]
 pub struct ChunkMeshData {
@@ -41,7 +41,8 @@ pub enum ChunkMeshStatus {
 
 #[derive(Resource, Default)]
 pub struct ExtractableChunkMeshData {
-    pub map: ChunkMap<TimedChunkMeshData>,
+    pub active: ChunkMap<TimedChunkMeshData>,
+    pub removed: Vec<ChunkPos>,
 }
 
 #[derive(Copy, Clone, PartialEq, dm::Constructor)]
@@ -70,8 +71,8 @@ impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
         debug!("Setting up mesh controller");
 
-        app.init_resource::<ChunkMeshStorage>()
-            .init_resource::<ChunkRenderPermits>()
+        app.init_resource::<ChunkRenderPermits>()
+            .init_resource::<ExtractableChunkMeshData>()
             .init_resource::<MeshGeneration>()
             .add_event::<RemeshChunk>()
             .add_event::<GrantPermit>()

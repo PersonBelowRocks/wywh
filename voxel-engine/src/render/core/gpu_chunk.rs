@@ -10,6 +10,7 @@ use bevy::{
         },
         world::{FromWorld, Mut, World},
     },
+    log::debug,
     prelude::Deref,
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
@@ -62,8 +63,10 @@ pub fn extract_chunk_mesh_data(
 ) {
     main_world.resource_scope(
         |world, mut extractable_meshes: Mut<ExtractableChunkMeshData>| {
+            let mut extracted = 0;
+
             extractable_meshes
-                .map
+                .active
                 .for_each_entry_mut(|pos, timed_mesh_data| {
                     // We only care about the filled chunk meshes here in the render world.
                     if matches!(timed_mesh_data.data, ChunkMeshStatus::Filled(_)) {
@@ -81,7 +84,9 @@ pub fn extract_chunk_mesh_data(
                                 let tcrd = entry.get_mut();
                                 if tcrd.generation < timed_mesh_data.generation {
                                     tcrd.generation = timed_mesh_data.generation;
-                                    tcrd.data = ChunkRenderData::Cpu(data)
+                                    tcrd.data = ChunkRenderData::Cpu(data);
+
+                                    extracted += 1;
                                 }
                             }
                             Entry::Vacant(entry) => {
@@ -89,10 +94,31 @@ pub fn extract_chunk_mesh_data(
                                     data: ChunkRenderData::Cpu(data),
                                     generation: timed_mesh_data.generation,
                                 });
+
+                                extracted += 1;
                             }
                         }
                     }
                 });
+
+            let mut removed = 0;
+
+            // Remove meshes from the render world
+            for &chunk_pos in &extractable_meshes.removed {
+                render_meshes.map.remove(chunk_pos);
+                removed += 1;
+            }
+
+            // Clear the removed mesh buffer
+            extractable_meshes.removed.clear();
+
+            if extracted > 0 {
+                debug!("Extracted {} chunk meshes to render world", extracted);
+            }
+
+            if removed > 0 {
+                debug!("Removed {} chunk meshes from render world", removed);
+            }
         },
     );
 }
@@ -105,6 +131,8 @@ pub fn prepare_chunk_mesh_data(
 ) {
     let gpu = gpu.as_ref();
     let queue = queue.as_ref();
+
+    let mut total = 0;
 
     chunk_data_store.map.for_each_entry_mut(|pos, timed_data| {
         if matches!(timed_data.data, ChunkRenderData::Cpu(_)) {
@@ -149,9 +177,15 @@ pub fn prepare_chunk_mesh_data(
                 position: position.buffer().unwrap().clone(),
                 index_buffer: indices.buffer().unwrap().clone(),
                 quad_buffer: quads.buffer().unwrap().clone(),
-            })
+            });
+
+            total += 1;
         }
     });
+
+    if total > 0 {
+        debug!("Uploaded {total} chunks to the GPU");
+    }
 }
 
 #[derive(Resource, Default)]

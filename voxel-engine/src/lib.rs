@@ -30,9 +30,12 @@ pub mod testing_utils;
 use crate::{
     data::systems::{build_registries, check_textures, load_textures, VariantFolders},
     render::{core::RenderCore, meshing::controller::MeshController},
-    topo::worldgen::{
-        ecs::{generate_chunks_from_events, setup_terrain_generator_workers, GeneratorSeed},
-        generator::GenerateChunk,
+    topo::{
+        world::{Chunk, ChunkEntity, ChunkPos},
+        worldgen::{
+            ecs::{generate_chunks_from_events, setup_terrain_generator_workers, GeneratorSeed},
+            generator::GenerateChunk,
+        },
     },
 };
 
@@ -99,6 +102,7 @@ impl Plugin for VoxelPlugin {
 }
 
 fn generate_debug_chunks(
+    mut cmds: Commands,
     mut events: EventWriter<GenerateChunk>,
     mut permits: EventWriter<GrantPermit>,
     generation: Res<MeshGeneration>,
@@ -120,6 +124,14 @@ fn generate_debug_chunks(
                     pos: pos.into(),
                     generation,
                 });
+
+                // TODO: we need a comprehensive system to manage chunk entities in the ECS world
+                cmds.spawn((
+                    ChunkPos::from(pos),
+                    VisibilityBundle::default(),
+                    Chunk::BOUNDING_BOX.to_aabb(),
+                    ChunkEntity,
+                ));
             }
         }
     }

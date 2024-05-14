@@ -4,9 +4,11 @@ use std::{
 };
 
 use bevy::{
+    log::Level,
     prelude::*,
     render::extract_resource::ExtractResource,
     tasks::{TaskPool, TaskPoolBuilder},
+    utils::tracing::span,
 };
 use dashmap::DashSet;
 
@@ -19,7 +21,7 @@ use crate::{
 
 use super::{
     workers::MeshWorkerPool, ChunkMeshData, ChunkMeshStatus, ChunkRenderPermit, ChunkRenderPermits,
-    TimedChunkMeshData,
+    ExtractableChunkMeshData, TimedChunkMeshData,
 };
 
 #[derive(Resource, Deref)]
@@ -27,9 +29,6 @@ pub struct MeshWorkerTaskPool(TaskPool);
 
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct MeshGeneration(u64);
-
-#[derive(Resource, ExtractResource, Deref, Default, Clone)]
-pub struct ChunkMeshStorage(Arc<SyncChunkMap<TimedChunkMeshData>>);
 
 #[derive(Event, Clone)]
 pub struct RemeshChunk {
@@ -54,6 +53,7 @@ pub fn handle_incoming_permits(
     mut grants: EventReader<GrantPermit>,
     mut revocations: EventReader<RevokePermit>,
     mut permits_r: ResMut<ChunkRenderPermits>,
+    mut meshes: ResMut<ExtractableChunkMeshData>,
 ) {
     let permits = &mut permits_r.permits;
 
@@ -63,6 +63,8 @@ pub fn handle_incoming_permits(
         if let Some(permit) = permits.get(event.pos) {
             if permit.granted < event.generation {
                 permits.remove(event.pos);
+                meshes.active.remove(event.pos);
+                meshes.removed.push(event.pos);
             }
         }
     }
@@ -70,6 +72,7 @@ pub fn handle_incoming_permits(
     let mut granted = 0;
     for event in grants.read() {
         granted += 1;
+
         let existing = permits.get(event.pos);
 
         if existing.is_none() || existing.is_some_and(|e| e.granted < event.generation) {
@@ -98,7 +101,7 @@ pub fn queue_chunk_mesh_jobs(workers: Res<MeshWorkerPool>, mut events: EventRead
     }
 }
 
-pub fn insert_chunks(workers: Res<MeshWorkerPool>, meshes: Res<ChunkMeshStorage>) {
+pub fn insert_chunks(workers: Res<MeshWorkerPool>, mut meshes: ResMut<ExtractableChunkMeshData>) {
     let mut total = 0;
 
     let finished = workers.get_finished_meshes();
@@ -110,7 +113,7 @@ pub fn insert_chunks(workers: Res<MeshWorkerPool>, meshes: Res<ChunkMeshStorage>
     let mut insert = ChunkMap::<TimedChunkMeshData>::new();
     for mesh in finished.into_iter() {
         total += 1;
-        let existing = meshes.get(mesh.pos);
+        let existing = meshes.active.get(mesh.pos);
 
         match existing {
             Some(existing) if existing.generation < mesh.generation => {
@@ -138,7 +141,7 @@ pub fn insert_chunks(workers: Res<MeshWorkerPool>, meshes: Res<ChunkMeshStorage>
     }
 
     insert.for_each_entry(|pos, chunk_data| {
-        meshes.set(pos, chunk_data.clone());
+        meshes.active.set(pos, chunk_data.clone());
     });
 
     if total > 0 {
@@ -237,24 +240,28 @@ pub fn voxel_realm_remesh_updated_chunks(
     }
 
     if remeshings_issued > 0 || neighbor_remeshings_issued > 0 {
-        debug!("===Remeshing report===");
         debug!(
-            "Issued {} primary remeshing events based on voxel realm updates",
-            remeshings_issued
+            "{}",
+            indoc::formatdoc! {"\n
+                [Realm auto-remesh report]
+
+                Primary remeshings issued: {primary}
+                Neighbor remeshings issued: {neighbors}
+                Total remeshings issued: {total}
+
+                Current mesh generation: {current_gen}
+            ",
+            primary = remeshings_issued,
+            neighbors = neighbor_remeshings_issued,
+            total = remeshings_issued + neighbor_remeshings_issued,
+            current_gen = current_generation.0,
+            }
         );
-        debug!(
-            "Issued {} remeshing events for relevant neighbors of primary remeshing events",
-            neighbor_remeshings_issued
-        );
-        debug!(
-            "Total issued remeshing events: {}",
-            remeshings_issued + neighbor_remeshings_issued
-        );
-        debug!("Current mesh generation: {}", current_generation.0);
-        debug!("======================\n")
     }
 
     // We only update our generation if we actually queued any chunks this run.
+    // TODO: this should be done a bit more intelligently, I don't think it's correct to do it
+    // in this system.
     if did_queue {
         current_generation.0 += 1;
     }

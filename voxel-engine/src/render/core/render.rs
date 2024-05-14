@@ -238,8 +238,6 @@ pub fn queue_chunks(
             }
         }
 
-        let rangefinder = view.rangefinder3d();
-
         iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
             let mut mesh_key = view_key;
 
