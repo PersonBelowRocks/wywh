@@ -73,18 +73,18 @@ pub fn queue_shadows(
             };
 
             iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
-                let mut mesh_key =
+                let mut key =
                     MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList)
                         | MeshPipelineKey::DEPTH_PREPASS;
 
                 if is_directional_light {
-                    mesh_key |= MeshPipelineKey::DEPTH_CLAMP_ORTHO;
+                    key |= MeshPipelineKey::DEPTH_CLAMP_ORTHO;
                 }
 
                 let pipeline_id = pipelines.specialize(
                     &pipeline_cache,
                     &prepass_pipeline,
-                    ChunkPipelineKey { mesh_key },
+                    ChunkPipelineKey { inner: key },
                 );
 
                 phase.add(Shadow {
