@@ -46,6 +46,7 @@ use crate::{
 };
 
 use super::{
+    draw::DrawChunk,
     gpu_chunk::{ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
     render::ChunkPipelineKey,
@@ -323,5 +324,5 @@ pub type DrawVoxelChunkPrepass = (
     SetPrepassViewBindGroup<0>,
     SetRegistryBindGroup<1>,
     SetChunkBindGroup<2>,
-    DrawMesh,
+    DrawChunk,
 );

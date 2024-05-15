@@ -1,6 +1,6 @@
 use bevy::ecs::query::QueryEntityError;
 use bevy::ecs::system::lifetimeless::Read;
-use bevy::pbr::MeshPipelineKey;
+use bevy::pbr::{MeshFlags, MeshPipelineKey};
 use bevy::prelude::*;
 use bevy::render::render_resource::{RenderPipelineDescriptor, ShaderDefVal};
 use bevy::render::Extract;
@@ -76,6 +76,10 @@ pub fn add_shader_constants(shader_defs: &mut Vec<ShaderDefVal>) {
             ChunkOcclusionMap::GPU_BUFFER_DIMENSIONS,
         ),
         u32_shader_def("HAS_NORMAL_MAP_BIT", GpuFaceTexture::HAS_NORMAL_MAP_BIT),
+        u32_shader_def(
+            "DEFAULT_PBR_INPUT_FLAGS",
+            (MeshFlags::SHADOW_RECEIVER | MeshFlags::TRANSMITTED_SHADOW_RECEIVER).bits(),
+        ),
     ];
 
     shader_defs.extend_from_slice(&shader_constants);

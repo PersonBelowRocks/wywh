@@ -46,6 +46,7 @@ use crate::{
 };
 
 use super::{
+    draw::DrawChunk,
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
     utils::{add_shader_constants, iter_visible_chunks, ChunkDataParams},
@@ -147,7 +148,7 @@ impl SpecializedRenderPipeline for ChunkPipeline {
                 topology: PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: FrontFace::Ccw,
-                cull_mode: None, // Some(Face::Back),
+                cull_mode: Some(Face::Back),
                 unclipped_depth: false,
                 polygon_mode: PolygonMode::Fill,
                 conservative: false,
@@ -314,5 +315,5 @@ pub type DrawVoxelChunk = (
     SetMeshViewBindGroup<0>,
     SetRegistryBindGroup<1>,
     SetChunkBindGroup<2>,
-    DrawMesh,
+    DrawChunk,
 );

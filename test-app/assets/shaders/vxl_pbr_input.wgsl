@@ -33,6 +33,7 @@
 #import "shaders/constants.wgsl"::FLIP_UV_Y_BIT
 #import "shaders/constants.wgsl"::ROTATION_MASK
 #import "shaders/constants.wgsl"::ROTATION_SHIFT
+#import "shaders/constants.wgsl"::DEFAULT_PBR_INPUT_FLAGS
 
 #import bevy_pbr::{
     mesh_view_bindings::view,
@@ -108,7 +109,7 @@ fn create_pbr_input(
         flipped_uv_y(quad),
     );
 
-    pbr_input.flags = 0u;
+    pbr_input.flags = DEFAULT_PBR_INPUT_FLAGS;
     pbr_input.is_orthographic = view.projection[3].w == 1.0;
     pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
     pbr_input.frag_coord = in.position;

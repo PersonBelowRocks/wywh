@@ -147,6 +147,7 @@ pub fn prepare_chunk_mesh_data(
                 buffer
             };
 
+            let index_count = data.index_buffer.len() as u32;
             let indices = {
                 let mut buffer =
                     BufferVec::<u32>::new(BufferUsages::COPY_DST | BufferUsages::INDEX);
@@ -174,6 +175,7 @@ pub fn prepare_chunk_mesh_data(
 
             timed_data.data = ChunkRenderData::Gpu(GpuChunkMeshData {
                 bind_group,
+                index_count,
                 position: position.buffer().unwrap().clone(),
                 index_buffer: indices.buffer().unwrap().clone(),
                 quad_buffer: quads.buffer().unwrap().clone(),
@@ -216,6 +218,7 @@ pub struct CpuChunkRenderData {
 pub struct GpuChunkMeshData {
     pub bind_group: BindGroup,
     pub index_buffer: Buffer,
+    pub index_count: u32,
     pub position: Buffer,
     pub quad_buffer: Buffer,
 }
