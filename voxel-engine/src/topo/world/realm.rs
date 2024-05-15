@@ -214,6 +214,10 @@ impl<'a> UpdatedChunks<'a> {
         self.manager.status.generating.len()
     }
 
+    pub fn num_updated_chunks(&self) -> usize {
+        self.manager.status.updated.len()
+    }
+
     pub fn iter_chunks<F>(&self, mut f: F) -> Result<(), ChunkManagerError>
     where
         F: for<'cref> FnMut(ChunkRef<'cref>),
