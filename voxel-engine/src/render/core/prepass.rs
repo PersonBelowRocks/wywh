@@ -49,8 +49,7 @@ use super::{
     gpu_chunk::{ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
     render::ChunkPipelineKey,
-    u32_shader_def,
-    utils::{iter_visible_chunks, ChunkDataParams},
+    utils::{add_shader_constants, iter_visible_chunks, ChunkDataParams},
     DefaultBindGroupLayouts, RenderCore,
 };
 
@@ -58,7 +57,6 @@ use super::{
 pub struct ChunkPrepassPipeline {
     pub view_layout_motion_vectors: BindGroupLayout,
     pub view_layout_no_motion_vectors: BindGroupLayout,
-    pub mesh_layouts: MeshLayouts,
     pub layouts: DefaultBindGroupLayouts,
     pub vert: Handle<Shader>,
     pub frag: Handle<Shader>,
@@ -102,7 +100,6 @@ impl FromWorld for ChunkPrepassPipeline {
         Self {
             view_layout_motion_vectors,
             view_layout_no_motion_vectors,
-            mesh_layouts: mesh_pipeline.mesh_pipeline.mesh_layouts.clone(),
             layouts: world.resource::<DefaultBindGroupLayouts>().clone(),
             vert: server.load("shaders/vxl_chunk_vert_prepass.wgsl"),
             frag: server.load("shaders/vxl_chunk_frag_prepass.wgsl"),
@@ -133,22 +130,9 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
             "VERTEX_UVS".into(),
             "VERTEX_NORMALS".into(),
             "VERTEX_TANGENTS".into(),
-            u32_shader_def("ROTATION_MASK", GpuQuadBitfields::ROTATION_MASK),
-            u32_shader_def("ROTATION_SHIFT", GpuQuadBitfields::ROTATION_SHIFT),
-            u32_shader_def("FACE_MASK", GpuQuadBitfields::FACE_MASK),
-            u32_shader_def("FACE_SHIFT", GpuQuadBitfields::FACE_SHIFT),
-            u32_shader_def("FLIP_UV_X_BIT", GpuQuadBitfields::FLIP_UV_X_BIT),
-            u32_shader_def("FLIP_UV_Y_BIT", GpuQuadBitfields::FLIP_UV_Y_BIT),
-            u32_shader_def(
-                "CHUNK_OCCLUSION_BUFFER_SIZE",
-                ChunkOcclusionMap::GPU_BUFFER_SIZE,
-            ),
-            u32_shader_def(
-                "CHUNK_OCCLUSION_BUFFER_DIMENSIONS",
-                ChunkOcclusionMap::GPU_BUFFER_DIMENSIONS,
-            ),
-            u32_shader_def("HAS_NORMAL_MAP_BIT", GpuFaceTexture::HAS_NORMAL_MAP_BIT),
         ];
+
+        add_shader_constants(&mut shader_defs);
 
         if key.contains(MeshPipelineKey::DEPTH_PREPASS) {
             shader_defs.push("DEPTH_PREPASS".into());

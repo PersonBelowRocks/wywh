@@ -1,7 +1,7 @@
 use bevy::{
     asset::{AssetId, AssetServer, Handle},
     core_pipeline::{
-        core_3d::Opaque3d,
+        core_3d::{Opaque3d, CORE_3D_DEPTH_FORMAT},
         prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass},
         tonemapping::{DebandDither, Tonemapping},
     },
@@ -12,9 +12,10 @@ use bevy::{
     },
     log::error,
     pbr::{
-        DrawMesh, MeshPipeline, MeshPipelineKey, RenderMeshInstances,
-        ScreenSpaceAmbientOcclusionSettings, SetMeshBindGroup, SetMeshViewBindGroup,
-        ShadowFilteringMethod,
+        generate_view_layouts, DrawMesh, MeshPipeline, MeshPipelineKey, MeshPipelineViewLayout,
+        MeshPipelineViewLayoutKey, RenderMeshInstances, ScreenSpaceAmbientOcclusionSettings,
+        SetMeshBindGroup, SetMeshViewBindGroup, ShadowFilteringMethod,
+        CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT,
     },
     prelude::Deref,
     render::{
@@ -23,30 +24,37 @@ use bevy::{
         render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
-            BindGroupLayout, Face, FrontFace, PipelineCache, RenderPipelineDescriptor, Shader,
-            SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
-            SpecializedRenderPipeline, SpecializedRenderPipelines,
+            BindGroupLayout, BlendState, ColorTargetState, ColorWrites, CompareFunction,
+            DepthBiasState, DepthStencilState, Face, FragmentState, FrontFace, MultisampleState,
+            PipelineCache, PolygonMode, PrimitiveState, PushConstantRange,
+            RenderPipelineDescriptor, Shader, ShaderDefVal, ShaderStages, SpecializedMeshPipeline,
+            SpecializedMeshPipelineError, SpecializedMeshPipelines, SpecializedRenderPipeline,
+            SpecializedRenderPipelines, StencilFaceState, StencilState, TextureFormat, VertexState,
         },
-        view::{ExtractedView, VisibleEntities},
+        renderer::RenderDevice,
+        texture::BevyDefault,
+        view::{ExtractedView, ViewTarget, VisibleEntities},
     },
 };
 
 use crate::{
     data::texture::GpuFaceTexture,
-    render::{occlusion::ChunkOcclusionMap, quad::GpuQuadBitfields},
+    render::{
+        core::utils::add_mesh_pipeline_shader_defs, occlusion::ChunkOcclusionMap,
+        quad::GpuQuadBitfields,
+    },
 };
 
 use super::{
     gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
     gpu_registries::SetRegistryBindGroup,
-    u32_shader_def,
-    utils::{iter_visible_chunks, ChunkDataParams},
+    utils::{add_shader_constants, iter_visible_chunks, ChunkDataParams},
     DefaultBindGroupLayouts, RenderCore,
 };
 
 #[derive(Resource, Clone)]
 pub struct ChunkPipeline {
-    pub mesh_pipeline: MeshPipeline,
+    pub mesh_pipeline_view_layouts: [MeshPipelineViewLayout; MeshPipelineViewLayoutKey::COUNT],
     pub registry_layout: BindGroupLayout,
     pub chunk_layout: BindGroupLayout,
     pub vert: Handle<Shader>,
@@ -61,11 +69,18 @@ pub struct ChunkPipelineKey {
 impl FromWorld for ChunkPipeline {
     fn from_world(world: &mut World) -> Self {
         let server = world.resource::<AssetServer>();
+        let gpu = world.resource::<RenderDevice>();
 
         let layouts = world.resource::<DefaultBindGroupLayouts>();
 
+        let clustered_forward_buffer_binding_type =
+            gpu.get_supported_read_only_binding_type(CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT);
+
         Self {
-            mesh_pipeline: world.resource::<MeshPipeline>().clone(),
+            mesh_pipeline_view_layouts: generate_view_layouts(
+                gpu,
+                clustered_forward_buffer_binding_type,
+            ),
             registry_layout: layouts.registry_bg_layout.clone(),
             chunk_layout: layouts.chunk_bg_layout.clone(),
             vert: server.load("shaders/vxl_chunk_vert.wgsl"),
@@ -78,52 +93,87 @@ impl SpecializedRenderPipeline for ChunkPipeline {
     type Key = ChunkPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
-        let mut descriptor: RenderPipelineDescriptor = todo!(); // self.mesh_pipeline.specialize(key.mesh_key)?;
-        descriptor.label = Some("chunk_pipeline".into());
-
-        descriptor.primitive.cull_mode = Some(Face::Back);
-        descriptor.primitive.front_face = FrontFace::Ccw;
-
-        descriptor.vertex.shader = self.vert.clone();
-        descriptor.fragment.as_mut().unwrap().shader = self.frag.clone();
-
-        let shader_constants = [
-            u32_shader_def("ROTATION_MASK", GpuQuadBitfields::ROTATION_MASK),
-            u32_shader_def("ROTATION_SHIFT", GpuQuadBitfields::ROTATION_SHIFT),
-            u32_shader_def("FACE_MASK", GpuQuadBitfields::FACE_MASK),
-            u32_shader_def("FACE_SHIFT", GpuQuadBitfields::FACE_SHIFT),
-            u32_shader_def("FLIP_UV_X_BIT", GpuQuadBitfields::FLIP_UV_X_BIT),
-            u32_shader_def("FLIP_UV_Y_BIT", GpuQuadBitfields::FLIP_UV_Y_BIT),
-            u32_shader_def("HAS_NORMAL_MAP_BIT", GpuFaceTexture::HAS_NORMAL_MAP_BIT),
-            u32_shader_def(
-                "CHUNK_OCCLUSION_BUFFER_SIZE",
-                ChunkOcclusionMap::GPU_BUFFER_SIZE,
-            ),
-            u32_shader_def(
-                "CHUNK_OCCLUSION_BUFFER_DIMENSIONS",
-                ChunkOcclusionMap::GPU_BUFFER_DIMENSIONS,
-            ),
-            u32_shader_def("HAS_NORMAL_MAP_BIT", GpuFaceTexture::HAS_NORMAL_MAP_BIT),
+        let mut shader_defs: Vec<ShaderDefVal> = vec![
+            "MESH_PIPELINE".into(),
+            "VERTEX_OUTPUT_INSTANCE_INDEX".into(),
         ];
 
-        descriptor
-            .vertex
-            .shader_defs
-            .extend_from_slice(&shader_constants);
-        descriptor
-            .fragment
-            .as_mut()
-            .unwrap()
-            .shader_defs
-            .extend_from_slice(&shader_constants);
+        add_shader_constants(&mut shader_defs);
+        add_mesh_pipeline_shader_defs(key.inner, &mut shader_defs);
 
-        descriptor.layout = vec![
-            self.mesh_pipeline.get_view_layout(key.inner.into()).clone(),
+        let mesh_view_layout = {
+            let idx = MeshPipelineViewLayoutKey::from(key.inner).bits() as usize;
+            self.mesh_pipeline_view_layouts[idx]
+                .bind_group_layout
+                .clone()
+        };
+
+        let bg_layouts = vec![
+            mesh_view_layout,
             self.registry_layout.clone(),
             self.chunk_layout.clone(),
         ];
 
-        descriptor
+        let target_format = if key.contains(MeshPipelineKey::HDR) {
+            ViewTarget::TEXTURE_FORMAT_HDR
+        } else {
+            TextureFormat::bevy_default()
+        };
+
+        RenderPipelineDescriptor {
+            label: Some("chunk_render_pipeline".into()),
+            vertex: VertexState {
+                shader: self.vert.clone(),
+                entry_point: "vertex".into(),
+                shader_defs: shader_defs.clone(),
+                buffers: vec![],
+            },
+            fragment: Some(FragmentState {
+                shader: self.frag.clone(),
+                entry_point: "fragment".into(),
+                shader_defs: shader_defs.clone(),
+                targets: vec![Some(ColorTargetState {
+                    format: target_format,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            layout: bg_layouts,
+            push_constant_ranges: vec![PushConstantRange {
+                stages: ShaderStages::VERTEX,
+                range: 0..4,
+            }],
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: FrontFace::Ccw,
+                cull_mode: None, // Some(Face::Back),
+                unclipped_depth: false,
+                polygon_mode: PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: Some(DepthStencilState {
+                format: CORE_3D_DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::GreaterEqual,
+                stencil: StencilState {
+                    front: StencilFaceState::IGNORE,
+                    back: StencilFaceState::IGNORE,
+                    read_mask: 0,
+                    write_mask: 0,
+                },
+                bias: DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: MultisampleState {
+                count: key.msaa_samples(),
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+        }
     }
 }
 

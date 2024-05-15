@@ -20,10 +20,9 @@ fn vertex(
     let quad = quads[vertex / 4u];
     var position = extract_position(quad, vertex % 4u);
     let face = extract_face(quad);
-    let model = mesh_functions::get_model_matrix(instance_index);
 
     var out: VertexOutput;
-    out.quad_idx = chunk_quad_index;
+    out.quad_idx = vertex / 4u;
 
     out.uv = project_to_2d(position, axis_from_face(face)) - quad.min;
 

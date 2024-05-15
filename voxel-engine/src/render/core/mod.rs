@@ -50,10 +50,6 @@ use self::{
 
 use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
 
-pub(crate) fn u32_shader_def(name: &str, value: u32) -> ShaderDefVal {
-    ShaderDefVal::UInt(name.into(), value)
-}
-
 pub struct RenderCore;
 
 impl RenderCore {

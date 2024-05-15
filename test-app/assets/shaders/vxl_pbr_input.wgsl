@@ -27,8 +27,6 @@
 #import "shaders/vxl_types.wgsl"::FaceTexture
 #import "shaders/vxl_types.wgsl"::ChunkQuad
 
-#import "shaders/chunk_bindings.wgsl"::occlusion
-
 #import "shaders/constants.wgsl"::HAS_NORMAL_MAP_BIT
 #import "shaders/constants.wgsl"::CHUNK_OCCLUSION_BUFFER_DIMENSIONS
 #import "shaders/constants.wgsl"::FLIP_UV_X_BIT
@@ -82,149 +80,6 @@ fn calculate_view(
     return V;
 }
 
-const U8_BITS: u32 = 8u;
-const U32_BYTES: u32 = 4u;
-
-fn get_block_occlusion(whole_idx: u32) -> u32 {
-
-    // based on the unit test "test_shader_logic" in "occlusion.rs"
-    let actual_idx = whole_idx / U32_BYTES;
-    let raw_occlusion_value = occlusion[actual_idx];
-
-    // which byte in the u32 are we interested in
-    let subidx = whole_idx % U32_BYTES;
-    // a mask that selects the bits in that byte
-    let mask = 0xffu << (subidx * U8_BITS);
-
-    // mask and shift our raw value so we get a bitmask of the occluded faces for this block
-    let normalized_value = (raw_occlusion_value & mask) >> (subidx * U8_BITS);
-    return normalized_value;
-}
-
-fn is_occluded_at_offset(
-    pos: vec2i,
-    // the components of the offset vector cannot have an absolute value greater than 1
-    offset: vec2i,
-    magnitude: i32,
-    axis: u32,
-) -> bool {
-    let ls_face_pos_2d = ivec_project_to_3d(pos, axis, magnitude);
-
-    let offset_pos = pos + offset;
-    let occlusion_pos = ivec_project_to_3d(offset_pos, axis, magnitude);
-    let normal = occlusion_pos - ls_face_pos_2d;
-
-    let index = index_from_3d_pos(vec3u(occlusion_pos + vec3i(1)), CHUNK_OCCLUSION_BUFFER_DIMENSIONS);
-    let occlusion = get_block_occlusion(index);
-
-    var is_occluded: bool;
-    if offset.x != 0 && offset.y != 0 {
-        // we're testing a corner so we need to split up our offset into 2 normals
-        let normal_1 = ivec_project_to_3d(vec2i(offset.x, 0), axis, 0);
-        let face_1 = opposite_face(face_from_normal(normal_1));
-        let normal_2 = ivec_project_to_3d(vec2i(0, offset.y), axis, 0);
-        let face_2 = opposite_face(face_from_normal(normal_2));
-
-        is_occluded = (occlusion & (1u << face_1)) != 0u && (occlusion & (1u << face_2)) != 0u;
-    } else {
-        // we're testing an edge
-        is_occluded = (occlusion & (1u << opposite_face(face_from_normal(normal)))) != 0u;
-    }
-
-    return is_occluded;
-}
-
-fn corner_occlusion(ls_face_pos_2d: vec2f, corner_pos: vec2f) -> f32 {
-    let sq_2: f32 = sqrt(2.0);
-
-    let d = distance(ls_face_pos_2d, corner_pos);
-    return max(0.0, 1.0 - d);
-    // return max(0.0, sq_2 - d - (sq_2 / 3.5));
-}
-
-const BIAS: f32 = -0.45;
-const WEIGHT: f32 = 1.2;
-const GLOBAL_WEIGHT: f32 = 0.4;
-
-// TODO: refactor occlusion code into own file
-fn calculate_occlusion(
-    // facespace position on a face, the origin is at the bottom left
-    // corner of the face
-    fs_pos_on_face: vec2<f32>,
-    // localspace position on a face, the origin is at the bottom left
-    // of the chunk "layer" this face is on
-    ls_face_pos_2d: vec2<i32>,
-    face: u32,
-    mag: i32
-) -> f32 {
-    let axis = axis_from_face(face);
-
-    // let ls_face_pos_2d = vec2i(floor(ls_pos_on_face));
-    let centered_fs_pos_on_face = fs_pos_on_face - vec2(0.5);
-
-    let mag_above = mag + face_signum(face);
-    let above_centered_pos = ivec_project_to_3d(ls_face_pos_2d, axis, mag_above);
-
-    let top = is_occluded_at_offset(ls_face_pos_2d, vec2i(0, 1), mag_above, axis);
-    let bottom = is_occluded_at_offset(ls_face_pos_2d, vec2i(0, -1), mag_above, axis);
-    let left = is_occluded_at_offset(ls_face_pos_2d, vec2i(-1, 0), mag_above, axis);
-    let right = is_occluded_at_offset(ls_face_pos_2d, vec2i(1, 0), mag_above, axis);
-
-    // TODO: occlusion math
-    var t: f32 = 0.0;
-
-    // top
-    if top {
-        let v = centered_fs_pos_on_face.y + 0.5;
-        t += max((WEIGHT * v) + BIAS, 0.0);
-    }
-
-    // bottom
-    if bottom {
-        let v = abs(centered_fs_pos_on_face.y - 0.5);
-        t += max((WEIGHT * v) + BIAS, 0.0);
-    }
-
-    // left
-    if left {
-        let v = abs(centered_fs_pos_on_face.x - 0.5);
-        t += max((WEIGHT * v) + BIAS, 0.0);
-    }
-
-    // right
-    if right {
-        let v = centered_fs_pos_on_face.x + 0.5;
-        t += max((WEIGHT * v) + BIAS, 0.0);
-    }
-
-    let x = centered_fs_pos_on_face.x;
-    let y = centered_fs_pos_on_face.y;
-
-    // corners!
-
-    if !top && !left && is_occluded_at_offset(ls_face_pos_2d, vec2i(-1, 1), mag_above, axis) {
-        let v = corner_occlusion(centered_fs_pos_on_face, vec2f(-0.5, 0.5));
-        t += max((WEIGHT * v) + BIAS, 0.0);
-    }
-
-    if !top && !right && is_occluded_at_offset(ls_face_pos_2d, vec2i(1, 1), mag_above, axis) {
-        let v = corner_occlusion(centered_fs_pos_on_face, vec2f(0.5, 0.5));
-        t += max((WEIGHT * v) + BIAS, 0.0);
-    }
-
-    if !bottom && !left && is_occluded_at_offset(ls_face_pos_2d, vec2i(-1, -1), mag_above, axis) {
-        let v = corner_occlusion(centered_fs_pos_on_face, vec2f(-0.5, -0.5));
-        t += max((WEIGHT * v) + BIAS, 0.0);
-    }
-
-    if !bottom && !right && is_occluded_at_offset(ls_face_pos_2d, vec2i(1, -1), mag_above, axis) {
-        let v = corner_occlusion(centered_fs_pos_on_face, vec2f(0.5, -0.5));
-        t += max((WEIGHT * v) + BIAS, 0.0);
-    }
-
-    return max(t * GLOBAL_WEIGHT, 0.0);
-}
-
 fn create_pbr_input(
     in: VertexOutput,
     quad: ChunkQuad,
@@ -253,7 +108,7 @@ fn create_pbr_input(
         flipped_uv_y(quad),
     );
 
-    pbr_input.flags = 0;
+    pbr_input.flags = 0u;
     pbr_input.is_orthographic = view.projection[3].w == 1.0;
     pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
     pbr_input.frag_coord = in.position;
@@ -278,29 +133,7 @@ fn create_pbr_input(
         mip_level
     );
 
-    let vis = calculate_occlusion(
-        fs_pos,
-        vec2i(floor(ls_pos)),
-        face,
-        // the magnitude passed to the shader is actually different from the magnitude used on the CPU side.
-        // if the quad is pointed in the positive direction of the axis, the magnitude is 1 more than the CPU magnitude.
-        // this is to actually give the blocks some volume, as otherwise quads would be placed at the same magnitude
-        // no matter the direction they're facing along an axis.
-        // e.g., consider two quads coming from the same block, A and B, such that:
-        // A is pointing east
-        // B is pointing west
-        // their dimensions and positions are identical
-        // 
-        // in this arrangement the CPU side magnitude in a CQS would be the same for both of these
-        // because we use the face to distinguish between the two. however for rendering we should "puff" quad A
-        // out a bit to give the block its volume.
-        // this happens in the mesher as part of converting the data to the format used in shaders, but we need to
-        // reverse it here to calculate our occlusion!
-        // TODO: this is (probably) not the best way of doing this, investigate better ways of doing it
-        quad.magnitude - max(0, face_signum(face)),
-    );
-
-    pbr_input.diffuse_occlusion = vec3(1.0 - vis);
+    pbr_input.diffuse_occlusion = vec3(1.0);
 
     if (face_texture.flags & HAS_NORMAL_MAP_BIT) != 0u {
         pbr_input.N = apply_normal_mapping(
