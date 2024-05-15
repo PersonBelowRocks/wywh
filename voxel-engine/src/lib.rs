@@ -109,7 +109,7 @@ fn generate_debug_chunks(
 ) {
     debug!("Generating debugging chunks");
 
-    const DIMS: i32 = 1;
+    const DIMS: i32 = 4;
 
     let generation = **generation;
 

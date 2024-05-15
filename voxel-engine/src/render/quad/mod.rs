@@ -88,6 +88,12 @@ pub struct ChunkQuads {
     pub quads: Vec<GpuQuad>,
 }
 
+impl ChunkQuads {
+    pub fn is_empty(&self) -> bool {
+        self.quads.is_empty()
+    }
+}
+
 impl Debug for ChunkQuads {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GpuQuads")

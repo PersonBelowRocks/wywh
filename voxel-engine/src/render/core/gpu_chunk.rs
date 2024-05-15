@@ -10,7 +10,7 @@ use bevy::{
         },
         world::{FromWorld, Mut, World},
     },
-    log::debug,
+    log::{debug, warn},
     prelude::Deref,
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
@@ -139,6 +139,11 @@ pub fn prepare_chunk_mesh_data(
             let ChunkRenderData::Cpu(ref data) = timed_data.data else {
                 unreachable!();
             };
+
+            if data.quads.is_empty() || data.index_buffer.is_empty() {
+                warn!("Tried to prepare render data for chunk at position {pos}, but it was missing data!");
+                return;
+            }
 
             let quads = {
                 let mut buffer = StorageBuffer::from(data.quads.quads.clone());

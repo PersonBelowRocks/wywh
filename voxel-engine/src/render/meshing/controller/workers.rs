@@ -79,14 +79,17 @@ impl Worker {
 
                         match result {
                             Ok(output) => {
-                                params.finished.send(FinishedChunkData {
-                                    data: ChunkMeshData {
-                                        index_buffer: output.indices,
-                                        quads: output.quads,
-                                    },
-                                    pos: cmd.pos,
-                                    generation: cmd.generation
-                                }).unwrap();
+                                // Only send the mesh data if the mesher actually produced something
+                                if !output.indices.is_empty() && !output.quads.is_empty() {
+                                    params.finished.send(FinishedChunkData {
+                                        data: ChunkMeshData {
+                                            index_buffer: output.indices,
+                                            quads: output.quads,
+                                        },
+                                        pos: cmd.pos,
+                                        generation: cmd.generation
+                                    }).unwrap();
+                                }
                             }
                             Err(err) => error!("Error in worker '{task_label}' building chunk mesh: {err}"),
                         }
