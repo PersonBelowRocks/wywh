@@ -8,7 +8,7 @@ use bevy::{
     prelude::*,
     render::extract_resource::ExtractResource,
     tasks::{TaskPool, TaskPoolBuilder},
-    utils::tracing::span,
+    utils::{tracing::span, warn},
 };
 use dashmap::DashSet;
 
@@ -177,67 +177,81 @@ pub fn voxel_realm_remesh_updated_chunks(
         *last_queued_fresh = current;
     }
 
-    let mut did_queue = false;
-
     // We need this to keep track of queued chunks, we don't want to queue chunks for remeshing twice!
-    let mut queued = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
+    let mut queued_primary = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
+    let mut queued_neighbors = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
 
     updated
         .iter_chunks(|cref| {
             // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
-            if permits.has_permit(cref.pos()) && !queued.contains(&cref.pos()) {
-                if cref.flags().contains(ChunkFlags::FRESH) && !should_queue_fresh {
-                    return;
-                }
+            if !permits.has_permit(cref.pos())
+                || queued_primary.contains(&cref.pos())
+                || queued_neighbors.contains(&cref.pos())
+            {
+                return;
+            }
 
-                writer.send(RemeshChunk {
-                    pos: cref.pos(),
-                    generation: **current_generation,
-                });
-                queued.insert(cref.pos());
+            if cref.flags().contains(ChunkFlags::FRESH) && !should_queue_fresh {
+                return;
+            }
 
-                remeshings_issued += 1;
+            queued_primary.insert(cref.pos());
+            remeshings_issued += 1;
 
-                // This chunk was updated in such a way that we need to remesh its neighbors too!
-                if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
-                    for face in Face::FACES {
-                        let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.pos()));
+            // This chunk was updated in such a way that we need to remesh its neighbors too!
+            if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
+                for face in Face::FACES {
+                    let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.pos()));
 
-                        // We only remesh the neighbor if it's neither generating or fresh.
-                        // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
-                        // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
-                        if permits.has_permit(neighbor_pos)
-                        && cm.chunk_flags(neighbor_pos).is_some_and(|flags| {
-                            !flags.contains(ChunkFlags::GENERATING | ChunkFlags::FRESH)
-                        })
-                        // We also shouldn't remesh already queued neighboring chunks.
-                        && !queued.contains(&neighbor_pos)
-                        {
-                            writer.send(RemeshChunk {
-                                pos: neighbor_pos,
-                                generation: **current_generation,
-                            });
-                            queued.insert(neighbor_pos);
-
-                            neighbor_remeshings_issued += 1;
-                        }
+                    if !permits.has_permit(neighbor_pos)
+                        || queued_primary.contains(&neighbor_pos)
+                        || queued_neighbors.contains(&neighbor_pos)
+                    {
+                        continue;
                     }
-                }
 
-                did_queue = true;
+                    // We only remesh the neighbor if it's neither generating or fresh.
+                    // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
+                    // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
+                    let avoid_flags: ChunkFlags = ChunkFlags::GENERATING | ChunkFlags::FRESH;
+                    if !cm
+                        .chunk_flags(neighbor_pos)
+                        .is_some_and(|f| f.intersects(avoid_flags))
+                    {
+                        continue;
+                    }
+
+                    queued_neighbors.insert(neighbor_pos);
+
+                    neighbor_remeshings_issued += 1;
+                }
             }
         })
         .unwrap();
 
-    for pos in queued {
-        let Ok(cref) = cm.get_loaded_chunk(pos) else {
-            continue;
-        };
+    let did_queue = queued_primary.len() > 0 || queued_neighbors.len() > 0;
 
-        cref.update_flags(|flags| {
-            flags.remove(ChunkFlags::REMESH | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::FRESH)
-        })
-    }
+    // Send remesh events and unflag the chunks as remeshable
+    writer.send_batch(queued_primary.into_iter().map(|pos| {
+        if let Ok(cref) = cm.get_loaded_chunk(pos) {
+            cref.update_flags(|flags| {
+                flags.remove(ChunkFlags::REMESH | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::FRESH)
+            });
+        } else {
+            warn!("Chunk {pos} was unloaded before its meshing flags could be updated");
+        }
+
+        RemeshChunk {
+            pos,
+            generation: current_generation.0,
+        }
+    }));
+
+    // We send remesh events for neighbors too but we don't unflag them
+    writer.send_batch(queued_neighbors.into_iter().map(|pos| RemeshChunk {
+        pos,
+        generation: current_generation.0,
+    }));
 
     if remeshings_issued > 0 || neighbor_remeshings_issued > 0 {
         debug!(

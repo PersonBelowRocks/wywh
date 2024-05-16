@@ -71,7 +71,7 @@ pub fn kb_controls(
     mut q: Query<(&mut Transform, &PlayerCamController)>,
     t: Res<Time>,
 ) {
-    const BASE_MOVEMENT: f32 = 12.0;
+    const BASE_MOVEMENT: f32 = 25.0;
 
     let (mut tfm, controller) = q.single_mut();
 
