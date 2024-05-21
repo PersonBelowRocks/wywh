@@ -113,31 +113,29 @@ pub fn insert_chunks(workers: Res<MeshWorkerPool>, mut meshes: ResMut<Extractabl
     let mut insert = ChunkMap::<TimedChunkMeshData>::new();
     for mesh in finished.into_iter() {
         total += 1;
-        let existing = meshes.active.get(mesh.pos);
 
-        match existing {
-            Some(existing) if existing.generation < mesh.generation => {
-                insert.set(
-                    mesh.pos,
-                    TimedChunkMeshData {
-                        generation: mesh.generation,
-                        data: ChunkMeshStatus::Filled(mesh.data),
-                    },
-                );
-            }
+        let Some(existing) = meshes.active.get(mesh.pos) else {
+            insert.set(
+                mesh.pos,
+                TimedChunkMeshData {
+                    generation: mesh.generation,
+                    data: ChunkMeshStatus::from_mesh_data(&mesh.data),
+                },
+            );
+            continue;
+        };
 
-            None => {
-                insert.set(
-                    mesh.pos,
-                    TimedChunkMeshData {
-                        generation: mesh.generation,
-                        data: ChunkMeshStatus::Filled(mesh.data),
-                    },
-                );
-            }
-
-            _ => (),
+        if existing.generation > mesh.generation {
+            continue;
         }
+
+        insert.set(
+            mesh.pos,
+            TimedChunkMeshData {
+                generation: mesh.generation,
+                data: ChunkMeshStatus::from_mesh_data(&mesh.data),
+            },
+        );
     }
 
     insert.for_each_entry(|pos, chunk_data| {
@@ -171,7 +169,7 @@ pub fn voxel_realm_remesh_updated_chunks(
     // to wait too long between each queuing. These numbers are kind of stupid rn and are just chosen randomly, but maybe a better hueristic can
     // be implemented in the future.
     let should_queue_fresh =
-        updated.num_fresh_chunks() > 100 || time_since_last_fresh_build.as_millis() > 500;
+        updated.num_fresh_chunks() > 300 || time_since_last_fresh_build.as_millis() > 1000;
 
     if should_queue_fresh {
         *last_queued_fresh = current;
@@ -184,11 +182,12 @@ pub fn voxel_realm_remesh_updated_chunks(
     updated
         .iter_chunks(|cref| {
             // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
-            if !permits.has_permit(cref.pos())
-                || queued_primary.contains(&cref.pos())
-                || queued_neighbors.contains(&cref.pos())
-            {
+            if !permits.has_permit(cref.pos()) || queued_primary.contains(&cref.pos()) {
                 return;
+            }
+
+            if queued_neighbors.contains(&cref.pos()) {
+                queued_neighbors.remove(&cref.pos());
             }
 
             if cref.flags().contains(ChunkFlags::FRESH) && !should_queue_fresh {
@@ -214,10 +213,11 @@ pub fn voxel_realm_remesh_updated_chunks(
                     // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
                     // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
                     let avoid_flags: ChunkFlags = ChunkFlags::GENERATING | ChunkFlags::FRESH;
-                    if !cm
-                        .chunk_flags(neighbor_pos)
-                        .is_some_and(|f| f.intersects(avoid_flags))
-                    {
+                    let Some(flags) = cm.chunk_flags(neighbor_pos) else {
+                        continue;
+                    };
+
+                    if flags.intersects(avoid_flags) {
                         continue;
                     }
 

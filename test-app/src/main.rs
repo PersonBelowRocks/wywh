@@ -200,7 +200,7 @@ fn setup(
     commands.insert_resource(Msaa::Off);
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
-        brightness: 0.3,
+        brightness: 2.0,
     });
 
     // camera
@@ -220,7 +220,7 @@ fn setup(
                 SpotLightBundle {
                     spot_light: SpotLight {
                         color: Color::WHITE,
-                        intensity: 1000000.0,
+                        intensity: 10000000.0,
                         shadows_enabled: true,
                         inner_angle: PI / 8.0 * 0.85,
                         outer_angle: PI / 8.0,

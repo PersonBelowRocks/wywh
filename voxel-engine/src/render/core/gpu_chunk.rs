@@ -68,6 +68,21 @@ pub fn extract_chunk_mesh_data(
             extractable_meshes
                 .active
                 .for_each_entry_mut(|pos, timed_mesh_data| {
+                    // If the mesh data is empty and newer, we remove the mesh from the render world
+                    // because there's nothing to draw.
+                    if matches!(timed_mesh_data.data, ChunkMeshStatus::Empty) {
+                        let Some(existing) = render_meshes.map.get(pos) else {
+                            return;
+                        };
+
+                        if existing.generation > timed_mesh_data.generation {
+                            return;
+                        }
+
+                        render_meshes.map.remove(pos);
+                        timed_mesh_data.data = ChunkMeshStatus::Extracted;
+                    }
+
                     // We only care about the filled chunk meshes here in the render world.
                     if matches!(timed_mesh_data.data, ChunkMeshStatus::Filled(_)) {
                         let ChunkMeshStatus::Filled(data) =
@@ -76,7 +91,6 @@ pub fn extract_chunk_mesh_data(
                             // We just checked that the ChunkMeshStatus enum matched above
                             unreachable!();
                         };
-
                         // Insert the chunk render data if it doesn't exist, and update it
                         // if this is a newer version
                         match render_meshes.map.entry(pos) {

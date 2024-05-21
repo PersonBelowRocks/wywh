@@ -26,6 +26,12 @@ pub struct ChunkMeshData {
     pub quads: ChunkQuads,
 }
 
+impl ChunkMeshData {
+    pub fn is_empty(&self) -> bool {
+        self.index_buffer.is_empty() || self.quads.is_empty()
+    }
+}
+
 #[derive(Clone)]
 pub struct TimedChunkMeshData {
     pub generation: u64,
@@ -35,8 +41,19 @@ pub struct TimedChunkMeshData {
 #[derive(Clone)]
 pub enum ChunkMeshStatus {
     Unfulfilled,
+    Empty,
     Filled(ChunkMeshData),
     Extracted,
+}
+
+impl ChunkMeshStatus {
+    pub fn from_mesh_data(data: &ChunkMeshData) -> Self {
+        if data.is_empty() {
+            Self::Empty
+        } else {
+            Self::Filled(data.clone())
+        }
+    }
 }
 
 #[derive(Resource, Default)]
