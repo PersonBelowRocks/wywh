@@ -67,51 +67,54 @@ pub fn extract_chunk_mesh_data(
 
             extractable_meshes
                 .active
-                .for_each_entry_mut(|pos, timed_mesh_data| {
-                    // If the mesh data is empty and newer, we remove the mesh from the render world
-                    // because there's nothing to draw.
-                    if matches!(timed_mesh_data.data, ChunkMeshStatus::Empty) {
-                        let Some(existing) = render_meshes.map.get(pos) else {
-                            return;
-                        };
-
-                        if existing.generation > timed_mesh_data.generation {
-                            return;
-                        }
-
-                        render_meshes.map.remove(pos);
-                        timed_mesh_data.data = ChunkMeshStatus::Extracted;
+                .for_each_entry_mut(|pos, new_mesh| {
+                    // Skip unfulfilled and extracted chunks
+                    if matches!(
+                        new_mesh.data,
+                        ChunkMeshStatus::Unfulfilled | ChunkMeshStatus::Extracted
+                    ) {
+                        return;
                     }
 
-                    // We only care about the filled chunk meshes here in the render world.
-                    if matches!(timed_mesh_data.data, ChunkMeshStatus::Filled(_)) {
-                        let ChunkMeshStatus::Filled(data) =
-                            mem::replace(&mut timed_mesh_data.data, ChunkMeshStatus::Extracted)
-                        else {
-                            // We just checked that the ChunkMeshStatus enum matched above
-                            unreachable!();
-                        };
+                    let status = mem::replace(&mut new_mesh.data, ChunkMeshStatus::Extracted);
+
+                    match status {
+                        // If the new chunk has an empty mesh, remove it from rendering
+                        ChunkMeshStatus::Empty => {
+                            let Some(existing) = render_meshes.map.get(pos) else {
+                                return;
+                            };
+
+                            if existing.generation > new_mesh.generation {
+                                return;
+                            }
+
+                            render_meshes.map.remove(pos);
+                            new_mesh.data = ChunkMeshStatus::Extracted;
+                        }
                         // Insert the chunk render data if it doesn't exist, and update it
                         // if this is a newer version
-                        match render_meshes.map.entry(pos) {
+                        ChunkMeshStatus::Filled(data) => match render_meshes.map.entry(pos) {
                             Entry::Occupied(mut entry) => {
                                 let tcrd = entry.get_mut();
-                                if tcrd.generation < timed_mesh_data.generation {
-                                    tcrd.generation = timed_mesh_data.generation;
-                                    tcrd.data = ChunkRenderData::Cpu(data);
-
-                                    extracted += 1;
+                                if tcrd.generation > new_mesh.generation {
+                                    return;
                                 }
+                                tcrd.generation = new_mesh.generation;
+                                tcrd.data = ChunkRenderData::Cpu(data);
+
+                                extracted += 1;
                             }
                             Entry::Vacant(entry) => {
                                 entry.insert(TimedChunkRenderData {
                                     data: ChunkRenderData::Cpu(data),
-                                    generation: timed_mesh_data.generation,
+                                    generation: new_mesh.generation,
                                 });
 
                                 extracted += 1;
                             }
-                        }
+                        },
+                        _ => unreachable!(),
                     }
                 });
 
