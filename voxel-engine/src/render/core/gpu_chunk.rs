@@ -157,13 +157,13 @@ pub fn prepare_chunk_mesh_data(
                 unreachable!();
             };
 
-            if data.quads.is_empty() || data.index_buffer.is_empty() {
+            if data.quad_buffer.is_empty() || data.index_buffer.is_empty() {
                 warn!("Tried to prepare render data for chunk at position {pos}, but it was missing data!");
                 return;
             }
 
             let quads = {
-                let mut buffer = StorageBuffer::from(data.quads.quads.clone());
+                let mut buffer = StorageBuffer::from(data.quad_buffer.clone());
                 buffer.set_label(Some("chunk_quad_buffer"));
                 buffer.write_buffer(gpu, queue);
                 buffer

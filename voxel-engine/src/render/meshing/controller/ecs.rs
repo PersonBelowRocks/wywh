@@ -342,8 +342,6 @@ pub fn setup_chunk_meshing_workers(
 ) {
     info!("Setting up chunk meshing workers");
 
-    let mesher = GreedyMesher::new();
-
     let task_pool = TaskPoolBuilder::new()
         .thread_name("Mesh Worker Task Pool".into())
         .num_threads(max(1, available_parallelism() / 2))
@@ -358,7 +356,6 @@ pub fn setup_chunk_meshing_workers(
     let worker_pool = MeshBuilder::new(
         settings,
         &task_pool,
-        mesher.clone(),
         registries.clone(),
         realm.chunk_manager.clone(),
     );

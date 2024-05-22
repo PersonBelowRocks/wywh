@@ -53,12 +53,12 @@ impl PartialOrd for RemeshPriority {
 #[derive(Clone)]
 pub struct ChunkMeshData {
     pub index_buffer: Vec<u32>,
-    pub quads: ChunkQuads,
+    pub quad_buffer: Vec<GpuQuad>,
 }
 
 impl ChunkMeshData {
     pub fn is_empty(&self) -> bool {
-        self.index_buffer.is_empty() || self.quads.is_empty()
+        self.index_buffer.is_empty() || self.quad_buffer.is_empty()
     }
 }
 

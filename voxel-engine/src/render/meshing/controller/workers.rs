@@ -18,9 +18,7 @@ use dashmap::DashMap;
 
 use crate::{
     data::registries::Registries,
-    render::meshing::{
-        error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context, Mesher, MesherOutput,
-    },
+    render::meshing::{error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context},
     topo::world::{ChunkManager, ChunkPos},
     util::{result::ResultFlattening, Keyed, KeyedOrd, SyncChunkMap},
 };
@@ -61,7 +59,7 @@ impl Keyed<RemeshPriority> for MeshCommand {
 impl Worker {
     pub fn new(
         pool: &TaskPool,
-        params: WorkerParams,
+        mut params: WorkerParams,
         channel_timeout: Duration,
         label: String,
     ) -> Self {
@@ -75,7 +73,7 @@ impl Worker {
                     Ok(cmd) => {
                         let cm = params.chunk_manager.clone();
 
-                        let result = cm.with_neighbors::<_, Result<MesherOutput, ChunkMeshingError>>(cmd.pos, |neighbors| {
+                        let result = cm.with_neighbors::<_, Result<ChunkMeshData, ChunkMeshingError>>(cmd.pos, |neighbors| {
                             let context = Context {
                                 neighbors,
                                 registries: &params.registries,
@@ -90,10 +88,7 @@ impl Worker {
                         match result {
                             Ok(output) => {
                                 params.finished.send(FinishedChunkData {
-                                    data: ChunkMeshData {
-                                        index_buffer: output.indices,
-                                        quads: output.quads,
-                                    },
+                                    data: output,
                                     pos: cmd.pos,
                                     generation: cmd.generation
                                 }).unwrap();
@@ -151,7 +146,6 @@ impl MeshBuilder {
     pub fn new(
         settings: MeshBuilderSettings,
         pool: &TaskPool,
-        mesher: GreedyMesher,
         registries: Registries,
         cm: Arc<ChunkManager>,
     ) -> Self {
@@ -165,7 +159,7 @@ impl MeshBuilder {
         let worker_params = WorkerParams {
             registries,
             chunk_manager: cm,
-            mesher,
+            mesher: GreedyMesher::new(),
             finished: mesh_sender,
             cmds: cmd_recver,
         };

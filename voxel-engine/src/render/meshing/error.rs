@@ -2,7 +2,7 @@ use std::error::Error;
 
 use crate::topo::world::ChunkManagerError;
 
-use super::{greedy::error::CqsError, MesherOutput};
+use super::{controller::ChunkMeshData, greedy::error::CqsError};
 
 #[derive(te::Error, Debug)]
 pub enum ChunkMeshingError {
@@ -26,4 +26,4 @@ impl MesherError {
     }
 }
 
-pub type MesherResult = Result<MesherOutput, MesherError>;
+pub type MesherResult = Result<ChunkMeshData, MesherError>;

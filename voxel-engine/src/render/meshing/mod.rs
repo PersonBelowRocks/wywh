@@ -13,23 +13,9 @@ use crate::{
 
 use self::error::MesherResult;
 
-use super::{occlusion::ChunkOcclusionMap, quad::ChunkQuads};
-
-pub trait Mesher: Clone + Send + Sync + 'static {
-    fn build<'reg, 'chunk>(
-        &self,
-        access: Crra<'chunk>,
-        context: Context<'reg, 'chunk>,
-    ) -> MesherResult;
-}
+use super::{occlusion::ChunkOcclusionMap, quad::GpuQuad};
 
 pub struct Context<'reg, 'chunk> {
     pub neighbors: Neighbors<'chunk>,
     pub registries: &'reg Registries,
-}
-
-#[derive(Clone, Debug)]
-pub struct MesherOutput {
-    pub indices: Vec<u32>,
-    pub quads: ChunkQuads,
 }

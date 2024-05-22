@@ -10,6 +10,7 @@ use bevy::render::mesh::Indices;
 use bevy::render::mesh::Mesh;
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
+use itertools::Itertools;
 
 use crate::data::registries::block::BlockVariantRegistry;
 
@@ -18,10 +19,9 @@ use crate::data::tile::Face;
 
 use crate::render::core::RenderCore;
 
+use crate::render::meshing::controller::ChunkMeshData;
 use crate::render::meshing::error::MesherResult;
 use crate::render::meshing::Context;
-use crate::render::meshing::Mesher;
-use crate::render::meshing::MesherOutput;
 use crate::render::occlusion::ChunkOcclusionMap;
 use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
@@ -107,18 +107,18 @@ fn heighten_quad<'reg, 'chunk>(
 }
 
 #[derive(Clone)]
-pub struct GreedyMesher {}
+pub struct GreedyMesher {
+    quad_buffer_scratch: Vec<IsometrizedQuad>,
+}
 
 impl GreedyMesher {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            quad_buffer_scratch: Vec::with_capacity(1024),
+        }
     }
 
-    fn calculate_slice_quads<'chunk>(
-        &self,
-        cqs: &ChunkQuadSlice<'_, 'chunk>,
-        buffer: &mut Vec<IsometrizedQuad>,
-    ) -> CqsResult<()> {
+    fn calculate_slice_quads<'chunk>(&mut self, cqs: &ChunkQuadSlice<'_, 'chunk>) -> CqsResult<()> {
         let mut mask = ChunkSliceMask::new();
 
         for cs_x in 0..Chunk::SIZE {
@@ -186,7 +186,7 @@ impl GreedyMesher {
 
                         let isoquad = cqs.isometrize(current);
 
-                        buffer.push(isoquad);
+                        self.quad_buffer_scratch.push(isoquad);
                     }
                 }
             }
@@ -194,72 +194,76 @@ impl GreedyMesher {
 
         Ok(())
     }
-}
 
-impl Mesher for GreedyMesher {
-    fn build<'reg, 'chunk>(&self, access: Crra<'chunk>, cx: Context<'reg, 'chunk>) -> MesherResult {
+    fn drain_quads(&mut self) -> (Vec<u32>, Vec<GpuQuad>) {
+        const VERTEX_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
+
+        let quads = self.quad_buffer_scratch.len();
+        let capacity_before = self.quad_buffer_scratch.capacity();
+
+        let mut indices = Vec::<u32>::with_capacity(quads * 6);
+        let mut current_idx: u32 = 0;
+
+        let quads = self
+            .quad_buffer_scratch
+            .drain(..)
+            .map(|quad| {
+                indices.extend_from_slice(&VERTEX_INDICES.map(|idx| idx + current_idx));
+                current_idx += 4;
+
+                let bitfields = GpuQuadBitfields::new()
+                    .with_rotation(quad.quad.dataquad.texture.rotation)
+                    .with_face(quad.isometry.face);
+
+                let magnitude = if quad.isometry.face.axis_direction() > 0 {
+                    quad.isometry.magnitude() + 1
+                } else {
+                    quad.isometry.magnitude()
+                };
+
+                GpuQuad {
+                    // TODO: get rid of these magic numbers
+                    min: quad.min_2d().as_vec2() * 0.25,
+                    max: (quad.max_2d().as_vec2() + Vec2::ONE) * 0.25,
+                    texture_id: quad.quad.dataquad.texture.id.as_u32(),
+                    bitfields,
+                    magnitude,
+                }
+            })
+            .collect_vec();
+
+        if capacity_before != self.quad_buffer_scratch.capacity() {
+            panic!("Failed sanity check of quad buffer scratch memory capacity");
+        }
+
+        (indices, quads)
+    }
+
+    pub fn build<'reg, 'chunk>(
+        &mut self,
+        access: Crra<'chunk>,
+        cx: Context<'reg, 'chunk>,
+    ) -> MesherResult {
         let varreg = cx
             .registries
             .get_registry::<BlockVariantRegistry>()
             .unwrap();
 
         let mut cqs = ChunkQuadSlice::new(Face::North, 0, &access, &cx.neighbors, &varreg).unwrap();
-        let mut quads = Vec::<IsometrizedQuad>::new();
 
         for face in Face::FACES {
             for layer in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
                 cqs.reposition(face, layer).unwrap();
 
-                self.calculate_slice_quads(&cqs, &mut quads)?;
+                self.calculate_slice_quads(&cqs)?;
             }
         }
 
-        // TODO: fix occlusion
-        let occlusion = ChunkOcclusionMap::new(); // self.calculate_occlusion(&access, &cx.neighbors, &cx.registries)?;
+        let (idx_buf, quad_buf) = self.drain_quads();
 
-        let mut gpu_quads = Vec::<GpuQuad>::with_capacity(quads.len());
-        for i in 0..quads.len() {
-            let quad = quads[i];
-
-            let bitfields = GpuQuadBitfields::new()
-                .with_rotation(quad.quad.dataquad.texture.rotation)
-                .with_face(quad.isometry.face);
-
-            let magnitude = if quad.isometry.face.axis_direction() > 0 {
-                quad.isometry.magnitude() + 1
-            } else {
-                quad.isometry.magnitude()
-            };
-
-            let gpu_quad = GpuQuad {
-                min: quad.min_2d().as_vec2() * 0.25,
-                max: (quad.max_2d().as_vec2() + Vec2::ONE) * 0.25,
-                texture_id: quad.quad.dataquad.texture.id.as_u32(),
-                bitfields,
-                magnitude,
-            };
-
-            gpu_quads.push(gpu_quad);
-        }
-
-        // The index buffer
-        let mut vertex_indices = Vec::<u32>::with_capacity(gpu_quads.len() * 6);
-
-        let mut current_idx = 0;
-        for _ in 0..gpu_quads.len() {
-            // 0---1
-            // |   |
-            // 2---3
-            const VERTEX_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
-
-            vertex_indices.extend_from_slice(&VERTEX_INDICES.map(|idx| idx + current_idx));
-
-            current_idx += 4;
-        }
-
-        Ok(MesherOutput {
-            indices: vertex_indices,
-            quads: ChunkQuads { quads: gpu_quads },
+        Ok(ChunkMeshData {
+            index_buffer: idx_buf,
+            quad_buffer: quad_buf,
         })
     }
 }
