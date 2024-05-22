@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 
 use bevy::{
     math::{ivec3, IVec3},

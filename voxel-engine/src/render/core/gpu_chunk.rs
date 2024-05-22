@@ -1,25 +1,23 @@
-use std::{mem, num::NonZeroU64, sync::Arc};
+use std::mem;
 
 use bevy::{
     ecs::{
-        entity::{Entity, EntityHashMap},
+        entity::Entity,
         query::{ROQueryItem, With},
         system::{
-            lifetimeless::{self, Read, SRes},
-            Commands, Local, Query, Res, ResMut, Resource, SystemParamItem,
+            lifetimeless::{Read, SRes},
+            Commands, Query, Res, ResMut, Resource, SystemParamItem,
         },
-        world::{FromWorld, Mut, World},
+        world::Mut,
     },
     log::{debug, warn},
-    prelude::Deref,
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
-            binding_types, BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
-            Buffer, BufferUsages, BufferVec, ShaderStages, StorageBuffer, UniformBuffer,
+            BindGroup, BindGroupEntries, Buffer, BufferUsages, BufferVec, StorageBuffer,
+            UniformBuffer,
         },
         renderer::{RenderDevice, RenderQueue},
-        view::Visibility,
         Extract, MainWorld,
     },
 };
@@ -28,18 +26,15 @@ use itertools::Itertools;
 
 use crate::{
     render::{
-        meshing::controller::{
-            ChunkMeshData, ChunkMeshStatus, ChunkRenderPermits, ExtractableChunkMeshData,
-            TimedChunkMeshData,
-        },
+        meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
         occlusion::ChunkOcclusionMap,
-        quad::{ChunkQuads, GpuQuad},
+        quad::GpuQuad,
     },
     topo::world::{ChunkEntity, ChunkPos},
-    util::{ChunkMap, SyncChunkMap},
+    util::ChunkMap,
 };
 
-use super::{render::ChunkPipeline, DefaultBindGroupLayouts};
+use super::DefaultBindGroupLayouts;
 
 pub fn extract_chunk_entities(
     mut cmds: Commands,
@@ -62,7 +57,7 @@ pub fn extract_chunk_mesh_data(
     mut main_world: ResMut<MainWorld>,
 ) {
     main_world.resource_scope(
-        |world, mut extractable_meshes: Mut<ExtractableChunkMeshData>| {
+        |_world, mut extractable_meshes: Mut<ExtractableChunkMeshData>| {
             let mut extracted = 0;
 
             extractable_meshes
@@ -253,7 +248,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetChunkBindGroup<I> {
     type ItemQuery = (Read<ChunkPos>, Read<ChunkEntity>);
 
     fn render<'w>(
-        item: &P,
+        _item: &P,
         _view: ROQueryItem<'w, Self::ViewQuery>,
         entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         param: SystemParamItem<'w, '_, Self::Param>,

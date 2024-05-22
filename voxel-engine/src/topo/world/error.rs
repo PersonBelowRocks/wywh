@@ -1,5 +1,3 @@
-use super::chunk::ChunkFlags;
-
 #[derive(te::Error, Debug, PartialEq, Eq, Clone)]
 pub enum ChunkManagerError {
     #[error("Chunk not loaded")]

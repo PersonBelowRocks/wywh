@@ -1,27 +1,18 @@
 use bevy::{
-    ecs::query::QueryEntityError,
     pbr::{
         CascadesVisibleEntities, CubemapVisibleEntities, ExtractedDirectionalLight,
-        ExtractedPointLight, LightEntity, MeshPipelineKey, RenderMeshInstances, Shadow,
-        ViewLightEntities,
+        ExtractedPointLight, LightEntity, MeshPipelineKey, Shadow, ViewLightEntities,
     },
     prelude::*,
     render::{
         mesh::PrimitiveTopology,
-        render_asset::RenderAssets,
         render_phase::{DrawFunctions, RenderPhase},
-        render_resource::{
-            PipelineCache, SpecializedMeshPipelines, SpecializedRenderPipeline,
-            SpecializedRenderPipelines,
-        },
+        render_resource::{PipelineCache, SpecializedRenderPipeline, SpecializedRenderPipelines},
         view::VisibleEntities,
     },
 };
 
-use crate::topo::world::{ChunkEntity, ChunkPos};
-
 use super::{
-    gpu_chunk::{ChunkRenderData, ChunkRenderDataStore},
     prepass::{ChunkPrepassPipeline, DrawVoxelChunkPrepass},
     render::ChunkPipelineKey,
     utils::{iter_visible_chunks, ChunkDataParams},
@@ -72,7 +63,7 @@ pub fn queue_shadows(
                     .expect("Failed to get spot light visible entities"),
             };
 
-            iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
+            iter_visible_chunks(visible_entities, &chunks, |entity, _chunk_pos| {
                 let mut key =
                     MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList)
                         | MeshPipelineKey::DEPTH_PREPASS;

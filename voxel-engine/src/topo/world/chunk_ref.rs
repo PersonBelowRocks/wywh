@@ -1,12 +1,6 @@
-use std::{
-    hash::BuildHasher,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Weak,
-    },
-};
+use std::hash::BuildHasher;
 
-use bevy::{log::info, math::UVec3, prelude::IVec3};
+use bevy::{math::UVec3, prelude::IVec3};
 
 use crate::topo::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
@@ -20,8 +14,8 @@ use crate::topo::{
 
 use super::{
     chunk::{Chunk, ChunkFlags, ChunkPos},
-    realm::{ChunkStatuses, LccRef, PendingChunkChanges},
-    ChunkFlagError, ChunkManagerError,
+    realm::{ChunkStatuses, LccRef},
+    ChunkManagerError,
 };
 
 /// Chunk reference read access

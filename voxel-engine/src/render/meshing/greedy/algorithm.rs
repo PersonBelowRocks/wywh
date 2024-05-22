@@ -1,15 +1,8 @@
-use bevy::ecs::system::Resource;
 use bevy::math::ivec2;
-
-use bevy::math::vec2;
 
 use bevy::math::IVec2;
 use bevy::math::Vec2;
 
-use bevy::render::mesh::Indices;
-use bevy::render::mesh::Mesh;
-use bevy::render::render_asset::RenderAssetUsages;
-use bevy::render::render_resource::PrimitiveTopology;
 use itertools::Itertools;
 
 use crate::data::registries::block::BlockVariantRegistry;
@@ -17,16 +10,13 @@ use crate::data::registries::block::BlockVariantRegistry;
 use crate::data::registries::Registry;
 use crate::data::tile::Face;
 
-use crate::render::core::RenderCore;
-
 use crate::render::meshing::controller::ChunkMeshData;
 use crate::render::meshing::error::MesherResult;
 use crate::render::meshing::Context;
-use crate::render::occlusion::ChunkOcclusionMap;
+
 use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
 
-use crate::render::quad::ChunkQuads;
 use crate::render::quad::GpuQuad;
 use crate::render::quad::GpuQuadBitfields;
 

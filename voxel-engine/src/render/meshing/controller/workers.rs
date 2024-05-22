@@ -1,11 +1,10 @@
 use std::{
     collections::BinaryHeap,
-    marker::PhantomData,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use bevy::{
@@ -14,13 +13,12 @@ use bevy::{
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
 use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TrySendError};
-use dashmap::DashMap;
 
 use crate::{
     data::registries::Registries,
     render::meshing::{error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context},
     topo::world::{ChunkManager, ChunkPos},
-    util::{result::ResultFlattening, Keyed, KeyedOrd, SyncChunkMap},
+    util::{result::ResultFlattening, Keyed, KeyedOrd},
 };
 
 use super::{ChunkMeshData, RemeshPriority};

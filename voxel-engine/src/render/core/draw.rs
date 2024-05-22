@@ -6,7 +6,6 @@ use bevy::{
             SystemParamItem,
         },
     },
-    log::{debug, debug_once},
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::IndexFormat,

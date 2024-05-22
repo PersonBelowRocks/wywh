@@ -2,7 +2,7 @@ use bevy::ecs::query::QueryEntityError;
 use bevy::ecs::system::lifetimeless::Read;
 use bevy::pbr::{MeshFlags, MeshPipelineKey};
 use bevy::prelude::*;
-use bevy::render::render_resource::{RenderPipelineDescriptor, ShaderDefVal};
+use bevy::render::render_resource::ShaderDefVal;
 use bevy::render::Extract;
 use bevy::{ecs::system::SystemParam, render::view::VisibleEntities};
 

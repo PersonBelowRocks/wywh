@@ -12,46 +12,33 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
-    log::error,
-    pbr::{
-        DrawMesh, MeshLayouts, MeshPipelineKey, PreviousViewProjection, RenderMeshInstances,
-        SetMeshBindGroup, SetPrepassViewBindGroup,
-    },
+    pbr::{MeshPipelineKey, PreviousViewProjection, SetPrepassViewBindGroup},
     render::{
         globals::GlobalsUniform,
-        mesh::{Mesh, MeshVertexBufferLayout, PrimitiveTopology},
-        render_asset::RenderAssets,
+        mesh::PrimitiveTopology,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
             binding_types::uniform_buffer, BindGroupLayout, BindGroupLayoutEntries,
             ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
             Face, FragmentState, FrontFace, MultisampleState, PipelineCache, PolygonMode,
             PrimitiveState, RenderPipelineDescriptor, Shader, ShaderDefVal, ShaderStages,
-            SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
-            SpecializedRenderPipeline, SpecializedRenderPipelines, StencilFaceState, StencilState,
-            VertexState,
+            SpecializedMeshPipeline, SpecializedRenderPipeline, SpecializedRenderPipelines,
+            StencilFaceState, StencilState, VertexState,
         },
         renderer::RenderDevice,
         view::{ExtractedView, ViewUniform, VisibleEntities},
     },
 };
 
-use crate::{
-    data::texture::GpuFaceTexture,
-    render::{
-        core::{gpu_chunk::ChunkRenderData, render::ChunkPipeline},
-        occlusion::ChunkOcclusionMap,
-        quad::GpuQuadBitfields,
-    },
-};
+use crate::render::core::render::ChunkPipeline;
 
 use super::{
     draw::DrawChunk,
-    gpu_chunk::{ChunkRenderDataStore, SetChunkBindGroup},
+    gpu_chunk::SetChunkBindGroup,
     gpu_registries::SetRegistryBindGroup,
     render::ChunkPipelineKey,
     utils::{add_shader_constants, iter_visible_chunks, ChunkDataParams},
-    DefaultBindGroupLayouts, RenderCore,
+    DefaultBindGroupLayouts,
 };
 
 #[derive(Clone, Resource)]
@@ -68,7 +55,7 @@ impl FromWorld for ChunkPrepassPipeline {
         let server = world.resource::<AssetServer>();
         let gpu = world.resource::<RenderDevice>();
 
-        let mesh_pipeline = world.resource::<ChunkPipeline>();
+        let _mesh_pipeline = world.resource::<ChunkPipeline>();
 
         let view_layout_motion_vectors = gpu.create_bind_group_layout(
             "chunk_prepass_view_layout_motion_vectors",
@@ -280,8 +267,14 @@ pub fn queue_prepass_chunks(
 ) {
     let draw_function = functions.read().get_id::<DrawVoxelChunkPrepass>().unwrap();
 
-    for (view, visible_entities, mut phase, depth_prepass, normal_prepass, motion_vector_prepass) in
-        &mut views
+    for (
+        _view,
+        visible_entities,
+        mut phase,
+        depth_prepass,
+        normal_prepass,
+        motion_vector_prepass,
+    ) in &mut views
     {
         let mut view_key = MeshPipelineKey::empty();
 
@@ -295,7 +288,7 @@ pub fn queue_prepass_chunks(
             view_key |= MeshPipelineKey::MOTION_VECTOR_PREPASS;
         }
 
-        iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
+        iter_visible_chunks(visible_entities, &chunks, |entity, _chunk_pos| {
             let pipeline_id = pipelines.specialize(
                 &pipeline_cache,
                 &prepass_pipeline,

@@ -7,8 +7,6 @@ mod render;
 mod shadows;
 mod utils;
 
-use std::num::NonZeroU64;
-
 use bevy::{
     app::{App, Plugin},
     core_pipeline::{core_3d::Opaque3d, prepass::Opaque3dPrepass},
@@ -20,10 +18,9 @@ use bevy::{
         mesh::MeshVertexAttribute,
         render_phase::AddRenderCommand,
         render_resource::{
-            binding_types::{self, sampler, storage_buffer_read_only, texture_2d_array},
-            BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderDefVal,
-            ShaderStages, ShaderType, SpecializedMeshPipelines, SpecializedRenderPipelines,
-            TextureSampleType, VertexFormat,
+            binding_types::{self},
+            BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderStages, ShaderType,
+            SpecializedRenderPipelines, TextureSampleType, VertexFormat,
         },
         renderer::RenderDevice,
         Render, RenderApp, RenderSet,

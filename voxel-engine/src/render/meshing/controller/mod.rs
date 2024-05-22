@@ -1,18 +1,14 @@
 mod ecs;
 mod workers;
 
-use std::{cmp, sync::Arc};
+use std::cmp;
 
 use bevy::prelude::*;
-use dashmap::DashSet;
 
 use crate::{
-    render::{
-        meshing::controller::ecs::dispatch_updated_chunk_remeshings,
-        quad::{ChunkQuads, GpuQuad},
-    },
+    render::{meshing::controller::ecs::dispatch_updated_chunk_remeshings, quad::GpuQuad},
     topo::world::ChunkPos,
-    util::{ChunkMap, SyncChunkMap},
+    util::ChunkMap,
     AppState, CoreEngineSetup,
 };
 
@@ -107,7 +103,7 @@ impl ChunkRenderPermits {
         self.permits.contains(pos)
     }
 
-    pub fn revoke_permit(&mut self, pos: ChunkPos, generation: u64) {
+    pub fn revoke_permit(&mut self, pos: ChunkPos, _generation: u64) {
         self.permits.remove(pos);
     }
 }

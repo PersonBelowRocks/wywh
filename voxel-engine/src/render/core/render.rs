@@ -10,25 +10,21 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
-    log::error,
     pbr::{
-        generate_view_layouts, DrawMesh, MeshPipeline, MeshPipelineKey, MeshPipelineViewLayout,
-        MeshPipelineViewLayoutKey, RenderMeshInstances, ScreenSpaceAmbientOcclusionSettings,
-        SetMeshBindGroup, SetMeshViewBindGroup, ShadowFilteringMethod,
+        generate_view_layouts, MeshPipelineKey, MeshPipelineViewLayout, MeshPipelineViewLayoutKey,
+        ScreenSpaceAmbientOcclusionSettings, SetMeshViewBindGroup, ShadowFilteringMethod,
         CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT,
     },
     prelude::Deref,
     render::{
         camera::{Projection, TemporalJitter},
-        mesh::{Mesh, MeshVertexBufferLayout, PrimitiveTopology},
-        render_asset::RenderAssets,
+        mesh::PrimitiveTopology,
         render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
-            BindGroupLayout, BlendState, ColorTargetState, ColorWrites, CompareFunction,
-            DepthBiasState, DepthStencilState, Face, FragmentState, FrontFace, MultisampleState,
-            PipelineCache, PolygonMode, PrimitiveState, PushConstantRange,
-            RenderPipelineDescriptor, Shader, ShaderDefVal, ShaderStages, SpecializedMeshPipeline,
-            SpecializedMeshPipelineError, SpecializedMeshPipelines, SpecializedRenderPipeline,
+            BindGroupLayout, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState,
+            DepthStencilState, Face, FragmentState, FrontFace, MultisampleState, PipelineCache,
+            PolygonMode, PrimitiveState, PushConstantRange, RenderPipelineDescriptor, Shader,
+            ShaderDefVal, ShaderStages, SpecializedMeshPipeline, SpecializedRenderPipeline,
             SpecializedRenderPipelines, StencilFaceState, StencilState, TextureFormat, VertexState,
         },
         renderer::RenderDevice,
@@ -37,20 +33,14 @@ use bevy::{
     },
 };
 
-use crate::{
-    data::texture::GpuFaceTexture,
-    render::{
-        core::utils::add_mesh_pipeline_shader_defs, occlusion::ChunkOcclusionMap,
-        quad::GpuQuadBitfields,
-    },
-};
+use crate::render::core::utils::add_mesh_pipeline_shader_defs;
 
 use super::{
     draw::DrawChunk,
-    gpu_chunk::{ChunkRenderData, ChunkRenderDataStore, SetChunkBindGroup},
+    gpu_chunk::SetChunkBindGroup,
     gpu_registries::SetRegistryBindGroup,
     utils::{add_shader_constants, iter_visible_chunks, ChunkDataParams},
-    DefaultBindGroupLayouts, RenderCore,
+    DefaultBindGroupLayouts,
 };
 
 #[derive(Resource, Clone)]
@@ -287,7 +277,7 @@ pub fn queue_chunks(
             }
         }
 
-        iter_visible_chunks(visible_entities, &chunks, |entity, chunk_pos| {
+        iter_visible_chunks(visible_entities, &chunks, |entity, _chunk_pos| {
             let pipeline_id = pipelines.specialize(
                 pipeline_cache.as_ref(),
                 pipeline.as_ref(),

@@ -1,32 +1,22 @@
-use std::{
-    cmp::max,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{cmp::max, time::Duration};
 
 use bevy::{
-    log::Level,
     prelude::*,
-    render::{extract_resource::ExtractResource, settings},
     tasks::{available_parallelism, TaskPool, TaskPoolBuilder},
-    utils::{tracing::span, warn},
 };
-use dashmap::DashSet;
+
 use itertools::Itertools;
 
 use crate::{
     data::{registries::Registries, tile::Face},
-    render::meshing::{controller::workers::MeshBuilderSettings, greedy::algorithm::GreedyMesher},
-    topo::{
-        neighbors,
-        world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
-    },
-    util::{ChunkMap, SyncChunkMap},
+    render::meshing::controller::workers::MeshBuilderSettings,
+    topo::world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
+    util::ChunkMap,
 };
 
 use super::{
     workers::{MeshBuilder, MeshCommand},
-    ChunkMeshData, ChunkMeshObserver, ChunkMeshStatus, ChunkRenderPermit, ChunkRenderPermits,
+    ChunkMeshObserver, ChunkMeshStatus, ChunkRenderPermit, ChunkRenderPermits,
     ExtractableChunkMeshData, RemeshPriority, RemeshType, TimedChunkMeshData,
 };
 
@@ -128,7 +118,7 @@ pub fn queue_chunk_mesh_jobs(
 
     builder.queue_jobs(commands.into_iter());
 
-    for cmd in immediate.iter() {
+    for _cmd in immediate.iter() {
         error!("Not yet implemented!");
     }
 }
