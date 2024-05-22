@@ -7,6 +7,9 @@ pub use intdiv::*;
 pub mod chunks;
 pub use chunks::*;
 
+pub mod keyed_ord;
+pub use keyed_ord::*;
+
 use bevy::prelude::*;
 use dashmap::DashMap;
 use ordered_float::NotNan;

@@ -94,7 +94,7 @@ impl Generator {
         let ws_min_sd = ws_min * 4;
         let _ws_max = cs_pos.worldspace_max();
 
-        if cs_pos.y < 0 {
+        if cs_pos.y() < 0 {
             for x in 0..Chunk::SIZE {
                 for y in 0..Chunk::SIZE {
                     for z in 0..Chunk::SIZE {

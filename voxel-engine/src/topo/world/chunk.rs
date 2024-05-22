@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicU32;
 use bevy::prelude::*;
 use bitflags::bitflags;
 use crossbeam::epoch::Atomic;
+use noise::Add;
 use parking_lot::RwLock;
 
 use crate::data::registries::block::BlockVariantRegistry;
@@ -12,21 +13,40 @@ use crate::topo::block::{BlockVoxel, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
 use crate::topo::storage::containers::data_storage::SyncIndexedChunkContainer;
 
-#[derive(
-    dm::From,
-    dm::Into,
-    dm::Display,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    Copy,
-    Clone,
-    Deref,
-    DerefMut,
-    Component,
-)]
+#[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
 pub struct ChunkPos(IVec3);
+
+impl ChunkPos {
+    pub const ZERO: Self = Self(IVec3::ZERO);
+
+    pub fn worldspace_max(self) -> IVec3 {
+        (self.0 * Chunk::SIZE) + (Chunk::SIZE - 1)
+    }
+
+    pub fn worldspace_min(self) -> IVec3 {
+        self.0 * Chunk::SIZE
+    }
+
+    pub fn x(self) -> i32 {
+        self.0.x
+    }
+
+    pub fn y(self) -> i32 {
+        self.0.y
+    }
+
+    pub fn z(self) -> i32 {
+        self.0.z
+    }
+
+    pub fn as_ivec3(self) -> IVec3 {
+        self.0
+    }
+
+    pub fn as_vec3(self) -> Vec3 {
+        self.0.as_vec3()
+    }
+}
 
 bitflags! {
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -41,18 +61,6 @@ bitflags! {
 
 #[derive(Copy, Clone, Debug, Component, PartialEq, Eq)]
 pub struct ChunkEntity;
-
-impl ChunkPos {
-    pub const ZERO: Self = Self(IVec3::ZERO);
-
-    pub fn worldspace_max(self) -> IVec3 {
-        (self.0 * Chunk::SIZE) + (Chunk::SIZE - 1)
-    }
-
-    pub fn worldspace_min(self) -> IVec3 {
-        self.0 * Chunk::SIZE
-    }
-}
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, dm::Constructor)]
 pub struct VoxelVariantData {

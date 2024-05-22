@@ -66,7 +66,7 @@ pub struct CoreEngineSetup;
 
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
-        debug!("Building voxel plugin");
+        info!("Building voxel plugin");
 
         app.add_plugins(MeshController);
         app.add_plugins(RenderCore);

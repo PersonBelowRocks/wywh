@@ -1,4 +1,5 @@
 use std::{
+    collections::BinaryHeap,
     marker::PhantomData,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -12,7 +13,7 @@ use bevy::{
     log::{error, info, warn},
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
-use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender};
+use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TrySendError};
 use dashmap::DashMap;
 
 use crate::{
@@ -21,10 +22,10 @@ use crate::{
         error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context, Mesher, MesherOutput,
     },
     topo::world::{ChunkManager, ChunkPos},
-    util::{result::ResultFlattening, SyncChunkMap},
+    util::{result::ResultFlattening, Keyed, KeyedOrd, SyncChunkMap},
 };
 
-use super::ChunkMeshData;
+use super::{ChunkMeshData, RemeshPriority};
 
 pub struct Worker {
     task: Task<()>,
@@ -44,8 +45,17 @@ pub struct WorkerParams {
 
 #[derive(Clone)]
 pub struct MeshCommand {
-    pos: ChunkPos,
-    generation: u64,
+    pub pos: ChunkPos,
+    pub priority: RemeshPriority,
+    pub generation: u64,
+}
+
+impl Keyed<RemeshPriority> for MeshCommand {
+    type Key = RemeshPriority;
+
+    fn key(&self) -> &Self::Key {
+        &self.priority
+    }
 }
 
 impl Worker {
@@ -121,24 +131,34 @@ pub struct FinishedChunkData {
     pub generation: u64,
 }
 
+#[derive(Copy, Clone)]
+pub struct MeshBuilderSettings {
+    pub workers: usize,
+    pub job_channel_capacity: usize,
+    // TODO: if a worker cant send its finished mesh immediately, then let it build another while waiting
+    pub worker_mesh_backlog_capacity: usize,
+}
+
 #[derive(Resource)]
-pub struct MeshWorkerPool {
+pub struct MeshBuilder {
     workers: Vec<Worker>,
     cmds: Sender<MeshCommand>,
+    pending: BinaryHeap<KeyedOrd<MeshCommand, RemeshPriority>>,
     finished: Receiver<FinishedChunkData>,
 }
 
-impl MeshWorkerPool {
+impl MeshBuilder {
     pub fn new(
-        worker_count: usize,
+        settings: MeshBuilderSettings,
         pool: &TaskPool,
         mesher: GreedyMesher,
         registries: Registries,
         cm: Arc<ChunkManager>,
     ) -> Self {
-        let (cmd_sender, cmd_recver) = channel::unbounded::<MeshCommand>();
+        let (cmd_sender, cmd_recver) =
+            channel::bounded::<MeshCommand>(settings.job_channel_capacity);
         let (mesh_sender, mesh_recver) = channel::unbounded::<FinishedChunkData>();
-        let mut workers = Vec::<Worker>::with_capacity(worker_count);
+        let mut workers = Vec::<Worker>::with_capacity(settings.workers);
 
         let default_channel_timeout_duration = Duration::from_millis(500);
 
@@ -150,7 +170,7 @@ impl MeshWorkerPool {
             cmds: cmd_recver,
         };
 
-        for i in 0..worker_count {
+        for i in 0..settings.workers {
             let worker = Worker::new(
                 pool,
                 worker_params.clone(),
@@ -163,8 +183,31 @@ impl MeshWorkerPool {
 
         Self {
             workers,
+            pending: BinaryHeap::default(),
             cmds: cmd_sender,
             finished: mesh_recver,
+        }
+    }
+
+    pub fn queue_jobs<I: Iterator<Item = MeshCommand>>(&mut self, cmds: I) {
+        self.pending.extend(cmds.map(KeyedOrd::new));
+
+        while let Some(next) = self.pending.pop() {
+            let next = next.into_inner();
+
+            if let Err(error) = self.cmds.try_send(next) {
+                match error {
+                    TrySendError::Disconnected(msg) => {
+                        self.pending.push(KeyedOrd::new(msg));
+                        error!("Could not send remesh command to workers because the channel is disconnected.");
+                        break;
+                    }
+                    TrySendError::Full(msg) => {
+                        self.pending.push(KeyedOrd::new(msg));
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -182,9 +225,5 @@ impl MeshWorkerPool {
         }
 
         vec
-    }
-
-    pub fn queue_job(&self, pos: ChunkPos, generation: u64) {
-        self.cmds.send(MeshCommand { pos, generation }).unwrap();
     }
 }

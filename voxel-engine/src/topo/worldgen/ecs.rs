@@ -1,6 +1,8 @@
+use std::cmp::max;
+
 use bevy::{
     prelude::*,
-    tasks::{TaskPool, TaskPoolBuilder},
+    tasks::{available_parallelism, TaskPool, TaskPoolBuilder},
 };
 
 use crate::{data::registries::Registries, topo::world::VoxelRealm};
@@ -19,10 +21,11 @@ pub fn setup_terrain_generator_workers(
     registries: Res<Registries>,
     realm: Res<VoxelRealm>,
 ) {
-    debug!("Setting up terrain generator workers");
+    info!("Setting up terrain generator workers");
 
     let task_pool = TaskPoolBuilder::new()
         .thread_name("Generator Worker Task Pool".into())
+        .num_threads(max(1, available_parallelism() / 2))
         .build();
 
     let worker_pool = GeneratorWorkerPool::new(
