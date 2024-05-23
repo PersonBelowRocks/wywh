@@ -5,6 +5,7 @@ use crate::{data::tile::Face, util::Axis3D};
 pub mod access;
 pub mod block;
 pub mod bounding_box;
+pub mod controller;
 mod ecs;
 pub mod error;
 pub mod neighbors;
@@ -13,7 +14,7 @@ pub mod util;
 pub mod world;
 pub mod worldgen;
 
-pub use ecs::ChunkObserver;
+pub use controller::ChunkObserver;
 
 pub use util::*;
 

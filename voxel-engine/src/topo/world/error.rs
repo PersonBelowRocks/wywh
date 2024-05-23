@@ -2,6 +2,8 @@
 pub enum ChunkManagerError {
     #[error("Chunk not loaded")]
     Unloaded,
+    #[error("Chunk is primordial")]
+    Primordial,
     #[error("Chunk doesn't exist")]
     DoesntExist,
     #[error("Tried to initialize already existing chunk")]

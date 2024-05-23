@@ -16,7 +16,7 @@ use data::{
     resourcepath::rpath,
 };
 use mip_texture_array::MippedArrayTexturePlugin;
-use render::meshing::controller::{GrantPermit, MeshGeneration};
+use render::meshing::controller::MeshGeneration;
 use topo::{block::FullBlock, world::VoxelRealm};
 
 pub mod data;
@@ -104,40 +104,10 @@ impl Plugin for VoxelPlugin {
 fn generate_debug_chunks(
     mut cmds: Commands,
     mut events: EventWriter<GenerateChunk>,
-    mut permits: EventWriter<GrantPermit>,
     generation: Res<MeshGeneration>,
 ) {
     debug!("Generating debugging chunks");
-
-    const DIMS: i32 = 4;
-
-    let generation = **generation;
-
-    for x in -DIMS..=DIMS {
-        for y in -DIMS..=DIMS {
-            for z in -DIMS..=DIMS {
-                let pos = ivec3(x, y, z);
-
-                events.send(GenerateChunk { pos: pos.into() });
-
-                permits.send(GrantPermit {
-                    pos: pos.into(),
-                    generation,
-                });
-
-                // TODO: we need a comprehensive system to manage chunk entities in the ECS world
-                cmds.spawn((
-                    ChunkPos::from(pos),
-                    VisibilityBundle::default(),
-                    Chunk::BOUNDING_BOX.to_aabb(),
-                    TransformBundle::from_transform(Transform::from_translation(
-                        pos.as_vec3() * Chunk::SIZE as f32,
-                    )),
-                    ChunkEntity,
-                ));
-            }
-        }
-    }
+    todo!()
 }
 
 fn setup(mut cmds: Commands, registries: Res<Registries>) {

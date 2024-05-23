@@ -77,7 +77,7 @@ impl Worker {
                                 registries: &params.registries,
                             };
 
-                            let chunk = cm.get_loaded_chunk(cmd.pos)?;
+                            let chunk = cm.get_loaded_chunk(cmd.pos, false)?;
                             Ok(chunk.with_read_access(|access| {
                                 params.mesher.build(access, context)
                             })??)

@@ -1,5 +1,4 @@
 pub mod chunk;
-pub mod chunk_entity;
 pub mod chunk_manager;
 pub mod chunk_ref;
 pub mod error;

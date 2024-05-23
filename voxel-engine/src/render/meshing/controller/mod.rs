@@ -13,11 +13,11 @@ use crate::{
 };
 
 use self::ecs::{
-    handle_incoming_permits, insert_chunks, queue_chunk_mesh_jobs, setup_chunk_meshing_workers,
+    insert_chunks, queue_chunk_mesh_jobs, setup_chunk_meshing_workers,
     voxel_realm_remesh_updated_chunks,
 };
 
-pub use self::ecs::{GrantPermit, MeshGeneration, RemeshChunk, RevokePermit};
+pub use self::ecs::{MeshGeneration, RemeshChunk};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RemeshType {
@@ -90,33 +90,15 @@ pub struct ChunkRenderPermit {
     pub granted: u64,
 }
 
-#[derive(Resource, Default)]
-pub struct ChunkRenderPermits {
-    pub(super) permits: ChunkMap<ChunkRenderPermit>,
-}
-
-impl ChunkRenderPermits {
-    pub fn has_permit(&self, pos: ChunkPos) -> bool {
-        self.permits.contains(pos)
-    }
-
-    pub fn revoke_permit(&mut self, pos: ChunkPos, _generation: u64) {
-        self.permits.remove(pos);
-    }
-}
-
 pub struct MeshController;
 
 impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
         info!("Setting up mesh controller");
 
-        app.init_resource::<ChunkRenderPermits>()
-            .init_resource::<ExtractableChunkMeshData>()
+        app.init_resource::<ExtractableChunkMeshData>()
             .init_resource::<MeshGeneration>()
-            .add_event::<RemeshChunk>()
-            .add_event::<GrantPermit>()
-            .add_event::<RevokePermit>();
+            .add_event::<RemeshChunk>();
 
         app.add_systems(
             OnEnter(AppState::Finished),
@@ -131,7 +113,6 @@ impl Plugin for MeshController {
         app.add_systems(
             FixedPostUpdate,
             (
-                handle_incoming_permits,
                 voxel_realm_remesh_updated_chunks.pipe(dispatch_updated_chunk_remeshings),
                 queue_chunk_mesh_jobs,
             )

@@ -8,6 +8,7 @@ use crate::data::registries::Registry;
 use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::block::{BlockVoxel, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
+use crate::topo::controller::LoadReasons;
 use crate::topo::storage::containers::data_storage::SyncIndexedChunkContainer;
 
 #[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
@@ -50,13 +51,24 @@ impl ChunkPos {
 }
 
 bitflags! {
+    /// Flags that describe various properties of a chunk
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub struct ChunkFlags: u32 {
+        /// Indicates that the chunk is currently being populated by the world generator.
         const GENERATING = 0b1 << 0;
+        /// Indicates that the chunk should be remeshed, when the engine remeshes the chunk this flag will
+        /// be unset.
         const REMESH = 0b1 << 1;
         // TODO: have flags for each edge that was updated
+        /// Indicates that the chunk's neighbors should be remeshed
         const REMESH_NEIGHBORS = 0b1 << 2;
-        const FRESH = 0b1 << 3;
+        /// Indicates that this chunk was just generated and has not been meshed before
+        const FRESHLY_GENERATED = 0b1 << 3;
+        /// Indicates that a chunk has not been populated with the generator and is only really
+        /// acting as a "dummy" until it's further processed by the engine.
+        /// Chunks are not supposed to be primordial for long, primordial chunks are usually immediately
+        /// queued for further processing by the engine to get them out of their primordial state.
+        const PRIMORDIAL = 0b1 << 4;
     }
 }
 
@@ -71,6 +83,7 @@ pub struct VoxelVariantData {
 
 pub struct Chunk {
     pub flags: RwLock<ChunkFlags>,
+    pub load_reasons: RwLock<LoadReasons>,
     pub variants: SyncIndexedChunkContainer<BlockVoxel>,
 }
 
@@ -92,9 +105,10 @@ impl Chunk {
     };
 
     #[inline]
-    pub fn new(filling: BlockVoxel, initial_flags: ChunkFlags) -> Self {
+    pub fn new(filling: BlockVoxel, initial_flags: ChunkFlags, load_reasons: LoadReasons) -> Self {
         Self {
             flags: RwLock::new(initial_flags),
+            load_reasons: RwLock::new(load_reasons),
             variants: SyncIndexedChunkContainer::filled(filling),
         }
     }

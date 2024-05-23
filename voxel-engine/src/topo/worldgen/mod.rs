@@ -49,30 +49,8 @@ pub struct GeneratorCommand {
 fn generate_chunk(generator: &Generator, cmd: GeneratorCommand, cm: &ChunkManager) {
     let cpos = cmd.pos;
 
-    match cm.initialize_new_chunk(cpos, true) {
-        Ok(cref) => {
-            let access_result = cref.with_access(true, |mut access| {
-                let gen_result = generator.write_to_chunk(cpos, &mut access);
-
-                if let Err(error) = gen_result {
-                    error!("Generator raised an error generating chunk '{cpos}': {error}")
-                } else {
-                    access.coalesce_microblocks();
-                    access.optimize_internal_storage();
-                }
-            });
-
-            cref.update_flags(|flags| {
-                flags.remove(ChunkFlags::GENERATING);
-                flags.insert(ChunkFlags::FRESH | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::REMESH);
-            });
-
-            if let Err(error) = access_result {
-                error!("Error getting write access to chunk '{cpos}': {error}");
-            }
-        }
-        Err(error) => error!("Error trying to generate chunk at '{cpos}': {error}"),
-    }
+    // TODO: get chunk and generate into it
+    todo!();
 }
 
 async fn internal_worker_task(

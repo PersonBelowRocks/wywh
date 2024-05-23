@@ -5,6 +5,7 @@ use bevy::{ecs::entity::Entity, math::UVec3, prelude::IVec3};
 use crate::topo::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
     block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},
+    controller::LoadReasons,
     error::ChunkAccessError,
     storage::{
         containers::data_storage::{SiccAccess, SiccReadAccess},
@@ -56,7 +57,7 @@ impl<'a> ChunkRef<'a> {
         let mut new_flags = old_flags;
         f(&mut new_flags);
 
-        if new_flags.contains(ChunkFlags::FRESH) {
+        if new_flags.contains(ChunkFlags::FRESHLY_GENERATED) {
             self.stats.fresh.insert(self.pos);
         } else {
             self.stats.fresh.remove(&self.pos);
@@ -75,6 +76,27 @@ impl<'a> ChunkRef<'a> {
         }
 
         self.set_flags(new_flags);
+    }
+
+    pub fn load_reasons(&self) -> LoadReasons {
+        *self.chunk.load_reasons.read()
+    }
+
+    fn set_load_reasons(&self, reasons: LoadReasons) {
+        let mut old = self.chunk.load_reasons.write();
+        *old = reasons;
+    }
+
+    pub fn update_load_reasons<F>(&self, f: F)
+    where
+        F: for<'lr> FnOnce(&'lr mut LoadReasons),
+    {
+        let old_reasons = self.load_reasons();
+        let mut new_reasons = old_reasons;
+        f(&mut new_reasons);
+
+        // TODO: mark chunk for unloading there are no load reasons
+        self.set_load_reasons(new_reasons);
     }
 
     pub fn with_access<F, U>(&self, manual_update_ctrl: bool, f: F) -> Result<U, ChunkManagerError>

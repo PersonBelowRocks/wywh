@@ -13,30 +13,22 @@ use dashmap::{mapref::one::Ref, DashSet};
 use crate::{
     topo::{
         block::{BlockVoxel, FullBlock},
+        controller::{ChunkPermitKey, ChunkPermits, PermitFlags},
         neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
         world::chunk::ChunkFlags,
     },
     util::{ivec3_to_1d, SyncHashMap},
 };
 
-use super::{
-    chunk::{Chunk, ChunkPos},
-    chunk_entity::CEBimap,
-    chunk_manager::ChunkManager,
-    chunk_ref::{ChunkRef, ChunkRefReadAccess},
-    error::ChunkManagerError,
-};
+use super::{chunk_manager::ChunkManager, ChunkPos};
 
 #[derive(Resource)]
 pub struct ChunkManagerResource(pub(crate) Arc<ChunkManager>);
 
-#[derive(Resource)]
-pub struct ChunkEntitiesBijectionResource(pub(crate) CEBimap);
-
 #[derive(SystemParam)]
 pub struct VoxelRealm<'w> {
     chunk_manager: Res<'w, ChunkManagerResource>,
-    chunk_entities: Res<'w, ChunkEntitiesBijectionResource>,
+    permits: Res<'w, ChunkPermits>,
 }
 
 impl<'w> VoxelRealm<'w> {
@@ -48,7 +40,13 @@ impl<'w> VoxelRealm<'w> {
         self.chunk_manager.0.clone()
     }
 
-    pub fn ce_bimap(&self) -> &CEBimap {
-        &self.chunk_entities.0
+    pub fn permits(&self) -> &ChunkPermits {
+        &self.permits
+    }
+
+    pub fn has_render_permit(&self, pos: ChunkPos) -> bool {
+        self.permits()
+            .get(ChunkPermitKey::Chunk(pos))
+            .is_some_and(|permit| permit.flags.contains(PermitFlags::RENDER))
     }
 }

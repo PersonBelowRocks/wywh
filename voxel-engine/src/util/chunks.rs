@@ -118,6 +118,13 @@ impl<T> ChunkMap<T> {
         Self(hb::HashMap::with_hasher(fxhash::FxBuildHasher::default()))
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(hb::HashMap::with_capacity_and_hasher(
+            capacity,
+            fxhash::FxBuildHasher::default(),
+        ))
+    }
+
     pub fn set(&mut self, pos: ChunkPos, data: T) -> Option<T> {
         self.0.insert(pos, data)
     }

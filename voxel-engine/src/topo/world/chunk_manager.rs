@@ -9,15 +9,13 @@ use dashmap::{mapref::one::Ref, DashSet};
 use crate::{
     topo::{
         block::{BlockVoxel, FullBlock},
+        controller::LoadReasons,
         neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
     },
     util::{ivec3_to_1d, ChunkSet, SyncHashMap},
 };
 
-use super::{
-    chunk::ChunkFlags, chunk_entity::CEBimap, Chunk, ChunkManagerError, ChunkPos, ChunkRef,
-    ChunkRefReadAccess,
-};
+use super::{chunk::ChunkFlags, Chunk, ChunkManagerError, ChunkPos, ChunkRef, ChunkRefReadAccess};
 
 #[derive(Default)]
 pub struct LoadedChunkContainer(pub(crate) SyncHashMap<ChunkPos, Chunk>);
@@ -98,11 +96,23 @@ impl ChunkManager {
         }
     }
 
-    pub fn get_loaded_chunk(&self, pos: ChunkPos) -> Result<ChunkRef<'_>, ChunkManagerError> {
+    /// Gets the loaded chunk at the given position if it exists, otherwise return an error.
+    /// If `get_primordial` is false this function will return an error if the chunk is tagged as primordial.
+    pub fn get_loaded_chunk(
+        &self,
+        pos: ChunkPos,
+        get_primordial: bool,
+    ) -> Result<ChunkRef<'_>, ChunkManagerError> {
         let chunk = self
             .loaded_chunks
             .get(pos)
             .ok_or(ChunkManagerError::Unloaded)?;
+
+        if !get_primordial {
+            if chunk.flags.read().contains(ChunkFlags::PRIMORDIAL) {
+                return Err(ChunkManagerError::Primordial);
+            }
+        }
 
         Ok(ChunkRef {
             chunk,
@@ -133,7 +143,9 @@ impl ChunkManager {
     }
 
     pub fn chunk_flags(&self, pos: ChunkPos) -> Option<ChunkFlags> {
-        self.get_loaded_chunk(pos).map(|cref| cref.flags()).ok()
+        self.get_loaded_chunk(pos, true)
+            .map(|cref| cref.flags())
+            .ok()
     }
 
     pub fn has_loaded_chunk(&self, pos: ChunkPos) -> bool {
@@ -158,7 +170,7 @@ impl ChunkManager {
                     }
 
                     let nbrpos_ws = ChunkPos::from(nbrpos + IVec3::from(pos));
-                    if let Ok(chunk_ref) = self.get_loaded_chunk(nbrpos_ws) {
+                    if let Ok(chunk_ref) = self.get_loaded_chunk(nbrpos_ws, false) {
                         refs[ivec3_to_1d(nbrpos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
                             .unwrap()] = Some(chunk_ref)
                     }
@@ -190,26 +202,24 @@ impl ChunkManager {
         self.loaded_chunks.set(pos, chunk);
     }
 
+    /// Initialize a new chunk at the given `pos` if one doesn't exist, with the provided load reasons.
+    /// The chunk will be flagged as primordial.
     pub fn initialize_new_chunk(
         &self,
         pos: ChunkPos,
-        generating: bool,
-    ) -> Result<ChunkRef, ChunkManagerError> {
-        let flags = if generating {
-            ChunkFlags::GENERATING
-        } else {
-            ChunkFlags::empty()
-        };
-
-        let chunk = Chunk::new(BlockVoxel::Full(self.default_block), flags);
-
+        load_reasons: LoadReasons,
+    ) -> Result<(), ChunkManagerError> {
         if self.loaded_chunks.get(pos).is_some() {
             return Err(ChunkManagerError::AlreadyInitialized);
         }
 
+        let chunk = Chunk::new(
+            BlockVoxel::Full(self.default_block),
+            ChunkFlags::PRIMORDIAL,
+            load_reasons,
+        );
         self.loaded_chunks.set(pos, chunk);
-
-        self.get_loaded_chunk(pos)
+        Ok(())
     }
 
     pub fn updated_chunks(&self) -> UpdatedChunks<'_> {
@@ -239,7 +249,7 @@ impl<'a> UpdatedChunks<'a> {
         F: for<'cref> FnMut(ChunkRef<'cref>),
     {
         for chunk_pos in self.manager.status.updated.iter() {
-            let cref = self.manager.get_loaded_chunk(*chunk_pos)?;
+            let cref = self.manager.get_loaded_chunk(*chunk_pos, false)?;
             f(cref);
         }
 
