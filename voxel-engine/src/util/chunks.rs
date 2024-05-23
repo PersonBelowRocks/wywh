@@ -179,4 +179,8 @@ impl<T> ChunkMap<T> {
     pub fn shrink_to_fit(&mut self) {
         self.0.shrink_to_fit()
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (ChunkPos, &T)> {
+        self.0.iter().map(|(&pos, data)| (pos, data))
+    }
 }

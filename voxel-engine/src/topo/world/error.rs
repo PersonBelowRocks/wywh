@@ -6,6 +6,10 @@ pub enum ChunkManagerError {
     DoesntExist,
     #[error("Tried to initialize already existing chunk")]
     AlreadyInitialized,
+    #[error("Could associate the entity with a chunk")]
+    MissingEntity,
+    #[error("Chunk position is out of bounds")]
+    OutOfBounds,
 }
 
 #[derive(te::Error, Debug, PartialEq, Eq, Clone)]

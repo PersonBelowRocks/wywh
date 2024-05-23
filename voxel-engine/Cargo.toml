@@ -21,7 +21,7 @@ dashmap = "5.5.3"
 derive_more = "0.99.17"
 deser-hjson = "2.2.4"
 downcast-rs = "1.2.0"
-hashbrown = "0.14.2"
+hashbrown = { version = "0.14.2", features = ["rayon"] }
 indexmap = "2.1.0"
 itertools = "0.11.0"
 noise = "0.8.2"

@@ -19,7 +19,7 @@ pub fn setup_terrain_generator_workers(
     mut cmds: Commands,
     seed: Res<GeneratorSeed>,
     registries: Res<Registries>,
-    realm: Res<VoxelRealm>,
+    realm: VoxelRealm,
 ) {
     info!("Setting up terrain generator workers");
 
@@ -33,7 +33,7 @@ pub fn setup_terrain_generator_workers(
         task_pool.thread_num(),
         &task_pool,
         registries.clone(),
-        realm.chunk_manager.clone(),
+        realm.clone_cm(),
     );
 
     cmds.insert_resource(worker_pool);

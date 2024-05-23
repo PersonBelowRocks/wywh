@@ -149,5 +149,5 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
             .unwrap(),
     };
 
-    cmds.insert_resource(VoxelRealm::new(void));
+    todo!() // TODO: set up voxel realm
 }

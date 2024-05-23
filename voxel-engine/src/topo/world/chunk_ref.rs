@@ -1,6 +1,6 @@
 use std::hash::BuildHasher;
 
-use bevy::{math::UVec3, prelude::IVec3};
+use bevy::{ecs::entity::Entity, math::UVec3, prelude::IVec3};
 
 use crate::topo::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
@@ -14,7 +14,7 @@ use crate::topo::{
 
 use super::{
     chunk::{Chunk, ChunkFlags, ChunkPos},
-    realm::{ChunkStatuses, LccRef},
+    chunk_manager::{ChunkStatuses, LccRef},
     ChunkManagerError,
 };
 
@@ -27,11 +27,16 @@ pub struct ChunkRef<'a> {
     pub(super) chunk: LccRef<'a>,
     pub(super) stats: &'a ChunkStatuses,
     pub(super) pos: ChunkPos,
+    pub(super) entity: Option<Entity>,
 }
 
 impl<'a> ChunkRef<'a> {
     pub fn pos(&self) -> ChunkPos {
         self.pos
+    }
+
+    pub fn entity(&self) -> Option<Entity> {
+        self.entity
     }
 
     pub fn flags(&self) -> ChunkFlags {

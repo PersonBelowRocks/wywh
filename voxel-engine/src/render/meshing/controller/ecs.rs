@@ -11,8 +11,8 @@ use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
     topo::{
-        ecs::ChunkObserver,
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
+        ChunkObserver,
     },
     util::ChunkMap,
 };
@@ -27,7 +27,7 @@ use super::{
 pub struct MeshWorkerTaskPool(TaskPool);
 
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct MeshGeneration(u64);
+pub struct MeshGeneration(pub u64);
 
 #[derive(Event, Clone)]
 pub struct RemeshChunk {
@@ -182,14 +182,14 @@ pub struct UpdateDetectionRemeshResults {
 /// Will dispatch remesh events for chunks neighboring the updated chunks if necessary.
 pub fn voxel_realm_remesh_updated_chunks(
     time: Res<Time>,
-    realm: Res<VoxelRealm>,
+    realm: VoxelRealm,
     permits: Res<ChunkRenderPermits>,
     mut last_queued_fresh: Local<Duration>,
 ) -> UpdateDetectionRemeshResults {
     let mut remeshings_issued = 0;
     let mut neighbor_remeshings_issued = 0;
 
-    let cm = realm.chunk_manager.as_ref();
+    let cm = realm.cm();
     let updated = cm.updated_chunks();
 
     let current = time.elapsed();
@@ -331,7 +331,7 @@ pub fn dispatch_updated_chunk_remeshings(
 pub fn setup_chunk_meshing_workers(
     mut cmds: Commands,
     registries: Res<Registries>,
-    realm: Res<VoxelRealm>,
+    realm: VoxelRealm,
 ) {
     info!("Setting up chunk meshing workers");
 
@@ -346,12 +346,7 @@ pub fn setup_chunk_meshing_workers(
         worker_mesh_backlog_capacity: 3,
     };
 
-    let worker_pool = MeshBuilder::new(
-        settings,
-        &task_pool,
-        registries.clone(),
-        realm.chunk_manager.clone(),
-    );
+    let worker_pool = MeshBuilder::new(settings, &task_pool, registries.clone(), realm.clone_cm());
 
     cmds.insert_resource(worker_pool);
     cmds.insert_resource(MeshWorkerTaskPool(task_pool));
