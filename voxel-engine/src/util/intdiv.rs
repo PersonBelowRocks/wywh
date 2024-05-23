@@ -1,6 +1,9 @@
 use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 
-use crate::topo::block::SubdividedBlock;
+use crate::topo::{
+    block::SubdividedBlock,
+    world::{Chunk, ChunkPos},
+};
 
 #[inline]
 pub const fn rem_euclid_2_pow_n(x: i32, n: u32) -> i32 {
@@ -45,6 +48,21 @@ pub const fn microblock_to_subdiv_pos_3d(mb: IVec3) -> IVec3 {
         rem_euclid_2_pow_n(mb.y, SubdividedBlock::SUBDIVISIONS_LOG2),
         rem_euclid_2_pow_n(mb.z, SubdividedBlock::SUBDIVISIONS_LOG2),
     )
+}
+
+#[inline]
+pub const fn ws_to_chunk_pos(ws_pos: IVec3) -> ChunkPos {
+    ChunkPos::new(ivec3(
+        floored_div_2_pow_n(ws_pos.x, Chunk::SIZE as _),
+        floored_div_2_pow_n(ws_pos.y, Chunk::SIZE as _),
+        floored_div_2_pow_n(ws_pos.z, Chunk::SIZE as _),
+    ))
+}
+
+// TODO: make this const
+#[inline]
+pub fn chunk_pos_to_ws(chunk_pos: ChunkPos) -> IVec3 {
+    chunk_pos.as_ivec3() * Chunk::SIZE
 }
 
 #[cfg(test)]

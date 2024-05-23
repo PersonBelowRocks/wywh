@@ -10,14 +10,17 @@ use itertools::Itertools;
 use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
-    topo::world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
+    topo::{
+        ecs::ChunkObserver,
+        world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
+    },
     util::ChunkMap,
 };
 
 use super::{
     workers::{MeshBuilder, MeshCommand},
-    ChunkMeshObserver, ChunkMeshStatus, ChunkRenderPermit, ChunkRenderPermits,
-    ExtractableChunkMeshData, RemeshPriority, RemeshType, TimedChunkMeshData,
+    ChunkMeshStatus, ChunkRenderPermit, ChunkRenderPermits, ExtractableChunkMeshData,
+    RemeshPriority, RemeshType, TimedChunkMeshData,
 };
 
 #[derive(Resource, Deref)]
@@ -298,7 +301,7 @@ fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> RemeshPriority 
 pub fn dispatch_updated_chunk_remeshings(
     In(detected): In<UpdateDetectionRemeshResults>,
     current_generation: Res<MeshGeneration>,
-    observers: Query<&Transform, With<ChunkMeshObserver>>,
+    observers: Query<&Transform, With<ChunkObserver>>,
     mut writer: EventWriter<RemeshChunk>,
 ) {
     writer.send_batch(

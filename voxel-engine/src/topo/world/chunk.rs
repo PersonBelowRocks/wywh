@@ -16,6 +16,10 @@ pub struct ChunkPos(IVec3);
 impl ChunkPos {
     pub const ZERO: Self = Self(IVec3::ZERO);
 
+    pub const fn new(pos: IVec3) -> Self {
+        Self(pos)
+    }
+
     pub fn worldspace_max(self) -> IVec3 {
         (self.0 * Chunk::SIZE) + (Chunk::SIZE - 1)
     }

@@ -8,6 +8,42 @@ use itertools::Itertools;
 
 use crate::topo::world::ChunkPos;
 
+#[derive(Clone, Default, Debug)]
+pub struct ChunkSet(hb::HashSet<ChunkPos, fxhash::FxBuildHasher>);
+
+impl ChunkSet {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(hb::HashSet::with_capacity_and_hasher(
+            capacity,
+            fxhash::FxBuildHasher::default(),
+        ))
+    }
+
+    pub fn set(&mut self, pos: ChunkPos) -> bool {
+        self.0.insert(pos)
+    }
+
+    pub fn contains(&self, pos: ChunkPos) -> bool {
+        self.0.contains(&pos)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn remove(&mut self, pos: ChunkPos) -> bool {
+        self.0.remove(&pos)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = ChunkPos> + '_ {
+        self.0.iter().cloned()
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+}
+
 #[derive(Clone)]
 pub struct SyncChunkMap<T>(DashMap<ChunkPos, T, fxhash::FxBuildHasher>);
 

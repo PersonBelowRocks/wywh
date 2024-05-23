@@ -19,9 +19,6 @@ use self::ecs::{
 
 pub use self::ecs::{GrantPermit, MeshGeneration, RemeshChunk, RevokePermit};
 
-#[derive(Copy, Clone, Debug, Component)]
-pub struct ChunkMeshObserver;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RemeshType {
     Immediate,
