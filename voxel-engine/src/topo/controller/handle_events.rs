@@ -6,14 +6,14 @@ use crate::{
         world::{ChunkEntity, ChunkManagerError, ChunkPos, VoxelRealm},
         worldgen::generator::GenerateChunk,
     },
-    util::ChunkMap,
+    util::{ChunkMap, ChunkSet},
 };
 
-use super::{ChunkPermits, LoadChunkEvent, Permit, UpdatePermit};
+use super::{ChunkEcsPermits, LoadChunkEvent, Permit, UnloadChunkEvent, UpdatePermit};
 
 pub fn handle_permit_updates(
     mut permit_events: EventReader<UpdatePermit>,
-    mut permits: ResMut<ChunkPermits>,
+    mut permits: ResMut<ChunkEcsPermits>,
     chunks: Query<(Entity, &ChunkPos), With<ChunkEntity>>,
     mut cmds: Commands,
 ) {
@@ -68,15 +68,8 @@ pub fn handle_chunk_loads(
     mut load_events: EventReader<LoadChunkEvent>,
     mut generation_events: EventWriter<GenerateChunk>,
 ) {
-    let mut chunks_to_load = ChunkMap::<LoadChunkEvent>::with_capacity(load_events.len());
-    for event in load_events.read() {
-        if event.reasons.is_empty() {
-            continue;
-        }
-        chunks_to_load.set(event.chunk_pos, *event);
-    }
-
-    for (chunk_pos, &event) in chunks_to_load.iter() {
+    for &event in load_events.read() {
+        let chunk_pos = event.chunk_pos;
         let result = realm.cm().initialize_new_chunk(chunk_pos, event.reasons);
         match result {
             Ok(_) => {
@@ -86,15 +79,49 @@ pub fn handle_chunk_loads(
                 }
             }
             Err(ChunkManagerError::AlreadyInitialized) => {
-                realm
+                if let Err(error) = realm
                     .cm()
                     .get_loaded_chunk(chunk_pos, true)
-                    .map(|cref| cref.update_load_reasons(|reasons| reasons.insert(event.reasons)));
+                    .map(|cref| cref.update_load_reasons(|reasons| reasons.insert(event.reasons)))
+                {
+                    error!("Error when updating load reasons for chunk {chunk_pos}: {error}");
+                    continue;
+                }
             }
             Err(error) => {
                 error!("Error initializing chunk at {chunk_pos} during chunk loading: {error}");
                 continue;
             }
+        }
+    }
+}
+
+pub fn handle_chunk_unloads(realm: VoxelRealm, mut unload_events: EventReader<UnloadChunkEvent>) {
+    // we can't unload chunks as we go because we're holding a lock guard to the chunk (and we'll deadlock)
+    // so we keep track of everything that needs to be removed and do it all at the end
+    let mut removed = ChunkSet::default();
+
+    for &event in unload_events.read() {
+        match realm.cm().get_loaded_chunk(event.chunk_pos, true) {
+            Ok(cref) => {
+                let new_reasons = cref.update_load_reasons(|flags| flags.remove(event.reasons));
+                if new_reasons.is_empty() {
+                    removed.set(event.chunk_pos);
+                }
+            }
+            Err(error) => {
+                error!(
+                    "Error getting chunk at {} to unload: {error}",
+                    event.chunk_pos
+                );
+                continue;
+            }
+        }
+    }
+
+    for removed_chunk in removed.iter() {
+        if let Err(error) = realm.cm().unload_chunk(removed_chunk) {
+            error!("Error unloading chunk at {removed_chunk}: {error}");
         }
     }
 }

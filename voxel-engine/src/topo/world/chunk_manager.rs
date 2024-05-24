@@ -122,6 +122,10 @@ impl ChunkManager {
         })
     }
 
+    /// Unload a chunk from the manager.
+    /// You should generally never use this method to unload chunks,
+    /// instead dispatch `ChunkUnloadEvent`s in the ECS world and let
+    /// the engine handle unloading for you.
     pub fn unload_chunk(&self, pos: ChunkPos) -> Result<(), ChunkManagerError> {
         if !self.has_loaded_chunk(pos) {
             return Err(ChunkManagerError::Unloaded);

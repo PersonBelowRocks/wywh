@@ -5,6 +5,7 @@ use super::world::ChunkPos;
 
 mod ecs;
 mod handle_events;
+mod observer_events;
 mod permits;
 
 pub use permits::*;
@@ -56,7 +57,7 @@ pub struct LoadChunkEvent {
 /// This chunk should be unloaded for the given reasons.
 /// Will remove the provided reasons from an already loaded chunk, and if that chunk ends up having
 /// no load reasons left it will be unloaded.
-#[derive(Clone, Event, Debug)]
+#[derive(Copy, Clone, Event, Debug)]
 pub struct UnloadChunkEvent {
     pub chunk_pos: ChunkPos,
     pub reasons: LoadReasons,

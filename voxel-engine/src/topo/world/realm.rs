@@ -13,7 +13,7 @@ use dashmap::{mapref::one::Ref, DashSet};
 use crate::{
     topo::{
         block::{BlockVoxel, FullBlock},
-        controller::{ChunkPermitKey, ChunkPermits, PermitFlags},
+        controller::{ChunkEcsPermits, ChunkPermitKey, PermitFlags},
         neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
         world::chunk::ChunkFlags,
     },
@@ -28,7 +28,7 @@ pub struct ChunkManagerResource(pub(crate) Arc<ChunkManager>);
 #[derive(SystemParam)]
 pub struct VoxelRealm<'w> {
     chunk_manager: Res<'w, ChunkManagerResource>,
-    permits: Res<'w, ChunkPermits>,
+    permits: Res<'w, ChunkEcsPermits>,
 }
 
 impl<'w> VoxelRealm<'w> {
@@ -40,7 +40,7 @@ impl<'w> VoxelRealm<'w> {
         self.chunk_manager.0.clone()
     }
 
-    pub fn permits(&self) -> &ChunkPermits {
+    pub fn permits(&self) -> &ChunkEcsPermits {
         &self.permits
     }
 

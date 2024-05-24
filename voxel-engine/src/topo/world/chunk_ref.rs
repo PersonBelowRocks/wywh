@@ -87,7 +87,7 @@ impl<'a> ChunkRef<'a> {
         *old = reasons;
     }
 
-    pub fn update_load_reasons<F>(&self, f: F)
+    pub fn update_load_reasons<F>(&self, f: F) -> LoadReasons
     where
         F: for<'lr> FnOnce(&'lr mut LoadReasons),
     {
@@ -97,6 +97,7 @@ impl<'a> ChunkRef<'a> {
 
         // TODO: mark chunk for unloading there are no load reasons
         self.set_load_reasons(new_reasons);
+        new_reasons
     }
 
     pub fn with_access<F, U>(&self, manual_update_ctrl: bool, f: F) -> Result<U, ChunkManagerError>

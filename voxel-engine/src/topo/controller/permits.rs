@@ -39,13 +39,13 @@ pub enum ChunkPermitKeys<'a> {
 }
 
 #[derive(Resource, Default)]
-pub struct ChunkPermits {
+pub struct ChunkEcsPermits {
     entity_keys: EntityHashMap<usize>,
     chunk_keys: ChunkMap<usize>,
     data: Vec<Entry>,
 }
 
-impl ChunkPermits {
+impl ChunkEcsPermits {
     fn get_idx(&self, key: ChunkPermitKey) -> Option<usize> {
         Some(*match key {
             ChunkPermitKey::Chunk(cpos) => self.chunk_keys.get(cpos)?,
@@ -91,5 +91,26 @@ impl ChunkPermits {
 
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+
+    pub fn iter(&self) -> ChunkEcsPermitsIterator<'_> {
+        ChunkEcsPermitsIterator {
+            current_idx: 0,
+            permits: &self,
+        }
+    }
+}
+
+pub struct ChunkEcsPermitsIterator<'a> {
+    permits: &'a ChunkEcsPermits,
+    current_idx: usize,
+}
+
+impl<'a> Iterator for ChunkEcsPermitsIterator<'a> {
+    type Item = &'a Entry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.current_idx += 1;
+        self.permits.data.get(self.current_idx)
     }
 }
