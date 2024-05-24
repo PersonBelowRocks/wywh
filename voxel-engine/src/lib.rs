@@ -17,7 +17,11 @@ use data::{
 };
 use mip_texture_array::MippedArrayTexturePlugin;
 use render::meshing::controller::MeshGeneration;
-use topo::{block::FullBlock, world::VoxelRealm};
+use topo::{
+    block::FullBlock,
+    controller::{ChunkEcsPermits, WorldController, WorldControllerSystems},
+    world::{realm::ChunkManagerResource, ChunkManager, VoxelRealm},
+};
 
 pub mod data;
 pub mod render;
@@ -68,6 +72,7 @@ impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
         info!("Building voxel plugin");
 
+        app.add_plugins(WorldController);
         app.add_plugins(MeshController);
         app.add_plugins(RenderCore);
         app.add_plugins(MippedArrayTexturePlugin::default());
@@ -82,32 +87,18 @@ impl Plugin for VoxelPlugin {
         app.add_systems(Update, check_textures.run_if(in_state(AppState::Setup)));
         app.add_systems(
             OnEnter(AppState::Finished),
-            (
-                build_registries,
-                setup,
-                setup_terrain_generator_workers,
-                generate_debug_chunks,
-            )
+            (build_registries, setup, setup_terrain_generator_workers)
                 .chain()
                 .in_set(CoreEngineSetup),
         );
 
         app.add_systems(
-            PostUpdate,
+            FixedPostUpdate,
             generate_chunks_from_events
-                .chain()
-                .run_if(in_state(AppState::Finished)),
+                .run_if(in_state(AppState::Finished))
+                .after(WorldControllerSystems::CoreEvents),
         );
     }
-}
-
-fn generate_debug_chunks(
-    mut cmds: Commands,
-    mut events: EventWriter<GenerateChunk>,
-    generation: Res<MeshGeneration>,
-) {
-    debug!("Generating debugging chunks");
-    todo!()
 }
 
 fn setup(mut cmds: Commands, registries: Res<Registries>) {
@@ -119,5 +110,8 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
             .unwrap(),
     };
 
-    todo!() // TODO: set up voxel realm
+    let chunk_manager = ChunkManager::new(void);
+
+    cmds.init_resource::<ChunkEcsPermits>();
+    cmds.insert_resource(ChunkManagerResource(Arc::new(chunk_manager)));
 }

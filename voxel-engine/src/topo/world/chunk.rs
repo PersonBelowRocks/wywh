@@ -93,6 +93,7 @@ const CHUNK_SIZE: usize = 16;
 impl Chunk {
     pub const USIZE: usize = CHUNK_SIZE;
     pub const SIZE: i32 = Self::USIZE as i32;
+    pub const SIZE_LOG2: u32 = Self::SIZE.ilog2();
 
     pub const SUBDIVIDED_CHUNK_SIZE: i32 = SubdividedBlock::SUBDIVISIONS * Self::SIZE;
     pub const SUBDIVIDED_CHUNK_USIZE: usize = Self::SUBDIVIDED_CHUNK_SIZE as usize;

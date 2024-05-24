@@ -15,7 +15,7 @@ use crate::{
 use super::{
     ChunkObserver, ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent, ChunkPermitKey,
     Entry, LastPosition, LoadChunkEvent, LoadReasons, Permit, PermitFlags, UnloadChunkEvent,
-    UpdatePermit,
+    UpdatePermitEvent,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -123,7 +123,7 @@ fn is_in_range(
 pub fn unload_out_of_range_chunks(
     realm: VoxelRealm,
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
-    mut update_permits: EventWriter<UpdatePermit>,
+    mut update_permits: EventWriter<UpdatePermitEvent>,
     mut unload_chunks: EventWriter<UnloadChunkEvent>,
     chunk_observers: Query<&ChunkObserver>,
 ) {
@@ -158,11 +158,12 @@ pub fn unload_out_of_range_chunks(
     }
 
     for (chunk_pos, entry) in removed.iter() {
+        // TODO: fix unloading
         unload_chunks.send(UnloadChunkEvent {
             chunk_pos,
             reasons: LoadReasons::RENDER,
         });
-        update_permits.send(UpdatePermit {
+        update_permits.send(UpdatePermitEvent {
             chunk_pos,
             new_permit: Permit {
                 flags: entry.permit.flags & !PermitFlags::RENDER,
@@ -175,7 +176,7 @@ pub fn load_in_range_chunks(
     realm: VoxelRealm,
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
     mut load_chunks: EventWriter<LoadChunkEvent>,
-    mut update_permits: EventWriter<UpdatePermit>,
+    mut update_permits: EventWriter<UpdatePermitEvent>,
     chunk_observers: Query<&ChunkObserver>,
 ) {
     let mut moved_observers = ChunkMap::<&ChunkObserver>::default();
@@ -232,7 +233,7 @@ pub fn load_in_range_chunks(
             reasons: LoadReasons::RENDER,
             auto_generate: true,
         });
-        update_permits.send(UpdatePermit {
+        update_permits.send(UpdatePermitEvent {
             chunk_pos,
             new_permit: Permit {
                 flags: PermitFlags::RENDER,

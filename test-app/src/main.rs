@@ -17,6 +17,7 @@ use bevy::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, FpsText, PositionText};
+use ve::topo::ChunkObserver;
 
 fn main() {
     println!(
@@ -211,6 +212,11 @@ fn setup(
                 ..default()
             },
             camera::PlayerCamController::default(),
+            ChunkObserver {
+                horizontal_range: 7.0,
+                view_distance_above: 5.0,
+                view_distance_below: 5.0,
+            },
             VisibilityBundle::default(),
             ScreenSpaceAmbientOcclusionBundle::default(),
         ))

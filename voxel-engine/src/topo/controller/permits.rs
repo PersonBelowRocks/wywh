@@ -72,9 +72,10 @@ impl ChunkEcsPermits {
 
         let removed_entry = self.data.swap_remove(idx);
 
-        let swapped_entry = &self.data[idx];
-        self.chunk_keys.set(swapped_entry.chunk, idx);
-        self.entity_keys.insert(swapped_entry.entity, idx);
+        if let Some(swapped_entry) = self.data.get(idx) {
+            self.chunk_keys.set(swapped_entry.chunk, idx);
+            self.entity_keys.insert(swapped_entry.entity, idx);
+        }
 
         Some(removed_entry)
     }

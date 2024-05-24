@@ -49,8 +49,44 @@ pub struct GeneratorCommand {
 fn generate_chunk(generator: &Generator, cmd: GeneratorCommand, cm: &ChunkManager) {
     let cpos = cmd.pos;
 
-    // TODO: get chunk and generate into it
-    todo!();
+    match cm.get_loaded_chunk(cpos, true) {
+        Ok(cref) => {
+            if !cref.flags().contains(ChunkFlags::PRIMORDIAL) {
+                error!("Cannot generate terrain in non-primordial chunk at position {cpos}");
+            }
+
+            cref.update_flags(|flags| {
+                flags.insert(ChunkFlags::GENERATING);
+            });
+
+            let result = cref.with_access(true, |mut access| {
+                match generator.write_to_chunk(cpos, &mut access) {
+                    Ok(()) => {
+                        access.coalesce_microblocks();
+                        access.optimize_internal_storage();
+                    }
+                    Err(error) => {
+                        error!("Generator raised an error generating chunk at {cpos}: {error}")
+                    }
+                }
+            });
+
+            if let Err(error) = result {
+                error!("Error getting write access to chunk '{cpos}': {error}");
+                return;
+            }
+
+            cref.update_flags(|flags| {
+                flags.remove(ChunkFlags::GENERATING | ChunkFlags::PRIMORDIAL);
+                flags.insert(
+                    ChunkFlags::FRESHLY_GENERATED
+                        | ChunkFlags::REMESH_NEIGHBORS
+                        | ChunkFlags::REMESH,
+                );
+            });
+        }
+        Err(error) => error!("Error getting chunk at position {cpos}: {error}"),
+    }
 }
 
 async fn internal_worker_task(

@@ -1,18 +1,18 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::view::NoFrustumCulling};
 
 use crate::{
     topo::{
         controller::{ChunkPermitKey, LoadReasons},
-        world::{ChunkEntity, ChunkManagerError, ChunkPos, VoxelRealm},
+        world::{Chunk, ChunkEntity, ChunkManagerError, ChunkPos, VoxelRealm},
         worldgen::generator::GenerateChunk,
     },
     util::{ChunkMap, ChunkSet},
 };
 
-use super::{ChunkEcsPermits, LoadChunkEvent, Permit, UnloadChunkEvent, UpdatePermit};
+use super::{ChunkEcsPermits, LoadChunkEvent, Permit, UnloadChunkEvent, UpdatePermitEvent};
 
 pub fn handle_permit_updates(
-    mut permit_events: EventReader<UpdatePermit>,
+    mut permit_events: EventReader<UpdatePermitEvent>,
     mut permits: ResMut<ChunkEcsPermits>,
     chunks: Query<(Entity, &ChunkPos), With<ChunkEntity>>,
     mut cmds: Commands,
@@ -52,10 +52,13 @@ pub fn handle_permit_updates(
             .spawn((
                 chunk_pos,
                 ChunkEntity,
-                VisibilityBundle {
+                SpatialBundle {
                     visibility: Visibility::Visible,
+                    transform: Transform::from_translation(chunk_pos.worldspace_min().as_vec3()),
                     ..default()
                 },
+                Chunk::BOUNDING_BOX.to_aabb(),
+                NoFrustumCulling,
             ))
             .id();
 
@@ -70,6 +73,7 @@ pub fn handle_chunk_loads(
 ) {
     for &event in load_events.read() {
         let chunk_pos = event.chunk_pos;
+        // TODO: dont load if theres no reasons
         let result = realm.cm().initialize_new_chunk(chunk_pos, event.reasons);
         match result {
             Ok(_) => {

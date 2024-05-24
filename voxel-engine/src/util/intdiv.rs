@@ -53,9 +53,9 @@ pub const fn microblock_to_subdiv_pos_3d(mb: IVec3) -> IVec3 {
 #[inline]
 pub const fn ws_to_chunk_pos(ws_pos: IVec3) -> ChunkPos {
     ChunkPos::new(ivec3(
-        floored_div_2_pow_n(ws_pos.x, Chunk::SIZE as _),
-        floored_div_2_pow_n(ws_pos.y, Chunk::SIZE as _),
-        floored_div_2_pow_n(ws_pos.z, Chunk::SIZE as _),
+        floored_div_2_pow_n(ws_pos.x, Chunk::SIZE_LOG2),
+        floored_div_2_pow_n(ws_pos.y, Chunk::SIZE_LOG2),
+        floored_div_2_pow_n(ws_pos.z, Chunk::SIZE_LOG2),
     ))
 }
 

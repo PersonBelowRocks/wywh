@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 use bitflags::bitflags;
+use handle_events::{handle_chunk_loads, handle_chunk_unloads, handle_permit_updates};
+use observer_events::{dispatch_move_events, load_in_range_chunks, unload_out_of_range_chunks};
 
 use super::world::ChunkPos;
 
@@ -64,7 +66,7 @@ pub struct UnloadChunkEvent {
 }
 
 #[derive(Clone, Event, Debug)]
-pub struct UpdatePermit {
+pub struct UpdatePermitEvent {
     pub chunk_pos: ChunkPos,
     pub new_permit: Permit,
 }
@@ -89,10 +91,48 @@ bitflags! {
     }
 }
 
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, SystemSet)]
+pub enum WorldControllerSystems {
+    CoreEvents,
+    ObserverMovement,
+    ObserverResponses,
+}
+
 pub struct WorldController;
 
 impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
-        todo!()
+        app.add_event::<LoadChunkEvent>()
+            .add_event::<UnloadChunkEvent>()
+            .add_event::<UpdatePermitEvent>()
+            .add_event::<ChunkObserverMoveEvent>()
+            .add_event::<ChunkObserverCrossChunkBorderEvent>();
+
+        app.add_systems(
+            FixedPostUpdate,
+            (
+                dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
+                (unload_out_of_range_chunks, load_in_range_chunks)
+                    .chain()
+                    .in_set(WorldControllerSystems::ObserverResponses),
+                (
+                    handle_chunk_unloads,
+                    handle_chunk_loads,
+                    handle_permit_updates,
+                )
+                    .chain()
+                    .in_set(WorldControllerSystems::CoreEvents),
+            ),
+        );
+
+        app.configure_sets(
+            FixedPostUpdate,
+            (
+                WorldControllerSystems::ObserverMovement,
+                WorldControllerSystems::ObserverResponses,
+                WorldControllerSystems::CoreEvents,
+            )
+                .chain(),
+        );
     }
 }
