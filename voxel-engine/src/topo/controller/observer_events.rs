@@ -141,10 +141,17 @@ pub fn unload_out_of_range_chunks(
         moved_observers.set(event.new_chunk, observer);
     }
 
+    // If there's no non-new border events, we don't do anything
+    if moved_observers.len() <= 0 {
+        return;
+    }
+
     let mut removed = ChunkMap::<Entry>::new();
 
     for entry in realm.permits().iter() {
         let mut visible = false;
+        // This would lead to a bug if we didn't already verify that there are actually events to be handled.
+        // If 'moved_observers' is empty, then 'visible' remains false, and the chunk is unloaded.
         for (opos, &observer) in moved_observers.iter() {
             if is_in_range(opos, entry.chunk, observer) {
                 visible = true;
@@ -165,9 +172,8 @@ pub fn unload_out_of_range_chunks(
         });
         update_permits.send(UpdatePermitEvent {
             chunk_pos,
-            new_permit: Permit {
-                flags: entry.permit.flags & !PermitFlags::RENDER,
-            },
+            insert_flags: PermitFlags::empty(),
+            remove_flags: PermitFlags::RENDER,
         });
     }
 }
@@ -211,7 +217,7 @@ pub fn load_in_range_chunks(
                         continue;
                     }
 
-                    let cpos = ChunkPos::new(ivec3(x, y, z));
+                    let cpos = ChunkPos::new(x, y, z);
 
                     if realm
                         .permits()
@@ -235,9 +241,8 @@ pub fn load_in_range_chunks(
         });
         update_permits.send(UpdatePermitEvent {
             chunk_pos,
-            new_permit: Permit {
-                flags: PermitFlags::RENDER,
-            },
+            insert_flags: PermitFlags::RENDER,
+            remove_flags: PermitFlags::empty(),
         });
     }
 }

@@ -286,7 +286,7 @@ pub fn setup_chunk_meshing_workers(
 
     let task_pool = TaskPoolBuilder::new()
         .thread_name("Mesh Worker Task Pool".into())
-        .num_threads(max(1, available_parallelism() / 2))
+        .num_threads(max(1, available_parallelism() / 4))
         .build();
 
     let settings = MeshBuilderSettings {

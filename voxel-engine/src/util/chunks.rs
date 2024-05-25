@@ -133,6 +133,10 @@ impl<T> ChunkMap<T> {
         self.0.get(&pos)
     }
 
+    pub fn get_mut(&mut self, pos: ChunkPos) -> Option<&mut T> {
+        self.0.get_mut(&pos)
+    }
+
     pub fn remove(&mut self, pos: ChunkPos) -> Option<T> {
         self.0.remove(&pos)
     }

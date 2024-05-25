@@ -19,6 +19,12 @@ pub struct Permit {
     pub flags: PermitFlags,
 }
 
+impl Permit {
+    pub fn new(flags: PermitFlags) -> Self {
+        Self { flags }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Entry {
     pub entity: Entity,
@@ -72,12 +78,25 @@ impl ChunkEcsPermits {
 
         let removed_entry = self.data.swap_remove(idx);
 
+        self.chunk_keys.remove(removed_entry.chunk);
+        self.entity_keys.remove(&removed_entry.entity);
+
         if let Some(swapped_entry) = self.data.get(idx) {
             self.chunk_keys.set(swapped_entry.chunk, idx);
             self.entity_keys.insert(swapped_entry.entity, idx);
         }
 
         Some(removed_entry)
+    }
+
+    pub fn get_entity(&self, key: ChunkPos) -> Option<Entity> {
+        let idx = self.get_idx(ChunkPermitKey::Chunk(key))?;
+        Some(self.data[idx].entity)
+    }
+
+    pub fn get_chunk_pos(&self, key: Entity) -> Option<ChunkPos> {
+        let idx = self.get_idx(ChunkPermitKey::Entity(key))?;
+        Some(self.data[idx].chunk)
     }
 
     pub fn get(&self, key: ChunkPermitKey) -> Option<&Permit> {
@@ -113,5 +132,37 @@ impl<'a> Iterator for ChunkEcsPermitsIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.current_idx += 1;
         self.permits.data.get(self.current_idx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chunk_ecs_permits() {
+        let mut permits = ChunkEcsPermits::default();
+
+        for i in 0..100 {
+            permits.insert(
+                Entity::from_raw(i as u32),
+                ChunkPos::new(0, i as i32, 0),
+                Permit::new(PermitFlags::RENDER),
+            );
+        }
+
+        for i in 0..50 {
+            permits
+                .remove(ChunkPermitKey::Chunk(ChunkPos::new(0, i, 0)))
+                .unwrap();
+        }
+
+        for i in 50..100 {
+            let cpos = ChunkPos::new(0, i, 0);
+            permits.get(ChunkPermitKey::Chunk(cpos)).unwrap();
+
+            let entity = permits.get_entity(cpos).unwrap();
+            assert_eq!(entity, Entity::from_raw(i as u32));
+        }
     }
 }

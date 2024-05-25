@@ -25,7 +25,7 @@ pub fn setup_terrain_generator_workers(
 
     let task_pool = TaskPoolBuilder::new()
         .thread_name("Generator Worker Task Pool".into())
-        .num_threads(max(1, available_parallelism() / 2))
+        .num_threads(max(1, available_parallelism() / 4))
         .build();
 
     let worker_pool = GeneratorWorkerPool::new(

@@ -1,4 +1,7 @@
-use bevy::{prelude::*, render::view::NoFrustumCulling};
+use bevy::{
+    prelude::*,
+    render::{primitives::Aabb, view::NoFrustumCulling},
+};
 
 use crate::{
     topo::{
@@ -11,58 +14,104 @@ use crate::{
 
 use super::{ChunkEcsPermits, LoadChunkEvent, Permit, UnloadChunkEvent, UpdatePermitEvent};
 
+#[derive(Bundle)]
+pub struct ChunkEcsBundle {
+    pub chunk_pos: ChunkPos,
+    pub marker: ChunkEntity,
+    pub no_frustum_culling: NoFrustumCulling,
+    pub aabb: Aabb,
+    pub spatial: SpatialBundle,
+}
+
+impl ChunkEcsBundle {
+    pub fn new(pos: ChunkPos) -> Self {
+        Self {
+            chunk_pos: pos,
+            marker: ChunkEntity,
+            no_frustum_culling: NoFrustumCulling,
+            aabb: Chunk::BOUNDING_BOX.to_aabb(),
+            spatial: SpatialBundle {
+                visibility: Visibility::Visible,
+                transform: Transform::from_translation(pos.worldspace_min().as_vec3()),
+                ..default()
+            },
+        }
+    }
+}
+
 pub fn handle_permit_updates(
     mut permit_events: EventReader<UpdatePermitEvent>,
     mut permits: ResMut<ChunkEcsPermits>,
     chunks: Query<(Entity, &ChunkPos), With<ChunkEntity>>,
     mut cmds: Commands,
 ) {
-    let mut permit_updates = ChunkMap::<Permit>::with_capacity(permit_events.len());
+    let mut permit_updates = ChunkMap::<UpdatePermitEvent>::with_capacity(permit_events.len());
 
-    for event in permit_events.read() {
-        permit_updates.set(event.chunk_pos, event.new_permit);
+    for event in permit_events.read().copied() {
+        match permit_updates.get_mut(event.chunk_pos) {
+            // If an event for this position had already been encountered, merge the flags together with this one.
+            Some(existing_event) => {
+                existing_event.insert_flags.insert(event.insert_flags);
+                existing_event.remove_flags.insert(event.remove_flags);
+            }
+            // We haven't seen this position before, add it to the map
+            None => {
+                permit_updates.set(event.chunk_pos, event);
+            }
+        }
     }
 
     // update or set permits for ECS chunks
     for (entity, &chunk) in &chunks {
-        // remove permit updates as we go, this lets us isolate the permit updates that aren't
-        // don't have an existing ECS chunk
-        let Some(permit) = permit_updates.remove(chunk) else {
+        let Some(permit) = permits.get_mut(ChunkPermitKey::Chunk(chunk)) else {
+            error!(
+                "Detected chunk entity in ECS world without a permit, so the entity was despawned."
+            );
+            cmds.entity(entity).despawn();
             continue;
         };
 
+        // remove permit updates as we go, this lets us isolate the permit updates that
+        // don't have an existing ECS chunk
+        let Some(event) = permit_updates.remove(chunk) else {
+            continue;
+        };
+
+        // lil sanity check just to be sure
+        assert_eq!(chunk, event.chunk_pos);
+
+        // Update the permit's flags
+        permit.flags.insert(event.insert_flags);
+        permit.flags.remove(event.remove_flags);
+
+        // Remove the permit (and remove the ECS chunk) if the flags ended up being empty.
         if permit.flags.is_empty() {
             permits
-                .remove(ChunkPermitKey::Chunk(chunk))
+                .remove(ChunkPermitKey::Chunk(event.chunk_pos))
                 .map(|entry| cmds.entity(entry.entity).despawn());
-        } else {
-            match permits.get_mut(ChunkPermitKey::Chunk(chunk)) {
-                Some(existing_permit) => *existing_permit = permit,
-                // all ECS chunks present in the world should also have associated permits, but if they don't who cares who
-                // are we to judge, we'll just help them out and insert one for them
-                // TODO: might wanna log a warning in this case
-                None => permits.insert(entity, chunk, permit),
-            }
         }
     }
 
     // we need to insert new ECS chunks for the permit events that are left over!
     for (chunk_pos, &permit) in permit_updates.iter() {
-        let entity = cmds
-            .spawn((
-                chunk_pos,
-                ChunkEntity,
-                SpatialBundle {
-                    visibility: Visibility::Visible,
-                    transform: Transform::from_translation(chunk_pos.worldspace_min().as_vec3()),
-                    ..default()
-                },
-                Chunk::BOUNDING_BOX.to_aabb(),
-                NoFrustumCulling,
-            ))
-            .id();
+        let mut permit_flags = permit.insert_flags;
+        permit_flags.remove(permit.remove_flags);
 
-        permits.insert(entity, chunk_pos, permit);
+        if permit_flags.is_empty() {
+            warn!("Received permit update event with empty (or cancelled out) permit flags. This is slightly sketchy and might indicate 
+            that something has gone wrong somewhere. No permits were updated and no ECS chunks were inserted.");
+            continue;
+        };
+
+        let entity = cmds.spawn(ChunkEcsBundle::new(chunk_pos)).id();
+
+        permits.insert(
+            entity,
+            chunk_pos,
+            Permit {
+                flags: permit_flags,
+            },
+        );
     }
 }
 

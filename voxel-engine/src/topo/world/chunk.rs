@@ -1,3 +1,4 @@
+use bevy::math::ivec3;
 use bevy::prelude::*;
 use bitflags::bitflags;
 
@@ -17,8 +18,8 @@ pub struct ChunkPos(IVec3);
 impl ChunkPos {
     pub const ZERO: Self = Self(IVec3::ZERO);
 
-    pub const fn new(pos: IVec3) -> Self {
-        Self(pos)
+    pub const fn new(x: i32, y: i32, z: i32) -> Self {
+        Self(ivec3(x, y, z))
     }
 
     pub fn worldspace_max(self) -> IVec3 {

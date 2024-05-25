@@ -3,6 +3,8 @@ use bitflags::bitflags;
 use handle_events::{handle_chunk_loads, handle_chunk_unloads, handle_permit_updates};
 use observer_events::{dispatch_move_events, load_in_range_chunks, unload_out_of_range_chunks};
 
+use crate::AppState;
+
 use super::world::ChunkPos;
 
 mod ecs;
@@ -65,10 +67,11 @@ pub struct UnloadChunkEvent {
     pub reasons: LoadReasons,
 }
 
-#[derive(Clone, Event, Debug)]
+#[derive(Copy, Clone, Event, Debug)]
 pub struct UpdatePermitEvent {
     pub chunk_pos: ChunkPos,
-    pub new_permit: Permit,
+    pub insert_flags: PermitFlags,
+    pub remove_flags: PermitFlags,
 }
 
 bitflags! {
@@ -91,6 +94,7 @@ bitflags! {
     }
 }
 
+/// System sets for the world controller
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, SystemSet)]
 pub enum WorldControllerSystems {
     CoreEvents,
@@ -132,7 +136,8 @@ impl Plugin for WorldController {
                 WorldControllerSystems::ObserverResponses,
                 WorldControllerSystems::CoreEvents,
             )
-                .chain(),
+                .chain()
+                .run_if(in_state(AppState::Finished)),
         );
     }
 }
