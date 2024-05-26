@@ -91,7 +91,7 @@ impl Worker {
                                     generation: cmd.generation
                                 }).unwrap();
                             }
-                            Err(err) => error!("Error in worker '{task_label}' building chunk mesh: {err}"),
+                            Err(err) => () // error!("Error in worker '{task_label}' building chunk mesh: {err}"),
                         }
                     },
                     Err(RecvTimeoutError::Timeout) => continue,

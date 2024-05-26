@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use bevy::{
     prelude::*,
     render::{primitives::Aabb, view::NoFrustumCulling},
@@ -45,6 +47,10 @@ pub fn handle_permit_updates(
     chunks: Query<(Entity, &ChunkPos), With<ChunkEntity>>,
     mut cmds: Commands,
 ) {
+    let then = Instant::now();
+
+    let has_events = permit_events.len() > 0;
+
     let mut permit_updates = ChunkMap::<UpdatePermitEvent>::with_capacity(permit_events.len());
 
     for event in permit_events.read().copied() {
@@ -113,6 +119,13 @@ pub fn handle_permit_updates(
             },
         );
     }
+
+    let now = Instant::now();
+    let elapsed = now - then;
+
+    if has_events {
+        info!("Spent {}ms handling permit updates", elapsed.as_millis());
+    }
 }
 
 pub fn handle_chunk_loads(
@@ -120,6 +133,9 @@ pub fn handle_chunk_loads(
     mut load_events: EventReader<LoadChunkEvent>,
     mut generation_events: EventWriter<GenerateChunk>,
 ) {
+    let then = Instant::now();
+    let has_events = load_events.len() > 0;
+
     for &event in load_events.read() {
         let chunk_pos = event.chunk_pos;
         // TODO: dont load if theres no reasons
@@ -147,6 +163,13 @@ pub fn handle_chunk_loads(
             }
         }
     }
+
+    let now = Instant::now();
+    let elapsed = now - then;
+
+    if has_events {
+        info!("Spent {}ms handling chunk loads", elapsed.as_millis());
+    }
 }
 
 pub fn handle_chunk_unloads(realm: VoxelRealm, mut unload_events: EventReader<UnloadChunkEvent>) {
@@ -172,9 +195,18 @@ pub fn handle_chunk_unloads(realm: VoxelRealm, mut unload_events: EventReader<Un
         }
     }
 
+    let then = Instant::now();
+
     for removed_chunk in removed.iter() {
         if let Err(error) = realm.cm().unload_chunk(removed_chunk) {
             error!("Error unloading chunk at {removed_chunk}: {error}");
         }
+    }
+
+    let now = Instant::now();
+    let elapsed = now - then;
+
+    if removed.len() > 0 {
+        info!("Spent {}ms handling chunk unloads", elapsed.as_millis());
     }
 }

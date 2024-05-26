@@ -9,7 +9,7 @@ use crate::{
     render::{meshing::controller::ecs::dispatch_updated_chunk_remeshings, quad::GpuQuad},
     topo::world::ChunkPos,
     util::ChunkMap,
-    EngineState, CoreEngineSetup,
+    CoreEngineSetup, EngineState,
 };
 
 use self::ecs::{

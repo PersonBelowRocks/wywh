@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use bevy::{
     ecs::system::SystemParam,
     math::{ivec2, ivec3},
@@ -127,6 +129,8 @@ pub fn unload_out_of_range_chunks(
     mut unload_chunks: EventWriter<UnloadChunkEvent>,
     chunk_observers: Query<&ChunkObserver>,
 ) {
+    let then = Instant::now();
+
     let mut moved_observers = ChunkMap::<&ChunkObserver>::default();
     for event in border_events.read() {
         if event.new {
@@ -176,6 +180,16 @@ pub fn unload_out_of_range_chunks(
             remove_flags: PermitFlags::RENDER,
         });
     }
+
+    let now = Instant::now();
+    let elapsed = now - then;
+
+    if removed.len() > 0 {
+        info!(
+            "Spent {}ms unloading out of range chunks for observers",
+            elapsed.as_millis()
+        );
+    }
 }
 
 pub fn load_in_range_chunks(
@@ -185,6 +199,8 @@ pub fn load_in_range_chunks(
     mut update_permits: EventWriter<UpdatePermitEvent>,
     chunk_observers: Query<&ChunkObserver>,
 ) {
+    let then = Instant::now();
+
     let mut moved_observers = ChunkMap::<&ChunkObserver>::default();
     for event in border_events.read() {
         let Ok(observer) = chunk_observers.get(event.entity) else {
@@ -244,5 +260,15 @@ pub fn load_in_range_chunks(
             insert_flags: PermitFlags::RENDER,
             remove_flags: PermitFlags::empty(),
         });
+    }
+
+    let now = Instant::now();
+    let elapsed = now - then;
+
+    if in_range.len() > 0 {
+        info!(
+            "Spent {}ms loading in-range chunks for observers",
+            elapsed.as_millis()
+        );
     }
 }

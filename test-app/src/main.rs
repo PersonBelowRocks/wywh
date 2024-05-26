@@ -42,7 +42,7 @@ fn main() {
                     ..default()
                 })
                 .set(LogPlugin {
-                    filter: "info,test_app=debug,voxel_engine=debug".into(),
+                    filter: "info".into(),
                     level: log::Level::DEBUG,
                     ..default()
                 }),

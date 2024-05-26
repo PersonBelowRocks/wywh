@@ -131,6 +131,15 @@ impl ChunkManager {
             return Err(ChunkManagerError::Unloaded);
         }
 
+        // TODO: here we have a classic concurrency issue. Dashmap requires complete access to the entire
+        // hashmap if we're gonna update the hashmap itself (and not just an entry/entries inside it).
+        // This method may be called while the world generator is populating a chunk, or a mesh builder worker
+        // is building a mesh for a chunk. In both of these scenarios there is a reference to the dashmap, meaning
+        // we have to block on the 'remove' call here until there are no references anymore. This is obviously slow
+        // because we're no longer generating / meshing asynchronously and our "main" thread or threads are suddenly
+        // dependant on the generator and mesh builder completing their work before we can do any kind of unloading.
+        // This should be fixed by reworking our concurrency model slightly, since issues like these are going to come
+        // up constantly in the future we should do a proper and thorough fix now early on.
         self.loaded_chunks.remove(pos);
         self.status.fresh.remove(&pos);
         self.status.generating.remove(&pos);
