@@ -3,7 +3,7 @@ use bitflags::bitflags;
 use handle_events::{handle_chunk_loads, handle_chunk_unloads, handle_permit_updates};
 use observer_events::{dispatch_move_events, load_in_range_chunks, unload_out_of_range_chunks};
 
-use crate::AppState;
+use crate::EngineState;
 
 use super::world::ChunkPos;
 
@@ -137,7 +137,7 @@ impl Plugin for WorldController {
                 WorldControllerSystems::CoreEvents,
             )
                 .chain()
-                .run_if(in_state(AppState::Finished)),
+                .run_if(in_state(EngineState::Finished)),
         );
     }
 }

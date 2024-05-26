@@ -59,7 +59,7 @@ impl VoxelPlugin {
 pub struct VoxelSystemSet;
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash, States)]
-pub enum AppState {
+pub enum EngineState {
     #[default]
     Setup,
     Finished,
@@ -78,15 +78,15 @@ impl Plugin for VoxelPlugin {
         app.add_plugins(MippedArrayTexturePlugin::default());
 
         app.add_event::<GenerateChunk>();
-        app.init_state::<AppState>();
+        app.init_state::<EngineState>();
 
         app.insert_resource(VariantFolders::new(self.variant_folders.clone()));
         app.insert_resource(GeneratorSeed(140));
 
-        app.add_systems(OnEnter(AppState::Setup), load_textures);
-        app.add_systems(Update, check_textures.run_if(in_state(AppState::Setup)));
+        app.add_systems(OnEnter(EngineState::Setup), load_textures);
+        app.add_systems(Update, check_textures.run_if(in_state(EngineState::Setup)));
         app.add_systems(
-            OnEnter(AppState::Finished),
+            OnEnter(EngineState::Finished),
             (build_registries, setup, setup_terrain_generator_workers)
                 .chain()
                 .in_set(CoreEngineSetup),
@@ -95,7 +95,7 @@ impl Plugin for VoxelPlugin {
         app.add_systems(
             FixedPostUpdate,
             generate_chunks_from_events
-                .run_if(in_state(AppState::Finished))
+                .run_if(in_state(EngineState::Finished))
                 .after(WorldControllerSystems::CoreEvents),
         );
     }

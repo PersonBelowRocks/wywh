@@ -9,7 +9,7 @@ use crate::{
     render::{meshing::controller::ecs::dispatch_updated_chunk_remeshings, quad::GpuQuad},
     topo::world::ChunkPos,
     util::ChunkMap,
-    AppState, CoreEngineSetup,
+    EngineState, CoreEngineSetup,
 };
 
 use self::ecs::{
@@ -101,13 +101,13 @@ impl Plugin for MeshController {
             .add_event::<RemeshChunk>();
 
         app.add_systems(
-            OnEnter(AppState::Finished),
+            OnEnter(EngineState::Finished),
             setup_chunk_meshing_workers.after(CoreEngineSetup),
         );
 
         app.add_systems(
             PreUpdate,
-            insert_chunks.run_if(in_state(AppState::Finished)),
+            insert_chunks.run_if(in_state(EngineState::Finished)),
         );
 
         app.add_systems(
@@ -117,7 +117,7 @@ impl Plugin for MeshController {
                 queue_chunk_mesh_jobs,
             )
                 .chain()
-                .run_if(in_state(AppState::Finished)),
+                .run_if(in_state(EngineState::Finished)),
         );
     }
 }
