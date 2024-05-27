@@ -1,10 +1,18 @@
-use std::sync::Arc;
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use bevy::{
     ecs::entity::Entity,
     math::{ivec3, IVec3},
 };
 use dashmap::{mapref::one::Ref, DashSet};
+use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
 use crate::{
     topo::{
@@ -12,36 +20,82 @@ use crate::{
         controller::LoadReasons,
         neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
     },
-    util::{ivec3_to_1d, ChunkSet, SyncHashMap},
+    util::{ivec3_to_1d, ChunkMap, ChunkSet, SyncHashMap},
 };
 
 use super::{chunk::ChunkFlags, Chunk, ChunkManagerError, ChunkPos, ChunkRef, ChunkRefReadAccess};
 
 #[derive(Default)]
-pub struct LoadedChunkContainer(pub(crate) SyncHashMap<ChunkPos, Chunk>);
+pub struct LoadedChunkContainer {
+    map: RwLock<ChunkMap<Chunk>>,
+    force_write: AtomicBool,
+}
 
-pub type LccRef<'a> = Ref<'a, ChunkPos, Chunk, ahash::RandomState>;
+pub struct LccRef<'a>(MappedRwLockReadGuard<'a, &'a Chunk>);
 
-pub struct LoadedChunkIterator<'a>(pub(crate) hb::hash_map::Iter<'a, ChunkPos, Chunk>);
+impl<'a> std::ops::Deref for LccRef<'a> {
+    type Target = Chunk;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
 
 pub type StrongChunkRef<'a> =
     dashmap::mapref::one::Ref<'a, ChunkPos, Arc<Chunk>, ahash::RandomState>;
 
 impl LoadedChunkContainer {
+    pub fn new() -> Self {
+        Self {
+            map: RwLock::new(ChunkMap::default()),
+            force_write: AtomicBool::new(false),
+        }
+    }
+
     pub fn get(&self, pos: ChunkPos) -> Option<LccRef<'_>> {
-        self.0.get(&pos)
+        if self.force_write.load(Ordering::Relaxed) {
+            return None;
+        }
+
+        let guard = self.map.read();
+        if !guard.contains(pos) {
+            return None;
+        }
+
+        let chunk = RwLockReadGuard::map(guard, |g| &g.get(pos).unwrap());
+
+        Some(LccRef(chunk))
     }
 
-    pub fn set(&self, pos: ChunkPos, chunk: Chunk) {
-        self.0.insert(pos, chunk);
-    }
+    /// Get a mutable reference to the underlying map to use in a closure.
+    /// You can specify a timeout to wait for, if a write lock couldn't be acquired in time, `None` will be returned.
+    /// If you set `force` to true, then other threads will be prevented from getting a read lock while you're waiting
+    /// for your write lock. This is essentially like getting priority over other lock consumers.
+    /// IMPORTANT: if `force` is set and this function times out, then other threads will be prevented from getting
+    /// a read lock until this function succeeds again.
+    pub fn with_write_lock<F, U>(&self, timeout: Option<Duration>, force: bool, f: F) -> Option<U>
+    where
+        F: for<'a> FnOnce(&'a mut ChunkMap<Chunk>) -> U,
+    {
+        if force {
+            self.force_write.store(true, Ordering::Release);
+        }
 
-    pub fn remove(&self, pos: ChunkPos) -> bool {
-        self.0.remove(&pos).is_some()
-    }
+        let mut guard = timeout
+            .map(|timeout| {
+                self.map.try_write_for(timeout).map(|guard| {
+                    self.force_write.store(false, Ordering::Release);
+                    guard
+                })
+            })
+            .unwrap_or_else(|| {
+                let guard = self.map.write();
+                self.force_write.store(false, Ordering::Relaxed);
+                Some(guard)
+            })?;
 
-    pub(crate) fn internal_map(&self) -> &'_ SyncHashMap<ChunkPos, Chunk> {
-        &self.0
+        let mut_ref = guard.deref_mut();
+        Some(f(mut_ref))
     }
 }
 
