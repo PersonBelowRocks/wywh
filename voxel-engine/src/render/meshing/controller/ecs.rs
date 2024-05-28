@@ -153,6 +153,7 @@ pub fn voxel_realm_remesh_updated_chunks(
     let mut queued_primary = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
     let mut queued_neighbors = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
 
+    // TODO: skip this update if the chunk manager is globally locked.
     updated
         .iter_chunks(|cref| {
             // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.

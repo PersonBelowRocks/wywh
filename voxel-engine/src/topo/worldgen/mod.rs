@@ -3,6 +3,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    thread,
     time::Duration,
 };
 
@@ -17,7 +18,7 @@ use crate::data::registries::Registries;
 
 use self::generator::Generator;
 
-use super::world::{chunk::ChunkFlags, ChunkManager, ChunkPos};
+use super::world::{chunk::ChunkFlags, chunk_manager::GlobalLockState, ChunkManager, ChunkPos};
 
 pub mod ecs;
 pub mod error;
@@ -46,70 +47,97 @@ pub struct GeneratorCommand {
     id: GeneratorCommandId,
 }
 
-fn generate_chunk(generator: &Generator, cmd: GeneratorCommand, cm: &ChunkManager) {
-    let cpos = cmd.pos;
-
-    // TODO: handle globally locked case
-    match cm.get_loaded_chunk(cpos, true) {
-        Ok(cref) => {
-            if !cref.flags().contains(ChunkFlags::PRIMORDIAL) {
-                error!("Cannot generate terrain in non-primordial chunk at position {cpos}");
-            }
-
-            cref.update_flags(|flags| {
-                flags.insert(ChunkFlags::GENERATING);
-            });
-
-            let result = cref.with_access(true, |mut access| {
-                match generator.write_to_chunk(cpos, &mut access) {
-                    Ok(()) => {
-                        access.coalesce_microblocks();
-                        access.optimize_internal_storage();
-                    }
-                    Err(error) => {
-                        error!("Generator raised an error generating chunk at {cpos}: {error}")
-                    }
-                }
-            });
-
-            if let Err(error) = result {
-                error!("Error getting write access to chunk '{cpos}': {error}");
-                return;
-            }
-
-            cref.update_flags(|flags| {
-                flags.remove(ChunkFlags::GENERATING | ChunkFlags::PRIMORDIAL);
-                flags.insert(
-                    ChunkFlags::FRESHLY_GENERATED
-                        | ChunkFlags::REMESH_NEIGHBORS
-                        | ChunkFlags::REMESH,
-                );
-            });
-        }
-        Err(error) => error!("Error getting chunk at position {cpos}: {error}"),
-    }
-}
-
 async fn internal_worker_task(
     generator: Generator,
     params: WorkerParams,
     interrupt: Arc<AtomicBool>,
     label: String,
 ) {
+    let cm = params.chunk_manager;
+    let mut backlog_cmd = None::<GeneratorCommand>;
+
     while !interrupt.load(Ordering::Relaxed) {
-        match params.cmds.recv_timeout(params.timeout) {
-            Ok(cmd) => {
-                generate_chunk(&generator, cmd, &params.chunk_manager);
+        // Try to get the command from the backlog before we get a new one.
+        let cmd = match backlog_cmd.take() {
+            Some(cmd) => Some(cmd),
+            None => match params.cmds.recv_timeout(params.timeout) {
+                Ok(cmd) => Some(cmd),
+                Err(RecvTimeoutError::Timeout) => None,
+                // This case should trigger upon shutdown, which is why this is a warning rather
+                // than an error.
+                Err(RecvTimeoutError::Disconnected) => {
+                    warn!(
+                        "Channel disconnected for generator worker '{}', shutting down.",
+                        label
+                    );
+                    return;
+                }
+            },
+        };
+
+        let Some(cmd) = cmd else { continue };
+
+        let cpos = cmd.pos;
+
+        let cref = match cm.get_loaded_chunk(cpos, true) {
+            Ok(cref) => cref,
+            // A global lock isn't an error for us, we just need to try again a little later.
+            Err(error) => {
+                if error.is_globally_locked() {
+                    // Place the command in the backlog, we'll try again next loop.
+                    backlog_cmd = Some(cmd);
+                    // We need to sleep here to emulate waiting on the channel.
+                    // Otherwise we end up busy looping.
+                    thread::sleep(params.timeout);
+                    continue;
+                } else {
+                    error!("Error getting chunk at position {cpos}: {error}");
+                    continue;
+                }
             }
-            Err(RecvTimeoutError::Timeout) => continue,
-            Err(RecvTimeoutError::Disconnected) => {
-                warn!(
-                    "Channel disconnected for generator worker '{}', worker is shutting down.",
-                    label
-                );
-                return;
-            }
+        };
+
+        // We only want to generate into primordial chunks. Generating into already populated chunks
+        // is possible but usually undesirable, and if we want to do it we probably don't want to use
+        // the worldgen system for it, but rather manually work the generator algorithm.
+        if !cref.flags().contains(ChunkFlags::PRIMORDIAL) {
+            error!("Cannot generate terrain in non-primordial chunk at position {cpos}");
+            continue;
         }
+
+        // Flag this chunk as being generated.
+        cref.update_flags(|flags| {
+            flags.insert(ChunkFlags::GENERATING);
+        });
+
+        let result = cref.with_access(true, |mut access| {
+            match generator.write_to_chunk(cpos, &mut access) {
+                Ok(()) => {
+                    // Optimize the chunk a bit before we flag it as updated. This can make
+                    // building the mesh for this chunk faster.
+                    access.coalesce_microblocks();
+                    access.optimize_internal_storage();
+                }
+                Err(error) => {
+                    error!("Generator raised an error generating chunk at {cpos}: {error}")
+                }
+            }
+        });
+
+        if let Err(error) = result {
+            error!("Error getting write access to chunk '{cpos}': {error}");
+            return;
+        }
+
+        // At last we remove both the primordial flag and the generating flag, indicating that
+        // this chunk is ready to be treated as any other chunk.
+        // We also set the remesh flags here so that the mesh is built.
+        cref.update_flags(|flags| {
+            flags.remove(ChunkFlags::GENERATING | ChunkFlags::PRIMORDIAL);
+            flags.insert(
+                ChunkFlags::FRESHLY_GENERATED | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::REMESH,
+            );
+        });
     }
 }
 

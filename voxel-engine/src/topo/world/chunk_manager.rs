@@ -70,6 +70,15 @@ impl LoadedChunkContainer {
         Ok(LccRef(chunk))
     }
 
+    /// Get the state of the global lock for this chunk container
+    pub fn global_lock(&self) -> GlobalLockState {
+        if self.force_write.load(Ordering::Relaxed) || self.map.is_locked_exclusive() {
+            GlobalLockState::Locked
+        } else {
+            GlobalLockState::Unlocked
+        }
+    }
+
     /// Get a mutable reference to the underlying map to use in a closure.
     /// You can specify a timeout to wait for, if a write lock couldn't be acquired in time, `None` will be returned.
     /// If you set `force` to true, then other threads will be prevented from getting a read lock while you're waiting
@@ -234,6 +243,12 @@ impl<'a> ChunkManagerAccess<'a> {
         self.chunks.set(pos, chunk);
         Ok(())
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum GlobalLockState {
+    Locked,
+    Unlocked,
 }
 
 pub struct ChunkManager {
