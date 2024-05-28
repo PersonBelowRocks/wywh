@@ -23,7 +23,10 @@ use crate::{
     util::{ivec3_to_1d, ChunkMap, ChunkSet, SyncHashMap},
 };
 
-use super::{chunk::ChunkFlags, Chunk, ChunkManagerError, ChunkPos, ChunkRef, ChunkRefReadAccess};
+use super::{
+    chunk::ChunkFlags, Chunk, ChunkContainerError, ChunkManagerError, ChunkPos, ChunkRef,
+    ChunkRefReadAccess,
+};
 
 #[derive(Default)]
 pub struct LoadedChunkContainer {
@@ -31,7 +34,7 @@ pub struct LoadedChunkContainer {
     force_write: AtomicBool,
 }
 
-pub struct LccRef<'a>(MappedRwLockReadGuard<'a, &'a Chunk>);
+pub struct LccRef<'a>(MappedRwLockReadGuard<'a, Chunk>);
 
 impl<'a> std::ops::Deref for LccRef<'a> {
     type Target = Chunk;
@@ -52,19 +55,19 @@ impl LoadedChunkContainer {
         }
     }
 
-    pub fn get(&self, pos: ChunkPos) -> Option<LccRef<'_>> {
+    pub fn get(&self, pos: ChunkPos) -> Result<LccRef<'_>, ChunkContainerError> {
         if self.force_write.load(Ordering::Relaxed) {
-            return None;
+            return Err(ChunkContainerError::GloballyLocked);
         }
 
         let guard = self.map.read();
         if !guard.contains(pos) {
-            return None;
+            return Err(ChunkContainerError::DoesntExist);
         }
 
-        let chunk = todo!(); // RwLockReadGuard::map(guard, |g| &g.get(pos).unwrap());
+        let chunk = RwLockReadGuard::map(guard, |g| g.get(pos).unwrap());
 
-        Some(LccRef(chunk))
+        Ok(LccRef(chunk))
     }
 
     /// Get a mutable reference to the underlying map to use in a closure.
@@ -160,9 +163,9 @@ impl<'a> ChunkManagerAccess<'a> {
         &mut self,
         pos: ChunkPos,
         unload_reasons: LoadReasons,
-    ) -> Result<bool, ChunkManagerError> {
+    ) -> Result<bool, ChunkContainerError> {
         let Some(chunk) = self.chunks.get(pos) else {
-            return Err(ChunkManagerError::DoesntExist);
+            return Err(ChunkContainerError::DoesntExist);
         };
 
         let mut load_reasons = chunk.load_reasons.write();
@@ -174,8 +177,11 @@ impl<'a> ChunkManagerAccess<'a> {
             self.statuses.generating.remove(&pos);
             self.statuses.updated.remove(&pos);
 
+            // Need to drop this immutable reference so we can mutate ourselves.
+            drop(load_reasons);
+
             // Remove the chunk from storage
-            todo!(); // self.chunks.remove(pos);
+            self.chunks.remove(pos);
 
             Ok(true)
         } else {
@@ -252,10 +258,7 @@ impl ChunkManager {
         pos: ChunkPos,
         get_primordial: bool,
     ) -> Result<ChunkRef<'_>, ChunkManagerError> {
-        let chunk = self
-            .loaded_chunks
-            .get(pos)
-            .ok_or(ChunkManagerError::Unloaded)?;
+        let chunk = self.loaded_chunks.get(pos)?;
 
         if !get_primordial {
             if chunk.flags.read().contains(ChunkFlags::PRIMORDIAL) {
@@ -275,10 +278,6 @@ impl ChunkManager {
         self.get_loaded_chunk(pos, true)
             .map(|cref| cref.flags())
             .ok()
-    }
-
-    pub fn has_loaded_chunk(&self, pos: ChunkPos) -> bool {
-        self.loaded_chunks.get(pos).is_some()
     }
 
     /// Acquire a global lock of the chunk manager and its data. The close passed to this function will

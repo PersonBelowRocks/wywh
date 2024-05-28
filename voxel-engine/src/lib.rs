@@ -8,7 +8,7 @@ extern crate thiserror as te;
 #[macro_use]
 extern crate num_derive;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use bevy::{math::ivec3, prelude::*};
 use data::{
@@ -19,7 +19,9 @@ use mip_texture_array::MippedArrayTexturePlugin;
 use render::meshing::controller::MeshGeneration;
 use topo::{
     block::FullBlock,
-    controller::{ChunkEcsPermits, WorldController, WorldControllerSystems},
+    controller::{
+        ChunkEcsPermits, WorldController, WorldControllerSettings, WorldControllerSystems,
+    },
     world::{realm::ChunkManagerResource, ChunkManager, VoxelRealm},
 };
 
@@ -72,7 +74,13 @@ impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
         info!("Building voxel plugin");
 
-        app.add_plugins(WorldController { settings: todo!() });
+        app.add_plugins(WorldController {
+            settings: WorldControllerSettings {
+                chunk_loading_handler_backlog_threshold: 100,
+                chunk_loading_handler_timeout: Duration::from_micros(20),
+                chunk_loading_max_stalling: Duration::from_millis(200),
+            },
+        });
         app.add_plugins(MeshController);
         app.add_plugins(RenderCore);
         app.add_plugins(MippedArrayTexturePlugin::default());

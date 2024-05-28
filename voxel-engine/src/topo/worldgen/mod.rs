@@ -49,6 +49,7 @@ pub struct GeneratorCommand {
 fn generate_chunk(generator: &Generator, cmd: GeneratorCommand, cm: &ChunkManager) {
     let cpos = cmd.pos;
 
+    // TODO: handle globally locked case
     match cm.get_loaded_chunk(cpos, true) {
         Ok(cref) => {
             if !cref.flags().contains(ChunkFlags::PRIMORDIAL) {

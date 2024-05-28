@@ -232,6 +232,8 @@ pub fn handle_chunk_loads_and_unloads(
                 // If the chunk wasn't loaded before and the event wants to generate the chunk,
                 // dispatch a generation event.
                 if result == ChunkLoadResult::New && event.auto_generate {
+                    info!("Sending generation event");
+
                     generation_events.send(GenerateChunk {
                         pos: event.chunk_pos,
                     });
