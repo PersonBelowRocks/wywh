@@ -12,7 +12,7 @@ use bevy::{
     math::{ivec3, IVec3},
 };
 use dashmap::{mapref::one::Ref, DashSet};
-use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
+use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
     topo::{
@@ -62,7 +62,7 @@ impl LoadedChunkContainer {
             return None;
         }
 
-        let chunk = RwLockReadGuard::map(guard, |g| &g.get(pos).unwrap());
+        let chunk = todo!(); // RwLockReadGuard::map(guard, |g| &g.get(pos).unwrap());
 
         Some(LccRef(chunk))
     }
@@ -135,9 +135,104 @@ pub struct ChunkStatuses {
     pub fresh: DashSet<ChunkPos, fxhash::FxBuildHasher>,
 }
 
+/// Indicates what happened when we tried to load a chunk
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ChunkLoadResult {
+    /// The chunk we tried to load didn't exist, so it was initialized
+    New,
+    /// The chunk we tried to load was already loaded, so we updated its load reasons.
+    /// The load reasons in this variant are the updated load reasons of the
+    /// existing chunk.
+    Updated(LoadReasons),
+}
+
+pub struct ChunkManagerAccess<'a> {
+    chunks: &'a mut ChunkMap<Chunk>,
+    statuses: RwLockWriteGuard<'a, ChunkStatuses>,
+    default_block: FullBlock,
+}
+
+impl<'a> ChunkManagerAccess<'a> {
+    /// Unload the chunk at the given position for the given reasons. This function will remove load reasons
+    /// from the chunk and automatically unload the chunk if no reasons remain.
+    /// Returns true if the chunk was unloaded, and false if not.
+    pub fn unload_chunk(
+        &mut self,
+        pos: ChunkPos,
+        unload_reasons: LoadReasons,
+    ) -> Result<bool, ChunkManagerError> {
+        let Some(chunk) = self.chunks.get(pos) else {
+            return Err(ChunkManagerError::DoesntExist);
+        };
+
+        let mut load_reasons = chunk.load_reasons.write();
+        load_reasons.remove(unload_reasons);
+
+        if load_reasons.is_empty() {
+            // Remove the chunk from the statuses
+            self.statuses.fresh.remove(&pos);
+            self.statuses.generating.remove(&pos);
+            self.statuses.updated.remove(&pos);
+
+            // Remove the chunk from storage
+            todo!(); // self.chunks.remove(pos);
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn load_chunk(
+        &mut self,
+        pos: ChunkPos,
+        load_reasons: LoadReasons,
+    ) -> Result<ChunkLoadResult, ChunkManagerError> {
+        match self.initialize_new_chunk(pos, load_reasons) {
+            Ok(()) => Ok(ChunkLoadResult::New),
+            // If the chunk is already loaded we update its load reasons by inserting the
+            // reasons passed to this function
+            Err(ChunkManagerError::AlreadyLoaded) => {
+                let chunk = self.chunks.get(pos).expect(
+                    "chunk should be present in storage because 
+                        initialize_new_chunk returned AlreadyInitialized",
+                );
+
+                let mut existing_load_reasons = chunk.load_reasons.write();
+
+                existing_load_reasons.insert(load_reasons);
+                Ok(ChunkLoadResult::Updated(existing_load_reasons.clone()))
+            }
+            // Just forward the error to the caller, not much we can do here anyways
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Initialize a new chunk at the given `pos` if one doesn't exist, with the provided load reasons.
+    /// The chunk will be flagged as primordial. Returns `ChunkManagerError::AlreadyLoaded` if the
+    /// chunk was already loaded.
+    pub fn initialize_new_chunk(
+        &mut self,
+        pos: ChunkPos,
+        load_reasons: LoadReasons,
+    ) -> Result<(), ChunkManagerError> {
+        if self.chunks.get(pos).is_some() {
+            return Err(ChunkManagerError::AlreadyLoaded);
+        }
+
+        let chunk = Chunk::new(
+            BlockVoxel::Full(self.default_block),
+            ChunkFlags::PRIMORDIAL,
+            load_reasons,
+        );
+        self.chunks.set(pos, chunk);
+        Ok(())
+    }
+}
+
 pub struct ChunkManager {
     loaded_chunks: LoadedChunkContainer,
-    status: ChunkStatuses,
+    status: RwLock<ChunkStatuses>,
     default_block: FullBlock,
 }
 
@@ -145,7 +240,7 @@ impl ChunkManager {
     pub fn new(default_block: FullBlock) -> Self {
         Self {
             loaded_chunks: LoadedChunkContainer::default(),
-            status: ChunkStatuses::default(),
+            status: RwLock::new(ChunkStatuses::default()),
             default_block,
         }
     }
@@ -170,43 +265,10 @@ impl ChunkManager {
 
         Ok(ChunkRef {
             chunk,
-            stats: &self.status,
+            stats: self.status.read(),
             pos,
             entity: None,
         })
-    }
-
-    /// Unload a chunk from the manager.
-    /// You should generally never use this method to unload chunks,
-    /// instead dispatch `ChunkUnloadEvent`s in the ECS world and let
-    /// the engine handle unloading for you.
-    pub fn unload_chunk(&self, pos: ChunkPos) -> Result<(), ChunkManagerError> {
-        if !self.has_loaded_chunk(pos) {
-            return Err(ChunkManagerError::Unloaded);
-        }
-
-        // TODO: here we have a classic concurrency issue. Dashmap requires complete access to the entire
-        // hashmap if we're gonna update the hashmap itself (and not just an entry/entries inside it).
-        // This method may be called while the world generator is populating a chunk, or a mesh builder worker
-        // is building a mesh for a chunk. In both of these scenarios there is a reference to the dashmap, meaning
-        // we have to block on the 'remove' call here until there are no references anymore. This is obviously slow
-        // because we're no longer generating / meshing asynchronously and our "main" thread or threads are suddenly
-        // dependant on the generator and mesh builder completing their work before we can do any kind of unloading.
-        // This should be fixed by reworking our concurrency model slightly, since issues like these are going to come
-        // up constantly in the future we should do a proper and thorough fix now early on.
-        self.loaded_chunks.remove(pos);
-        self.status.fresh.remove(&pos);
-        self.status.generating.remove(&pos);
-        self.status.updated.remove(&pos);
-
-        Ok(())
-    }
-
-    pub fn unload_chunks(&self, chunks: ChunkSet) {
-        self.loaded_chunks.0.retain(|&pos, _| !chunks.contains(pos));
-        self.status.fresh.retain(|&pos| !chunks.contains(pos));
-        self.status.generating.retain(|&pos| !chunks.contains(pos));
-        self.status.updated.retain(|&pos| !chunks.contains(pos));
     }
 
     pub fn chunk_flags(&self, pos: ChunkPos) -> Option<ChunkFlags> {
@@ -217,6 +279,42 @@ impl ChunkManager {
 
     pub fn has_loaded_chunk(&self, pos: ChunkPos) -> bool {
         self.loaded_chunks.get(pos).is_some()
+    }
+
+    /// Acquire a global lock of the chunk manager and its data. The close passed to this function will
+    /// receive unique access to the chunk manager and be allowed to do whatever it wants without having to
+    /// wait for other threads to give up their resources. This also means that this function essentially freezes
+    /// everything that tries to get a chunk reference while the closure is running. You should try to complete the
+    /// work you want to do in the closure as quick as possible, and try to calculate as much as possible ahead of
+    /// running this function.
+    /// ### Parameters
+    /// You can specify a timeout to wait for, if a write lock couldn't be acquired in time, `None` will be returned.
+    /// If you set `force` to true, then other threads will be prevented from getting a read lock while you're waiting
+    /// for your write lock. This is essentially like getting priority over other lock consumers.
+    /// ### Warning
+    /// If `force` is set and this function times out, then other threads will be prevented from getting
+    /// a read lock until this function succeeds again.
+    pub fn with_global_lock<F, U>(&self, timeout: Option<Duration>, force: bool, f: F) -> Option<U>
+    where
+        F: for<'a> FnOnce(ChunkManagerAccess<'a>) -> U,
+    {
+        self.loaded_chunks
+            .with_write_lock(timeout, force, |chunks| {
+                // We get the status lock in here because the only permitted way to update statuses is
+                // through a ChunkRef. If we enter this closure then there are no outstanding chunk refs,
+                // thus we can assume that any thread that wanted to update statuses has done so by now.
+                // There's also no need for any kind of timeout system here because status locks are never
+                // held for long (unlike the chunk data lock in a chunk ref).
+                let statuses = self.status.write();
+
+                let access = ChunkManagerAccess {
+                    chunks,
+                    statuses,
+                    default_block: self.default_block,
+                };
+
+                f(access)
+            })
     }
 
     // TODO: test
@@ -265,30 +363,6 @@ impl ChunkManager {
         Ok(result)
     }
 
-    pub fn set_loaded_chunk(&self, pos: ChunkPos, chunk: Chunk) {
-        self.loaded_chunks.set(pos, chunk);
-    }
-
-    /// Initialize a new chunk at the given `pos` if one doesn't exist, with the provided load reasons.
-    /// The chunk will be flagged as primordial.
-    pub fn initialize_new_chunk(
-        &self,
-        pos: ChunkPos,
-        load_reasons: LoadReasons,
-    ) -> Result<(), ChunkManagerError> {
-        if self.loaded_chunks.get(pos).is_some() {
-            return Err(ChunkManagerError::AlreadyInitialized);
-        }
-
-        let chunk = Chunk::new(
-            BlockVoxel::Full(self.default_block),
-            ChunkFlags::PRIMORDIAL,
-            load_reasons,
-        );
-        self.loaded_chunks.set(pos, chunk);
-        Ok(())
-    }
-
     pub fn updated_chunks(&self) -> UpdatedChunks<'_> {
         UpdatedChunks { manager: &self }
     }
@@ -300,22 +374,22 @@ pub struct UpdatedChunks<'a> {
 
 impl<'a> UpdatedChunks<'a> {
     pub fn num_fresh_chunks(&self) -> usize {
-        self.manager.status.fresh.len()
+        self.manager.status.read().fresh.len()
     }
 
     pub fn num_generating_chunks(&self) -> usize {
-        self.manager.status.generating.len()
+        self.manager.status.read().generating.len()
     }
 
     pub fn num_updated_chunks(&self) -> usize {
-        self.manager.status.updated.len()
+        self.manager.status.read().updated.len()
     }
 
     pub fn iter_chunks<F>(&self, mut f: F) -> Result<(), ChunkManagerError>
     where
         F: for<'cref> FnMut(ChunkRef<'cref>),
     {
-        for chunk_pos in self.manager.status.updated.iter() {
+        for chunk_pos in self.manager.status.read().updated.iter() {
             let cref = self.manager.get_loaded_chunk(*chunk_pos, false)?;
             f(cref);
         }

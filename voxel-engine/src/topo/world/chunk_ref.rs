@@ -1,6 +1,7 @@
 use std::hash::BuildHasher;
 
 use bevy::{ecs::entity::Entity, math::UVec3, prelude::IVec3};
+use parking_lot::RwLockReadGuard;
 
 use crate::topo::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
@@ -26,7 +27,7 @@ pub type Crwa<'a> = ChunkRefAccess<'a>;
 
 pub struct ChunkRef<'a> {
     pub(super) chunk: LccRef<'a>,
-    pub(super) stats: &'a ChunkStatuses,
+    pub(super) stats: RwLockReadGuard<'a, ChunkStatuses>,
     pub(super) pos: ChunkPos,
     pub(super) entity: Option<Entity>,
 }

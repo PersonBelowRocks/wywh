@@ -1,16 +1,21 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 use bitflags::bitflags;
-use handle_events::{handle_chunk_loads, handle_chunk_unloads, handle_permit_updates};
+use error::EventPosMismatch;
+use handle_events::{handle_chunk_loads_and_unloads, handle_permit_updates};
 use observer_events::{dispatch_move_events, load_in_range_chunks, unload_out_of_range_chunks};
 
 use crate::EngineState;
 
 use super::world::ChunkPos;
 
-mod ecs;
+mod error;
+mod events;
 mod handle_events;
 mod observer_events;
 mod permits;
+pub use events::*;
 
 pub use permits::*;
 
@@ -25,53 +30,6 @@ pub struct ChunkObserver {
 pub struct LastPosition {
     pub ws_pos: Vec3,
     pub chunk_pos: ChunkPos,
-}
-
-#[derive(Clone, Event, Debug)]
-pub struct ChunkObserverMoveEvent {
-    /// Indicates if this observer entity was just inserted.
-    /// i.e. instead of a regular movement where its current position was different from its last position,
-    /// this movement event was because the entity didn't even have a last position, and this was the first time
-    /// we recorded its position.
-    pub new: bool,
-    pub entity: Entity,
-    pub old_pos: Vec3,
-    pub new_pos: Vec3,
-}
-
-#[derive(Clone, Event, Debug)]
-pub struct ChunkObserverCrossChunkBorderEvent {
-    /// Same as for ChunkObserverMoveEvent.
-    pub new: bool,
-    pub entity: Entity,
-    pub old_chunk: ChunkPos,
-    pub new_chunk: ChunkPos,
-}
-
-/// This chunk should be loaded for the given reasons.
-/// Will either load a chunk with the provided reasons, or add the given load reasons to an
-/// already loaded chunk.
-#[derive(Copy, Clone, Event, Debug)]
-pub struct LoadChunkEvent {
-    pub chunk_pos: ChunkPos,
-    pub reasons: LoadReasons,
-    pub auto_generate: bool,
-}
-
-/// This chunk should be unloaded for the given reasons.
-/// Will remove the provided reasons from an already loaded chunk, and if that chunk ends up having
-/// no load reasons left it will be unloaded.
-#[derive(Copy, Clone, Event, Debug)]
-pub struct UnloadChunkEvent {
-    pub chunk_pos: ChunkPos,
-    pub reasons: LoadReasons,
-}
-
-#[derive(Copy, Clone, Event, Debug)]
-pub struct UpdatePermitEvent {
-    pub chunk_pos: ChunkPos,
-    pub insert_flags: PermitFlags,
-    pub remove_flags: PermitFlags,
 }
 
 bitflags! {
@@ -102,11 +60,21 @@ pub enum WorldControllerSystems {
     ObserverResponses,
 }
 
-pub struct WorldController;
+#[derive(Copy, Clone, Resource, Debug)]
+pub struct WorldControllerSettings {
+    pub chunk_loading_handler_timeout: Duration,
+    pub chunk_loading_max_stalling: Duration,
+    pub chunk_loading_handler_backlog_threshold: usize,
+}
+
+pub struct WorldController {
+    pub settings: WorldControllerSettings,
+}
 
 impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
-        app.add_event::<LoadChunkEvent>()
+        app.insert_resource(self.settings)
+            .add_event::<LoadChunkEvent>()
             .add_event::<UnloadChunkEvent>()
             .add_event::<UpdatePermitEvent>()
             .add_event::<ChunkObserverMoveEvent>()
@@ -119,11 +87,7 @@ impl Plugin for WorldController {
                 (unload_out_of_range_chunks, load_in_range_chunks)
                     .chain()
                     .in_set(WorldControllerSystems::ObserverResponses),
-                (
-                    handle_chunk_unloads,
-                    handle_chunk_loads,
-                    handle_permit_updates,
-                )
+                (handle_chunk_loads_and_unloads, handle_permit_updates)
                     .chain()
                     .in_set(WorldControllerSystems::CoreEvents),
             ),

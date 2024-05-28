@@ -5,16 +5,24 @@ use bevy::{
     render::{primitives::Aabb, view::NoFrustumCulling},
 };
 
+use hb::hash_map::Entry as HashbrownEntry;
+
 use crate::{
     topo::{
         controller::{ChunkPermitKey, LoadReasons},
-        world::{Chunk, ChunkEntity, ChunkManagerError, ChunkPos, VoxelRealm},
+        world::{
+            chunk_manager::ChunkLoadResult, Chunk, ChunkEntity, ChunkManagerError, ChunkPos,
+            VoxelRealm,
+        },
         worldgen::generator::GenerateChunk,
     },
     util::{ChunkMap, ChunkSet},
 };
 
-use super::{ChunkEcsPermits, LoadChunkEvent, Permit, UnloadChunkEvent, UpdatePermitEvent};
+use super::{
+    ChunkEcsPermits, LoadChunkEvent, MergeEvent, Permit, UnloadChunkEvent, UpdatePermitEvent,
+    WorldControllerSettings,
+};
 
 #[derive(Bundle)]
 pub struct ChunkEcsBundle {
@@ -128,85 +136,109 @@ pub fn handle_permit_updates(
     }
 }
 
-pub fn handle_chunk_loads(
-    realm: VoxelRealm,
-    mut load_events: EventReader<LoadChunkEvent>,
-    mut generation_events: EventWriter<GenerateChunk>,
+fn update_backlogs<E: Event + Clone + MergeEvent>(
+    reader: &mut EventReader<E>,
+    backlog: &mut ChunkMap<E>,
 ) {
-    let then = Instant::now();
-    let has_events = load_events.len() > 0;
-
-    for &event in load_events.read() {
-        let chunk_pos = event.chunk_pos;
-        // TODO: dont load if theres no reasons
-        let result = realm.cm().initialize_new_chunk(chunk_pos, event.reasons);
-        match result {
-            Ok(_) => {
-                // dispatch a generation event if needed
-                if event.auto_generate {
-                    generation_events.send(GenerateChunk { pos: chunk_pos });
-                }
-            }
-            Err(ChunkManagerError::AlreadyInitialized) => {
-                if let Err(error) = realm
-                    .cm()
-                    .get_loaded_chunk(chunk_pos, true)
-                    .map(|cref| cref.update_load_reasons(|reasons| reasons.insert(event.reasons)))
-                {
-                    error!("Error when updating load reasons for chunk {chunk_pos}: {error}");
-                    continue;
-                }
-            }
-            Err(error) => {
-                error!("Error initializing chunk at {chunk_pos} during chunk loading: {error}");
-                continue;
-            }
-        }
-    }
-
-    let now = Instant::now();
-    let elapsed = now - then;
-
-    if has_events {
-        info!("Spent {}ms handling chunk loads", elapsed.as_millis());
+    for event in reader.read() {
+        backlog
+            .entry(event.pos())
+            .and_modify(|e| e.merge(event.clone()).unwrap())
+            .or_insert(event.clone());
     }
 }
 
-pub fn handle_chunk_unloads(realm: VoxelRealm, mut unload_events: EventReader<UnloadChunkEvent>) {
-    // we can't unload chunks as we go because we're holding a lock guard to the chunk (and we'll deadlock)
-    // so we keep track of everything that needs to be removed and do it all at the end
-    let mut removed = ChunkSet::default();
+pub fn handle_chunk_loads_and_unloads(
+    // Prelude
+    realm: VoxelRealm,
+    settings: Res<WorldControllerSettings>,
+    // Timekeeping
+    time: Res<Time<Real>>,
+    mut latest_cycle: Local<Option<Instant>>,
+    // Events
+    mut load_events: EventReader<LoadChunkEvent>,
+    mut unload_events: EventReader<UnloadChunkEvent>,
+    mut generation_events: EventWriter<GenerateChunk>,
+    // Backlogs
+    mut unload_backlog: Local<ChunkMap<UnloadChunkEvent>>,
+    mut load_backlog: Local<ChunkMap<LoadChunkEvent>>,
+) {
+    let threshold = settings.chunk_loading_handler_backlog_threshold;
+    let timeout = settings.chunk_loading_handler_timeout;
+    let max_stall = settings.chunk_loading_max_stalling;
 
-    for &event in unload_events.read() {
-        match realm.cm().get_loaded_chunk(event.chunk_pos, true) {
-            Ok(cref) => {
-                let new_reasons = cref.update_load_reasons(|flags| flags.remove(event.reasons));
-                if new_reasons.is_empty() {
-                    removed.set(event.chunk_pos);
+    update_backlogs(&mut unload_events, &mut unload_backlog);
+    update_backlogs(&mut load_events, &mut load_backlog);
+
+    let Some(now) = time.last_update() else {
+        return;
+    };
+
+    // If we've stalled for more than our allowed time, we have to load the chunks ASAP, so we force
+    // the global lock.
+    let overtime = match *latest_cycle {
+        Some(latest) if now - latest > max_stall => true,
+        _ => false,
+    };
+
+    // Force a global lock if either of the backlogs exceeded their threshold or if we've stalled
+    // for too long (see above)
+    let force = load_backlog.len() > threshold || unload_backlog.len() > threshold || overtime;
+
+    realm
+        .cm()
+        .with_global_lock(Some(timeout), force, |mut access| {
+            // Record this cycle
+            *latest_cycle = Some(now);
+
+            for (chunk_pos, event) in unload_backlog.iter() {
+                // sanity check to catch potential shenanigans early
+                assert_eq!(chunk_pos, event.chunk_pos);
+
+                match access.unload_chunk(event.chunk_pos, event.reasons) {
+                    Ok(unloaded) => {
+                        if unloaded {
+                            load_backlog.remove(event.chunk_pos);
+                        }
+                    }
+                    Err(error) => {
+                        error!(
+                            "Error UNLOADING chunk at position {}: {error}",
+                            event.chunk_pos
+                        );
+                        continue;
+                    }
                 }
             }
-            Err(error) => {
-                error!(
-                    "Error getting chunk at {} to unload: {error}",
-                    event.chunk_pos
-                );
-                continue;
+
+            // Clear the backlog, we just processed everything in it.
+            unload_backlog.clear();
+
+            for (chunk_pos, event) in load_backlog.iter() {
+                // sanity check to catch potential shenanigans early
+                assert_eq!(chunk_pos, event.chunk_pos);
+
+                let result = match access.load_chunk(event.chunk_pos, event.reasons) {
+                    Ok(result) => result,
+                    Err(error) => {
+                        error!(
+                            "Error LOADING chunk at position {}: {error}",
+                            event.chunk_pos
+                        );
+                        continue;
+                    }
+                };
+
+                // If the chunk wasn't loaded before and the event wants to generate the chunk,
+                // dispatch a generation event.
+                if result == ChunkLoadResult::New && event.auto_generate {
+                    generation_events.send(GenerateChunk {
+                        pos: event.chunk_pos,
+                    });
+                }
             }
-        }
-    }
 
-    let then = Instant::now();
-
-    for removed_chunk in removed.iter() {
-        if let Err(error) = realm.cm().unload_chunk(removed_chunk) {
-            error!("Error unloading chunk at {removed_chunk}: {error}");
-        }
-    }
-
-    let now = Instant::now();
-    let elapsed = now - then;
-
-    if removed.len() > 0 {
-        info!("Spent {}ms handling chunk unloads", elapsed.as_millis());
-    }
+            // Clear this backlog too.
+            load_backlog.clear();
+        });
 }

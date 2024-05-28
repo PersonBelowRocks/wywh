@@ -3,7 +3,7 @@ use dashmap::{
     DashMap,
 };
 use fxhash::FxBuildHasher;
-use hb::hash_map::Entry as HashbrownEntry;
+use hb::hash_map::{Drain, Entry as HashbrownEntry};
 use itertools::Itertools;
 
 use crate::topo::world::ChunkPos;
@@ -193,5 +193,13 @@ impl<T> ChunkMap<T> {
 
     pub fn iter(&self) -> impl Iterator<Item = (ChunkPos, &T)> {
         self.0.iter().map(|(&pos, data)| (pos, data))
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+
+    pub fn drain(&mut self) -> Drain<'_, ChunkPos, T> {
+        self.0.drain()
     }
 }

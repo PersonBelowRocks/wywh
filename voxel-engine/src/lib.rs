@@ -72,7 +72,7 @@ impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
         info!("Building voxel plugin");
 
-        app.add_plugins(WorldController);
+        app.add_plugins(WorldController { settings: todo!() });
         app.add_plugins(MeshController);
         app.add_plugins(RenderCore);
         app.add_plugins(MippedArrayTexturePlugin::default());

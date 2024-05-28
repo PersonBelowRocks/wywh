@@ -7,7 +7,7 @@ pub enum ChunkManagerError {
     #[error("Chunk doesn't exist")]
     DoesntExist,
     #[error("Tried to initialize already existing chunk")]
-    AlreadyInitialized,
+    AlreadyLoaded,
     #[error("Could associate the entity with a chunk")]
     MissingEntity,
     #[error("Chunk position is out of bounds")]
