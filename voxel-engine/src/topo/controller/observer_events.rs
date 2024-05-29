@@ -2,7 +2,10 @@ use std::time::Instant;
 
 use bevy::{
     ecs::system::SystemParam,
-    math::{ivec2, ivec3},
+    math::{
+        bounding::{Aabb3d, BoundingVolume},
+        ivec2, ivec3,
+    },
     prelude::*,
     tasks::ComputeTaskPool,
 };
@@ -103,23 +106,21 @@ fn is_in_range(
     chunk_pos: ChunkPos,
     observer_settings: &ChunkObserver,
 ) -> bool {
+    let horizontal = Vec2::splat(observer_settings.horizontal_range);
+    let above = observer_settings.view_distance_above;
+    let below = -observer_settings.view_distance_below;
+
     let observer_pos = chunk_pos_center_vec3(observer_pos);
     let chunk_pos = chunk_pos_center_vec3(chunk_pos);
 
-    let observer_horizontal_range_sq =
-        observer_settings.horizontal_range * observer_settings.horizontal_range;
+    let local_cpos = chunk_pos - observer_pos;
 
-    let (vny, vpy) = (
-        observer_settings.view_distance_below,
-        observer_settings.view_distance_above,
-    );
+    let in_horizontal_range =
+        local_cpos.xz().cmpge(-horizontal).all() && local_cpos.xz().cmple(horizontal).all();
 
-    let is_below = chunk_pos.y < observer_pos.y;
+    let in_vertical_range = (below..=above).contains(&local_cpos.y);
 
-    (match is_below {
-        true => (chunk_pos.y - observer_pos.y).abs() < vny,
-        false => (chunk_pos.y - observer_pos.y).abs() < vpy,
-    }) && (observer_pos.xz().distance_squared(chunk_pos.xz()) < observer_horizontal_range_sq)
+    in_horizontal_range && in_vertical_range
 }
 
 pub fn unload_out_of_range_chunks(
@@ -214,26 +215,21 @@ pub fn load_in_range_chunks(
     let mut in_range = ChunkSet::default();
 
     for (opos, &observer) in moved_observers.iter() {
-        let observer_pos = chunk_pos_center_vec3(opos);
+        let min_y = (-observer.view_distance_below).floor() as i32;
+        let max_y = observer.view_distance_above.ceil() as i32;
 
-        let min_y = (observer_pos.y - observer.view_distance_below).floor() as i32;
-        let max_y = (observer_pos.y + observer.view_distance_above).floor() as i32;
+        let horizontal_min = IVec2::splat((-observer.horizontal_range).floor() as i32);
+        let horizontal_max = IVec2::splat(observer.horizontal_range.ceil() as i32);
 
-        let horizontal_range = observer.horizontal_range.floor() as i32;
-        let horizontal_range_sq = observer.horizontal_range.powi(2).floor();
-        let min_xz = opos.as_ivec3().xz() - IVec2::splat(horizontal_range);
-        let max_xz = opos.as_ivec3().xz() + IVec2::splat(horizontal_range);
+        for y in min_y..=max_y {
+            for x in horizontal_min.x..=horizontal_max.x {
+                for z in horizontal_min.y..=horizontal_max.y {
+                    let pos = ivec3(x, y, z);
+                    let cpos = ChunkPos::from(pos + opos.as_ivec3());
 
-        for y in min_y..max_y {
-            for x in min_xz.x..max_xz.x {
-                for z in min_xz.y..max_xz.y {
-                    if ivec2(x, z).as_vec2().distance_squared(observer_pos.xz())
-                        > horizontal_range_sq
-                    {
+                    if !is_in_range(opos, cpos, observer) {
                         continue;
                     }
-
-                    let cpos = ChunkPos::new(x, y, z);
 
                     if realm
                         .permits()

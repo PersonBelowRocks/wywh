@@ -154,58 +154,65 @@ pub fn voxel_realm_remesh_updated_chunks(
     let mut queued_neighbors = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
 
     // TODO: skip this update if the chunk manager is globally locked.
-    updated
-        .iter_chunks(|cref| {
-            // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
-            if !realm.has_render_permit(cref.pos()) || queued_primary.contains(&cref.pos()) {
-                return;
-            }
+    let result = updated.iter_chunks(|cref| {
+        // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
+        if !realm.has_render_permit(cref.pos()) || queued_primary.contains(&cref.pos()) {
+            return;
+        }
 
-            // If this chunk was previously queued as a neighbor remesh, we "convert" it to a primary
-            // remesh. This is because we need to unflag all chunks that were updated, but we don't want
-            // to do that to the neighbors.
-            if queued_neighbors.contains(&cref.pos()) {
-                queued_neighbors.remove(&cref.pos());
-            }
+        // If this chunk was previously queued as a neighbor remesh, we "convert" it to a primary
+        // remesh. This is because we need to unflag all chunks that were updated, but we don't want
+        // to do that to the neighbors.
+        if queued_neighbors.contains(&cref.pos()) {
+            queued_neighbors.remove(&cref.pos());
+        }
 
-            if cref.flags().contains(ChunkFlags::FRESHLY_GENERATED) && !should_queue_fresh {
-                return;
-            }
+        if cref.flags().contains(ChunkFlags::FRESHLY_GENERATED) && !should_queue_fresh {
+            return;
+        }
 
-            queued_primary.insert(cref.pos());
-            remeshings_issued += 1;
+        queued_primary.insert(cref.pos());
+        remeshings_issued += 1;
 
-            // This chunk was updated in such a way that we need to remesh its neighbors too!
-            if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
-                for face in Face::FACES {
-                    let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.pos()));
+        // This chunk was updated in such a way that we need to remesh its neighbors too!
+        if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
+            for face in Face::FACES {
+                let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.pos()));
 
-                    if !realm.has_render_permit(neighbor_pos)
-                        || queued_primary.contains(&neighbor_pos)
-                        || queued_neighbors.contains(&neighbor_pos)
-                    {
-                        continue;
-                    }
-
-                    // We only remesh the neighbor if it's neither generating or fresh.
-                    // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
-                    // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
-                    let avoid_flags: ChunkFlags =
-                        ChunkFlags::GENERATING | ChunkFlags::FRESHLY_GENERATED;
-                    let Some(flags) = cm.chunk_flags(neighbor_pos) else {
-                        continue;
-                    };
-
-                    if flags.intersects(avoid_flags) {
-                        continue;
-                    }
-
-                    queued_neighbors.insert(neighbor_pos);
-                    neighbor_remeshings_issued += 1;
+                if !realm.has_render_permit(neighbor_pos)
+                    || queued_primary.contains(&neighbor_pos)
+                    || queued_neighbors.contains(&neighbor_pos)
+                {
+                    continue;
                 }
+
+                // We only remesh the neighbor if it's neither generating or fresh (or primordial).
+                // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
+                // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
+                let avoid_flags: ChunkFlags =
+                    ChunkFlags::PRIMORDIAL | ChunkFlags::GENERATING | ChunkFlags::FRESHLY_GENERATED;
+                let Some(flags) = cm.chunk_flags(neighbor_pos) else {
+                    continue;
+                };
+
+                if flags.intersects(avoid_flags) {
+                    continue;
+                }
+
+                queued_neighbors.insert(neighbor_pos);
+                neighbor_remeshings_issued += 1;
             }
-        })
-        .unwrap();
+        }
+    });
+
+    if let Err(error) = result {
+        // A global lock error is fine (and expected from time to time), we just retry on the next
+        // iteration of this system. Since chunks are unflagged in this system, and we didn't manage to
+        // queue any chunks for remeshing and unflagging, the flags will be the same on the next iteration.
+        if !error.is_globally_locked() {
+            error!("Error trying to iterate over remeshable chunks: {error}");
+        }
+    }
 
     for pos in &queued_primary {
         if let Ok(cref) = cm.get_loaded_chunk(*pos, false) {

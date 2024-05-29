@@ -89,11 +89,14 @@ async fn internal_worker_task(
                     // We need to sleep here to emulate waiting on the channel.
                     // Otherwise we end up busy looping.
                     thread::sleep(params.timeout);
-                    continue;
-                } else {
-                    error!("Error getting chunk at position {cpos}: {error}");
-                    continue;
                 }
+
+                // We don't log the error here because it likely isn't an error. If
+                // the chunk didn't exist then it's likely that the chunk was unloaded before
+                // we could process the command, which is normal. And other than that
+                // there's not really any error that's relevant here other than the global lock error,
+                // (which we already handled) so we just skip to the next command.
+                continue;
             }
         };
 
@@ -101,7 +104,6 @@ async fn internal_worker_task(
         // is possible but usually undesirable, and if we want to do it we probably don't want to use
         // the worldgen system for it, but rather manually work the generator algorithm.
         if !cref.flags().contains(ChunkFlags::PRIMORDIAL) {
-            error!("Cannot generate terrain in non-primordial chunk at position {cpos}");
             continue;
         }
 

@@ -44,9 +44,6 @@ impl<'a> std::ops::Deref for LccRef<'a> {
     }
 }
 
-pub type StrongChunkRef<'a> =
-    dashmap::mapref::one::Ref<'a, ChunkPos, Arc<Chunk>, ahash::RandomState>;
-
 impl LoadedChunkContainer {
     pub fn new() -> Self {
         Self {
@@ -71,7 +68,7 @@ impl LoadedChunkContainer {
     }
 
     /// Get the state of the global lock for this chunk container
-    pub fn global_lock(&self) -> GlobalLockState {
+    pub fn global_lock_state(&self) -> GlobalLockState {
         if self.force_write.load(Ordering::Relaxed) || self.map.is_locked_exclusive() {
             GlobalLockState::Locked
         } else {
@@ -210,7 +207,7 @@ impl<'a> ChunkManagerAccess<'a> {
             Err(ChunkManagerError::AlreadyLoaded) => {
                 let chunk = self.chunks.get(pos).expect(
                     "chunk should be present in storage because 
-                        initialize_new_chunk returned AlreadyInitialized",
+                        initialize_new_chunk returned AlreadyLoaded",
                 );
 
                 let mut existing_load_reasons = chunk.load_reasons.write();
@@ -289,10 +286,16 @@ impl ChunkManager {
         })
     }
 
+    /// Get the chunk flags for the given chunk position
     pub fn chunk_flags(&self, pos: ChunkPos) -> Option<ChunkFlags> {
         self.get_loaded_chunk(pos, true)
             .map(|cref| cref.flags())
             .ok()
+    }
+
+    /// Get the state of the global lock
+    pub fn global_lock_state(&self) -> GlobalLockState {
+        self.loaded_chunks.global_lock_state()
     }
 
     /// Acquire a global lock of the chunk manager and its data. The close passed to this function will

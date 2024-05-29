@@ -213,9 +213,9 @@ fn setup(
             },
             camera::PlayerCamController::default(),
             ChunkObserver {
-                horizontal_range: 10.0,
-                view_distance_above: 4.0,
-                view_distance_below: 4.0,
+                horizontal_range: 5.0,
+                view_distance_above: 3.0,
+                view_distance_below: 3.0,
             },
             VisibilityBundle::default(),
             ScreenSpaceAmbientOcclusionBundle::default(),

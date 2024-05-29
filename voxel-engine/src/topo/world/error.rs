@@ -21,6 +21,10 @@ impl ChunkManagerError {
             Self::ContainerError(ChunkContainerError::GloballyLocked)
         )
     }
+
+    pub fn is_doesnt_exists(&self) -> bool {
+        matches!(self, Self::ContainerError(ChunkContainerError::DoesntExist))
+    }
 }
 
 #[derive(te::Error, Debug, PartialEq, Eq, Clone)]

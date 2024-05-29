@@ -181,6 +181,11 @@ pub fn handle_chunk_loads_and_unloads(
         _ => false,
     };
 
+    // Nothing to process, so just return early.
+    if unload_backlog.len() <= 0 || load_backlog.len() <= 0 {
+        return;
+    }
+
     // Force a global lock if either of the backlogs exceeded their threshold or if we've stalled
     // for too long (see above)
     let force = load_backlog.len() > threshold || unload_backlog.len() > threshold || overtime;
@@ -202,6 +207,9 @@ pub fn handle_chunk_loads_and_unloads(
                         }
                     }
                     Err(error) => {
+                        // FIXME: sometimes we end up here with the error "chunk does not exist".
+                        // figure out what causes this and what to do about it. it doesnt seem to be causing
+                        // any issues but it's an error nonetheless
                         error!(
                             "Error UNLOADING chunk at position {}: {error}",
                             event.chunk_pos
@@ -232,8 +240,6 @@ pub fn handle_chunk_loads_and_unloads(
                 // If the chunk wasn't loaded before and the event wants to generate the chunk,
                 // dispatch a generation event.
                 if result == ChunkLoadResult::New && event.auto_generate {
-                    info!("Sending generation event");
-
                     generation_events.send(GenerateChunk {
                         pos: event.chunk_pos,
                     });

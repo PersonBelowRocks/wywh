@@ -44,6 +44,8 @@ pub fn generate_chunks_from_events(
     mut reader: EventReader<GenerateChunk>,
     workers: Res<GeneratorWorkerPool>,
 ) {
+    // TODO: generator commands should be sorted by distance to closest observer like what
+    // the mesh controller does when queuing mesh building jobs.
     let mut total = 0;
     for event in reader.read() {
         workers.queue_job(event.pos);
