@@ -1,4 +1,6 @@
 use std::{
+    cmp,
+    collections::BinaryHeap,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -12,9 +14,13 @@ use bevy::{
     log::{error, warn},
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
-use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender};
+use bhp::KeyComparator;
+use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TrySendError};
 
-use crate::data::registries::Registries;
+use crate::{
+    data::registries::Registries,
+    util::{Keyed, KeyedOrd},
+};
 
 use self::generator::Generator;
 
@@ -38,13 +44,39 @@ pub struct WorkerParams {
     pub timeout: Duration,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord)]
+pub struct GenerationPriority(u32);
+
+impl GenerationPriority {
+    pub const HIGHEST: Self = Self(0);
+    pub const LOWEST: Self = Self(u32::MAX);
+
+    pub fn new(raw: u32) -> Self {
+        Self(raw)
+    }
+}
+
+impl PartialOrd for GenerationPriority {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        other.0.partial_cmp(&self.0)
+    }
+}
+
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, dm::Constructor)]
 pub struct GeneratorCommandId(u32);
 
 #[derive(Clone)]
 pub struct GeneratorCommand {
-    pos: ChunkPos,
-    id: GeneratorCommandId,
+    pub pos: ChunkPos,
+    pub priority: GenerationPriority,
+}
+
+impl Keyed<GenerationPriority> for GeneratorCommand {
+    type Key = GenerationPriority;
+
+    fn key(&self) -> &Self::Key {
+        &self.priority
+    }
 }
 
 async fn internal_worker_task(
@@ -171,22 +203,30 @@ impl Worker {
     }
 }
 
+#[derive(Copy, Clone)]
+pub struct GeneratorPoolSettings {
+    pub workers: usize,
+    pub job_channel_capacity: usize,
+}
+
 #[derive(Resource)]
 pub struct GeneratorWorkerPool {
     workers: Vec<Worker>,
     cmds: Sender<GeneratorCommand>,
+    pending: BinaryHeap<KeyedOrd<GeneratorCommand, GenerationPriority>>,
 }
 
 impl GeneratorWorkerPool {
     pub fn new(
+        settings: GeneratorPoolSettings,
         seed: u32,
-        worker_count: usize,
         pool: &TaskPool,
         registries: Registries,
         cm: Arc<ChunkManager>,
     ) -> Self {
-        let (cmd_sender, cmd_recver) = channel::unbounded::<GeneratorCommand>();
-        let mut workers = Vec::<Worker>::with_capacity(worker_count);
+        let (cmd_sender, cmd_recver) =
+            channel::bounded::<GeneratorCommand>(settings.job_channel_capacity);
+        let mut workers = Vec::<Worker>::with_capacity(settings.workers);
 
         let default_channel_timeout_duration = Duration::from_millis(500);
 
@@ -197,7 +237,7 @@ impl GeneratorWorkerPool {
             timeout: default_channel_timeout_duration,
         };
 
-        for i in 0..worker_count {
+        for i in 0..settings.workers {
             let worker = Worker::new(
                 seed,
                 pool,
@@ -211,6 +251,7 @@ impl GeneratorWorkerPool {
         Self {
             workers,
             cmds: cmd_sender,
+            pending: BinaryHeap::new(),
         }
     }
 
@@ -220,12 +261,25 @@ impl GeneratorWorkerPool {
         }
     }
 
-    pub fn queue_job(&self, pos: ChunkPos) {
-        self.cmds
-            .send(GeneratorCommand {
-                pos,
-                id: GeneratorCommandId::new(0), // TODO: generation task ID tracking
-            })
-            .unwrap();
+    pub fn queue_jobs<I: Iterator<Item = GeneratorCommand>>(&mut self, cmds: I) {
+        self.pending.extend(cmds.map(KeyedOrd::new));
+
+        while let Some(next) = self.pending.pop() {
+            let next = next.into_inner();
+
+            if let Err(error) = self.cmds.try_send(next) {
+                match error {
+                    TrySendError::Disconnected(msg) => {
+                        self.pending.push(KeyedOrd::new(msg));
+                        error!("Could not send generator command to workers because the channel is disconnected.");
+                        break;
+                    }
+                    TrySendError::Full(msg) => {
+                        self.pending.push(KeyedOrd::new(msg));
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

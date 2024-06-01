@@ -195,6 +195,10 @@ impl<T> ChunkMap<T> {
         self.0.iter().map(|(&pos, data)| (pos, data))
     }
 
+    pub fn into_iter(self) -> impl Iterator<Item = (ChunkPos, T)> {
+        self.0.into_iter()
+    }
+
     pub fn clear(&mut self) {
         self.0.clear()
     }

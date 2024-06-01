@@ -1,3 +1,4 @@
+extern crate binary_heap_plus as bhp;
 extern crate crossbeam as cb;
 extern crate derive_more as dm;
 extern crate derive_new as dn;

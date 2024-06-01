@@ -19,7 +19,7 @@ use crate::{
     },
 };
 
-use super::error::GeneratorError;
+use super::{error::GeneratorError, GenerationPriority};
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -30,6 +30,7 @@ pub enum GeneratorChoice {
 #[derive(Event, Debug)]
 pub struct GenerateChunk {
     pub pos: ChunkPos,
+    pub priority: GenerationPriority,
 }
 
 #[derive(Copy, Clone)]
