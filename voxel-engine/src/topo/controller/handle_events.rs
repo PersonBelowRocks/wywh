@@ -20,8 +20,8 @@ use crate::{
 };
 
 use super::{
-    ChunkEcsPermits, LoadChunkEvent, MergeEvent, Permit, UnloadChunkEvent, UpdatePermitEvent,
-    WorldControllerSettings,
+    ChunkEcsPermits, LoadChunkEvent, LoadedChunkEvent, MergeEvent, Permit, UnloadChunkEvent,
+    UnloadedChunkEvent, UpdatePermitEvent, WorldControllerSettings,
 };
 
 #[derive(Bundle)]
@@ -157,8 +157,9 @@ pub fn handle_chunk_loads_and_unloads(
     mut latest_cycle: Local<Option<Instant>>,
     // Events
     mut load_events: EventReader<LoadChunkEvent>,
+    mut loaded_chunks: EventWriter<LoadedChunkEvent>,
     mut unload_events: EventReader<UnloadChunkEvent>,
-    mut generation_events: EventWriter<GenerateChunk>,
+    mut unloaded_chunks: EventWriter<UnloadedChunkEvent>,
     // Backlogs
     mut unload_backlog: Local<ChunkMap<UnloadChunkEvent>>,
     mut load_backlog: Local<ChunkMap<LoadChunkEvent>>,
@@ -203,7 +204,16 @@ pub fn handle_chunk_loads_and_unloads(
                 match access.unload_chunk(event.chunk_pos, event.reasons) {
                     Ok(unloaded) => {
                         if unloaded {
+                            // Remove this chunk from our backlog so we don't re-load it later on
+                            // FIXME: unsure of this logic, we might have a condition where a chunk is
+                            // unloaded and then loaded again before this system has a chance to do anything
+                            // about it. in such a scenario the chunk should be loaded but we've removed it from
+                            // the load backlog.
                             load_backlog.remove(event.chunk_pos);
+
+                            unloaded_chunks.send(UnloadedChunkEvent {
+                                chunk_pos: event.chunk_pos,
+                            });
                         }
                     }
                     Err(error) => {
@@ -239,11 +249,10 @@ pub fn handle_chunk_loads_and_unloads(
 
                 // If the chunk wasn't loaded before and the event wants to generate the chunk,
                 // dispatch a generation event.
-                if result == ChunkLoadResult::New && event.auto_generate {
-                    // TODO: calculate priority here.
-                    generation_events.send(GenerateChunk {
-                        pos: event.chunk_pos,
-                        priority: todo!(),
+                if result == ChunkLoadResult::New {
+                    loaded_chunks.send(LoadedChunkEvent {
+                        chunk_pos: event.chunk_pos,
+                        auto_generate: event.auto_generate,
                     });
                 }
             }

@@ -60,6 +60,16 @@ impl MergeEvent for LoadChunkEvent {
     }
 }
 
+/// Event triggered when a chunk is loaded. This event is "downstream" from [`LoadChunkEvent`] in that
+/// `LoadChunkEvent`'s handler system in the engine also triggers this event. But this event is dispatched
+/// AFTER a chunk is loaded, whereas `LoadChunkEvent` is dispatched TO LOAD a chunk.
+/// This event is not triggered when load reasons are updated, only when a new chunk is loaded.
+#[derive(Copy, Clone, Event, Debug)]
+pub struct LoadedChunkEvent {
+    pub chunk_pos: ChunkPos,
+    pub auto_generate: bool,
+}
+
 /// This chunk should be unloaded for the given reasons.
 /// Will remove the provided reasons from an already loaded chunk, and if that chunk ends up having
 /// no load reasons left it will be unloaded.
@@ -86,6 +96,15 @@ impl MergeEvent for UnloadChunkEvent {
             Ok(())
         }
     }
+}
+
+/// Event triggered when a chunk is unloaded. This event is "downstream" from [`UnloadChunkEvent`] in that
+/// `UnloadChunkEvent`'s handler system in the engine also triggers this event. But this event is dispatched
+/// AFTER a chunk is unloaded, whereas `UnloadChunkEvent` is dispatched TO UNLOAD a chunk.
+/// This event is not triggered when load reasons are updated, only when a chunk is unloaded from the manager.
+#[derive(Copy, Clone, Event, Debug)]
+pub struct UnloadedChunkEvent {
+    pub chunk_pos: ChunkPos,
 }
 
 #[derive(Copy, Clone, Event, Debug)]

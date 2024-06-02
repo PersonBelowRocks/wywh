@@ -13,14 +13,17 @@ use cb::channel;
 
 use crate::{
     render::meshing::controller::MeshGeneration,
-    topo::world::{realm::ChunkManagerResource, ChunkEntity, ChunkPos, VoxelRealm},
+    topo::{
+        world::{realm::ChunkManagerResource, Chunk, ChunkEntity, ChunkPos, VoxelRealm},
+        worldgen::{generator::GenerateChunk, GenerationPriority},
+    },
     util::{ws_to_chunk_pos, ChunkMap, ChunkSet},
 };
 
 use super::{
     ChunkObserver, ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent, ChunkPermitKey,
-    Entry, LastPosition, LoadChunkEvent, LoadReasons, Permit, PermitFlags, UnloadChunkEvent,
-    UpdatePermitEvent,
+    Entry, LastPosition, LoadChunkEvent, LoadReasons, LoadedChunkEvent, Permit, PermitFlags,
+    UnloadChunkEvent, UpdatePermitEvent,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -267,4 +270,46 @@ pub fn load_in_range_chunks(
             elapsed.as_millis()
         );
     }
+}
+
+fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> GenerationPriority {
+    const CHUNK_SIZE_F32: f32 = Chunk::SIZE as f32;
+    const CHUNK_SIZE_DIV2: f32 = CHUNK_SIZE_F32 / 2.0;
+
+    let chunk_center = (chunk_pos.as_vec3() * CHUNK_SIZE_F32) + Vec3::splat(CHUNK_SIZE_DIV2);
+
+    let distance_sq = chunk_center.distance_squared(trans.translation);
+    let distance_sq_int = distance_sq.clamp(0.0, u32::MAX as _) as u32;
+
+    GenerationPriority::new(distance_sq_int)
+}
+
+pub fn generate_chunks_with_priority(
+    observers: Query<&Transform, With<ChunkObserver>>,
+    mut loaded_chunks: EventReader<LoadedChunkEvent>,
+    mut generation_events: EventWriter<GenerateChunk>,
+) {
+    let mut chunks_to_gen = ChunkSet::default();
+
+    // We only care about auto_generate chunks
+    for chunk in loaded_chunks.read() {
+        if chunk.auto_generate {
+            chunks_to_gen.set(chunk.chunk_pos);
+        }
+    }
+
+    generation_events.send_batch(chunks_to_gen.iter().map(|chunk_pos| {
+        // Calculate priority based on distance to nearest observer, if there's no observers we use
+        // the lowest priority.
+        let priority = observers
+            .iter()
+            .map(|trans| calculate_priority(trans, chunk_pos))
+            .max()
+            .unwrap_or(GenerationPriority::LOWEST);
+
+        GenerateChunk {
+            pos: chunk_pos,
+            priority,
+        }
+    }));
 }

@@ -4,7 +4,10 @@ use bevy::prelude::*;
 use bitflags::bitflags;
 use error::EventPosMismatch;
 use handle_events::{handle_chunk_loads_and_unloads, handle_permit_updates};
-use observer_events::{dispatch_move_events, load_in_range_chunks, unload_out_of_range_chunks};
+use observer_events::{
+    dispatch_move_events, generate_chunks_with_priority, load_in_range_chunks,
+    unload_out_of_range_chunks,
+};
 
 use crate::EngineState;
 
@@ -75,7 +78,9 @@ impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings)
             .add_event::<LoadChunkEvent>()
+            .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunkEvent>()
+            .add_event::<UnloadedChunkEvent>()
             .add_event::<UpdatePermitEvent>()
             .add_event::<ChunkObserverMoveEvent>()
             .add_event::<ChunkObserverCrossChunkBorderEvent>();
@@ -90,6 +95,7 @@ impl Plugin for WorldController {
                 (handle_chunk_loads_and_unloads, handle_permit_updates)
                     .chain()
                     .in_set(WorldControllerSystems::CoreEvents),
+                generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),
             ),
         );
 
