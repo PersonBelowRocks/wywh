@@ -178,7 +178,7 @@ fn setup(
     commands.insert_resource(Msaa::Off);
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
-        brightness: 2.0,
+        brightness: 200.0,
     });
 
     // camera
