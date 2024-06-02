@@ -1,7 +1,7 @@
 mod ecs;
 mod workers;
 
-use std::cmp;
+use std::{cmp, fmt};
 
 use bevy::prelude::*;
 
@@ -55,13 +55,24 @@ impl ChunkMeshData {
     }
 }
 
-#[derive(Clone)]
+impl fmt::Debug for ChunkMeshData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut map = f.debug_map();
+
+        map.entry(&"indices", &self.index_buffer.len());
+        map.entry(&"quads", &self.quad_buffer.len());
+
+        map.finish()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TimedChunkMeshData {
     pub generation: u64,
     pub data: ChunkMeshStatus,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ChunkMeshStatus {
     Unfulfilled,
     Empty,

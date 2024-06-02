@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fmt, time::Duration};
 
 use bevy::prelude::*;
 use bitflags::bitflags;
@@ -41,7 +41,7 @@ bitflags! {
     /// Removing certain flags can result in some relevant resources being unloaded, but not the chunk
     /// itself (unless all flags are removed). For example if a chunk doesn't have a RENDER flag, it
     /// should not have any associated data on the GPU.
-    #[derive(Copy, Clone, Eq, Debug, PartialEq, Hash)]
+    #[derive(Copy, Clone, Eq, PartialEq, Hash)]
     pub struct LoadReasons: u16 {
         /// This chunk is manually loaded, and thus should be manually unloaded (aka. force loaded)
         /// The engine won't touch this flag, so it's up to the user to manage force loaded chunks
@@ -52,6 +52,26 @@ bitflags! {
         /// This chunk is loaded because it should have collisions, if it passes out of physics distance
         /// then this flag will be removed
         const COLLISION = 1 << 2;
+    }
+}
+
+impl fmt::Debug for LoadReasons {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let permit_flag_names = [
+            (Self::MANUAL, "MANUAL"),
+            (Self::RENDER, "RENDER"),
+            (Self::COLLISION, "COLLISION"),
+        ];
+
+        let mut list = f.debug_list();
+
+        for (flag, name) in permit_flag_names {
+            if self.contains(flag) {
+                list.entry(&name);
+            }
+        }
+
+        list.finish()
     }
 }
 

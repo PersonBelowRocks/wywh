@@ -1,3 +1,5 @@
+use std::fmt;
+
 use bevy::ecs::{
     entity::{Entity, EntityHashMap},
     system::Resource,
@@ -7,10 +9,26 @@ use bitflags::bitflags;
 use crate::{topo::world::ChunkPos, util::ChunkMap};
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PermitFlags: u16 {
         const RENDER = 1 << 0;
         const COLLISION = 1 << 1;
+    }
+}
+
+impl fmt::Debug for PermitFlags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let permit_flag_names = [(Self::RENDER, "RENDER"), (Self::COLLISION, "COLLISION")];
+
+        let mut list = f.debug_list();
+
+        for (flag, name) in permit_flag_names {
+            if self.contains(flag) {
+                list.entry(&name);
+            }
+        }
+
+        list.finish()
     }
 }
 

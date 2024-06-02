@@ -1,3 +1,5 @@
+use std::fmt;
+
 use bevy::math::ivec3;
 use bevy::prelude::*;
 use bitflags::bitflags;
@@ -70,6 +72,28 @@ bitflags! {
         /// Chunks are not supposed to be primordial for long, primordial chunks are usually immediately
         /// queued for further processing by the engine to get them out of their primordial state.
         const PRIMORDIAL = 0b1 << 4;
+    }
+}
+
+impl fmt::Debug for ChunkFlags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let permit_flag_names = [
+            (Self::GENERATING, "GENERATING"),
+            (Self::REMESH, "REMESH"),
+            (Self::REMESH_NEIGHBORS, "REMESH_NEIGHBORS"),
+            (Self::FRESHLY_GENERATED, "FRESHLY_GENERATED"),
+            (Self::PRIMORDIAL, "PRIMORDIAL"),
+        ];
+
+        let mut list = f.debug_list();
+
+        for (flag, name) in permit_flag_names {
+            if self.contains(flag) {
+                list.entry(&name);
+            }
+        }
+
+        list.finish()
     }
 }
 
