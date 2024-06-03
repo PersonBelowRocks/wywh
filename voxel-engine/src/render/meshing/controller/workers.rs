@@ -4,6 +4,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    thread,
     time::Duration,
 };
 
@@ -66,43 +67,60 @@ impl Worker {
         let task_label = label.clone();
         let task_interrupt = atomic_interrupt.clone();
         let task = pool.spawn(async move {
+            let mut backlog_cmd = None::<MeshCommand>;
+
             while !task_interrupt.load(Ordering::Relaxed) {
-                match params.cmds.recv_timeout(channel_timeout) {
-                    Ok(cmd) => {
-                        let cm = params.chunk_manager.clone();
-
-                        let result = cm.with_neighbors::<_, Result<ChunkMeshData, ChunkMeshingError>>(cmd.pos, |neighbors| {
-                            let context = Context {
-                                neighbors,
-                                registries: &params.registries,
-                            };
-
-                            let chunk = cm.get_loaded_chunk(cmd.pos, false)?;
-                            Ok(chunk.with_read_access(|access| {
-                                params.mesher.build(access, context)
-                            })??)
-                        }).map_err(ChunkMeshingError::from).custom_flatten();
-
-                        match result {
-                            Ok(output) => {
-                                params.finished.send(FinishedChunkData {
-                                    data: output,
-                                    pos: cmd.pos,
-                                    generation: cmd.generation
-                                }).unwrap();
-                            }
-                            Err(err) => () // error!("Error in worker '{task_label}' building chunk mesh: {err}"),
+                let cmd = match backlog_cmd.take() {
+                    Some(cmd) => Some(cmd),
+                    None => match params.cmds.recv_timeout(channel_timeout) {
+                        Ok(cmd) => Some(cmd),
+                        Err(RecvTimeoutError::Timeout) => None,
+                        Err(RecvTimeoutError::Disconnected) => {
+                            warn!("Channel disconnected for meshing worker '{task_label}', worker is shutting down.");
+                            return;
                         }
+                    }
+                };
+
+                let Some(cmd) = cmd else { continue };
+
+                let cm = params.chunk_manager.clone();
+
+                let result = cm.with_neighbors::<_, Result<ChunkMeshData, ChunkMeshingError>>(cmd.pos, |neighbors| {
+                    let context = Context {
+                        neighbors,
+                        registries: &params.registries,
+                    };
+
+                    let chunk = cm.get_loaded_chunk(cmd.pos, false)?;
+                    Ok(chunk.with_read_access(|access| {
+                        params.mesher.build(access, context)
+                    })??)
+                }).map_err(ChunkMeshingError::from).custom_flatten();
+
+                match result {
+                    Ok(output) => {
+                        params.finished.send(FinishedChunkData {
+                            data: output,
+                            pos: cmd.pos,
+                            generation: cmd.generation
+                        }).unwrap();
+                    }
+                    Err(ChunkMeshingError::ChunkManagerError(error)) => {
+                        // backlog if globally locked
+                        if error.is_globally_locked() {
+                            backlog_cmd = Some(cmd);
+                            // sleep here to avoid busy looping
+                            thread::sleep(channel_timeout);
+                        }
+
+                        continue;
                     },
-                    Err(RecvTimeoutError::Timeout) => continue,
-                    Err(RecvTimeoutError::Disconnected) => {
-                        warn!("Channel disconnected for meshing worker '{task_label}', worker is shutting down.");
-                        return;
+                    Err(ChunkMeshingError::MesherError(error)) => {
+                        error!("Error in worker '{task_label}' building chunk mesh for {}: {error}", cmd.pos);
                     }
                 }
             }
-
-            info!("Meshing worker '{task_label}' was interrupted and is shutting down.")
         });
 
         Self {
@@ -152,7 +170,7 @@ impl MeshBuilder {
         let (mesh_sender, mesh_recver) = channel::unbounded::<FinishedChunkData>();
         let mut workers = Vec::<Worker>::with_capacity(settings.workers);
 
-        let default_channel_timeout_duration = Duration::from_millis(500);
+        let default_channel_timeout_duration = Duration::from_millis(50);
 
         let worker_params = WorkerParams {
             registries,

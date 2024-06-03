@@ -228,7 +228,7 @@ impl GeneratorWorkerPool {
             channel::bounded::<GeneratorCommand>(settings.job_channel_capacity);
         let mut workers = Vec::<Worker>::with_capacity(settings.workers);
 
-        let default_channel_timeout_duration = Duration::from_millis(500);
+        let default_channel_timeout_duration = Duration::from_millis(50);
 
         let worker_params = WorkerParams {
             registries,
