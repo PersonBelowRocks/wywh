@@ -4,6 +4,7 @@ mod workers;
 use std::{cmp, fmt};
 
 use bevy::prelude::*;
+use ecs::remove_chunks;
 
 use crate::{
     render::{meshing::controller::ecs::dispatch_updated_chunk_remeshings, quad::GpuQuad},
@@ -118,7 +119,7 @@ impl Plugin for MeshController {
 
         app.add_systems(
             PreUpdate,
-            insert_chunks.run_if(in_state(EngineState::Finished)),
+            (remove_chunks, insert_chunks).run_if(in_state(EngineState::Finished)),
         );
 
         app.add_systems(
