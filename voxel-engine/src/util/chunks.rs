@@ -9,13 +9,13 @@ use itertools::Itertools;
 use crate::topo::world::ChunkPos;
 
 #[derive(Clone, Default, Debug)]
-pub struct ChunkSet(hb::HashSet<ChunkPos, fxhash::FxBuildHasher>);
+pub struct ChunkSet(hb::HashSet<ChunkPos, wyhash2::WyHash>);
 
 impl ChunkSet {
     pub fn with_capacity(capacity: usize) -> Self {
         Self(hb::HashSet::with_capacity_and_hasher(
             capacity,
-            fxhash::FxBuildHasher::default(),
+            wyhash2::WyHash::default(),
         ))
     }
 
@@ -45,7 +45,7 @@ impl ChunkSet {
 }
 
 #[derive(Clone)]
-pub struct SyncChunkMap<T>(DashMap<ChunkPos, T, fxhash::FxBuildHasher>);
+pub struct SyncChunkMap<T>(DashMap<ChunkPos, T, wyhash2::WyHash>);
 
 impl<T> Default for SyncChunkMap<T> {
     fn default() -> Self {
@@ -55,14 +55,14 @@ impl<T> Default for SyncChunkMap<T> {
 
 impl<T> SyncChunkMap<T> {
     pub fn new() -> Self {
-        Self(DashMap::with_hasher(FxBuildHasher::default()))
+        Self(DashMap::with_hasher(wyhash2::WyHash::default()))
     }
 
     pub fn set(&self, pos: ChunkPos, data: T) -> Option<T> {
         self.0.insert(pos, data)
     }
 
-    pub fn get(&self, pos: ChunkPos) -> Option<DashMapRef<ChunkPos, T, fxhash::FxBuildHasher>> {
+    pub fn get(&self, pos: ChunkPos) -> Option<DashMapRef<ChunkPos, T, wyhash2::WyHash>> {
         self.0.get(&pos)
     }
 
@@ -74,7 +74,7 @@ impl<T> SyncChunkMap<T> {
         self.0.contains_key(&pos)
     }
 
-    pub fn entry(&self, pos: ChunkPos) -> DashMapEntry<'_, ChunkPos, T, fxhash::FxBuildHasher> {
+    pub fn entry(&self, pos: ChunkPos) -> DashMapEntry<'_, ChunkPos, T, wyhash2::WyHash> {
         self.0.entry(pos)
     }
 
@@ -105,7 +105,7 @@ impl<T> SyncChunkMap<T> {
 }
 
 #[derive(Clone)]
-pub struct ChunkMap<T>(hb::HashMap<ChunkPos, T, fxhash::FxBuildHasher>);
+pub struct ChunkMap<T>(hb::HashMap<ChunkPos, T, wyhash2::WyHash>);
 
 impl<T> Default for ChunkMap<T> {
     fn default() -> Self {
@@ -115,13 +115,13 @@ impl<T> Default for ChunkMap<T> {
 
 impl<T> ChunkMap<T> {
     pub fn new() -> Self {
-        Self(hb::HashMap::with_hasher(fxhash::FxBuildHasher::default()))
+        Self(hb::HashMap::with_hasher(wyhash2::WyHash::default()))
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         Self(hb::HashMap::with_capacity_and_hasher(
             capacity,
-            fxhash::FxBuildHasher::default(),
+            wyhash2::WyHash::default(),
         ))
     }
 
@@ -145,10 +145,7 @@ impl<T> ChunkMap<T> {
         self.0.contains_key(&pos)
     }
 
-    pub fn entry(
-        &mut self,
-        pos: ChunkPos,
-    ) -> HashbrownEntry<'_, ChunkPos, T, fxhash::FxBuildHasher> {
+    pub fn entry(&mut self, pos: ChunkPos) -> HashbrownEntry<'_, ChunkPos, T, wyhash2::WyHash> {
         self.0.entry(pos)
     }
 
