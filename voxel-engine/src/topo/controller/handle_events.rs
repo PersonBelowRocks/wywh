@@ -28,7 +28,6 @@ use super::{
 pub struct ChunkEcsBundle {
     pub chunk_pos: ChunkPos,
     pub marker: ChunkEntity,
-    pub no_frustum_culling: NoFrustumCulling,
     pub aabb: Aabb,
     pub spatial: SpatialBundle,
 }
@@ -38,7 +37,6 @@ impl ChunkEcsBundle {
         Self {
             chunk_pos: pos,
             marker: ChunkEntity,
-            no_frustum_culling: NoFrustumCulling,
             aabb: Chunk::BOUNDING_BOX.to_aabb(),
             spatial: SpatialBundle {
                 visibility: Visibility::Visible,
