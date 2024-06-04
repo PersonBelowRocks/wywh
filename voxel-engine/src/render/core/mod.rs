@@ -1,3 +1,4 @@
+mod chunk_multidraw;
 mod draw;
 mod gpu_chunk;
 mod gpu_registries;
