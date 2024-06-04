@@ -1,3 +1,4 @@
+mod buffer_utils;
 mod chunk_multidraw;
 mod draw;
 mod gpu_chunk;

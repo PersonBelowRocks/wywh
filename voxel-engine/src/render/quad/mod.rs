@@ -6,7 +6,11 @@ pub mod isometric;
 use std::{fmt::Debug, mem::size_of};
 
 pub use anon::*;
-use bevy::{math::Vec2, render::render_resource::ShaderType};
+use bevy::{
+    core::{Pod, Zeroable},
+    math::Vec2,
+    render::render_resource::ShaderType,
+};
 pub use data::*;
 pub use error::*;
 pub use isometric::*;
@@ -23,6 +27,7 @@ pub mod consts {
 }
 
 #[derive(Copy, Clone, Debug, ShaderType, PartialEq)]
+#[repr(C)]
 pub struct GpuQuad {
     pub texture_id: u32,
     pub bitfields: GpuQuadBitfields,
@@ -32,6 +37,7 @@ pub struct GpuQuad {
 }
 
 #[derive(Copy, Clone, Debug, ShaderType, PartialEq, Eq)]
+#[repr(C)]
 pub struct GpuQuadBitfields {
     value: u32,
 }
