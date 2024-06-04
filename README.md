@@ -4,6 +4,22 @@ This is a very WIP voxel game made in bevy. The game will eventually be a sandbo
 
 Development is currently largely focused on technical stuff so that's what this readme will mostly cover.
 
+## Run Demo
+
+To demonstrate and test stuff there's currently a small demo that just generates some terrain.
+Currently doesn't work too well on linux, but windows should work fine.
+Requires Rust 1.78+
+
+```
+> git clone https://github.com/PersonBelowRocks/wywh.git
+> cd wywh
+
+(to get the latest rust version) 
+> rustup update
+
+> cargo run --bin=test-app --release
+```
+
 ## Engine
 
 The game is built in [bevy](https://github.com/bevyengine/bevy) and uses a custom built voxel engine, which is where development is largely focused at the moment. The voxel engine is also built in bevy and takes the form of a plugin.
