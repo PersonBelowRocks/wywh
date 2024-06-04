@@ -11,6 +11,9 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
     },
 };
+use bhp::{FnComparator, KeyComparator};
+use itertools::Itertools;
+use rangemap::RangeSet;
 
 fn to_formatted_bytes<T: ShaderType + ShaderSize + WriteInto>(slice: &[T]) -> Vec<u8> {
     let mut scratch = FormattedBuffer::<Vec<u8>>::new(vec![]);
@@ -18,6 +21,10 @@ fn to_formatted_bytes<T: ShaderType + ShaderSize + WriteInto>(slice: &[T]) -> Ve
     scratch.into_inner()
 }
 
+/// Resizable array living entirely on the GPU. Unlike bevy's buffer helper types this type has no data in main memory.
+/// This is done to conserve memory. Read and write operations are queued immediately, aka. this type doesn't try to batch
+/// automatically. If you're going to use this then try to batch together writes and removals as much as possible to send fewer commands
+/// to the GPU.
 #[derive(Clone)]
 pub struct VramArray<T: ShaderType + ShaderSize + WriteInto> {
     buffer: Buffer,
@@ -28,11 +35,15 @@ pub struct VramArray<T: ShaderType + ShaderSize + WriteInto> {
     _ty: PhantomData<fn() -> T>,
 }
 
+#[allow(dead_code)]
 impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
     pub fn item_size() -> u64 {
-        u64::from(T::min_size())
+        u64::from(T::SHADER_SIZE)
     }
 
+    /// Constructor function. The provided label will be used as the wgpu label for the buffer.
+    /// The buffer will always have the [`BufferUsages`] `COPY_DST` and `COPY_SRC` in addition to whatever you
+    /// provide here. The buffer needs these usages in order to be copied and written to by this type.
     pub fn new(label: &'static str, usages: BufferUsages, gpu: &RenderDevice) -> Self {
         Self {
             buffer: gpu.create_buffer(&BufferDescriptor {
@@ -49,12 +60,29 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
         }
     }
 
+    fn create_buffer(&self, gpu: &RenderDevice, size: u64) -> Buffer {
+        gpu.create_buffer(&BufferDescriptor {
+            label: Some(self.label),
+            size,
+            usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | self.usages,
+            mapped_at_creation: false,
+        })
+    }
+
+    /// How many items of type `T` are in the buffer on the GPU.
     pub fn len(&self) -> u64 {
         self.buffer_len
     }
 
+    /// How many bytes this buffer takes up on the GPU.
+    /// Equivalent to `VramArray::len() * T::SHADER_SIZE`
     pub fn vram_bytes(&self) -> u64 {
         self.len() * Self::item_size()
+    }
+
+    /// The GPU buffer containing all our data.
+    pub fn buffer(&self) -> &Buffer {
+        &self.buffer
     }
 
     /// Append a slice of data to the buffer on the gpu.
@@ -63,12 +91,7 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
         let size = self.vram_bytes() + (data.len() as u64 * Self::item_size());
 
         // this buffer will replace our old one
-        let buffer = gpu.create_buffer(&BufferDescriptor {
-            label: Some(self.label),
-            size,
-            usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | self.usages,
-            mapped_at_creation: false,
-        });
+        let buffer = self.create_buffer(gpu, size);
 
         let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
             label: Some(&format!("{}-append_cmd_encoder", self.label)),
@@ -90,7 +113,33 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
     /// Removes all the data between the different provided ranges. Think of this as copying all the data
     /// contained in the buffer that does NOT fall between any of the provided ranges.
     /// The range bounds are indices of `T` in the GPU buffer. Not indices of bytes!
-    pub fn remove(&mut self, queue: &RenderQueue, gpu: &RenderDevice, ranges: &[Range<u64>]) {
-        todo!()
+    pub fn remove(&mut self, queue: &RenderQueue, gpu: &RenderDevice, ranges: &RangeSet<u64>) {
+        // we collect the ranges into a vector here so we don't have to do any duplicate calculation of gaps
+        let remaining = ranges.gaps(&(0..self.len())).collect_vec();
+        // the end of the range should always be greater than the start
+        let new_length: u64 = remaining.iter().map(|r| r.end - r.start).sum();
+
+        // allocate a new buffer on the GPU
+        let new_buffer = self.create_buffer(gpu, new_length * Self::item_size());
+
+        let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some(&format!("{}-remove_cmd_encoder", self.label)),
+        });
+
+        // copy everything we want to keep into our new buffer
+        let mut current_index: u64 = 0;
+        for range in remaining {
+            let min = range.start * Self::item_size();
+            let max = range.end * Self::item_size();
+            let copy_size = max - min;
+
+            encoder.copy_buffer_to_buffer(&self.buffer, min, &new_buffer, current_index, copy_size);
+            current_index += copy_size;
+        }
+
+        queue.submit([encoder.finish()]);
+
+        self.buffer = new_buffer;
+        self.buffer_len = new_length;
     }
 }
