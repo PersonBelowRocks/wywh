@@ -14,7 +14,7 @@ use bevy::{
     log::{error, warn},
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
-use bhp::KeyComparator;
+
 use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TrySendError};
 
 use crate::{
@@ -24,7 +24,7 @@ use crate::{
 
 use self::generator::Generator;
 
-use super::world::{chunk::ChunkFlags, chunk_manager::GlobalLockState, ChunkManager, ChunkPos};
+use super::world::{chunk::ChunkFlags, ChunkManager, ChunkPos};
 
 pub mod ecs;
 pub mod error;

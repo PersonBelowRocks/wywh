@@ -1,13 +1,9 @@
-use std::{cell::OnceCell, ops::Range, u32};
+use std::{ops::Range, u32};
 
 use bevy::{
-    core::cast_slice,
     prelude::*,
     render::{
-        render_resource::{
-            Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ShaderSize,
-            ShaderType, StorageBuffer,
-        },
+        render_resource::{Buffer, BufferDescriptor, BufferUsages, ShaderSize, ShaderType},
         renderer::{RenderDevice, RenderQueue},
     },
 };
@@ -17,13 +13,10 @@ use rangemap::RangeSet;
 
 use crate::{
     render::{meshing::controller::ChunkMeshData, quad::GpuQuad},
-    util::{ChunkMap, ChunkSet, MultiChunkMap},
+    util::{ChunkMap, ChunkSet},
 };
 
-use super::{
-    buffer_utils::{to_formatted_bytes, VramArray},
-    gpu_chunk::ChunkRenderData,
-};
+use super::buffer_utils::{to_formatted_bytes, VramArray};
 
 #[derive(Clone, ShaderType)]
 pub struct ChunkInstanceData {

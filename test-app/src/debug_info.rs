@@ -11,10 +11,7 @@ use ve::{
     },
     util::ws_to_chunk_pos,
 };
-use voxel_engine::{
-    data::tile::Face,
-    topo::world::{Chunk, ChunkEntity},
-};
+use voxel_engine::{data::tile::Face, topo::world::Chunk};
 
 use crate::camera::PlayerCamController;
 

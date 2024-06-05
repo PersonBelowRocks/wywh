@@ -12,7 +12,6 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
-    log::debug,
     pbr::{MeshPipelineKey, PreviousViewProjection, SetPrepassViewBindGroup},
     render::{
         globals::GlobalsUniform,

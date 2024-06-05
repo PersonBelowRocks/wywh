@@ -2,7 +2,7 @@ use std::{fmt, time::Duration};
 
 use bevy::prelude::*;
 use bitflags::bitflags;
-use error::EventPosMismatch;
+
 use handle_events::{handle_chunk_loads_and_unloads, handle_permit_updates};
 use observer_events::{
     dispatch_move_events, generate_chunks_with_priority, load_in_range_chunks,

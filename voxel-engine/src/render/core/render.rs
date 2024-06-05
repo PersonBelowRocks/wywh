@@ -10,7 +10,6 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
-    log::debug,
     pbr::{
         generate_view_layouts, MeshPipelineKey, MeshPipelineViewLayout, MeshPipelineViewLayoutKey,
         ScreenSpaceAmbientOcclusionSettings, SetMeshViewBindGroup, ShadowFilteringMethod,

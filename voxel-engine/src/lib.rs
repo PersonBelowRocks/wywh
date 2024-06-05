@@ -11,19 +11,19 @@ extern crate num_derive;
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use bevy::{math::ivec3, prelude::*};
+use bevy::prelude::*;
 use data::{
     registries::{block::BlockVariantRegistry, Registries, Registry},
     resourcepath::rpath,
 };
 use mip_texture_array::MippedArrayTexturePlugin;
-use render::meshing::controller::MeshGeneration;
+
 use topo::{
     block::FullBlock,
     controller::{
         ChunkEcsPermits, WorldController, WorldControllerSettings, WorldControllerSystems,
     },
-    world::{realm::ChunkManagerResource, ChunkManager, VoxelRealm},
+    world::{realm::ChunkManagerResource, ChunkManager},
 };
 
 pub mod data;
@@ -37,12 +37,9 @@ pub mod testing_utils;
 use crate::{
     data::systems::{build_registries, check_textures, load_textures, VariantFolders},
     render::{core::RenderCore, meshing::controller::MeshController},
-    topo::{
-        world::{Chunk, ChunkEntity, ChunkPos},
-        worldgen::{
-            ecs::{generate_chunks_from_events, setup_terrain_generator_workers, GeneratorSeed},
-            generator::GenerateChunk,
-        },
+    topo::worldgen::{
+        ecs::{generate_chunks_from_events, setup_terrain_generator_workers, GeneratorSeed},
+        generator::GenerateChunk,
     },
 };
 

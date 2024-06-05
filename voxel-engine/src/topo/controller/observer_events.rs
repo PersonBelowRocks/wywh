@@ -1,20 +1,13 @@
 use std::time::Instant;
 
 use bevy::{
-    ecs::system::SystemParam,
-    math::{
-        bounding::{Aabb3d, BoundingVolume},
-        ivec2, ivec3,
-    },
+    math::{bounding::BoundingVolume, ivec3},
     prelude::*,
-    tasks::ComputeTaskPool,
 };
-use cb::channel;
 
 use crate::{
-    render::meshing::controller::MeshGeneration,
     topo::{
-        world::{realm::ChunkManagerResource, Chunk, ChunkEntity, ChunkPos, VoxelRealm},
+        world::{Chunk, ChunkPos, VoxelRealm},
         worldgen::{generator::GenerateChunk, GenerationPriority},
     },
     util::{ws_to_chunk_pos, ChunkMap, ChunkSet},
@@ -22,7 +15,7 @@ use crate::{
 
 use super::{
     ChunkObserver, ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent, ChunkPermitKey,
-    Entry, LastPosition, LoadChunkEvent, LoadReasons, LoadedChunkEvent, Permit, PermitFlags,
+    Entry, LastPosition, LoadChunkEvent, LoadReasons, LoadedChunkEvent, PermitFlags,
     UnloadChunkEvent, UpdatePermitEvent,
 };
 
@@ -172,7 +165,7 @@ pub fn unload_out_of_range_chunks(
         }
     }
 
-    for (chunk_pos, entry) in removed.iter() {
+    for (chunk_pos, _entry) in removed.iter() {
         // TODO: fix unloading
         unload_chunks.send(UnloadChunkEvent {
             chunk_pos,

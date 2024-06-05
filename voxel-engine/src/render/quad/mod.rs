@@ -6,11 +6,7 @@ pub mod isometric;
 use std::{fmt::Debug, mem::size_of};
 
 pub use anon::*;
-use bevy::{
-    core::{Pod, Zeroable},
-    math::Vec2,
-    render::render_resource::ShaderType,
-};
+use bevy::{math::Vec2, render::render_resource::ShaderType};
 pub use data::*;
 pub use error::*;
 pub use isometric::*;

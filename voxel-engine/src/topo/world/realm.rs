@@ -1,24 +1,11 @@
 use std::sync::Arc;
 
 use bevy::{
-    ecs::{
-        entity::Entity,
-        system::{Res, SystemParam},
-    },
-    math::{ivec3, IVec3},
+    ecs::system::{Res, SystemParam},
     prelude::Resource,
 };
-use dashmap::{mapref::one::Ref, DashSet};
 
-use crate::{
-    topo::{
-        block::{BlockVoxel, FullBlock},
-        controller::{ChunkEcsPermits, ChunkPermitKey, PermitFlags},
-        neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
-        world::chunk::ChunkFlags,
-    },
-    util::{ivec3_to_1d, SyncHashMap},
-};
+use crate::topo::controller::{ChunkEcsPermits, ChunkPermitKey, PermitFlags};
 
 use super::{chunk_manager::ChunkManager, ChunkPos};
 

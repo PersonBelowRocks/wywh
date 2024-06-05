@@ -10,7 +10,7 @@ use std::{
 
 use bevy::{
     ecs::system::Resource,
-    log::{error, info, warn},
+    log::{error, warn},
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
 use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TrySendError};

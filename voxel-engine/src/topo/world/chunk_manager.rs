@@ -1,17 +1,11 @@
 use std::{
     ops::{Deref, DerefMut},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
 
-use bevy::{
-    ecs::entity::Entity,
-    math::{ivec3, IVec3},
-};
-use dashmap::{mapref::one::Ref, DashSet};
+use bevy::math::{ivec3, IVec3};
+use dashmap::DashSet;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
@@ -20,7 +14,7 @@ use crate::{
         controller::LoadReasons,
         neighbors::{Neighbors, NEIGHBOR_ARRAY_SIZE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS},
     },
-    util::{ivec3_to_1d, ChunkMap, ChunkSet, SyncHashMap},
+    util::{ivec3_to_1d, ChunkMap},
 };
 
 use super::{

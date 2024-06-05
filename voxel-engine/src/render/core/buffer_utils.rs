@@ -1,15 +1,11 @@
-use std::{marker::PhantomData, ops::Range};
+use std::marker::PhantomData;
 
-use bevy::{
-    core::{cast_slice, Pod},
-    render::{
-        render_resource::{
-            encase::{self, internal::WriteInto, StorageBuffer as FormattedBuffer},
-            Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ShaderSize,
-            ShaderType, StorageBuffer,
-        },
-        renderer::{RenderDevice, RenderQueue},
+use bevy::render::{
+    render_resource::{
+        encase::{internal::WriteInto, StorageBuffer as FormattedBuffer},
+        Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ShaderSize, ShaderType,
     },
+    renderer::{RenderDevice, RenderQueue},
 };
 use itertools::Itertools;
 use rangemap::RangeSet;
