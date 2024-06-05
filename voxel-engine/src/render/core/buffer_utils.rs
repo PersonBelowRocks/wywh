@@ -11,13 +11,13 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
     },
 };
-use bhp::{FnComparator, KeyComparator};
 use itertools::Itertools;
 use rangemap::RangeSet;
 
-fn to_formatted_bytes<T: ShaderType + ShaderSize + WriteInto>(slice: &[T]) -> Vec<u8> {
-    let mut scratch = FormattedBuffer::<Vec<u8>>::new(vec![]);
-    scratch.write(&slice);
+pub fn to_formatted_bytes<T: ShaderType + ShaderSize + WriteInto>(slice: &[T]) -> Vec<u8> {
+    let capacity = slice.len() * u64::from(T::SHADER_SIZE) as usize;
+    let mut scratch = FormattedBuffer::<Vec<u8>>::new(Vec::with_capacity(capacity));
+    scratch.write(&slice).unwrap();
     scratch.into_inner()
 }
 

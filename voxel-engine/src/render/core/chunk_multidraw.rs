@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, ops::Range};
+use std::{cell::OnceCell, ops::Range, u32};
 
 use bevy::{
     core::cast_slice,
@@ -6,76 +6,111 @@ use bevy::{
     render::{
         render_resource::{
             Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ShaderSize,
+            ShaderType, StorageBuffer,
         },
         renderer::{RenderDevice, RenderQueue},
     },
 };
+use itertools::Itertools;
 use once_cell::unsync::Lazy;
+use rangemap::RangeSet;
 
 use crate::{
     render::{meshing::controller::ChunkMeshData, quad::GpuQuad},
-    util::{ChunkMap, MultiChunkMap},
+    util::{ChunkMap, ChunkSet, MultiChunkMap},
 };
 
-use super::{buffer_utils::VramArray, gpu_chunk::ChunkRenderData};
+use super::{
+    buffer_utils::{to_formatted_bytes, VramArray},
+    gpu_chunk::ChunkRenderData,
+};
 
-#[derive(Clone)]
-pub struct ChunkBufferBounds {
-    pub instance: u32,
-    pub indices: Range<u32>,
-    pub quads: Range<u32>,
+#[derive(Clone, ShaderType)]
+pub struct ChunkInstanceData {
+    pub pos: Vec3,
+    pub first_quad: u32,
 }
 
-fn copyable_buffer_desc(label: &'static str, usages: BufferUsages) -> BufferDescriptor<'static> {
+/// Argument buffer layout for draw_indexed_indirect commands.
+/// Identical to wgpu's `DrawIndexedIndirectArgs` but this type implements
+/// the traits required to use it in a `VramArray`.
+#[derive(Copy, Clone, Debug, Default, ShaderType)]
+pub struct IndexedIndirectArgs {
+    /// The number of indices to draw.
+    pub index_count: u32,
+    /// The number of instances to draw.
+    pub instance_count: u32,
+    /// The first index within the index buffer.
+    pub first_index: u32,
+    /// The value added to the vertex index before indexing into the vertex buffer.
+    pub base_vertex: i32,
+    /// The instance ID of the first instance to draw.
+    ///
+    /// Has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE) is enabled.
+    pub first_instance: u32,
+}
+
+fn writable_buffer_desc(label: &'static str, usages: BufferUsages) -> BufferDescriptor<'static> {
     BufferDescriptor {
         label: Some(label),
         size: 0,
-        usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | usages,
+        usage: BufferUsages::COPY_DST | usages,
         mapped_at_creation: false,
     }
 }
 
 pub const INDEX_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
-    Lazy::new(|| copyable_buffer_desc("chunk_multidraw_index_buffer", BufferUsages::INDEX));
+    Lazy::new(|| writable_buffer_desc("chunk_multidraw_index_buffer", BufferUsages::INDEX));
 
 pub const QUAD_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
-    Lazy::new(|| copyable_buffer_desc("chunk_multidraw_quad_buffer", BufferUsages::STORAGE));
+    Lazy::new(|| writable_buffer_desc("chunk_multidraw_quad_buffer", BufferUsages::STORAGE));
 
 pub const INSTANCE_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
-    Lazy::new(|| copyable_buffer_desc("chunk_multidraw_instance_buffer", BufferUsages::VERTEX));
+    Lazy::new(|| writable_buffer_desc("chunk_multidraw_instance_buffer", BufferUsages::VERTEX));
 
 pub const INDIRECT_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
-    Lazy::new(|| copyable_buffer_desc("chunk_multidraw_indirect_buffer", BufferUsages::INDIRECT));
+    Lazy::new(|| writable_buffer_desc("chunk_multidraw_indirect_buffer", BufferUsages::INDIRECT));
 
-#[derive(Clone)]
 pub struct MultidrawBuffers {
     pub index: VramArray<u32>,
     pub quad: VramArray<GpuQuad>,
-    // TODO: instance data
     pub instance: Buffer,
-    pub instance_buf_len: u64,
-    // TODO: make this a vram buffer
     pub indirect: Buffer,
-    pub indirect_buf_len: u64,
 }
 
 impl MultidrawBuffers {
     pub fn new(gpu: &RenderDevice) -> Self {
         Self {
-            index: todo!(),
-            quad: todo!(),
+            index: VramArray::new("chunk_multidraw_index_buffer", BufferUsages::INDEX, gpu),
+            quad: VramArray::new("chunk_multidraw_quad_buffer", BufferUsages::STORAGE, gpu),
             instance: gpu.create_buffer(&INSTANCE_BUFFER_DESC),
-            instance_buf_len: 0,
             indirect: gpu.create_buffer(&INDIRECT_BUFFER_DESC),
-            indirect_buf_len: 0,
         }
     }
 }
 
-#[derive(Resource, Clone)]
+#[derive(Clone)]
+pub struct ChunkBufferBounds {
+    pub instance: u64,
+    pub indices: Range<u64>,
+    pub quads: Range<u64>,
+}
+
+impl ChunkBufferBounds {
+    pub fn num_indices(&self) -> u64 {
+        self.indices.end - self.indices.start
+    }
+
+    pub fn num_quads(&self) -> u64 {
+        self.quads.end - self.quads.start
+    }
+}
+
+#[derive(Resource)]
 pub struct ChunkMultidrawData {
     buffers: MultidrawBuffers,
-    bounds: MultiChunkMap<ChunkBufferBounds>,
+    bounds: ChunkMap<ChunkBufferBounds>,
+    ready: bool,
 }
 
 impl ChunkMultidrawData {
@@ -83,8 +118,89 @@ impl ChunkMultidrawData {
     pub fn new(gpu: &RenderDevice) -> Self {
         Self {
             buffers: MultidrawBuffers::new(gpu),
-            bounds: MultiChunkMap::new(),
+            bounds: ChunkMap::new(),
+            ready: false,
         }
+    }
+
+    /// Returns whether or not this multidraw data ready for rendering.
+    pub fn is_ready(&self) -> bool {
+        self.ready
+    }
+
+    fn set_instances(
+        &mut self,
+        gpu: &RenderDevice,
+        queue: &RenderQueue,
+        instances: &[ChunkInstanceData],
+    ) {
+        let instance_buffer = gpu.create_buffer(&BufferDescriptor {
+            label: INSTANCE_BUFFER_DESC.label,
+            size: (instances.len() as u64 * u64::from(ChunkInstanceData::SHADER_SIZE)),
+            usage: INSTANCE_BUFFER_DESC.usage,
+            mapped_at_creation: false,
+        });
+
+        let data = to_formatted_bytes(&instances);
+        queue.write_buffer(&instance_buffer, 0, &data);
+
+        self.buffers.instance = instance_buffer;
+    }
+
+    fn set_indirect_args(
+        &mut self,
+        gpu: &RenderDevice,
+        queue: &RenderQueue,
+        indirect_args: &[IndexedIndirectArgs],
+    ) {
+        let indirect_buffer = gpu.create_buffer(&BufferDescriptor {
+            label: INDIRECT_BUFFER_DESC.label,
+            size: (indirect_args.len() as u64 * u64::from(IndexedIndirectArgs::SHADER_SIZE)),
+            usage: INDIRECT_BUFFER_DESC.usage,
+            mapped_at_creation: false,
+        });
+
+        let data = to_formatted_bytes(&indirect_args);
+        queue.write_buffer(&indirect_buffer, 0, &data);
+
+        self.buffers.indirect = indirect_buffer;
+    }
+
+    fn update_bounds(
+        &mut self,
+        gpu: &RenderDevice,
+        queue: &RenderQueue,
+        new_bounds: ChunkMap<ChunkBufferBounds>,
+    ) {
+        let chunk_instances = new_bounds
+            .iter()
+            .sorted_unstable_by_key(|(_, b)| b.instance)
+            .map(|(chunk, bounds)| ChunkInstanceData {
+                pos: chunk.worldspace_min().as_vec3(),
+                first_quad: bounds.quads.start as u32,
+            })
+            .collect_vec();
+
+        if !chunk_instances.is_empty() {
+            debug_assert_eq!(0, chunk_instances[0].first_quad);
+        }
+
+        let indirect_args = new_bounds
+            .iter()
+            .map(|(_, bounds)| IndexedIndirectArgs {
+                first_instance: bounds.instance as u32,
+                instance_count: 1,
+                first_index: bounds.indices.start as u32,
+                index_count: bounds.num_indices() as u32,
+                // We're only using an index buffer and an instance buffer, so we'll never end up using this
+                base_vertex: 0,
+            })
+            .collect_vec();
+
+        self.set_instances(gpu, queue, &chunk_instances);
+        self.set_indirect_args(gpu, queue, &indirect_args);
+
+        self.bounds = new_bounds;
     }
 
     pub fn upload_chunks(
@@ -93,11 +209,135 @@ impl ChunkMultidrawData {
         queue: &RenderQueue,
         chunks: ChunkMap<ChunkMeshData>,
     ) {
-        let mut new_buffers = MultidrawBuffers::new(gpu);
-        let mut bounds = MultiChunkMap::<ChunkBufferBounds>::new();
+        // FIXME: we're iterating through a lot of hashmaps here, which has an arbitrary order.
+        // this likely causes some issues that we need to sort out, so investigate and fix them!
 
+        let mut upload_bounds = ChunkMap::<ChunkBufferBounds>::with_capacity(chunks.len());
+        // A set of chunks that this multidraw data had beforehand, but that were present in the provided
+        // chunk mesh data that we're supposed to upload. These chunks can be considered "updated" and we want to replace
+        // the existing mesh data with the provided (new) data. To do this we must remove the data from our existing
+        // buffers and tie the existing chunk with the new data that we have uploaded.
+        let mut updated_chunks = ChunkSet::default();
+        let mut upload_indices = Vec::<u32>::new();
+        let mut upload_quads = Vec::<GpuQuad>::new();
+
+        let mut current_instance = 0;
         for (chunk, mesh) in chunks.iter() {
-            todo!();
+            if self.bounds.contains(chunk) {
+                updated_chunks.set(chunk);
+            }
+
+            let indices_len = upload_indices.len() as u64;
+            let quads_len = upload_quads.len() as u64;
+
+            let bounds = ChunkBufferBounds {
+                instance: current_instance,
+                indices: indices_len..(indices_len + mesh.index_buffer.len() as u64),
+                quads: quads_len..(quads_len + mesh.quad_buffer.len() as u64),
+            };
+
+            current_instance += 1;
+
+            debug_assert_eq!(upload_indices.len() as u64, bounds.indices.start);
+            debug_assert_eq!(upload_quads.len() as u64, bounds.quads.start);
+
+            // After extending our data here the length of our data should match up
+            // with the end bounds in the ChunkBufferBounds value that we made earlier.
+            upload_indices.extend(&mesh.index_buffer);
+            upload_quads.extend(&mesh.quad_buffer);
+
+            debug_assert_eq!(upload_indices.len() as u64, bounds.indices.end);
+            debug_assert_eq!(upload_quads.len() as u64, bounds.quads.end);
+
+            upload_bounds.set(chunk, bounds);
         }
+
+        // Note down the data ranges for the chunks we want to remove
+        let mut remove_indices = RangeSet::<u64>::new();
+        let mut remove_quads = RangeSet::<u64>::new();
+
+        for chunk in updated_chunks.iter() {
+            let bounds = self.bounds.get(chunk).expect(
+                "we already checked that this chunk was present in our bounds in the earlier loop",
+            );
+
+            remove_indices.insert(bounds.indices.clone());
+            remove_quads.insert(bounds.quads.clone());
+        }
+
+        // Update the data ranges for the chunks we retained (aka. didn't remove)
+        let mut retained_bounds = ChunkMap::<ChunkBufferBounds>::new();
+
+        // Array of all our chunk bounds not marked for removal sorted by where their share of the index buffer begins.
+        let sorted_bounds = self
+            .bounds
+            .iter()
+            .filter(|(chunk, _)| !updated_chunks.contains(*chunk))
+            // We use an unstable sort for the performance gain, no chunks should have equal start indices.
+            .sorted_unstable_by_key(|(_, b)| b.indices.start)
+            .collect_vec();
+
+        let mut current_instance: u64 = 0;
+        let mut current_index: u64 = 0;
+        let mut current_quad: u64 = 0;
+
+        for (chunk, bounds) in sorted_bounds.iter() {
+            let contains_indices = remove_indices.overlaps(&bounds.indices);
+            let contains_quads = remove_quads.overlaps(&bounds.quads);
+
+            // Both must be true, otherwise we're removing quads but not indices, or vice versa.
+            // Doing so would massively mess up the format of the data, and should never happen.
+            debug_assert!(!(contains_indices ^ contains_quads));
+
+            // If this chunk's buffer bounds were marked for removal, then the chunk must also
+            // we marked as an updated chunk.
+            debug_assert!(contains_indices && contains_quads == updated_chunks.contains(*chunk));
+
+            // If the check above was false, this chunk will be retained, so we must update its bounds.
+
+            let num_indices = bounds.indices.end - bounds.indices.start;
+            let num_quads = bounds.quads.end - bounds.quads.start;
+
+            retained_bounds.set(
+                *chunk,
+                ChunkBufferBounds {
+                    instance: current_instance,
+                    indices: current_index..(num_indices + current_index),
+                    quads: current_quad..(num_quads + current_quad),
+                },
+            );
+
+            current_instance += 1;
+            current_index += num_indices;
+            current_quad += num_quads;
+        }
+
+        // Okay now we actually queue up the copying commands for the GPU.
+        // After this the bounds in 'retained_bounds' should map correctly into the buffers on the GPU.
+        self.buffers.index.remove(queue, gpu, &remove_indices);
+        self.buffers.quad.remove(queue, gpu, &remove_quads);
+
+        // Now we shift the bounds and instance numbers of the chunks we're going to upload so that they're placed after our retained chunks.
+        let max_retained_instance = current_instance;
+        let max_retained_index = current_index;
+        let max_retained_quad = current_quad;
+
+        for (_, bound) in upload_bounds.iter_mut() {
+            bound.instance += max_retained_instance;
+
+            bound.indices.start += max_retained_index;
+            bound.indices.end += max_retained_index;
+
+            bound.quads.start += max_retained_quad;
+            bound.quads.end += max_retained_quad;
+        }
+
+        retained_bounds.extend(upload_bounds.into_iter());
+        let new_bounds = retained_bounds;
+
+        self.buffers.index.append(queue, gpu, &upload_indices);
+        self.buffers.quad.append(queue, gpu, &upload_quads);
+
+        self.update_bounds(gpu, queue, new_bounds);
     }
 }

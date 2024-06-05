@@ -313,6 +313,10 @@ impl<T> ChunkMap<T> {
         self.0.iter().map(|(&pos, data)| (pos, data))
     }
 
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (ChunkPos, &mut T)> {
+        self.0.iter_mut().map(|(&pos, data)| (pos, data))
+    }
+
     pub fn into_iter(self) -> impl Iterator<Item = (ChunkPos, T)> {
         self.0.into_iter()
     }
@@ -323,5 +327,11 @@ impl<T> ChunkMap<T> {
 
     pub fn drain(&mut self) -> Drain<'_, ChunkPos, T> {
         self.0.drain()
+    }
+}
+
+impl<T> Extend<(ChunkPos, T)> for ChunkMap<T> {
+    fn extend<I: IntoIterator<Item = (ChunkPos, T)>>(&mut self, iter: I) {
+        self.0.extend(iter);
     }
 }
