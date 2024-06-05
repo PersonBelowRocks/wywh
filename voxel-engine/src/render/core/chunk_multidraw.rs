@@ -106,6 +106,18 @@ impl ChunkBufferBounds {
     }
 }
 
+#[inline]
+fn indirect_args_from_bounds(bounds: &ChunkBufferBounds) -> IndexedIndirectArgs {
+    IndexedIndirectArgs {
+        first_instance: bounds.instance as u32,
+        instance_count: 1,
+        first_index: bounds.indices.start as u32,
+        index_count: bounds.num_indices() as u32,
+        // We're only using an index buffer and an instance buffer, so we'll never end up using this
+        base_vertex: 0,
+    }
+}
+
 #[derive(Resource)]
 pub struct ChunkMultidrawData {
     buffers: MultidrawBuffers,
@@ -187,14 +199,7 @@ impl ChunkMultidrawData {
 
         let indirect_args = new_bounds
             .iter()
-            .map(|(_, bounds)| IndexedIndirectArgs {
-                first_instance: bounds.instance as u32,
-                instance_count: 1,
-                first_index: bounds.indices.start as u32,
-                index_count: bounds.num_indices() as u32,
-                // We're only using an index buffer and an instance buffer, so we'll never end up using this
-                base_vertex: 0,
-            })
+            .map(|(_, bounds)| indirect_args_from_bounds(bounds))
             .collect_vec();
 
         self.set_instances(gpu, queue, &chunk_instances);
@@ -314,8 +319,8 @@ impl ChunkMultidrawData {
 
         // Okay now we actually queue up the copying commands for the GPU.
         // After this the bounds in 'retained_bounds' should map correctly into the buffers on the GPU.
-        self.buffers.index.remove(queue, gpu, &remove_indices);
-        self.buffers.quad.remove(queue, gpu, &remove_quads);
+        self.buffers.index.remove(gpu, queue, &remove_indices);
+        self.buffers.quad.remove(gpu, queue, &remove_quads);
 
         // Now we shift the bounds and instance numbers of the chunks we're going to upload so that they're placed after our retained chunks.
         let max_retained_instance = current_instance;
@@ -339,5 +344,44 @@ impl ChunkMultidrawData {
         self.buffers.quad.append(queue, gpu, &upload_quads);
 
         self.update_bounds(gpu, queue, new_bounds);
+    }
+
+    pub fn remove_chunks(&mut self, gpu: &RenderDevice, queue: &RenderQueue, chunks: ChunkSet) {
+        let mut remove_indices = RangeSet::<u64>::new();
+        let mut remove_quads = RangeSet::<u64>::new();
+        let mut chunks_to_retain = ChunkMap::<ChunkBufferBounds>::with_capacity(self.bounds.len());
+
+        let mut current_instance: u64 = 0;
+        let mut current_index: u64 = 0;
+        let mut current_quad: u64 = 0;
+
+        for (chunk_pos, bounds) in self
+            .bounds
+            .iter()
+            .sorted_unstable_by_key(|(_, b)| b.instance)
+        {
+            if chunks.contains(chunk_pos) {
+                remove_indices.insert(bounds.indices.clone());
+                remove_quads.insert(bounds.quads.clone());
+            } else {
+                chunks_to_retain.set(
+                    chunk_pos,
+                    ChunkBufferBounds {
+                        instance: current_instance,
+                        indices: (current_index..bounds.num_indices()),
+                        quads: (current_quad..bounds.num_quads()),
+                    },
+                );
+
+                current_instance += 1;
+                current_index += bounds.num_indices();
+                current_quad += bounds.num_quads();
+            }
+        }
+
+        self.buffers.index.remove(gpu, queue, &remove_indices);
+        self.buffers.quad.remove(gpu, queue, &remove_quads);
+
+        self.update_bounds(gpu, queue, chunks_to_retain);
     }
 }

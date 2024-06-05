@@ -113,7 +113,7 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
     /// Removes all the data between the different provided ranges. Think of this as copying all the data
     /// contained in the buffer that does NOT fall between any of the provided ranges.
     /// The range bounds are indices of `T` in the GPU buffer. Not indices of bytes!
-    pub fn remove(&mut self, queue: &RenderQueue, gpu: &RenderDevice, ranges: &RangeSet<u64>) {
+    pub fn remove(&mut self, gpu: &RenderDevice, queue: &RenderQueue, ranges: &RangeSet<u64>) {
         // we collect the ranges into a vector here so we don't have to do any duplicate calculation of gaps
         let remaining = ranges.gaps(&(0..self.len())).collect_vec();
         // the end of the range should always be greater than the start
