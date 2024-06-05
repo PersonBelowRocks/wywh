@@ -119,6 +119,90 @@ fn indirect_args_from_bounds(bounds: &ChunkBufferBounds) -> IndexedIndirectArgs 
     }
 }
 
+/// Stores chunk rendering data in contiguous buffers on the GPU and associated chunk positions with shares of these buffers.
+/// Meant to be used to set up data correctly for indirect multidraw rendering.
+///
+/// There are 4 main buffers that [`ChunkMultidrawData`] manages:
+/// - Index buffer, contains the indices for all the chunks
+/// - Quad buffer, contains the quads for all the chunks
+/// - Instance buffer, contains the chunk position of each chunk as well as the starting quad
+/// - Indirect arg buffer, contains the arguments required for indexed indirect multidraw commands ([`wgpu::util::DrawIndexedIndirectArgs`])
+///
+/// The instance buffer and indirect arg buffer are quite simple because one value in these buffers corresponds to one chunk.
+/// But the index buffers and quad buffers are a bit more complicated. One chunk "owns" a range of values in these buffers,
+/// so when that chunk is updated or removed, we need to remove the associated data from these buffers. But additionally
+/// we need to update the indirect arg buffer and instance buffer to reflect the change.
+///
+/// The data looks something like this on the GPU:
+/// ```
+/// indices: ##########################################################################
+/// quads:   ##########################################################################
+/// ```
+/// Now consider how this data is split up between different chunks:
+/// ```
+/// instance:         0                         1           2           3                         4
+/// indices:   [######][########################][##########][##########][########################]
+/// quads:     [################][#########][########][###############][##########################]
+/// instance:                   0          1         2                3                           4
+/// ```
+/// Note that this is not to scale, chunks will always have more indices than quads (each quad needs 4 different indices 6 times).
+///
+/// Each instance is a different chunk, so there's a 1=1 relationship between instance and chunk.
+///
+/// Also importantly the instance number increases as the quad and index increases.
+/// i.e., if chunk A's instance number is higher than chunk B's instance number, then chunk A's share of the index and quad buffer
+/// comes AFTER chunk B's share. All shares are therefore ordered by their owner's instance number.
+///
+/// On the CPU side we maintain a chunk hashmap that looks a bit like this:
+/// ```
+/// buffer_bounds = {
+///     chunk_0: {
+///         instance: 0
+///         indices: x..y,
+///         quads: z..w
+///     },
+///     chunk_1: {
+///         instance: 1
+///         indices: x..y,
+///         quads: z..w
+///     },
+///     chunk_2: {
+///         instance: 2
+///         indices: x..y,
+///         quads: z..w
+///     },
+///     chunk_3: {
+///         instance: 3
+///         indices: x..y,
+///         quads: z..w
+///     },
+///     chunk_4: {
+///         instance: 4
+///         indices: x..y,
+///         quads: z..w
+///     }
+/// }
+/// ```
+///
+/// You might notice that this hashmap looks an awful lot like the indexed indirect arg type that we need for indirect draw calls.
+/// This similarity is deliberate, and it simplifies the process of editing the data on the GPU by a lot.
+/// Every time we remove chunks, we do roughly the following (all on CPU):
+/// - Find all the chunks requested for removal that are present in our `buffer_bounds` (chunks to remove)
+/// - Find all chunks that are NOT requested for removal (retained chunks)
+/// - Sort the retained chunks by their instance number.
+/// - Iterate through the sorted retained chunks
+/// - Keep track of the current index, quad, and instance
+/// - For each retained chunk, update its bounds to start at the current index/quad,
+/// and end at the current index/quad + the amount of indices/quads this chunk owns.
+/// Also set the chunk's instance to the current instance number.
+/// - Increase the current instance by 1, and the current index/quad by the number of indices/quads this chunk owns.
+/// - Create new index and quad buffers on the GPU, and copy all the retained data (i.e., all data excluding the stuff we wanted removed)
+/// from our old data buffers into these new buffers. Importantly, this copy preserves the order.
+/// - Now we just use these new data buffers instead, and we update our hashmap we use to keep track of which chunk owns what.
+/// - And finally we convert the ownership data in our CPU hashmap to indirect args and instances in the instance buffer.
+///
+/// Uploading chunks to the GPU requires us to do almost this entire removal process but for chunks who's data we want to
+/// overwrite. After everything has been removed, we just tack on the extra data for our uploaded chunks on the end of our existing data.
 #[derive(Resource, Clone)]
 pub struct ChunkMultidrawData {
     buffers: MultidrawBuffers,
