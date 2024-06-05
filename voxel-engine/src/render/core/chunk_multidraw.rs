@@ -71,6 +71,7 @@ pub const INSTANCE_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
 pub const INDIRECT_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
     Lazy::new(|| writable_buffer_desc("chunk_multidraw_indirect_buffer", BufferUsages::INDIRECT));
 
+#[derive(Clone)]
 pub struct MultidrawBuffers {
     pub index: VramArray<u32>,
     pub quad: VramArray<GpuQuad>,
@@ -118,7 +119,7 @@ fn indirect_args_from_bounds(bounds: &ChunkBufferBounds) -> IndexedIndirectArgs 
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct ChunkMultidrawData {
     buffers: MultidrawBuffers,
     bounds: ChunkMap<ChunkBufferBounds>,
