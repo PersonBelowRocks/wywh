@@ -262,6 +262,8 @@ impl ChunkMultidrawData {
         queue: &RenderQueue,
         new_bounds: ChunkMap<ChunkBufferBounds>,
     ) {
+        debug_assert!(chunk_bounds_correctly_formatted(&new_bounds));
+
         let chunk_instances = new_bounds
             .iter()
             .sorted_unstable_by_key(|(_, b)| b.instance)
@@ -352,7 +354,7 @@ impl ChunkMultidrawData {
         let mut retained_bounds = ChunkMap::<ChunkBufferBounds>::new();
 
         // Array of all our chunk bounds not marked for removal sorted by where their share of the index buffer begins.
-        let sorted_bounds = self
+        let sorted_retained_chunks = self
             .bounds
             .iter()
             .filter(|(chunk, _)| !updated_chunks.contains(*chunk))
@@ -364,22 +366,25 @@ impl ChunkMultidrawData {
         let mut current_index: u64 = 0;
         let mut current_quad: u64 = 0;
 
-        for (chunk, bounds) in sorted_bounds.iter() {
-            let contains_indices = remove_indices.overlaps(&bounds.indices);
-            let contains_quads = remove_quads.overlaps(&bounds.quads);
+        for (chunk, bounds) in sorted_retained_chunks.iter() {
+            #[cfg(debug_assertions)]
+            {
+                let contains_indices = remove_indices.overlaps(&bounds.indices);
+                let contains_quads = remove_quads.overlaps(&bounds.quads);
 
-            // Both must be true, otherwise we're removing quads but not indices, or vice versa.
-            // Doing so would massively mess up the format of the data, and should never happen.
-            debug_assert!(!(contains_indices ^ contains_quads));
+                // Both must be true, otherwise we're removing quads but not indices, or vice versa.
+                // Doing so would massively mess up the format of the data, and should never happen.
+                debug_assert!(!(contains_indices ^ contains_quads));
 
-            // If this chunk's buffer bounds were marked for removal, then the chunk must also
-            // we marked as an updated chunk.
-            debug_assert!(contains_indices && contains_quads == updated_chunks.contains(*chunk));
+                // If this chunk's buffer bounds were marked for removal, then the chunk must also
+                // we marked as an updated chunk.
+                debug_assert!(
+                    contains_indices && contains_quads == updated_chunks.contains(*chunk)
+                );
+            }
 
-            // If the check above was false, this chunk will be retained, so we must update its bounds.
-
-            let num_indices = bounds.indices.end - bounds.indices.start;
-            let num_quads = bounds.quads.end - bounds.quads.start;
+            let num_indices = bounds.num_indices();
+            let num_quads = bounds.num_quads();
 
             retained_bounds.set(
                 *chunk,
@@ -462,4 +467,48 @@ impl ChunkMultidrawData {
 
         self.update_bounds(gpu, queue, chunks_to_retain);
     }
+}
+
+/// Tests if a chunk map of a bunch of buffer bounds is correctly formatted.
+pub(crate) fn chunk_bounds_correctly_formatted(bounds: &ChunkMap<ChunkBufferBounds>) -> bool {
+    // If there's less than 2 different bounds then it's not really possible to format them incorrectly.
+    if bounds.len() < 2 {
+        return true;
+    }
+
+    let sorted_by_instance = bounds
+        .iter()
+        .sorted_unstable_by_key(|(_, b)| b.instance)
+        .collect_vec();
+
+    // The first chunk must be instance 0, and all its bounds must start at 0.
+    let first = sorted_by_instance[0].1;
+    let first_chunk_is_correct =
+        0 == first.instance && 0 == first.indices.start && 0 == first.quads.start;
+
+    if !first_chunk_is_correct {
+        return false;
+    }
+
+    for w in sorted_by_instance.windows(2) {
+        // Previous chunk
+        let (_p_cpos, p_bounds) = w[0];
+        // Next chunk
+        let (_n_cpos, n_bounds) = w[1];
+
+        let is_correct =
+            // The instance of the next chunk must be larger than the previous one by exactly 1.
+            p_bounds.instance < n_bounds.instance
+            && 1 == (n_bounds.instance - p_bounds.instance)
+            // The chunks must share the data buffers contiguously.
+            // i.e., the previous chunk's share must end where the next chunk's starts
+            && p_bounds.indices.end == n_bounds.indices.start
+            && p_bounds.quads.end == n_bounds.quads.start;
+
+        if !is_correct {
+            return false;
+        }
+    }
+
+    true
 }

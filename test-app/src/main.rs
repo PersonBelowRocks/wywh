@@ -32,7 +32,8 @@ fn main() {
             DefaultPlugins
                 .set(RenderPlugin {
                     render_creation: WgpuSettings {
-                        features: WgpuFeatures::POLYGON_MODE_LINE,
+                        features: WgpuFeatures::POLYGON_MODE_LINE
+                            | WgpuFeatures::INDIRECT_FIRST_INSTANCE,
                         ..default()
                     }
                     .into(),

@@ -11,6 +11,7 @@ use bevy::{
         world::Mut,
     },
     log::{debug, warn},
+    prelude::{FromWorld, World},
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
@@ -34,7 +35,7 @@ use crate::{
     util::ChunkMap,
 };
 
-use super::DefaultBindGroupLayouts;
+use super::{chunk_multidraw::ChunkMultidrawData, DefaultBindGroupLayouts};
 
 pub fn extract_chunk_entities(
     mut cmds: Commands,
@@ -210,6 +211,21 @@ pub fn prepare_chunk_mesh_data(
 #[derive(Resource, Default)]
 pub struct ChunkRenderDataStore {
     pub map: ChunkMap<TimedChunkRenderData>,
+}
+
+#[derive(Resource)]
+pub struct MultidrawRenderDataStore {
+    pub chunks: ChunkMultidrawData,
+}
+
+impl FromWorld for MultidrawRenderDataStore {
+    fn from_world(world: &mut World) -> Self {
+        let gpu = world.resource::<RenderDevice>();
+
+        Self {
+            chunks: ChunkMultidrawData::new(gpu),
+        }
+    }
 }
 
 #[derive(Clone)]
