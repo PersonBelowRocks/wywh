@@ -32,7 +32,7 @@ use crate::{
         quad::GpuQuad,
     },
     topo::world::{ChunkEntity, ChunkPos},
-    util::ChunkMap,
+    util::{ChunkMap, ChunkSet},
 };
 
 use super::{chunk_multidraw::ChunkMultidrawData, DefaultBindGroupLayouts};
@@ -55,6 +55,7 @@ pub fn extract_chunk_entities(
 
 pub fn extract_chunk_mesh_data(
     mut render_meshes: ResMut<ChunkRenderDataStore>,
+    mut multidraw_data: ResMut<MultidrawRenderDataStore>,
     mut main_world: ResMut<MainWorld>,
 ) {
     main_world.resource_scope(
@@ -118,6 +119,7 @@ pub fn extract_chunk_mesh_data(
 
             // Remove meshes from the render world
             for &chunk_pos in &extractable_meshes.removed {
+                multidraw_data.remove.set(chunk_pos);
                 render_meshes.map.remove(chunk_pos);
                 removed += 1;
             }
@@ -138,6 +140,7 @@ pub fn extract_chunk_mesh_data(
 
 pub fn prepare_chunk_mesh_data(
     mut chunk_data_store: ResMut<ChunkRenderDataStore>,
+    mut multidraw_data: ResMut<MultidrawRenderDataStore>,
     default_layouts: Res<DefaultBindGroupLayouts>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
@@ -147,11 +150,15 @@ pub fn prepare_chunk_mesh_data(
 
     let mut total = 0;
 
+    let mut cpu_render_data = ChunkMap::<ChunkMeshData>::new();
+
     chunk_data_store.map.for_each_entry_mut(|pos, timed_data| {
         if matches!(timed_data.data, ChunkRenderData::Cpu(_)) {
             let ChunkRenderData::Cpu(ref data) = timed_data.data else {
                 unreachable!();
             };
+
+            cpu_render_data.set(pos, data.clone());
 
             if data.quad_buffer.is_empty() || data.index_buffer.is_empty() {
                 warn!("Tried to prepare render data for chunk at position {pos}, but it was missing data!");
@@ -203,6 +210,14 @@ pub fn prepare_chunk_mesh_data(
         }
     });
 
+    let remove_chunks = mem::replace(&mut multidraw_data.remove, ChunkSet::default());
+    multidraw_data
+        .chunks
+        .remove_chunks(gpu, queue, remove_chunks);
+    multidraw_data
+        .chunks
+        .upload_chunks(gpu, queue, cpu_render_data);
+
     if total > 0 {
         debug!("Uploaded {total} chunks to the GPU");
     }
@@ -216,6 +231,7 @@ pub struct ChunkRenderDataStore {
 #[derive(Resource)]
 pub struct MultidrawRenderDataStore {
     pub chunks: ChunkMultidrawData,
+    pub remove: ChunkSet,
 }
 
 impl FromWorld for MultidrawRenderDataStore {
@@ -224,6 +240,7 @@ impl FromWorld for MultidrawRenderDataStore {
 
         Self {
             chunks: ChunkMultidrawData::new(gpu),
+            remove: ChunkSet::default(),
         }
     }
 }

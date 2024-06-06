@@ -28,6 +28,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
+use gpu_chunk::MultidrawRenderDataStore;
 
 use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
@@ -103,8 +104,9 @@ impl Plugin for RenderCore {
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
 
-        render_app.init_resource::<DefaultBindGroupLayouts>();
+        render_app.init_resource::<MultidrawRenderDataStore>();
 
+        render_app.init_resource::<DefaultBindGroupLayouts>();
         render_app.init_resource::<ChunkPipeline>();
         render_app.init_resource::<ChunkPrepassPipeline>();
     }
