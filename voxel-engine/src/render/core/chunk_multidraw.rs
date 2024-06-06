@@ -308,8 +308,8 @@ impl ChunkMultidrawData {
         queue: &RenderQueue,
         chunks: ChunkMap<ChunkMeshData>,
     ) {
-        // FIXME: we're iterating through a lot of hashmaps here, which has an arbitrary order.
-        // this likely causes some issues that we need to sort out, so investigate and fix them!
+        // TODO: instead of constantly sorting all the chunks by their instance number,
+        // we should store them in pre-sorted in an IndexMap or something.
 
         if chunks.is_empty() {
             return;
