@@ -145,6 +145,9 @@ pub fn prepare_chunk_mesh_data(
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
+    // TODO: every time there's a chunk to upload, we upload it, however this can get very slow and unecessary when we don't care
+    // about rendering the updated chunk immediately. we should batch together chunk uploads when they don't need to happen immediately
+
     let gpu = gpu.as_ref();
     let queue = queue.as_ref();
 
@@ -158,12 +161,12 @@ pub fn prepare_chunk_mesh_data(
                 unreachable!();
             };
 
-            cpu_render_data.set(pos, data.clone());
-
             if data.quad_buffer.is_empty() || data.index_buffer.is_empty() {
                 warn!("Tried to prepare render data for chunk at position {pos}, but it was missing data!");
                 return;
             }
+
+            cpu_render_data.set(pos, data.clone());
 
             let quads = {
                 let mut buffer = StorageBuffer::from(data.quad_buffer.clone());

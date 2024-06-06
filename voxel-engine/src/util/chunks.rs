@@ -152,6 +152,10 @@ impl ChunkSet {
         self.0.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn remove(&mut self, pos: ChunkPos) -> bool {
         self.0.remove(&pos)
     }
@@ -299,6 +303,10 @@ impl<T> ChunkMap<T> {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn capacity(&self) -> usize {

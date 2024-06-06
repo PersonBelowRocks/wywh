@@ -311,6 +311,10 @@ impl ChunkMultidrawData {
         // FIXME: we're iterating through a lot of hashmaps here, which has an arbitrary order.
         // this likely causes some issues that we need to sort out, so investigate and fix them!
 
+        if chunks.is_empty() {
+            return;
+        }
+
         let mut upload_bounds = ChunkMap::<ChunkBufferBounds>::with_capacity(chunks.len());
         // A set of chunks that this multidraw data had beforehand, but that were present in the provided
         // chunk mesh data that we're supposed to upload. These chunks can be considered "updated" and we want to replace
@@ -334,6 +338,9 @@ impl ChunkMultidrawData {
                 indices: indices_len..(indices_len + mesh.index_buffer.len() as u64),
                 quads: quads_len..(quads_len + mesh.quad_buffer.len() as u64),
             };
+
+            debug_assert!(bounds.indices.start < bounds.indices.end);
+            debug_assert!(bounds.quads.start < bounds.quads.end);
 
             current_instance += 1;
 
@@ -392,9 +399,11 @@ impl ChunkMultidrawData {
 
                 // If this chunk's buffer bounds were marked for removal, then the chunk must also
                 // we marked as an updated chunk.
-                debug_assert!(
-                    contains_indices && contains_quads == updated_chunks.contains(*chunk)
-                );
+                if updated_chunks.contains(*chunk) {
+                    debug_assert!(contains_indices && contains_quads);
+                } else {
+                    debug_assert!(!contains_indices && !contains_quads);
+                }
             }
 
             let num_indices = bounds.num_indices();
@@ -447,6 +456,10 @@ impl ChunkMultidrawData {
     }
 
     pub fn remove_chunks(&mut self, gpu: &RenderDevice, queue: &RenderQueue, chunks: ChunkSet) {
+        if chunks.is_empty() {
+            return;
+        }
+
         let mut remove_indices = RangeSet::<u64>::new();
         let mut remove_quads = RangeSet::<u64>::new();
         let mut chunks_to_retain = ChunkMap::<ChunkBufferBounds>::with_capacity(self.bounds.len());
@@ -464,14 +477,19 @@ impl ChunkMultidrawData {
                 remove_indices.insert(bounds.indices.clone());
                 remove_quads.insert(bounds.quads.clone());
             } else {
-                chunks_to_retain.set(
-                    chunk_pos,
-                    ChunkBufferBounds {
-                        instance: current_instance,
-                        indices: (current_index..bounds.num_indices()),
-                        quads: (current_quad..bounds.num_quads()),
-                    },
-                );
+                let new_bounds = ChunkBufferBounds {
+                    instance: current_instance,
+                    indices: (current_index..(current_index + bounds.num_indices())),
+                    quads: (current_quad..(current_quad + bounds.num_quads())),
+                };
+
+                // Plenty of sanity checks here to make sure that the start of a range is always smaller than the end.
+                debug_assert!(bounds.indices.start < bounds.indices.end);
+                debug_assert!(bounds.quads.start < bounds.quads.end);
+                debug_assert!(new_bounds.indices.start < new_bounds.indices.end);
+                debug_assert!(new_bounds.quads.start < new_bounds.quads.end);
+
+                chunks_to_retain.set(chunk_pos, new_bounds);
 
                 current_instance += 1;
                 current_index += bounds.num_indices();
