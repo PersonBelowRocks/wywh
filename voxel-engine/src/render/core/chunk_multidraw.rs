@@ -83,7 +83,7 @@ impl MultidrawBuffers {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChunkBufferBounds {
     pub instance: u64,
     pub indices: Range<u64>,
@@ -224,15 +224,20 @@ impl ChunkMultidrawData {
         queue: &RenderQueue,
         instances: &[ChunkInstanceData],
     ) {
+        let buffer_size = instances.len() as u64 * u64::from(ChunkInstanceData::SHADER_SIZE);
+
         let instance_buffer = gpu.create_buffer(&BufferDescriptor {
             label: INSTANCE_BUFFER_DESC.label,
-            size: (instances.len() as u64 * u64::from(ChunkInstanceData::SHADER_SIZE)),
+            size: buffer_size,
             usage: INSTANCE_BUFFER_DESC.usage,
             mapped_at_creation: false,
         });
 
-        let data = to_formatted_bytes(&instances);
-        queue.write_buffer(&instance_buffer, 0, &data);
+        if instances.len() > 0 {
+            let data = to_formatted_bytes(&instances);
+            debug_assert_eq!(buffer_size, data.len() as u64);
+            queue.write_buffer(&instance_buffer, 0, &data);
+        }
 
         self.buffers.instance = instance_buffer;
     }
@@ -243,15 +248,20 @@ impl ChunkMultidrawData {
         queue: &RenderQueue,
         indirect_args: &[IndexedIndirectArgs],
     ) {
+        let buffer_size = indirect_args.len() as u64 * u64::from(IndexedIndirectArgs::SHADER_SIZE);
+
         let indirect_buffer = gpu.create_buffer(&BufferDescriptor {
             label: INDIRECT_BUFFER_DESC.label,
-            size: (indirect_args.len() as u64 * u64::from(IndexedIndirectArgs::SHADER_SIZE)),
+            size: buffer_size,
             usage: INDIRECT_BUFFER_DESC.usage,
             mapped_at_creation: false,
         });
 
-        let data = to_formatted_bytes(&indirect_args);
-        queue.write_buffer(&indirect_buffer, 0, &data);
+        if indirect_args.len() > 0 {
+            let data = to_formatted_bytes(&indirect_args);
+            debug_assert_eq!(buffer_size, data.len() as u64);
+            queue.write_buffer(&indirect_buffer, 0, &data);
+        }
 
         self.buffers.indirect = indirect_buffer;
     }
@@ -282,8 +292,12 @@ impl ChunkMultidrawData {
             .map(|(_, bounds)| indirect_args_from_bounds(bounds))
             .collect_vec();
 
+        debug!("Setting instance buffer for multidraw data.");
         self.set_instances(gpu, queue, &chunk_instances);
+        debug!("Setting indirect arg buffer for multidraw data.");
         self.set_indirect_args(gpu, queue, &indirect_args);
+
+        debug!("Successfully set instance buffer and indirect arg buffer for multidraw data.");
 
         self.bounds = new_bounds;
     }
@@ -423,8 +437,11 @@ impl ChunkMultidrawData {
         retained_bounds.extend(upload_bounds.into_iter());
         let new_bounds = retained_bounds;
 
+        debug!("Uploading indices to the GPU.");
         self.buffers.index.append(queue, gpu, &upload_indices);
+        debug!("Uploading quads to the GPU.");
         self.buffers.quad.append(queue, gpu, &upload_quads);
+        debug!("Successfully uploaded indices and quads to the GPU.");
 
         self.update_bounds(gpu, queue, new_bounds);
     }
@@ -487,6 +504,9 @@ pub(crate) fn chunk_bounds_correctly_formatted(bounds: &ChunkMap<ChunkBufferBoun
         0 == first.instance && 0 == first.indices.start && 0 == first.quads.start;
 
     if !first_chunk_is_correct {
+        error!("First chunk bounds in the provided bounds are incorrect!");
+        dbg!(first);
+
         return false;
     }
 
@@ -506,6 +526,10 @@ pub(crate) fn chunk_bounds_correctly_formatted(bounds: &ChunkMap<ChunkBufferBoun
             && p_bounds.quads.end == n_bounds.quads.start;
 
         if !is_correct {
+            error!("Relationship between these 2 chunks violates buffer bounds format rules!");
+            dbg!(p_bounds);
+            dbg!(n_bounds);
+
             return false;
         }
     }

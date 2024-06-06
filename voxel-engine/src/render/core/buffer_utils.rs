@@ -83,6 +83,13 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
 
     /// Append a slice of data to the buffer on the gpu.
     pub fn append(&mut self, queue: &RenderQueue, gpu: &RenderDevice, data: &[T]) {
+        // The encase crate (utilities for working on gpu data) seems to hate empty slices
+        // and keeps insisting they're bigger than they are, so we return early if we have
+        // an empty slice (there's nothing to do anyways, appending an empty slice is essentially no-op)
+        if data.is_empty() {
+            return;
+        }
+
         // calculate our new size after we append all the data
         let size = self.vram_bytes() + (data.len() as u64 * Self::item_size());
 
