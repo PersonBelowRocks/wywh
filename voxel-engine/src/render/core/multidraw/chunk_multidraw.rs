@@ -3,7 +3,10 @@ use std::{ops::Range, u32};
 use bevy::{
     prelude::*,
     render::{
-        render_resource::{Buffer, BufferDescriptor, BufferUsages, ShaderSize, ShaderType},
+        render_resource::{
+            BindGroup, BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ShaderSize,
+            ShaderType,
+        },
         renderer::{RenderDevice, RenderQueue},
     },
 };
@@ -18,6 +21,7 @@ use crate::{
 
 use super::buffer_utils::{to_formatted_bytes, VramArray};
 
+// TODO: we need to split our instance data up into 3 different buffers because wgpu doesn't like structs as instance data i guess?
 #[derive(Clone, ShaderType)]
 pub struct ChunkInstanceData {
     pub pos: Vec3,
@@ -216,6 +220,10 @@ impl ChunkMultidrawData {
     /// Returns whether or not this multidraw data ready for rendering.
     pub fn is_ready(&self) -> bool {
         self.ready
+    }
+
+    pub fn buffers(&self) -> &MultidrawBuffers {
+        &self.buffers
     }
 
     fn set_instances(

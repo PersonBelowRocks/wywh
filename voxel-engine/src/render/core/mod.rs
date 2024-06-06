@@ -1,9 +1,8 @@
-mod buffer_utils;
-mod chunk_multidraw;
 mod draw;
 mod gpu_chunk;
 mod gpu_registries;
 mod impls;
+mod multidraw;
 mod prepass;
 mod render;
 mod shadows;
@@ -116,6 +115,7 @@ impl Plugin for RenderCore {
 pub(crate) struct DefaultBindGroupLayouts {
     pub registry_bg_layout: BindGroupLayout,
     pub chunk_bg_layout: BindGroupLayout,
+    pub multidraw_chunk_bg_layout: BindGroupLayout,
 }
 
 impl FromWorld for DefaultBindGroupLayouts {
@@ -147,6 +147,13 @@ impl FromWorld for DefaultBindGroupLayouts {
                         ),
                         binding_types::storage_buffer_read_only::<GpuQuad>(false),
                     ),
+                ),
+            ),
+            multidraw_chunk_bg_layout: gpu.create_bind_group_layout(
+                Some("multidraw_chunks_bind_group_layout"),
+                &BindGroupLayoutEntries::single(
+                    ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                    binding_types::storage_buffer_read_only::<GpuQuad>(false),
                 ),
             ),
         }

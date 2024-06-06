@@ -35,7 +35,7 @@ use crate::{
     util::{ChunkMap, ChunkSet},
 };
 
-use super::{chunk_multidraw::ChunkMultidrawData, DefaultBindGroupLayouts};
+use super::{multidraw::ChunkMultidrawData, DefaultBindGroupLayouts};
 
 pub fn extract_chunk_entities(
     mut cmds: Commands,
@@ -214,12 +214,19 @@ pub fn prepare_chunk_mesh_data(
     });
 
     let remove_chunks = mem::replace(&mut multidraw_data.remove, ChunkSet::default());
+
+    let recreate_bind_group = !remove_chunks.is_empty() || !cpu_render_data.is_empty();
+
     multidraw_data
         .chunks
         .remove_chunks(gpu, queue, remove_chunks);
     multidraw_data
         .chunks
         .upload_chunks(gpu, queue, cpu_render_data);
+
+    if recreate_bind_group {
+        todo!();
+    }
 
     if total > 0 {
         debug!("Uploaded {total} chunks to the GPU");
@@ -234,6 +241,7 @@ pub struct ChunkRenderDataStore {
 #[derive(Resource)]
 pub struct MultidrawRenderDataStore {
     pub chunks: ChunkMultidrawData,
+    pub bind_group: Option<BindGroup>,
     pub remove: ChunkSet,
 }
 
@@ -243,6 +251,7 @@ impl FromWorld for MultidrawRenderDataStore {
 
         Self {
             chunks: ChunkMultidrawData::new(gpu),
+            bind_group: None,
             remove: ChunkSet::default(),
         }
     }
