@@ -1,26 +1,24 @@
 mod ecs;
 mod workers;
 
-use std::cmp;
+use std::{cmp, fmt};
 
 use bevy::prelude::*;
+use ecs::remove_chunks;
 
 use crate::{
     render::{meshing::controller::ecs::dispatch_updated_chunk_remeshings, quad::GpuQuad},
     topo::world::ChunkPos,
     util::ChunkMap,
-    AppState, CoreEngineSetup,
+    CoreEngineSetup, EngineState,
 };
 
 use self::ecs::{
-    handle_incoming_permits, insert_chunks, queue_chunk_mesh_jobs, setup_chunk_meshing_workers,
+    insert_chunks, queue_chunk_mesh_jobs, setup_chunk_meshing_workers,
     voxel_realm_remesh_updated_chunks,
 };
 
-pub use self::ecs::{GrantPermit, MeshGeneration, RemeshChunk, RevokePermit};
-
-#[derive(Copy, Clone, Debug, Component)]
-pub struct ChunkMeshObserver;
+pub use self::ecs::{MeshGeneration, RemeshChunk};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RemeshType {
@@ -58,13 +56,24 @@ impl ChunkMeshData {
     }
 }
 
-#[derive(Clone)]
+impl fmt::Debug for ChunkMeshData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut map = f.debug_map();
+
+        map.entry(&"indices", &self.index_buffer.len());
+        map.entry(&"quads", &self.quad_buffer.len());
+
+        map.finish()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TimedChunkMeshData {
     pub generation: u64,
     pub data: ChunkMeshStatus,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ChunkMeshStatus {
     Unfulfilled,
     Empty,
@@ -93,53 +102,34 @@ pub struct ChunkRenderPermit {
     pub granted: u64,
 }
 
-#[derive(Resource, Default)]
-pub struct ChunkRenderPermits {
-    pub(super) permits: ChunkMap<ChunkRenderPermit>,
-}
-
-impl ChunkRenderPermits {
-    pub fn has_permit(&self, pos: ChunkPos) -> bool {
-        self.permits.contains(pos)
-    }
-
-    pub fn revoke_permit(&mut self, pos: ChunkPos, _generation: u64) {
-        self.permits.remove(pos);
-    }
-}
-
 pub struct MeshController;
 
 impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
         info!("Setting up mesh controller");
 
-        app.init_resource::<ChunkRenderPermits>()
-            .init_resource::<ExtractableChunkMeshData>()
+        app.init_resource::<ExtractableChunkMeshData>()
             .init_resource::<MeshGeneration>()
-            .add_event::<RemeshChunk>()
-            .add_event::<GrantPermit>()
-            .add_event::<RevokePermit>();
+            .add_event::<RemeshChunk>();
 
         app.add_systems(
-            OnEnter(AppState::Finished),
+            OnEnter(EngineState::Finished),
             setup_chunk_meshing_workers.after(CoreEngineSetup),
         );
 
         app.add_systems(
             PreUpdate,
-            insert_chunks.run_if(in_state(AppState::Finished)),
+            (remove_chunks, insert_chunks).run_if(in_state(EngineState::Finished)),
         );
 
         app.add_systems(
             FixedPostUpdate,
             (
-                handle_incoming_permits,
                 voxel_realm_remesh_updated_chunks.pipe(dispatch_updated_chunk_remeshings),
                 queue_chunk_mesh_jobs,
             )
                 .chain()
-                .run_if(in_state(AppState::Finished)),
+                .run_if(in_state(EngineState::Finished)),
         );
     }
 }

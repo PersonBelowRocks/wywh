@@ -10,21 +10,25 @@ use itertools::Itertools;
 use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
-    topo::world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
+    topo::{
+        controller::{PermitFlags, UpdatePermitEvent},
+        world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
+        ChunkObserver,
+    },
     util::ChunkMap,
 };
 
 use super::{
     workers::{MeshBuilder, MeshCommand},
-    ChunkMeshObserver, ChunkMeshStatus, ChunkRenderPermit, ChunkRenderPermits,
-    ExtractableChunkMeshData, RemeshPriority, RemeshType, TimedChunkMeshData,
+    ChunkMeshStatus, ChunkRenderPermit, ExtractableChunkMeshData, RemeshPriority, RemeshType,
+    TimedChunkMeshData,
 };
 
 #[derive(Resource, Deref)]
 pub struct MeshWorkerTaskPool(TaskPool);
 
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct MeshGeneration(u64);
+pub struct MeshGeneration(pub u64);
 
 #[derive(Event, Clone)]
 pub struct RemeshChunk {
@@ -32,61 +36,6 @@ pub struct RemeshChunk {
     pub remesh_type: RemeshType,
     pub priority: RemeshPriority,
     pub generation: u64,
-}
-
-#[derive(Event, Clone)]
-pub struct GrantPermit {
-    pub pos: ChunkPos,
-    pub generation: u64,
-}
-
-#[derive(Event, Clone)]
-pub struct RevokePermit {
-    pub pos: ChunkPos,
-    pub generation: u64,
-}
-
-// TODO: queue new permits for remeshing
-/// This system keeps track of chunk render permits as they are added and removed.
-/// Will also dispatch remeshing events as necessary (currently not implemented)
-pub fn handle_incoming_permits(
-    mut grants: EventReader<GrantPermit>,
-    mut revocations: EventReader<RevokePermit>,
-    mut permits_r: ResMut<ChunkRenderPermits>,
-    mut meshes: ResMut<ExtractableChunkMeshData>,
-) {
-    let permits = &mut permits_r.permits;
-
-    let mut revoked = 0;
-    for event in revocations.read() {
-        revoked += 1;
-        if let Some(permit) = permits.get(event.pos) {
-            if permit.granted < event.generation {
-                permits.remove(event.pos);
-                meshes.active.remove(event.pos);
-                meshes.removed.push(event.pos);
-            }
-        }
-    }
-
-    let mut granted = 0;
-    for event in grants.read() {
-        granted += 1;
-
-        let existing = permits.get(event.pos);
-
-        if existing.is_none() || existing.is_some_and(|e| e.granted < event.generation) {
-            permits.set(event.pos, ChunkRenderPermit::new(event.generation));
-        }
-    }
-
-    if revoked > 0 || granted > 0 {
-        debug!(
-            "Handled {} revoked permits, and {} granted permits.",
-            revoked, granted
-        );
-        debug!("Total active permits is now: {}", permits.len());
-    }
 }
 
 /// This system queues meshing jobs in the mesh builder from `RemeshChunk` events.
@@ -170,6 +119,18 @@ pub fn insert_chunks(workers: Res<MeshBuilder>, mut meshes: ResMut<ExtractableCh
     }
 }
 
+/// Remove the extracted chunks from the render world when their render permits are revoked
+pub fn remove_chunks(
+    mut meshes: ResMut<ExtractableChunkMeshData>,
+    mut events: EventReader<UpdatePermitEvent>,
+) {
+    for event in events.read() {
+        if event.remove_flags.contains(PermitFlags::RENDER) {
+            meshes.removed.push(event.chunk_pos);
+        }
+    }
+}
+
 pub struct UpdateDetectionRemeshResults {
     primary: hb::HashSet<ChunkPos, fxhash::FxBuildHasher>,
     neighbors: hb::HashSet<ChunkPos, fxhash::FxBuildHasher>,
@@ -179,14 +140,13 @@ pub struct UpdateDetectionRemeshResults {
 /// Will dispatch remesh events for chunks neighboring the updated chunks if necessary.
 pub fn voxel_realm_remesh_updated_chunks(
     time: Res<Time>,
-    realm: Res<VoxelRealm>,
-    permits: Res<ChunkRenderPermits>,
+    realm: VoxelRealm,
     mut last_queued_fresh: Local<Duration>,
 ) -> UpdateDetectionRemeshResults {
     let mut remeshings_issued = 0;
     let mut neighbor_remeshings_issued = 0;
 
-    let cm = realm.chunk_manager.as_ref();
+    let cm = realm.cm();
     let updated = cm.updated_chunks();
 
     let current = time.elapsed();
@@ -206,62 +166,75 @@ pub fn voxel_realm_remesh_updated_chunks(
     let mut queued_primary = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
     let mut queued_neighbors = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
 
-    updated
-        .iter_chunks(|cref| {
-            // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
-            if !permits.has_permit(cref.pos()) || queued_primary.contains(&cref.pos()) {
-                return;
-            }
+    // TODO: skip this update if the chunk manager is globally locked.
+    let result = updated.iter_chunks(|cref| {
+        // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
+        if !realm.has_render_permit(cref.pos()) || queued_primary.contains(&cref.pos()) {
+            return;
+        }
 
-            // If this chunk was previously queued as a neighbor remesh, we "convert" it to a primary
-            // remesh. This is because we need to unflag all chunks that were updated, but we don't want
-            // to do that to the neighbors.
-            if queued_neighbors.contains(&cref.pos()) {
-                queued_neighbors.remove(&cref.pos());
-            }
+        // If this chunk was previously queued as a neighbor remesh, we "convert" it to a primary
+        // remesh. This is because we need to unflag all chunks that were updated, but we don't want
+        // to do that to the neighbors.
+        if queued_neighbors.contains(&cref.pos()) {
+            queued_neighbors.remove(&cref.pos());
+        }
 
-            if cref.flags().contains(ChunkFlags::FRESH) && !should_queue_fresh {
-                return;
-            }
+        if cref.flags().contains(ChunkFlags::FRESHLY_GENERATED) && !should_queue_fresh {
+            return;
+        }
 
-            queued_primary.insert(cref.pos());
-            remeshings_issued += 1;
+        queued_primary.insert(cref.pos());
+        remeshings_issued += 1;
 
-            // This chunk was updated in such a way that we need to remesh its neighbors too!
-            if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
-                for face in Face::FACES {
-                    let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.pos()));
+        // This chunk was updated in such a way that we need to remesh its neighbors too!
+        if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
+            for face in Face::FACES {
+                let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.pos()));
 
-                    if !permits.has_permit(neighbor_pos)
-                        || queued_primary.contains(&neighbor_pos)
-                        || queued_neighbors.contains(&neighbor_pos)
-                    {
-                        continue;
-                    }
-
-                    // We only remesh the neighbor if it's neither generating or fresh.
-                    // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
-                    // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
-                    let avoid_flags: ChunkFlags = ChunkFlags::GENERATING | ChunkFlags::FRESH;
-                    let Some(flags) = cm.chunk_flags(neighbor_pos) else {
-                        continue;
-                    };
-
-                    if flags.intersects(avoid_flags) {
-                        continue;
-                    }
-
-                    queued_neighbors.insert(neighbor_pos);
-                    neighbor_remeshings_issued += 1;
+                if !realm.has_render_permit(neighbor_pos)
+                    || queued_primary.contains(&neighbor_pos)
+                    || queued_neighbors.contains(&neighbor_pos)
+                {
+                    continue;
                 }
+
+                // We only remesh the neighbor if it's neither generating or fresh (or primordial).
+                // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
+                // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
+                let avoid_flags: ChunkFlags =
+                    ChunkFlags::PRIMORDIAL | ChunkFlags::GENERATING | ChunkFlags::FRESHLY_GENERATED;
+                let Some(flags) = cm.chunk_flags(neighbor_pos) else {
+                    continue;
+                };
+
+                if flags.intersects(avoid_flags) {
+                    continue;
+                }
+
+                queued_neighbors.insert(neighbor_pos);
+                neighbor_remeshings_issued += 1;
             }
-        })
-        .unwrap();
+        }
+    });
+
+    if let Err(error) = result {
+        // A global lock error is fine (and expected from time to time), we just retry on the next
+        // iteration of this system. Since chunks are unflagged in this system, and we didn't manage to
+        // queue any chunks for remeshing and unflagging, the flags will be the same on the next iteration.
+        if !error.is_globally_locked() {
+            error!("Error trying to iterate over remeshable chunks: {error}");
+        }
+    }
 
     for pos in &queued_primary {
-        if let Ok(cref) = cm.get_loaded_chunk(*pos) {
+        if let Ok(cref) = cm.get_loaded_chunk(*pos, false) {
             cref.update_flags(|flags| {
-                flags.remove(ChunkFlags::REMESH | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::FRESH)
+                flags.remove(
+                    ChunkFlags::REMESH
+                        | ChunkFlags::REMESH_NEIGHBORS
+                        | ChunkFlags::FRESHLY_GENERATED,
+                )
             });
         }
     }
@@ -298,7 +271,7 @@ fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> RemeshPriority 
 pub fn dispatch_updated_chunk_remeshings(
     In(detected): In<UpdateDetectionRemeshResults>,
     current_generation: Res<MeshGeneration>,
-    observers: Query<&Transform, With<ChunkMeshObserver>>,
+    observers: Query<&Transform, With<ChunkObserver>>,
     mut writer: EventWriter<RemeshChunk>,
 ) {
     writer.send_batch(
@@ -328,13 +301,13 @@ pub fn dispatch_updated_chunk_remeshings(
 pub fn setup_chunk_meshing_workers(
     mut cmds: Commands,
     registries: Res<Registries>,
-    realm: Res<VoxelRealm>,
+    realm: VoxelRealm,
 ) {
     info!("Setting up chunk meshing workers");
 
     let task_pool = TaskPoolBuilder::new()
         .thread_name("Mesh Worker Task Pool".into())
-        .num_threads(max(1, available_parallelism() / 2))
+        .num_threads(max(1, available_parallelism() / 4))
         .build();
 
     let settings = MeshBuilderSettings {
@@ -343,12 +316,7 @@ pub fn setup_chunk_meshing_workers(
         worker_mesh_backlog_capacity: 3,
     };
 
-    let worker_pool = MeshBuilder::new(
-        settings,
-        &task_pool,
-        registries.clone(),
-        realm.chunk_manager.clone(),
-    );
+    let worker_pool = MeshBuilder::new(settings, &task_pool, registries.clone(), realm.clone_cm());
 
     cmds.insert_resource(worker_pool);
     cmds.insert_resource(MeshWorkerTaskPool(task_pool));

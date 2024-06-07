@@ -2,6 +2,15 @@ use bevy::{
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
+use ve::{
+    render::meshing::controller::ExtractableChunkMeshData,
+    topo::{
+        controller::{ChunkPermitKey, LastPosition},
+        world::VoxelRealm,
+        ChunkObserver,
+    },
+    util::ws_to_chunk_pos,
+};
 use voxel_engine::{
     data::tile::Face,
     topo::world::{Chunk, ChunkEntity},
@@ -10,7 +19,7 @@ use voxel_engine::{
 use crate::camera::PlayerCamController;
 
 #[derive(Component)]
-pub struct PositionText;
+pub struct SpatialDebugText;
 
 #[derive(Component)]
 pub struct DirectionText;
@@ -18,16 +27,58 @@ pub struct DirectionText;
 #[derive(Component)]
 pub struct FpsText;
 
-pub fn update_position_text(
-    mut q: Query<&mut Text, With<PositionText>>,
+pub fn text_section(string: impl Into<String>) -> TextSection {
+    let default_style = TextStyle {
+        font_size: 35.0,
+        color: Color::WHITE,
+        ..default()
+    };
+
+    TextSection::new(string, default_style)
+}
+
+pub fn update_spatial_debug_text(
+    realm: VoxelRealm,
+    meshes: Res<ExtractableChunkMeshData>,
+    mut q: Query<&mut Text, With<SpatialDebugText>>,
     player_q: Query<&Transform, With<PlayerCamController>>,
 ) {
     let pos = player_q.single().translation;
+    let chunk_pos = ws_to_chunk_pos(pos.floor().as_ivec3());
+
+    let permit_flags = realm
+        .permits()
+        .get(ChunkPermitKey::Chunk(chunk_pos))
+        .map(|permit| permit.flags);
+
+    let load_reasons = realm
+        .cm()
+        .get_loaded_chunk(chunk_pos, true)
+        .ok()
+        .map(|cref| cref.load_reasons());
+
+    let chunk_flags = realm
+        .cm()
+        .get_loaded_chunk(chunk_pos, true)
+        .ok()
+        .map(|cref| cref.flags());
+
+    let mesh = meshes.active.get(chunk_pos);
 
     for mut text in &mut q {
-        text.sections[0].value = format!("x: {:.5}\n", pos.x);
-        text.sections[1].value = format!("y: {:.5}\n", pos.y);
-        text.sections[2].value = format!("z: {:.5}\n", pos.z);
+        text.sections = [
+            format!("x: {:.5}\n", pos.x),
+            format!("y: {:.5}\n", pos.y),
+            format!("z: {:.5}\n", pos.z),
+            format!("chunk: {}\n", chunk_pos),
+            format!("load reasons: {load_reasons:?}\n"),
+            format!("chunk flags: {chunk_flags:?}\n"),
+            format!("permit flags: {permit_flags:?}\n"),
+            format!("\n"),
+            format!("mesh: {mesh:?}"),
+        ]
+        .map(text_section)
+        .to_vec();
     }
 }
 
@@ -66,12 +117,11 @@ pub fn update_direction_text(
     text.sections[0].value = format!("Facing: {0}", direction_letter)
 }
 
-pub fn chunk_borders(mut giz: Gizmos, chunks: Query<&Transform, With<ChunkEntity>>) {
-    for chunk_tf in chunks.iter() {
-        let gizmo_translation = chunk_tf.translation + (Vec3::splat(Chunk::SIZE as _) / 2.0);
+pub fn chunk_borders(mut giz: Gizmos, observers: Query<&LastPosition, With<ChunkObserver>>) {
+    for last_pos in &observers {
+        let pos = last_pos.chunk_pos.worldspace_min().as_vec3() + (Chunk::SIZE as f32 / 2.0);
 
-        let gizmo_tf = Transform::from_translation(gizmo_translation)
-            .with_scale(Vec3::splat(Chunk::SIZE as _));
+        let gizmo_tf = Transform::from_translation(pos).with_scale(Vec3::splat(Chunk::SIZE as _));
         giz.cuboid(gizmo_tf, Color::LIME_GREEN);
     }
 }

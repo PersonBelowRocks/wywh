@@ -3,13 +3,49 @@ use dashmap::{
     DashMap,
 };
 use fxhash::FxBuildHasher;
-use hb::hash_map::Entry as HashbrownEntry;
+use hb::hash_map::{Drain, Entry as HashbrownEntry};
 use itertools::Itertools;
 
 use crate::topo::world::ChunkPos;
 
+#[derive(Clone, Default, Debug)]
+pub struct ChunkSet(hb::HashSet<ChunkPos, wyhash2::WyHash>);
+
+impl ChunkSet {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(hb::HashSet::with_capacity_and_hasher(
+            capacity,
+            wyhash2::WyHash::default(),
+        ))
+    }
+
+    pub fn set(&mut self, pos: ChunkPos) -> bool {
+        self.0.insert(pos)
+    }
+
+    pub fn contains(&self, pos: ChunkPos) -> bool {
+        self.0.contains(&pos)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn remove(&mut self, pos: ChunkPos) -> bool {
+        self.0.remove(&pos)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = ChunkPos> + '_ {
+        self.0.iter().cloned()
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+}
+
 #[derive(Clone)]
-pub struct SyncChunkMap<T>(DashMap<ChunkPos, T, fxhash::FxBuildHasher>);
+pub struct SyncChunkMap<T>(DashMap<ChunkPos, T, wyhash2::WyHash>);
 
 impl<T> Default for SyncChunkMap<T> {
     fn default() -> Self {
@@ -19,14 +55,14 @@ impl<T> Default for SyncChunkMap<T> {
 
 impl<T> SyncChunkMap<T> {
     pub fn new() -> Self {
-        Self(DashMap::with_hasher(FxBuildHasher::default()))
+        Self(DashMap::with_hasher(wyhash2::WyHash::default()))
     }
 
     pub fn set(&self, pos: ChunkPos, data: T) -> Option<T> {
         self.0.insert(pos, data)
     }
 
-    pub fn get(&self, pos: ChunkPos) -> Option<DashMapRef<ChunkPos, T, fxhash::FxBuildHasher>> {
+    pub fn get(&self, pos: ChunkPos) -> Option<DashMapRef<ChunkPos, T, wyhash2::WyHash>> {
         self.0.get(&pos)
     }
 
@@ -38,7 +74,7 @@ impl<T> SyncChunkMap<T> {
         self.0.contains_key(&pos)
     }
 
-    pub fn entry(&self, pos: ChunkPos) -> DashMapEntry<'_, ChunkPos, T, fxhash::FxBuildHasher> {
+    pub fn entry(&self, pos: ChunkPos) -> DashMapEntry<'_, ChunkPos, T, wyhash2::WyHash> {
         self.0.entry(pos)
     }
 
@@ -69,7 +105,7 @@ impl<T> SyncChunkMap<T> {
 }
 
 #[derive(Clone)]
-pub struct ChunkMap<T>(hb::HashMap<ChunkPos, T, fxhash::FxBuildHasher>);
+pub struct ChunkMap<T>(hb::HashMap<ChunkPos, T, wyhash2::WyHash>);
 
 impl<T> Default for ChunkMap<T> {
     fn default() -> Self {
@@ -79,7 +115,14 @@ impl<T> Default for ChunkMap<T> {
 
 impl<T> ChunkMap<T> {
     pub fn new() -> Self {
-        Self(hb::HashMap::with_hasher(fxhash::FxBuildHasher::default()))
+        Self(hb::HashMap::with_hasher(wyhash2::WyHash::default()))
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(hb::HashMap::with_capacity_and_hasher(
+            capacity,
+            wyhash2::WyHash::default(),
+        ))
     }
 
     pub fn set(&mut self, pos: ChunkPos, data: T) -> Option<T> {
@@ -90,6 +133,10 @@ impl<T> ChunkMap<T> {
         self.0.get(&pos)
     }
 
+    pub fn get_mut(&mut self, pos: ChunkPos) -> Option<&mut T> {
+        self.0.get_mut(&pos)
+    }
+
     pub fn remove(&mut self, pos: ChunkPos) -> Option<T> {
         self.0.remove(&pos)
     }
@@ -98,10 +145,7 @@ impl<T> ChunkMap<T> {
         self.0.contains_key(&pos)
     }
 
-    pub fn entry(
-        &mut self,
-        pos: ChunkPos,
-    ) -> HashbrownEntry<'_, ChunkPos, T, fxhash::FxBuildHasher> {
+    pub fn entry(&mut self, pos: ChunkPos) -> HashbrownEntry<'_, ChunkPos, T, wyhash2::WyHash> {
         self.0.entry(pos)
     }
 
@@ -142,5 +186,21 @@ impl<T> ChunkMap<T> {
 
     pub fn shrink_to_fit(&mut self) {
         self.0.shrink_to_fit()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (ChunkPos, &T)> {
+        self.0.iter().map(|(&pos, data)| (pos, data))
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = (ChunkPos, T)> {
+        self.0.into_iter()
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+
+    pub fn drain(&mut self) -> Drain<'_, ChunkPos, T> {
+        self.0.drain()
     }
 }

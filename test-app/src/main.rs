@@ -17,7 +17,9 @@ use bevy::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use bevy::window::PresentMode;
-use debug_info::{DirectionText, FpsText, PositionText};
+use debug_info::{DirectionText, FpsText, SpatialDebugText};
+use ve::topo::ChunkObserver;
+use ve::EngineState;
 
 fn main() {
     println!(
@@ -42,7 +44,7 @@ fn main() {
                     ..default()
                 })
                 .set(LogPlugin {
-                    filter: "info,test_app=debug,voxel_engine=debug".into(),
+                    filter: "info".into(),
                     level: log::Level::DEBUG,
                     ..default()
                 })
@@ -70,8 +72,8 @@ fn main() {
         .add_systems(
             Update,
             (
-                debug_info::update_position_text,
-                // debug_info::chunk_borders,
+                debug_info::update_spatial_debug_text.run_if(in_state(EngineState::Finished)),
+                debug_info::chunk_borders,
                 debug_info::update_direction_text,
                 debug_info::fps_text_update_system,
             ),
@@ -90,40 +92,16 @@ fn setup(
     debug!("Setting up test-app");
 
     commands.spawn((
-        TextBundle::from_sections([
-            TextSection::new(
-                "x",
-                TextStyle {
-                    font_size: 35.0,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            ),
-            TextSection::new(
-                "y",
-                TextStyle {
-                    font_size: 35.0,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            ),
-            TextSection::new(
-                "z",
-                TextStyle {
-                    font_size: 35.0,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            ),
-        ])
-        .with_text_justify(JustifyText::Left)
-        .with_style(Style {
-            position_type: PositionType::Absolute,
-            bottom: Val::Percent(85.0),
-            right: Val::Percent(10.0),
-            ..default()
-        }),
-        PositionText,
+        TextBundle::default()
+            .with_text_justify(JustifyText::Left)
+            .with_style(Style {
+                position_type: PositionType::Absolute,
+                top: Val::Percent(2.0),
+                right: Val::Percent(2.0),
+                flex_direction: FlexDirection::Row,
+                ..default()
+            }),
+        SpatialDebugText,
     ));
 
     commands.spawn((
@@ -208,7 +186,7 @@ fn setup(
     commands.insert_resource(Msaa::Off);
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
-        brightness: 2.0,
+        brightness: 200.0,
     });
 
     // camera
@@ -216,9 +194,18 @@ fn setup(
         .spawn((
             Camera3dBundle {
                 transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+                projection: Projection::Perspective(PerspectiveProjection {
+                    fov: 100.0 * (PI / 180.0),
+                    ..default()
+                }),
                 ..default()
             },
             camera::PlayerCamController::default(),
+            ChunkObserver {
+                horizontal_range: 5.0,
+                view_distance_above: 3.0,
+                view_distance_below: 3.0,
+            },
             VisibilityBundle::default(),
             ScreenSpaceAmbientOcclusionBundle::default(),
         ))

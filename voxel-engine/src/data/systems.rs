@@ -10,7 +10,7 @@ use mip_texture_array::asset::MippedArrayTexture;
 
 use crate::{
     data::{registries::texture::TextureRegistryLoader, resourcepath::ResourcePath},
-    AppState,
+    EngineState,
 };
 
 use super::{
@@ -126,7 +126,7 @@ pub(crate) fn load_textures(mut cmds: Commands, server: Res<AssetServer>) {
 }
 
 pub(crate) fn check_textures(
-    mut next_state: ResMut<NextState<AppState>>,
+    mut next_state: ResMut<NextState<EngineState>>,
     mut texture_folder: ResMut<VoxelTextureFolder>,
     mut normalmap_folder: ResMut<VoxelNormalMapFolder>,
     mut events: EventReader<AssetEvent<LoadedFolder>>,
@@ -142,7 +142,7 @@ pub(crate) fn check_textures(
     }
 
     if texture_folder.loaded && normalmap_folder.loaded {
-        next_state.set(AppState::Finished);
+        next_state.set(EngineState::Finished);
     }
 }
 

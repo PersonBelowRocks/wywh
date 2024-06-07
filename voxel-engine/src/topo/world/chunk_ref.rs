@@ -1,10 +1,12 @@
 use std::hash::BuildHasher;
 
-use bevy::{math::UVec3, prelude::IVec3};
+use bevy::{ecs::entity::Entity, math::UVec3, prelude::IVec3};
+use parking_lot::RwLockReadGuard;
 
 use crate::topo::{
     access::{ChunkBounds, ReadAccess, WriteAccess},
     block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},
+    controller::LoadReasons,
     error::ChunkAccessError,
     storage::{
         containers::data_storage::{SiccAccess, SiccReadAccess},
@@ -14,7 +16,7 @@ use crate::topo::{
 
 use super::{
     chunk::{Chunk, ChunkFlags, ChunkPos},
-    realm::{ChunkStatuses, LccRef},
+    chunk_manager::{ChunkStatuses, LccRef},
     ChunkManagerError,
 };
 
@@ -25,13 +27,18 @@ pub type Crwa<'a> = ChunkRefAccess<'a>;
 
 pub struct ChunkRef<'a> {
     pub(super) chunk: LccRef<'a>,
-    pub(super) stats: &'a ChunkStatuses,
+    pub(super) stats: RwLockReadGuard<'a, ChunkStatuses>,
     pub(super) pos: ChunkPos,
+    pub(super) entity: Option<Entity>,
 }
 
 impl<'a> ChunkRef<'a> {
     pub fn pos(&self) -> ChunkPos {
         self.pos
+    }
+
+    pub fn entity(&self) -> Option<Entity> {
+        self.entity
     }
 
     pub fn flags(&self) -> ChunkFlags {
@@ -51,7 +58,7 @@ impl<'a> ChunkRef<'a> {
         let mut new_flags = old_flags;
         f(&mut new_flags);
 
-        if new_flags.contains(ChunkFlags::FRESH) {
+        if new_flags.contains(ChunkFlags::FRESHLY_GENERATED) {
             self.stats.fresh.insert(self.pos);
         } else {
             self.stats.fresh.remove(&self.pos);
@@ -70,6 +77,28 @@ impl<'a> ChunkRef<'a> {
         }
 
         self.set_flags(new_flags);
+    }
+
+    pub fn load_reasons(&self) -> LoadReasons {
+        *self.chunk.load_reasons.read()
+    }
+
+    fn set_load_reasons(&self, reasons: LoadReasons) {
+        let mut old = self.chunk.load_reasons.write();
+        *old = reasons;
+    }
+
+    pub fn update_load_reasons<F>(&self, f: F) -> LoadReasons
+    where
+        F: for<'lr> FnOnce(&'lr mut LoadReasons),
+    {
+        let old_reasons = self.load_reasons();
+        let mut new_reasons = old_reasons;
+        f(&mut new_reasons);
+
+        // TODO: mark chunk for unloading there are no load reasons
+        self.set_load_reasons(new_reasons);
+        new_reasons
     }
 
     pub fn with_access<F, U>(&self, manual_update_ctrl: bool, f: F) -> Result<U, ChunkManagerError>

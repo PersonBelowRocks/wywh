@@ -1,3 +1,4 @@
+extern crate binary_heap_plus as bhp;
 extern crate crossbeam as cb;
 extern crate derive_more as dm;
 extern crate derive_new as dn;
@@ -8,7 +9,7 @@ extern crate thiserror as te;
 #[macro_use]
 extern crate num_derive;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use bevy::{math::ivec3, prelude::*};
 use data::{
@@ -16,8 +17,14 @@ use data::{
     resourcepath::rpath,
 };
 use mip_texture_array::MippedArrayTexturePlugin;
-use render::meshing::controller::{GrantPermit, MeshGeneration};
-use topo::{block::FullBlock, world::VoxelRealm};
+use render::meshing::controller::MeshGeneration;
+use topo::{
+    block::FullBlock,
+    controller::{
+        ChunkEcsPermits, WorldController, WorldControllerSettings, WorldControllerSystems,
+    },
+    world::{realm::ChunkManagerResource, ChunkManager, VoxelRealm},
+};
 
 pub mod data;
 pub mod render;
@@ -55,7 +62,7 @@ impl VoxelPlugin {
 pub struct VoxelSystemSet;
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash, States)]
-pub enum AppState {
+pub enum EngineState {
     #[default]
     Setup,
     Finished,
@@ -68,75 +75,38 @@ impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
         info!("Building voxel plugin");
 
+        app.add_plugins(WorldController {
+            settings: WorldControllerSettings {
+                chunk_loading_handler_backlog_threshold: 100,
+                chunk_loading_handler_timeout: Duration::from_micros(20),
+                chunk_loading_max_stalling: Duration::from_millis(200),
+            },
+        });
         app.add_plugins(MeshController);
         app.add_plugins(RenderCore);
         app.add_plugins(MippedArrayTexturePlugin::default());
 
         app.add_event::<GenerateChunk>();
-        app.init_state::<AppState>();
+        app.init_state::<EngineState>();
 
         app.insert_resource(VariantFolders::new(self.variant_folders.clone()));
         app.insert_resource(GeneratorSeed(140));
 
-        app.add_systems(OnEnter(AppState::Setup), load_textures);
-        app.add_systems(Update, check_textures.run_if(in_state(AppState::Setup)));
+        app.add_systems(OnEnter(EngineState::Setup), load_textures);
+        app.add_systems(Update, check_textures.run_if(in_state(EngineState::Setup)));
         app.add_systems(
-            OnEnter(AppState::Finished),
-            (
-                build_registries,
-                setup,
-                setup_terrain_generator_workers,
-                generate_debug_chunks,
-            )
+            OnEnter(EngineState::Finished),
+            (build_registries, setup, setup_terrain_generator_workers)
                 .chain()
                 .in_set(CoreEngineSetup),
         );
 
         app.add_systems(
-            PostUpdate,
+            FixedPostUpdate,
             generate_chunks_from_events
-                .chain()
-                .run_if(in_state(AppState::Finished)),
+                .run_if(in_state(EngineState::Finished))
+                .after(WorldControllerSystems::CoreEvents),
         );
-    }
-}
-
-fn generate_debug_chunks(
-    mut cmds: Commands,
-    mut events: EventWriter<GenerateChunk>,
-    mut permits: EventWriter<GrantPermit>,
-    generation: Res<MeshGeneration>,
-) {
-    debug!("Generating debugging chunks");
-
-    const DIMS: i32 = 4;
-
-    let generation = **generation;
-
-    for x in -DIMS..=DIMS {
-        for y in -DIMS..=DIMS {
-            for z in -DIMS..=DIMS {
-                let pos = ivec3(x, y, z);
-
-                events.send(GenerateChunk { pos: pos.into() });
-
-                permits.send(GrantPermit {
-                    pos: pos.into(),
-                    generation,
-                });
-
-                // TODO: we need a comprehensive system to manage chunk entities in the ECS world
-                cmds.spawn((
-                    ChunkPos::from(pos),
-                    VisibilityBundle::default(),
-                    Chunk::BOUNDING_BOX.to_aabb(),
-                    TransformBundle::from_transform(Transform::from_translation(
-                        pos.as_vec3() * Chunk::SIZE as f32,
-                    )),
-                    ChunkEntity,
-                ));
-            }
-        }
     }
 }
 
@@ -149,5 +119,8 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
             .unwrap(),
     };
 
-    cmds.insert_resource(VoxelRealm::new(void));
+    let chunk_manager = ChunkManager::new(void);
+
+    cmds.init_resource::<ChunkEcsPermits>();
+    cmds.insert_resource(ChunkManagerResource(Arc::new(chunk_manager)));
 }

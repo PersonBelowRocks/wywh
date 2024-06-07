@@ -12,6 +12,7 @@ use bevy::{
         system::{Query, Res, ResMut, Resource},
         world::{FromWorld, World},
     },
+    log::debug,
     pbr::{MeshPipelineKey, PreviousViewProjection, SetPrepassViewBindGroup},
     render::{
         globals::GlobalsUniform,
@@ -298,6 +299,7 @@ pub fn queue_prepass_chunks(
                     ) | view_key,
                 },
             );
+
             phase.add(Opaque3dPrepass {
                 entity: entity,
                 draw_function: draw_function,
