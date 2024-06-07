@@ -76,7 +76,7 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
 
         let indirect_buffer = &store.chunks.buffers().indirect;
 
-        pass.multi_draw_indexed_indirect(indirect_buffer, 0, 1);
+        pass.multi_draw_indexed_indirect(indirect_buffer, 0, store.chunks.num_chunks() as _);
 
         RenderCommandResult::Success
     }

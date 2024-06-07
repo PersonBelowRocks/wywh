@@ -502,6 +502,10 @@ impl ChunkMultidrawData {
 
         self.update_bounds(gpu, queue, chunks_to_retain);
     }
+
+    pub fn num_chunks(&self) -> usize {
+        self.bounds.len()
+    }
 }
 
 /// Tests if a chunk map of a bunch of buffer bounds is correctly formatted.

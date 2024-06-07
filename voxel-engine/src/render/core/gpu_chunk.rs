@@ -225,17 +225,21 @@ pub fn prepare_chunk_mesh_data(
         .upload_chunks(gpu, queue, cpu_render_data);
 
     if recreate_bind_group {
-        // TODO: get this working
-        let quad_buffer = multidraw_data.chunks.buffers().quad.buffer();
+        let quad_vram_array = &multidraw_data.chunks.buffers().quad;
 
-        let bg = gpu.create_bind_group(
-            "indirect_chunks_bind_group",
-            &default_layouts.indirect_chunk_bg_layout,
-            &BindGroupEntries::single(quad_buffer.as_entire_buffer_binding()),
-        );
+        // we only make a bind group if the buffer is long enough to be bound
+        if quad_vram_array.vram_bytes() > 0 {
+            let quad_buffer = quad_vram_array.buffer();
 
-        multidraw_data.bind_group = Some(bg);
-        multidraw_data.ready = true;
+            let bg = gpu.create_bind_group(
+                "indirect_chunks_bind_group",
+                &default_layouts.indirect_chunk_bg_layout,
+                &BindGroupEntries::single(quad_buffer.as_entire_buffer_binding()),
+            );
+
+            multidraw_data.bind_group = Some(bg);
+            multidraw_data.ready = true;
+        }
     }
 
     if total > 0 {
