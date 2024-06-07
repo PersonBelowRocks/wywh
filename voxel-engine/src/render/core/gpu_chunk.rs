@@ -15,8 +15,8 @@ use bevy::{
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
-            BindGroup, BindGroupEntries, Buffer, BufferUsages, BufferVec, StorageBuffer,
-            UniformBuffer,
+            BindGroup, BindGroupEntries, BindingResource, Buffer, BufferBinding, BufferUsages,
+            BufferVec, StorageBuffer, UniformBuffer,
         },
         renderer::{RenderDevice, RenderQueue},
         Extract, MainWorld,
@@ -55,7 +55,7 @@ pub fn extract_chunk_entities(
 
 pub fn extract_chunk_mesh_data(
     mut render_meshes: ResMut<ChunkRenderDataStore>,
-    mut multidraw_data: ResMut<MultidrawRenderDataStore>,
+    mut multidraw_data: ResMut<IndirectRenderDataStore>,
     mut main_world: ResMut<MainWorld>,
 ) {
     main_world.resource_scope(
@@ -140,7 +140,7 @@ pub fn extract_chunk_mesh_data(
 
 pub fn prepare_chunk_mesh_data(
     mut chunk_data_store: ResMut<ChunkRenderDataStore>,
-    mut multidraw_data: ResMut<MultidrawRenderDataStore>,
+    mut multidraw_data: ResMut<IndirectRenderDataStore>,
     default_layouts: Res<DefaultBindGroupLayouts>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
@@ -226,6 +226,16 @@ pub fn prepare_chunk_mesh_data(
 
     if recreate_bind_group {
         // TODO: get this working
+        let quad_buffer = multidraw_data.chunks.buffers().quad.buffer();
+
+        let bg = gpu.create_bind_group(
+            "indirect_chunks_bind_group",
+            &default_layouts.indirect_chunk_bg_layout,
+            &BindGroupEntries::single(quad_buffer.as_entire_buffer_binding()),
+        );
+
+        multidraw_data.bind_group = Some(bg);
+        multidraw_data.ready = true;
     }
 
     if total > 0 {
@@ -239,19 +249,21 @@ pub struct ChunkRenderDataStore {
 }
 
 #[derive(Resource)]
-pub struct MultidrawRenderDataStore {
+pub struct IndirectRenderDataStore {
     pub chunks: ChunkMultidrawData,
     pub bind_group: Option<BindGroup>,
+    pub ready: bool,
     pub remove: ChunkSet,
 }
 
-impl FromWorld for MultidrawRenderDataStore {
+impl FromWorld for IndirectRenderDataStore {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
 
         Self {
             chunks: ChunkMultidrawData::new(gpu),
             bind_group: None,
+            ready: false,
             remove: ChunkSet::default(),
         }
     }

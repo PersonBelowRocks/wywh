@@ -28,8 +28,8 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use gpu_chunk::MultidrawRenderDataStore;
-use multidraw::MultidrawChunkPipeline;
+use gpu_chunk::IndirectRenderDataStore;
+use multidraw::{queue_indirect_chunks, IndirectChunkPipeline, MultidrawIndirectChunks};
 use shaders::load_internal_shaders;
 
 use crate::data::{
@@ -68,12 +68,13 @@ impl Plugin for RenderCore {
         render_app
             .add_render_command::<Opaque3d, DrawVoxelChunk>()
             .add_render_command::<Opaque3dPrepass, DrawVoxelChunkPrepass>()
-            .add_render_command::<Shadow, DrawVoxelChunkPrepass>();
+            .add_render_command::<Shadow, DrawVoxelChunkPrepass>()
+            .add_render_command::<Opaque3d, MultidrawIndirectChunks>();
 
         render_app
             .init_resource::<SpecializedRenderPipelines<ChunkPipeline>>()
             .init_resource::<SpecializedRenderPipelines<ChunkPrepassPipeline>>()
-            .init_resource::<SpecializedRenderPipelines<MultidrawChunkPipeline>>()
+            .init_resource::<SpecializedRenderPipelines<IndirectChunkPipeline>>()
             .init_resource::<ChunkRenderDataStore>();
 
         render_app.add_systems(
@@ -96,7 +97,13 @@ impl Plugin for RenderCore {
                     prepare_chunk_mesh_data,
                 )
                     .in_set(RenderSet::PrepareResources),
-                (queue_chunks, queue_prepass_chunks, queue_shadows).in_set(RenderSet::QueueMeshes),
+                (
+                    queue_indirect_chunks,
+                    // queue_chunks,
+                    // queue_prepass_chunks,
+                    // queue_shadows,
+                )
+                    .in_set(RenderSet::QueueMeshes),
             ),
         );
     }
@@ -105,9 +112,9 @@ impl Plugin for RenderCore {
         let render_app = app.sub_app_mut(RenderApp);
 
         render_app.init_resource::<DefaultBindGroupLayouts>();
-        render_app.init_resource::<MultidrawRenderDataStore>();
+        render_app.init_resource::<IndirectRenderDataStore>();
 
-        render_app.init_resource::<MultidrawChunkPipeline>();
+        render_app.init_resource::<IndirectChunkPipeline>();
         render_app.init_resource::<ChunkPipeline>();
         render_app.init_resource::<ChunkPrepassPipeline>();
     }
@@ -117,7 +124,7 @@ impl Plugin for RenderCore {
 pub(crate) struct DefaultBindGroupLayouts {
     pub registry_bg_layout: BindGroupLayout,
     pub chunk_bg_layout: BindGroupLayout,
-    pub multidraw_chunk_bg_layout: BindGroupLayout,
+    pub indirect_chunk_bg_layout: BindGroupLayout,
 }
 
 impl FromWorld for DefaultBindGroupLayouts {
@@ -151,7 +158,7 @@ impl FromWorld for DefaultBindGroupLayouts {
                     ),
                 ),
             ),
-            multidraw_chunk_bg_layout: gpu.create_bind_group_layout(
+            indirect_chunk_bg_layout: gpu.create_bind_group_layout(
                 Some("multidraw_chunks_bind_group_layout"),
                 &BindGroupLayoutEntries::single(
                     ShaderStages::VERTEX | ShaderStages::FRAGMENT,

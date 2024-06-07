@@ -39,7 +39,7 @@ use super::{
     draw::DrawChunk,
     gpu_chunk::SetChunkBindGroup,
     gpu_registries::SetRegistryBindGroup,
-    multidraw::{MultidrawChunkPipeline, MultidrawChunkPipelineKey},
+    multidraw::{IndirectChunkPipeline, MultidrawChunkPipelineKey},
     shaders::SHADER_STAGES,
     utils::{add_shader_constants, iter_visible_chunks, ChunkDataParams},
     DefaultBindGroupLayouts,
@@ -174,8 +174,6 @@ pub fn queue_chunks(
     functions: Res<DrawFunctions<Opaque3d>>,
     pipeline: Res<ChunkPipeline>,
     mut pipelines: ResMut<SpecializedRenderPipelines<ChunkPipeline>>,
-    multidraw_pipeline: Res<MultidrawChunkPipeline>,
-    mut multidraw_pipelines: ResMut<SpecializedRenderPipelines<MultidrawChunkPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     chunks: ChunkDataParams,
     mut views: Query<(
@@ -271,15 +269,6 @@ pub fn queue_chunks(
                 pipeline_cache.as_ref(),
                 pipeline.as_ref(),
                 ChunkPipelineKey {
-                    inner: view_key
-                        | MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList),
-                },
-            );
-
-            let multidraw_pipeline_id = multidraw_pipelines.specialize(
-                &pipeline_cache,
-                &multidraw_pipeline,
-                MultidrawChunkPipelineKey {
                     inner: view_key
                         | MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList),
                 },

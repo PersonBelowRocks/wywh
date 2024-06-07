@@ -54,15 +54,15 @@ fn chunk_multidraw_instance_buffer_layout(start_at: u32) -> VertexBufferLayout {
 
 /// The render pipeline for chunk multidraw
 #[derive(Resource, Clone)]
-pub struct MultidrawChunkPipeline {
+pub struct IndirectChunkPipeline {
     pub view_layouts: [MeshPipelineViewLayout; MeshPipelineViewLayoutKey::COUNT],
     pub registry_layout: BindGroupLayout,
-    pub multidraw_chunk_layout: BindGroupLayout,
+    pub indirect_chunk_bg_layout: BindGroupLayout,
     pub vert: Handle<Shader>,
     pub frag: Handle<Shader>,
 }
 
-impl FromWorld for MultidrawChunkPipeline {
+impl FromWorld for IndirectChunkPipeline {
     fn from_world(world: &mut World) -> Self {
         let server = world.resource::<AssetServer>();
         let gpu = world.resource::<RenderDevice>();
@@ -75,7 +75,7 @@ impl FromWorld for MultidrawChunkPipeline {
         Self {
             view_layouts: generate_view_layouts(gpu, clustered_forward_buffer_binding_type),
             registry_layout: layouts.registry_bg_layout.clone(),
-            multidraw_chunk_layout: layouts.multidraw_chunk_bg_layout.clone(),
+            indirect_chunk_bg_layout: layouts.indirect_chunk_bg_layout.clone(),
             vert: server.load(SHADER_STAGES.multidraw_vert),
             frag: server.load(SHADER_STAGES.multidraw_frag),
         }
@@ -87,7 +87,7 @@ pub struct MultidrawChunkPipelineKey {
     pub inner: MeshPipelineKey,
 }
 
-impl SpecializedRenderPipeline for MultidrawChunkPipeline {
+impl SpecializedRenderPipeline for IndirectChunkPipeline {
     type Key = MultidrawChunkPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
@@ -107,7 +107,7 @@ impl SpecializedRenderPipeline for MultidrawChunkPipeline {
         let bg_layouts = vec![
             mesh_view_layout,
             self.registry_layout.clone(),
-            self.multidraw_chunk_layout.clone(),
+            self.indirect_chunk_bg_layout.clone(),
         ];
 
         let target_format = if key.contains(MeshPipelineKey::HDR) {

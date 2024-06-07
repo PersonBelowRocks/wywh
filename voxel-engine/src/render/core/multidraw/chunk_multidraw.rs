@@ -203,7 +203,6 @@ fn indirect_args_from_bounds(bounds: &ChunkBufferBounds) -> IndexedIndirectArgs 
 pub struct ChunkMultidrawData {
     buffers: MultidrawBuffers,
     bounds: ChunkMap<ChunkBufferBounds>,
-    ready: bool,
 }
 
 impl ChunkMultidrawData {
@@ -212,13 +211,7 @@ impl ChunkMultidrawData {
         Self {
             buffers: MultidrawBuffers::new(gpu),
             bounds: ChunkMap::new(),
-            ready: false,
         }
-    }
-
-    /// Returns whether or not this multidraw data ready for rendering.
-    pub fn is_ready(&self) -> bool {
-        self.ready
     }
 
     pub fn buffers(&self) -> &MultidrawBuffers {

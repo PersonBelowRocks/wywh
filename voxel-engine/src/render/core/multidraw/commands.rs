@@ -4,17 +4,23 @@ use bevy::{
         system::{lifetimeless::SRes, SystemParamItem},
     },
     log::error,
+    pbr::{MeshViewBindGroup, SetMeshViewBindGroup},
     render::{
-        render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
+        render_phase::{
+            PhaseItem, RenderCommand, RenderCommandResult, SetItemPipeline, TrackedRenderPass,
+        },
         render_resource::IndexFormat,
     },
 };
 
-use crate::render::core::gpu_chunk::MultidrawRenderDataStore;
+use crate::render::core::{
+    gpu_chunk::{IndirectRenderDataStore, SetChunkBindGroup},
+    gpu_registries::SetRegistryBindGroup,
+};
 
 pub struct SetIndirectChunkBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkBindGroup<I> {
-    type Param = SRes<MultidrawRenderDataStore>;
+    type Param = SRes<IndirectRenderDataStore>;
 
     type ViewQuery = ();
 
@@ -42,7 +48,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkBindGrou
 
 pub struct IndirectChunkDraw;
 impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
-    type Param = SRes<MultidrawRenderDataStore>;
+    type Param = SRes<IndirectRenderDataStore>;
 
     type ViewQuery = ();
 
@@ -57,7 +63,7 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
     ) -> RenderCommandResult {
         let store = param.into_inner();
 
-        if !store.chunks.is_ready() {
+        if !store.ready {
             error!("Multidraw render data is not ready and cannot be rendered");
             return RenderCommandResult::Failure;
         }
@@ -75,3 +81,11 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
         RenderCommandResult::Success
     }
 }
+
+pub type MultidrawIndirectChunks = (
+    SetItemPipeline,
+    SetMeshViewBindGroup<0>,
+    SetRegistryBindGroup<1>,
+    SetIndirectChunkBindGroup<2>,
+    IndirectChunkDraw,
+);
