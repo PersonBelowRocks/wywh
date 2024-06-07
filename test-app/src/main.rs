@@ -16,6 +16,7 @@ use bevy::prelude::*;
 
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
+use bevy::window::PresentMode;
 use debug_info::{DirectionText, FpsText, PositionText};
 
 fn main() {
@@ -43,6 +44,13 @@ fn main() {
                 .set(LogPlugin {
                     filter: "info,test_app=debug,voxel_engine=debug".into(),
                     level: log::Level::DEBUG,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        present_mode: PresentMode::Immediate,
+                        ..default()
+                    }),
                     ..default()
                 }),
             WireframePlugin,
