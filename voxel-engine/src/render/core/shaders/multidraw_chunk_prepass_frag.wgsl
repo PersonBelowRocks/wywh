@@ -1,27 +1,27 @@
-#import "shaders/vxl_chunk_io.wgsl"::PrepassOutput
+#import vxl::chunk_io::PrepassOutput
+#import vxl::multidraw_chunk_bindings::quads
+
+#import vxl::utils::{
+    normal_from_face,
+    extract_face
+}
+
 #import bevy_pbr::{
     prepass_io::FragmentOutput,
     prepass_bindings,
     mesh_view_bindings::{view, previous_view_proj},
 }
 
-#import "shaders/chunk_bindings.wgsl"::quads
-
-#import "shaders/utils.wgsl"::normal_from_face
-#import "shaders/utils.wgsl"::extract_face
-
 @fragment
 fn fragment(
     in: PrepassOutput,
-    @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
     let quad = quads[in.quad_idx];
 
-    var out: FragmentOutput;
-
     let face = extract_face(quad);
-
     let world_normal = normal_from_face(face);
+
+    var out: FragmentOutput;
 
 #ifdef NORMAL_PREPASS
     // not sure why this happens but we need to do this little funny operation on the normal otherwise rendering is all
@@ -35,15 +35,11 @@ fn fragment(
     let clip_position = clip_position_t.xy / clip_position_t.w;
     let previous_clip_position_t = prepass_bindings::previous_view_proj * in.previous_world_position;
     let previous_clip_position = previous_clip_position_t.xy / previous_clip_position_t.w;
-    // These motion vectors are used as offsets to UV positions and are stored
-    // in the range -1,1 to allow offsetting from the one corner to the
-    // diagonally-opposite corner in UV coordinates, in either direction.
-    // A difference between diagonally-opposite corners of clip space is in the
-    // range -2,2, so this needs to be scaled by 0.5. And the V direction goes
-    // down where clip space y goes up, so y needs to be flipped.
+
     out.motion_vector = (clip_position - previous_clip_position) * vec2(0.5, -0.5);
 #endif
 
+    // TODO: do we need this?
 #ifdef DEFERRED_PREPASS
     out.deferred = vec4<u32>(0u, 0u, 0u, 0u);
     out.deferred_lighting_pass_id = 0u;
@@ -54,6 +50,4 @@ fn fragment(
 #endif
 
     return out;
-
-    // TODO: implement
 }

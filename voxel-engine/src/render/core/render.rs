@@ -11,9 +11,9 @@ use bevy::{
         world::{FromWorld, World},
     },
     pbr::{
-        generate_view_layouts, MeshPipelineKey, MeshPipelineViewLayout, MeshPipelineViewLayoutKey,
-        ScreenSpaceAmbientOcclusionSettings, SetMeshViewBindGroup, ShadowFilteringMethod,
-        CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT,
+        generate_view_layouts, tonemapping_pipeline_key, MeshPipelineKey, MeshPipelineViewLayout,
+        MeshPipelineViewLayoutKey, ScreenSpaceAmbientOcclusionSettings, SetMeshViewBindGroup,
+        ShadowFilteringMethod, CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT,
     },
     prelude::Deref,
     render::{
@@ -39,6 +39,8 @@ use super::{
     draw::DrawChunk,
     gpu_chunk::SetChunkBindGroup,
     gpu_registries::SetRegistryBindGroup,
+    multidraw::{MultidrawChunkPipeline, MultidrawChunkPipelineKey},
+    shaders::SHADER_STAGES,
     utils::{add_shader_constants, iter_visible_chunks, ChunkDataParams},
     DefaultBindGroupLayouts,
 };
@@ -168,25 +170,12 @@ impl SpecializedRenderPipeline for ChunkPipeline {
     }
 }
 
-pub const fn tonemapping_pipeline_key(tonemapping: Tonemapping) -> MeshPipelineKey {
-    match tonemapping {
-        Tonemapping::None => MeshPipelineKey::TONEMAP_METHOD_NONE,
-        Tonemapping::Reinhard => MeshPipelineKey::TONEMAP_METHOD_REINHARD,
-        Tonemapping::ReinhardLuminance => MeshPipelineKey::TONEMAP_METHOD_REINHARD_LUMINANCE,
-        Tonemapping::AcesFitted => MeshPipelineKey::TONEMAP_METHOD_ACES_FITTED,
-        Tonemapping::AgX => MeshPipelineKey::TONEMAP_METHOD_AGX,
-        Tonemapping::SomewhatBoringDisplayTransform => {
-            MeshPipelineKey::TONEMAP_METHOD_SOMEWHAT_BORING_DISPLAY_TRANSFORM
-        }
-        Tonemapping::TonyMcMapface => MeshPipelineKey::TONEMAP_METHOD_TONY_MC_MAPFACE,
-        Tonemapping::BlenderFilmic => MeshPipelineKey::TONEMAP_METHOD_BLENDER_FILMIC,
-    }
-}
-
 pub fn queue_chunks(
     functions: Res<DrawFunctions<Opaque3d>>,
     pipeline: Res<ChunkPipeline>,
     mut pipelines: ResMut<SpecializedRenderPipelines<ChunkPipeline>>,
+    multidraw_pipeline: Res<MultidrawChunkPipeline>,
+    mut multidraw_pipelines: ResMut<SpecializedRenderPipelines<MultidrawChunkPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     chunks: ChunkDataParams,
     mut views: Query<(
@@ -282,6 +271,15 @@ pub fn queue_chunks(
                 pipeline_cache.as_ref(),
                 pipeline.as_ref(),
                 ChunkPipelineKey {
+                    inner: view_key
+                        | MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList),
+                },
+            );
+
+            let multidraw_pipeline_id = multidraw_pipelines.specialize(
+                &pipeline_cache,
+                &multidraw_pipeline,
+                MultidrawChunkPipelineKey {
                     inner: view_key
                         | MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList),
                 },

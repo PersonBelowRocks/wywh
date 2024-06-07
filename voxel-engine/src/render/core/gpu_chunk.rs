@@ -225,7 +225,7 @@ pub fn prepare_chunk_mesh_data(
         .upload_chunks(gpu, queue, cpu_render_data);
 
     if recreate_bind_group {
-        todo!();
+        // TODO: get this working
     }
 
     if total > 0 {

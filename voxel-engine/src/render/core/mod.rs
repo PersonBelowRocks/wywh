@@ -5,6 +5,7 @@ mod impls;
 mod multidraw;
 mod prepass;
 mod render;
+mod shaders;
 mod shadows;
 mod utils;
 
@@ -28,6 +29,8 @@ use bevy::{
     },
 };
 use gpu_chunk::MultidrawRenderDataStore;
+use multidraw::MultidrawChunkPipeline;
+use shaders::load_internal_shaders;
 
 use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
@@ -52,13 +55,10 @@ use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
 
 pub struct RenderCore;
 
-impl RenderCore {
-    pub const QUAD_INDEX_ATTR: MeshVertexAttribute =
-        MeshVertexAttribute::new("quad_index_attr", 5099_0, VertexFormat::Uint32);
-}
-
 impl Plugin for RenderCore {
     fn build(&self, app: &mut App) {
+        load_internal_shaders(app);
+
         app.add_plugins(ExtractResourcePlugin::<VoxelColorArrayTexture>::default());
         app.add_plugins(ExtractResourcePlugin::<VoxelNormalArrayTexture>::default());
 
@@ -73,6 +73,7 @@ impl Plugin for RenderCore {
         render_app
             .init_resource::<SpecializedRenderPipelines<ChunkPipeline>>()
             .init_resource::<SpecializedRenderPipelines<ChunkPrepassPipeline>>()
+            .init_resource::<SpecializedRenderPipelines<MultidrawChunkPipeline>>()
             .init_resource::<ChunkRenderDataStore>();
 
         render_app.add_systems(
@@ -103,9 +104,10 @@ impl Plugin for RenderCore {
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
 
+        render_app.init_resource::<DefaultBindGroupLayouts>();
         render_app.init_resource::<MultidrawRenderDataStore>();
 
-        render_app.init_resource::<DefaultBindGroupLayouts>();
+        render_app.init_resource::<MultidrawChunkPipeline>();
         render_app.init_resource::<ChunkPipeline>();
         render_app.init_resource::<ChunkPrepassPipeline>();
     }

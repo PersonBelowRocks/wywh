@@ -1,6 +1,9 @@
+use std::mem::size_of;
+
 use bevy::{
     asset::{AssetServer, Handle},
     core_pipeline::core_3d::CORE_3D_DEPTH_FORMAT,
+    math::Vec3,
     pbr::{
         generate_view_layouts, MeshPipelineKey, MeshPipelineViewLayout, MeshPipelineViewLayoutKey,
         CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT,
@@ -9,12 +12,12 @@ use bevy::{
     render::{
         mesh::PrimitiveTopology,
         render_resource::{
-            BindGroupLayout, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState,
-            DepthStencilState, Face, FragmentState, FrontFace, MultisampleState, PolygonMode,
-            PrimitiveState, PushConstantRange, RenderPipelineDescriptor, Shader, ShaderDefVal,
-            ShaderSize, ShaderStages, SpecializedRenderPipeline, StencilFaceState, StencilState,
-            TextureFormat, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
-            VertexStepMode,
+            BindGroupLayout, BufferAddress, ColorTargetState, ColorWrites, CompareFunction,
+            DepthBiasState, DepthStencilState, Face, FragmentState, FrontFace, MultisampleState,
+            PolygonMode, PrimitiveState, PushConstantRange, RenderPipelineDescriptor, Shader,
+            ShaderDefVal, ShaderSize, ShaderStages, SpecializedRenderPipeline, StencilFaceState,
+            StencilState, TextureFormat, VertexAttribute, VertexBufferLayout, VertexFormat,
+            VertexState, VertexStepMode,
         },
         renderer::RenderDevice,
         texture::BevyDefault,
@@ -23,17 +26,38 @@ use bevy::{
 };
 
 use crate::render::core::{
+    shaders::SHADER_STAGES,
     utils::{add_mesh_pipeline_shader_defs, add_shader_constants},
     DefaultBindGroupLayouts,
 };
 
 use super::ChunkInstanceData;
 
+fn chunk_multidraw_instance_buffer_layout(start_at: u32) -> VertexBufferLayout {
+    VertexBufferLayout {
+        array_stride: ChunkInstanceData::SHADER_SIZE.into(),
+        step_mode: VertexStepMode::Instance,
+        attributes: vec![
+            VertexAttribute {
+                format: VertexFormat::Float32x3,
+                shader_location: 0 + start_at,
+                offset: 0,
+            },
+            VertexAttribute {
+                format: VertexFormat::Uint32,
+                shader_location: 1 + start_at,
+                offset: size_of::<Vec3>() as BufferAddress,
+            },
+        ],
+    }
+}
+
+/// The render pipeline for chunk multidraw
 #[derive(Resource, Clone)]
 pub struct MultidrawChunkPipeline {
     pub view_layouts: [MeshPipelineViewLayout; MeshPipelineViewLayoutKey::COUNT],
     pub registry_layout: BindGroupLayout,
-    pub chunk_layout: BindGroupLayout,
+    pub multidraw_chunk_layout: BindGroupLayout,
     pub vert: Handle<Shader>,
     pub frag: Handle<Shader>,
 }
@@ -48,14 +72,12 @@ impl FromWorld for MultidrawChunkPipeline {
         let clustered_forward_buffer_binding_type =
             gpu.get_supported_read_only_binding_type(CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT);
 
-        todo!("need to write the shaders");
-
         Self {
             view_layouts: generate_view_layouts(gpu, clustered_forward_buffer_binding_type),
             registry_layout: layouts.registry_bg_layout.clone(),
-            chunk_layout: layouts.chunk_bg_layout.clone(),
-            vert: server.load("TODO"),
-            frag: server.load("TODO"),
+            multidraw_chunk_layout: layouts.multidraw_chunk_bg_layout.clone(),
+            vert: server.load(SHADER_STAGES.multidraw_vert),
+            frag: server.load(SHADER_STAGES.multidraw_frag),
         }
     }
 }
@@ -85,7 +107,7 @@ impl SpecializedRenderPipeline for MultidrawChunkPipeline {
         let bg_layouts = vec![
             mesh_view_layout,
             self.registry_layout.clone(),
-            self.chunk_layout.clone(),
+            self.multidraw_chunk_layout.clone(),
         ];
 
         let target_format = if key.contains(MeshPipelineKey::HDR) {
@@ -100,11 +122,7 @@ impl SpecializedRenderPipeline for MultidrawChunkPipeline {
                 shader: self.vert.clone(),
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
-                buffers: vec![VertexBufferLayout {
-                    array_stride: ChunkInstanceData::SHADER_SIZE.into(),
-                    step_mode: VertexStepMode::Instance,
-                    attributes: vec![todo!()],
-                }],
+                buffers: vec![chunk_multidraw_instance_buffer_layout(0)],
             },
             fragment: Some(FragmentState {
                 shader: self.frag.clone(),

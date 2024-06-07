@@ -21,8 +21,7 @@ use crate::{
 
 use super::buffer_utils::{to_formatted_bytes, VramArray};
 
-// TODO: we need to split our instance data up into 3 different buffers because wgpu doesn't like structs as instance data i guess?
-#[derive(Clone, ShaderType)]
+#[derive(Copy, Clone, ShaderType)]
 pub struct ChunkInstanceData {
     pub pos: Vec3,
     pub first_quad: u32,
