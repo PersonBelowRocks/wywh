@@ -4,7 +4,7 @@ use bevy::{
         system::{lifetimeless::SRes, SystemParamItem},
     },
     log::error,
-    pbr::{MeshViewBindGroup, SetMeshViewBindGroup},
+    pbr::{MeshViewBindGroup, SetMeshViewBindGroup, SetPrepassViewBindGroup},
     render::{
         render_phase::{
             PhaseItem, RenderCommand, RenderCommandResult, SetItemPipeline, TrackedRenderPass,
@@ -82,9 +82,17 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
     }
 }
 
-pub type MultidrawIndirectChunks = (
+pub type IndirectChunksRender = (
     SetItemPipeline,
     SetMeshViewBindGroup<0>,
+    SetRegistryBindGroup<1>,
+    SetIndirectChunkBindGroup<2>,
+    IndirectChunkDraw,
+);
+
+pub type IndirectChunksPrepass = (
+    SetItemPipeline,
+    SetPrepassViewBindGroup<0>,
     SetRegistryBindGroup<1>,
     SetIndirectChunkBindGroup<2>,
     IndirectChunkDraw,

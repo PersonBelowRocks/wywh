@@ -20,15 +20,15 @@ use bevy::{
 
 use crate::render::core::{gpu_chunk::IndirectRenderDataStore, gpu_registries::RegistryBindGroup};
 
-use super::{IndirectChunkPipeline, MultidrawChunkPipelineKey, MultidrawIndirectChunks};
+use super::{IndirectChunkPipelineKey, IndirectChunkRenderPipeline, IndirectChunksRender};
 
-pub fn queue_indirect_chunks(
+pub fn render_queue_indirect_chunks(
     registry_bg: Option<Res<RegistryBindGroup>>,
     indirect_data: Res<IndirectRenderDataStore>,
     functions: Res<DrawFunctions<Opaque3d>>,
     pipeline_cache: Res<PipelineCache>,
-    mut pipelines: ResMut<SpecializedRenderPipelines<IndirectChunkPipeline>>,
-    pipeline: Res<IndirectChunkPipeline>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>,
+    pipeline: Res<IndirectChunkRenderPipeline>,
     mut views: Query<(
         &ExtractedView,
         &VisibleEntities,
@@ -56,7 +56,7 @@ pub fn queue_indirect_chunks(
         return;
     }
 
-    let func = functions.read().id::<MultidrawIndirectChunks>();
+    let func = functions.read().id::<IndirectChunksRender>();
 
     for (
         view,
@@ -129,7 +129,7 @@ pub fn queue_indirect_chunks(
         let pipeline_id = pipelines.specialize(
             pipeline_cache.as_ref(),
             pipeline.as_ref(),
-            MultidrawChunkPipelineKey {
+            IndirectChunkPipelineKey {
                 inner: view_key
                     | MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList),
             },

@@ -1,48 +1,35 @@
 use bevy::{
-    asset::{AssetId, AssetServer, Handle},
     core_pipeline::{
         core_3d::CORE_3D_DEPTH_FORMAT,
-        prepass::{
-            DepthPrepass, MotionVectorPrepass, NormalPrepass, Opaque3dPrepass,
-            MOTION_VECTOR_PREPASS_FORMAT, NORMAL_PREPASS_FORMAT,
-        },
+        prepass::{MOTION_VECTOR_PREPASS_FORMAT, NORMAL_PREPASS_FORMAT},
     },
-    ecs::{
-        query::Has,
-        system::{Query, Res, ResMut, Resource},
-        world::{FromWorld, World},
-    },
-    pbr::{MeshPipelineKey, PreviousViewProjection, SetPrepassViewBindGroup},
+    pbr::{MeshPipelineKey, PreviousViewProjection},
+    prelude::*,
     render::{
         globals::GlobalsUniform,
-        mesh::PrimitiveTopology,
-        render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::{
             binding_types::uniform_buffer, BindGroupLayout, BindGroupLayoutEntries,
             ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-            Face, FragmentState, FrontFace, MultisampleState, PipelineCache, PolygonMode,
-            PrimitiveState, RenderPipelineDescriptor, Shader, ShaderDefVal, ShaderStages,
-            SpecializedMeshPipeline, SpecializedRenderPipeline, SpecializedRenderPipelines,
+            Face, FragmentState, FrontFace, MultisampleState, PolygonMode, PrimitiveState,
+            RenderPipelineDescriptor, ShaderDefVal, ShaderStages, SpecializedRenderPipeline,
             StencilFaceState, StencilState, VertexState,
         },
         renderer::RenderDevice,
-        view::{ExtractedView, ViewUniform, VisibleEntities},
+        view::ViewUniform,
     },
 };
 
-use crate::render::core::render::ChunkPipeline;
+use crate::render::core::{
+    shaders::SHADER_PATHS, utils::add_shader_constants, DefaultBindGroupLayouts,
+};
 
 use super::{
-    draw::DrawChunk,
-    gpu_chunk::SetChunkBindGroup,
-    gpu_registries::SetRegistryBindGroup,
-    render::ChunkPipelineKey,
-    utils::{add_shader_constants, iter_visible_chunks, ChunkDataParams},
-    DefaultBindGroupLayouts,
+    chunk_indirect_instance_buffer_layout, IndirectChunkPipelineKey,
+    INDIRECT_CHUNKS_PRIMITIVE_STATE,
 };
 
 #[derive(Clone, Resource)]
-pub struct ChunkPrepassPipeline {
+pub struct IndirectChunkPrepassPipeline {
     pub view_layout_motion_vectors: BindGroupLayout,
     pub view_layout_no_motion_vectors: BindGroupLayout,
     pub layouts: DefaultBindGroupLayouts,
@@ -50,12 +37,10 @@ pub struct ChunkPrepassPipeline {
     pub frag: Handle<Shader>,
 }
 
-impl FromWorld for ChunkPrepassPipeline {
+impl FromWorld for IndirectChunkPrepassPipeline {
     fn from_world(world: &mut World) -> Self {
         let server = world.resource::<AssetServer>();
         let gpu = world.resource::<RenderDevice>();
-
-        let _mesh_pipeline = world.resource::<ChunkPipeline>();
 
         let view_layout_motion_vectors = gpu.create_bind_group_layout(
             "chunk_prepass_view_layout_motion_vectors",
@@ -89,16 +74,16 @@ impl FromWorld for ChunkPrepassPipeline {
             view_layout_motion_vectors,
             view_layout_no_motion_vectors,
             layouts: world.resource::<DefaultBindGroupLayouts>().clone(),
-            vert: server.load("shaders/vxl_chunk_vert_prepass.wgsl"),
-            frag: server.load("shaders/vxl_chunk_frag_prepass.wgsl"),
+            vert: server.load(SHADER_PATHS.indirect_prepass_vert),
+            frag: server.load(SHADER_PATHS.indirect_prepass_frag),
         }
     }
 }
 
 // most of this code is taken verbatim from
 // https://github.com/bevyengine/bevy/blob/d4132f661a8a567fd3f9c3b329c2b4032bb1e05e/crates/bevy_pbr/src/prepass/mod.rs#L297C1-L582C2
-impl SpecializedRenderPipeline for ChunkPrepassPipeline {
-    type Key = ChunkPipelineKey;
+impl SpecializedRenderPipeline for IndirectChunkPrepassPipeline {
+    type Key = IndirectChunkPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         let mut bind_group_layouts =
@@ -110,7 +95,7 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
 
         bind_group_layouts.extend_from_slice(&[
             self.layouts.registry_bg_layout.clone(),
-            self.layouts.chunk_bg_layout.clone(),
+            self.layouts.indirect_chunk_bg_layout.clone(),
         ]);
 
         let mut shader_defs: Vec<ShaderDefVal> = vec![
@@ -194,129 +179,33 @@ impl SpecializedRenderPipeline for ChunkPrepassPipeline {
             || key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO)
             || key.contains(MeshPipelineKey::MAY_DISCARD);
 
-        let fragment = fragment_required.then(|| {
-            // Use the fragment shader from the material
-
-            FragmentState {
-                shader: self.frag.clone(),
-                entry_point: "fragment".into(),
-                shader_defs: shader_defs.clone(),
-                targets,
-            }
+        let fragment = fragment_required.then(|| FragmentState {
+            shader: self.frag.clone(),
+            entry_point: "fragment".into(),
+            shader_defs: shader_defs.clone(),
+            targets,
         });
 
         RenderPipelineDescriptor {
-            label: Some("chunk_prepass_pipeline".into()),
+            label: Some("indirect_chunk_prepass_pipeline".into()),
             layout: bind_group_layouts,
             push_constant_ranges: Vec::new(),
             vertex: VertexState {
                 shader: self.vert.clone(),
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
-                buffers: vec![],
+                buffers: vec![chunk_indirect_instance_buffer_layout(0)],
             },
-            primitive: PrimitiveState {
-                topology: key.primitive_topology(),
-                strip_index_format: None,
-                front_face: FrontFace::Ccw,
-                cull_mode: Some(Face::Back),
-                unclipped_depth: false,
-                polygon_mode: PolygonMode::Fill,
-                conservative: false,
-            },
+            primitive: INDIRECT_CHUNKS_PRIMITIVE_STATE,
             depth_stencil: Some(DepthStencilState {
                 format: CORE_3D_DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: CompareFunction::GreaterEqual,
-                stencil: StencilState {
-                    front: StencilFaceState::IGNORE,
-                    back: StencilFaceState::IGNORE,
-                    read_mask: 0,
-                    write_mask: 0,
-                },
-                bias: DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
             }),
-            multisample: MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            multisample: MultisampleState::default(),
             fragment,
         }
     }
 }
-
-pub fn queue_prepass_chunks(
-    functions: Res<DrawFunctions<Opaque3dPrepass>>,
-    mut pipelines: ResMut<SpecializedRenderPipelines<ChunkPrepassPipeline>>,
-    pipeline_cache: Res<PipelineCache>,
-    prepass_pipeline: Res<ChunkPrepassPipeline>,
-    chunks: ChunkDataParams,
-    mut views: Query<(
-        &ExtractedView,
-        &VisibleEntities,
-        &mut RenderPhase<Opaque3dPrepass>,
-        Has<DepthPrepass>,
-        Has<NormalPrepass>,
-        Has<MotionVectorPrepass>,
-    )>,
-) {
-    let draw_function = functions.read().get_id::<DrawVoxelChunkPrepass>().unwrap();
-
-    for (
-        _view,
-        visible_entities,
-        mut phase,
-        depth_prepass,
-        normal_prepass,
-        motion_vector_prepass,
-    ) in &mut views
-    {
-        let mut view_key = MeshPipelineKey::empty();
-
-        if depth_prepass {
-            view_key |= MeshPipelineKey::DEPTH_PREPASS;
-        }
-        if normal_prepass {
-            view_key |= MeshPipelineKey::NORMAL_PREPASS;
-        }
-        if motion_vector_prepass {
-            view_key |= MeshPipelineKey::MOTION_VECTOR_PREPASS;
-        }
-
-        iter_visible_chunks(visible_entities, &chunks, |entity, _chunk_pos| {
-            let pipeline_id = pipelines.specialize(
-                &pipeline_cache,
-                &prepass_pipeline,
-                ChunkPipelineKey {
-                    inner: MeshPipelineKey::from_primitive_topology(
-                        PrimitiveTopology::TriangleList,
-                    ) | view_key,
-                },
-            );
-
-            phase.add(Opaque3dPrepass {
-                entity: entity,
-                draw_function: draw_function,
-                pipeline_id,
-                // this asset ID is seemingly just for some sorting stuff bevy does, but we have our own
-                // logic so we don't care about what bevy would use this field for, so we set it to the default asset ID
-                asset_id: AssetId::default(),
-                batch_range: 0..1,
-                dynamic_offset: None,
-            });
-        });
-    }
-}
-
-pub type DrawVoxelChunkPrepass = (
-    SetItemPipeline,
-    SetPrepassViewBindGroup<0>,
-    SetRegistryBindGroup<1>,
-    SetChunkBindGroup<2>,
-    DrawChunk,
-);

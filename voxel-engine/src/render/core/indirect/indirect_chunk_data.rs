@@ -200,12 +200,12 @@ fn indirect_args_from_bounds(bounds: &ChunkBufferBounds) -> IndexedIndirectArgs 
 /// Uploading chunks to the GPU requires us to do almost this entire removal process but for chunks who's data we want to
 /// overwrite. After everything has been removed, we just tack on the extra data for our uploaded chunks on the end of our existing data.
 #[derive(Resource, Clone)]
-pub struct ChunkMultidrawData {
+pub struct IndirectChunkData {
     buffers: MultidrawBuffers,
     bounds: ChunkMap<ChunkBufferBounds>,
 }
 
-impl ChunkMultidrawData {
+impl IndirectChunkData {
     #[allow(dead_code)]
     pub fn new(gpu: &RenderDevice) -> Self {
         Self {

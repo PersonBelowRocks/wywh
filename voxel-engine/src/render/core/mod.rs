@@ -1,12 +1,8 @@
-mod draw;
 mod gpu_chunk;
 mod gpu_registries;
 mod impls;
-mod multidraw;
-mod prepass;
-mod render;
+mod indirect;
 mod shaders;
-mod shadows;
 mod utils;
 
 use bevy::{
@@ -29,7 +25,11 @@ use bevy::{
     },
 };
 use gpu_chunk::IndirectRenderDataStore;
-use multidraw::{queue_indirect_chunks, IndirectChunkPipeline, MultidrawIndirectChunks};
+use indirect::{
+    prepass_queue_indirect_chunks, render_queue_indirect_chunks, shadow_queue_indirect_chunks,
+    IndirectChunkPrepassPipeline, IndirectChunkRenderPipeline, IndirectChunksPrepass,
+    IndirectChunksRender,
+};
 use shaders::load_internal_shaders;
 
 use crate::data::{
@@ -45,9 +45,6 @@ use self::{
     gpu_registries::{
         extract_texreg_faces, prepare_gpu_registry_data, ExtractedTexregFaces, RegistryBindGroup,
     },
-    prepass::{queue_prepass_chunks, ChunkPrepassPipeline, DrawVoxelChunkPrepass},
-    render::{queue_chunks, ChunkPipeline, DrawVoxelChunk},
-    shadows::queue_shadows,
     utils::main_world_res_exists,
 };
 
@@ -66,15 +63,13 @@ impl Plugin for RenderCore {
         let render_app = app.sub_app_mut(RenderApp);
 
         render_app
-            .add_render_command::<Opaque3d, DrawVoxelChunk>()
-            .add_render_command::<Opaque3dPrepass, DrawVoxelChunkPrepass>()
-            .add_render_command::<Shadow, DrawVoxelChunkPrepass>()
-            .add_render_command::<Opaque3d, MultidrawIndirectChunks>();
+            .add_render_command::<Opaque3dPrepass, IndirectChunksPrepass>()
+            .add_render_command::<Opaque3d, IndirectChunksRender>()
+            .add_render_command::<Shadow, IndirectChunksPrepass>();
 
         render_app
-            .init_resource::<SpecializedRenderPipelines<ChunkPipeline>>()
-            .init_resource::<SpecializedRenderPipelines<ChunkPrepassPipeline>>()
-            .init_resource::<SpecializedRenderPipelines<IndirectChunkPipeline>>()
+            .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
+            .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
             .init_resource::<ChunkRenderDataStore>();
 
         render_app.add_systems(
@@ -98,10 +93,9 @@ impl Plugin for RenderCore {
                 )
                     .in_set(RenderSet::PrepareResources),
                 (
-                    queue_indirect_chunks,
-                    // queue_chunks,
-                    // queue_prepass_chunks,
-                    // queue_shadows,
+                    render_queue_indirect_chunks,
+                    prepass_queue_indirect_chunks,
+                    shadow_queue_indirect_chunks,
                 )
                     .in_set(RenderSet::QueueMeshes),
             ),
@@ -114,9 +108,8 @@ impl Plugin for RenderCore {
         render_app.init_resource::<DefaultBindGroupLayouts>();
         render_app.init_resource::<IndirectRenderDataStore>();
 
-        render_app.init_resource::<IndirectChunkPipeline>();
-        render_app.init_resource::<ChunkPipeline>();
-        render_app.init_resource::<ChunkPrepassPipeline>();
+        render_app.init_resource::<IndirectChunkRenderPipeline>();
+        render_app.init_resource::<IndirectChunkPrepassPipeline>();
     }
 }
 

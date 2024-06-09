@@ -35,7 +35,9 @@ use crate::{
     util::{ChunkMap, ChunkSet},
 };
 
-use super::{multidraw::ChunkMultidrawData, DefaultBindGroupLayouts};
+use super::{indirect::IndirectChunkData, DefaultBindGroupLayouts};
+
+// TODO: remove old code dealing with individual chunks, in favor of the indirect multidraw system
 
 pub fn extract_chunk_entities(
     mut cmds: Commands,
@@ -254,7 +256,7 @@ pub struct ChunkRenderDataStore {
 
 #[derive(Resource)]
 pub struct IndirectRenderDataStore {
-    pub chunks: ChunkMultidrawData,
+    pub chunks: IndirectChunkData,
     pub bind_group: Option<BindGroup>,
     pub ready: bool,
     pub remove: ChunkSet,
@@ -265,7 +267,7 @@ impl FromWorld for IndirectRenderDataStore {
         let gpu = world.resource::<RenderDevice>();
 
         Self {
-            chunks: ChunkMultidrawData::new(gpu),
+            chunks: IndirectChunkData::new(gpu),
             bind_group: None,
             ready: false,
             remove: ChunkSet::default(),

@@ -26,14 +26,24 @@ use bevy::{
 };
 
 use crate::render::core::{
-    shaders::SHADER_STAGES,
+    shaders::SHADER_PATHS,
     utils::{add_mesh_pipeline_shader_defs, add_shader_constants},
     DefaultBindGroupLayouts,
 };
 
 use super::ChunkInstanceData;
 
-fn chunk_multidraw_instance_buffer_layout(start_at: u32) -> VertexBufferLayout {
+pub const INDIRECT_CHUNKS_PRIMITIVE_STATE: PrimitiveState = PrimitiveState {
+    topology: PrimitiveTopology::TriangleList,
+    strip_index_format: None,
+    front_face: FrontFace::Ccw,
+    cull_mode: Some(Face::Back),
+    unclipped_depth: false,
+    polygon_mode: PolygonMode::Fill,
+    conservative: false,
+};
+
+pub fn chunk_indirect_instance_buffer_layout(start_at: u32) -> VertexBufferLayout {
     VertexBufferLayout {
         array_stride: ChunkInstanceData::SHADER_SIZE.into(),
         step_mode: VertexStepMode::Instance,
@@ -54,7 +64,7 @@ fn chunk_multidraw_instance_buffer_layout(start_at: u32) -> VertexBufferLayout {
 
 /// The render pipeline for chunk multidraw
 #[derive(Resource, Clone)]
-pub struct IndirectChunkPipeline {
+pub struct IndirectChunkRenderPipeline {
     pub view_layouts: [MeshPipelineViewLayout; MeshPipelineViewLayoutKey::COUNT],
     pub registry_layout: BindGroupLayout,
     pub indirect_chunk_bg_layout: BindGroupLayout,
@@ -62,7 +72,7 @@ pub struct IndirectChunkPipeline {
     pub frag: Handle<Shader>,
 }
 
-impl FromWorld for IndirectChunkPipeline {
+impl FromWorld for IndirectChunkRenderPipeline {
     fn from_world(world: &mut World) -> Self {
         let server = world.resource::<AssetServer>();
         let gpu = world.resource::<RenderDevice>();
@@ -76,19 +86,19 @@ impl FromWorld for IndirectChunkPipeline {
             view_layouts: generate_view_layouts(gpu, clustered_forward_buffer_binding_type),
             registry_layout: layouts.registry_bg_layout.clone(),
             indirect_chunk_bg_layout: layouts.indirect_chunk_bg_layout.clone(),
-            vert: server.load(SHADER_STAGES.multidraw_vert),
-            frag: server.load(SHADER_STAGES.multidraw_frag),
+            vert: server.load(SHADER_PATHS.indirect_vert),
+            frag: server.load(SHADER_PATHS.indirect_frag),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deref)]
-pub struct MultidrawChunkPipelineKey {
+pub struct IndirectChunkPipelineKey {
     pub inner: MeshPipelineKey,
 }
 
-impl SpecializedRenderPipeline for IndirectChunkPipeline {
-    type Key = MultidrawChunkPipelineKey;
+impl SpecializedRenderPipeline for IndirectChunkRenderPipeline {
+    type Key = IndirectChunkPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         let mut shader_defs: Vec<ShaderDefVal> = vec![
@@ -117,12 +127,12 @@ impl SpecializedRenderPipeline for IndirectChunkPipeline {
         };
 
         RenderPipelineDescriptor {
-            label: Some("multidraw_chunk_render_pipeline".into()),
+            label: Some("indirect_chunk_render_pipeline".into()),
             vertex: VertexState {
                 shader: self.vert.clone(),
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
-                buffers: vec![chunk_multidraw_instance_buffer_layout(0)],
+                buffers: vec![chunk_indirect_instance_buffer_layout(0)],
             },
             fragment: Some(FragmentState {
                 shader: self.frag.clone(),
@@ -139,30 +149,13 @@ impl SpecializedRenderPipeline for IndirectChunkPipeline {
                 stages: ShaderStages::VERTEX,
                 range: 0..4,
             }],
-            primitive: PrimitiveState {
-                topology: PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: FrontFace::Ccw,
-                cull_mode: Some(Face::Back),
-                unclipped_depth: false,
-                polygon_mode: PolygonMode::Fill,
-                conservative: false,
-            },
+            primitive: INDIRECT_CHUNKS_PRIMITIVE_STATE,
             depth_stencil: Some(DepthStencilState {
                 format: CORE_3D_DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: CompareFunction::GreaterEqual,
-                stencil: StencilState {
-                    front: StencilFaceState::IGNORE,
-                    back: StencilFaceState::IGNORE,
-                    read_mask: 0,
-                    write_mask: 0,
-                },
-                bias: DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
             }),
             multisample: MultisampleState {
                 count: key.msaa_samples(),

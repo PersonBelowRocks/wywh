@@ -5,20 +5,20 @@ use bevy::{
 };
 
 #[derive(Copy, Clone, Debug)]
-pub struct ShaderStages<'a> {
-    pub multidraw_vert: &'a str,
-    pub multidraw_frag: &'a str,
-    pub multidraw_prepass_vert: &'a str,
-    pub multidraw_prepass_frag: &'a str,
+pub struct ShaderPaths<'a> {
+    pub indirect_vert: &'a str,
+    pub indirect_frag: &'a str,
+    pub indirect_prepass_vert: &'a str,
+    pub indirect_prepass_frag: &'a str,
 }
 
-pub static SHADER_STAGES: ShaderStages<'static> = ShaderStages {
-    multidraw_vert: "embedded://voxel_engine/render/core/shaders/multidraw_chunk_vert.wgsl",
-    multidraw_frag: "embedded://voxel_engine/render/core/shaders/multidraw_chunk_frag.wgsl",
-    multidraw_prepass_vert:
-        "embedded://voxel-engine/render/core/shaders/multidraw_chunk_prepass_vert.wgsl",
-    multidraw_prepass_frag:
-        "embedded://voxel-engine/render/core/shaders/multidraw_chunk_prepass_frag.wgsl",
+pub static SHADER_PATHS: ShaderPaths<'static> = ShaderPaths {
+    indirect_vert: "embedded://voxel_engine/render/core/shaders/multidraw_chunk_vert.wgsl",
+    indirect_frag: "embedded://voxel_engine/render/core/shaders/multidraw_chunk_frag.wgsl",
+    indirect_prepass_vert:
+        "embedded://voxel_engine/render/core/shaders/multidraw_chunk_prepass_vert.wgsl",
+    indirect_prepass_frag:
+        "embedded://voxel_engine/render/core/shaders/multidraw_chunk_prepass_frag.wgsl",
 };
 
 pub const CHUNK_IO_HANDLE: Handle<Shader> = Handle::weak_from_u128(2653624191855805);
