@@ -28,7 +28,6 @@ use itertools::Itertools;
 use crate::{
     render::{
         meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
-        occlusion::ChunkOcclusionMap,
         quad::GpuQuad,
     },
     topo::world::{ChunkEntity, ChunkPos},
@@ -286,12 +285,6 @@ pub enum ChunkRenderData {
 pub struct TimedChunkRenderData {
     pub data: ChunkRenderData,
     pub generation: u64,
-}
-
-#[derive(Clone)]
-pub struct CpuChunkRenderData {
-    pub quads: Vec<GpuQuad>,
-    pub occlusion: ChunkOcclusionMap,
 }
 
 #[derive(Clone)]

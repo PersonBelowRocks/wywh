@@ -1,4 +1,4 @@
-use crate::{render::occlusion::BlockOcclusion, util::FaceMap};
+use crate::util::FaceMap;
 
 use self::{
     descriptor::BlockVariantDescriptor,
@@ -130,9 +130,5 @@ impl VoxelModel {
             Self::Block(model) => Some(model),
             _ => None,
         }
-    }
-
-    pub fn occlusion(&self, _rotation: Option<BlockModelRotation>) -> BlockOcclusion {
-        todo!()
     }
 }

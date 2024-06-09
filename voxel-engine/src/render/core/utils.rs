@@ -7,7 +7,6 @@ use bevy::render::Extract;
 use bevy::{ecs::system::SystemParam, render::view::VisibleEntities};
 
 use crate::data::texture::GpuFaceTexture;
-use crate::render::occlusion::ChunkOcclusionMap;
 use crate::render::quad::GpuQuadBitfields;
 use crate::topo::world::{ChunkEntity, ChunkPos};
 
@@ -67,14 +66,6 @@ pub fn add_shader_constants(shader_defs: &mut Vec<ShaderDefVal>) {
         u32_shader_def("FLIP_UV_X_BIT", GpuQuadBitfields::FLIP_UV_X_BIT),
         u32_shader_def("FLIP_UV_Y_BIT", GpuQuadBitfields::FLIP_UV_Y_BIT),
         u32_shader_def("HAS_NORMAL_MAP_BIT", GpuFaceTexture::HAS_NORMAL_MAP_BIT),
-        u32_shader_def(
-            "CHUNK_OCCLUSION_BUFFER_SIZE",
-            ChunkOcclusionMap::GPU_BUFFER_SIZE,
-        ),
-        u32_shader_def(
-            "CHUNK_OCCLUSION_BUFFER_DIMENSIONS",
-            ChunkOcclusionMap::GPU_BUFFER_DIMENSIONS,
-        ),
         u32_shader_def("HAS_NORMAL_MAP_BIT", GpuFaceTexture::HAS_NORMAL_MAP_BIT),
         u32_shader_def(
             "DEFAULT_PBR_INPUT_FLAGS",
