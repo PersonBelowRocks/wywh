@@ -8,7 +8,6 @@ use ecs::remove_chunks;
 
 use crate::{
     render::{meshing::controller::ecs::dispatch_updated_chunk_remeshings, quad::GpuQuad},
-    topo::world::ChunkPos,
     util::{ChunkMap, ChunkSet},
     CoreEngineSetup, EngineState,
 };

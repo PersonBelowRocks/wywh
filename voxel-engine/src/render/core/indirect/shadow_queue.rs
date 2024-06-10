@@ -48,7 +48,7 @@ pub fn shadow_queue_indirect_chunks(
                 view_light_shadow_phases.get_mut(view_light_entity).unwrap();
 
             let is_directional_light = matches!(light_entity, LightEntity::Directional { .. });
-            let visible_entities = match light_entity {
+            let _visible_entities = match light_entity {
                 LightEntity::Directional {
                     light_entity,
                     cascade_index,

@@ -3,10 +3,7 @@ use std::{ops::Range, u32};
 use bevy::{
     prelude::*,
     render::{
-        render_resource::{
-            BindGroup, BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, ShaderSize,
-            ShaderType,
-        },
+        render_resource::{Buffer, BufferDescriptor, BufferUsages, ShaderSize, ShaderType},
         renderer::{RenderDevice, RenderQueue},
     },
 };

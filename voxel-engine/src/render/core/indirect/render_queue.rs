@@ -60,7 +60,7 @@ pub fn render_queue_indirect_chunks(
 
     for (
         view,
-        visible_entities,
+        _visible_entities,
         mut phase,
         tonemapping,
         dither,

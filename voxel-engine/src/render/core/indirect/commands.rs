@@ -4,7 +4,7 @@ use bevy::{
         system::{lifetimeless::SRes, SystemParamItem},
     },
     log::error,
-    pbr::{MeshViewBindGroup, SetMeshViewBindGroup, SetPrepassViewBindGroup},
+    pbr::{SetMeshViewBindGroup, SetPrepassViewBindGroup},
     render::{
         render_phase::{
             PhaseItem, RenderCommand, RenderCommandResult, SetItemPipeline, TrackedRenderPass,

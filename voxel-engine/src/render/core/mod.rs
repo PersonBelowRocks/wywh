@@ -13,12 +13,11 @@ use bevy::{
     prelude::*,
     render::{
         extract_resource::ExtractResourcePlugin,
-        mesh::MeshVertexAttribute,
         render_phase::AddRenderCommand,
         render_resource::{
             binding_types::{self},
-            BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderStages, ShaderType,
-            SpecializedRenderPipelines, TextureSampleType, VertexFormat,
+            BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderStages,
+            SpecializedRenderPipelines, TextureSampleType,
         },
         renderer::RenderDevice,
         Render, RenderApp, RenderSet,
@@ -122,7 +121,6 @@ impl Plugin for RenderCore {
 #[derive(Resource, Clone)]
 pub(crate) struct DefaultBindGroupLayouts {
     pub registry_bg_layout: BindGroupLayout,
-    pub chunk_bg_layout: BindGroupLayout,
     pub indirect_chunk_bg_layout: BindGroupLayout,
 }
 
@@ -141,19 +139,6 @@ impl FromWorld for DefaultBindGroupLayouts {
                         binding_types::sampler(SamplerBindingType::NonFiltering),
                         binding_types::texture_2d_array(TextureSampleType::default()),
                         binding_types::sampler(SamplerBindingType::NonFiltering),
-                    ),
-                ),
-            ),
-            chunk_bg_layout: gpu.create_bind_group_layout(
-                Some("chunk_bind_group_layout"),
-                &BindGroupLayoutEntries::sequential(
-                    ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                    (
-                        binding_types::uniform_buffer_sized(
-                            false,
-                            Some(<Vec3 as ShaderType>::min_size()),
-                        ),
-                        binding_types::storage_buffer_read_only::<GpuQuad>(false),
                     ),
                 ),
             ),

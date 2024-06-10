@@ -2,35 +2,20 @@ use std::mem;
 
 use bevy::{
     ecs::{
-        entity::Entity,
-        query::{ROQueryItem, With},
-        system::{
-            lifetimeless::{Read, SRes},
-            Commands, Query, Res, ResMut, Resource, SystemParamItem,
-        },
+        system::{Res, ResMut, Resource},
         world::Mut,
     },
     log::{debug, warn},
     prelude::{Deref, DerefMut, FromWorld, World},
     render::{
-        render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
-        render_resource::{
-            BindGroup, BindGroupEntries, BindingResource, Buffer, BufferBinding, BufferUsages,
-            BufferVec, StorageBuffer, UniformBuffer,
-        },
+        render_resource::{BindGroup, BindGroupEntries},
         renderer::{RenderDevice, RenderQueue},
-        Extract, MainWorld,
+        MainWorld,
     },
 };
-use hashbrown::hash_map::Entry;
-use itertools::Itertools;
 
 use crate::{
-    render::{
-        meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
-        quad::GpuQuad,
-    },
-    topo::world::{ChunkEntity, ChunkPos},
+    render::meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
     util::{ChunkMap, ChunkSet},
 };
 

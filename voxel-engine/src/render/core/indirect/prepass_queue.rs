@@ -45,7 +45,7 @@ pub fn prepass_queue_indirect_chunks(
 
     for (
         _view,
-        visible_entities,
+        _visible_entities,
         mut phase,
         depth_prepass,
         normal_prepass,

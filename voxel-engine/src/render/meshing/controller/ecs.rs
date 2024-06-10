@@ -5,8 +5,6 @@ use bevy::{
     tasks::{available_parallelism, TaskPool, TaskPoolBuilder},
 };
 
-use itertools::Itertools;
-
 use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
@@ -15,7 +13,6 @@ use crate::{
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ChunkObserver,
     },
-    util::ChunkMap,
 };
 
 use super::{

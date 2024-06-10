@@ -10,9 +10,8 @@ use bevy::{
         render_resource::{
             binding_types::uniform_buffer, BindGroupLayout, BindGroupLayoutEntries,
             ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-            Face, FragmentState, FrontFace, MultisampleState, PolygonMode, PrimitiveState,
-            RenderPipelineDescriptor, ShaderDefVal, ShaderStages, SpecializedRenderPipeline,
-            StencilFaceState, StencilState, VertexState,
+            FragmentState, MultisampleState, RenderPipelineDescriptor, ShaderDefVal, ShaderStages,
+            SpecializedRenderPipeline, StencilState, VertexState,
         },
         renderer::RenderDevice,
         view::ViewUniform,
