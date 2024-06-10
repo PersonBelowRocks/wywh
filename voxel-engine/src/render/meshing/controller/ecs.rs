@@ -74,17 +74,25 @@ pub fn queue_chunk_mesh_jobs(
 }
 
 /// This system makes finished chunk meshes available for extraction by the renderer.
-pub fn insert_chunks(workers: Res<MeshBuilder>, mut meshes: ResMut<ExtractableChunkMeshData>) {
+pub fn insert_chunks(
+    workers: Res<MeshBuilder>,
+    mut meshes: ResMut<ExtractableChunkMeshData>,
+    realm: VoxelRealm,
+) {
     let finished = workers.get_finished_meshes();
 
     let ExtractableChunkMeshData {
         active,
-        remove: _,
+        remove,
         should_extract: _,
         added,
     } = meshes.as_mut();
 
     for mesh in finished.into_iter() {
+        if !realm.has_render_permit(mesh.pos) {
+            continue;
+        }
+
         let existing: &mut TimedChunkMeshStatus =
             active.entry(mesh.pos).or_insert(TimedChunkMeshStatus {
                 generation: mesh.generation,
@@ -99,9 +107,19 @@ pub fn insert_chunks(workers: Res<MeshBuilder>, mut meshes: ResMut<ExtractableCh
             existing.generation = mesh.generation;
             existing.status = ChunkMeshStatus::from_mesh_data(&mesh.data);
 
-            // Only extract the chunk mesh if it's not empty.
-            if existing.status != ChunkMeshStatus::Empty {
-                added.set(mesh.pos, mesh.data);
+            match existing.status {
+                // If the chunk mesh is empty, we remove it from the render world
+                ChunkMeshStatus::Empty => {
+                    remove.set(mesh.pos);
+                }
+                // If it's filled, extract it
+                ChunkMeshStatus::Filled => {
+                    if realm.has_render_permit(mesh.pos) {
+                        added.set(mesh.pos, mesh.data);
+                    }
+                }
+                // We just updated this field and know it can't be any of these values
+                ChunkMeshStatus::Unfulfilled | ChunkMeshStatus::Extracted => unreachable!(),
             }
         }
     }
@@ -115,6 +133,7 @@ pub fn remove_chunks(
     for event in events.read() {
         if event.remove_flags.contains(PermitFlags::RENDER) {
             meshes.remove.set(event.chunk_pos);
+            meshes.active.remove(event.chunk_pos);
         }
     }
 }

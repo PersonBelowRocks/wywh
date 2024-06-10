@@ -124,6 +124,7 @@ impl Plugin for MeshController {
         app.add_systems(
             PreUpdate,
             (remove_chunks, insert_chunks, batch_chunk_extraction)
+                .chain()
                 .run_if(in_state(EngineState::Finished)),
         );
 
