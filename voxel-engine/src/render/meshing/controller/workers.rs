@@ -19,7 +19,7 @@ use crate::{
     data::registries::Registries,
     render::meshing::{error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context},
     topo::world::{ChunkManager, ChunkPos},
-    util::{result::ResultFlattening, Keyed, KeyedOrd},
+    util::{result::ResultFlattening, ChunkIndexMap, ChunkSet, Keyed, KeyedOrd},
 };
 
 use super::{ChunkMeshData, RemeshPriority};
@@ -37,17 +37,17 @@ pub struct WorkerParams {
     pub mesher: GreedyMesher,
 
     pub finished: Sender<FinishedChunkData>,
-    pub cmds: Receiver<MeshCommand>,
+    pub cmds: Receiver<MeshBuilderCommand>,
 }
 
 #[derive(Clone)]
-pub struct MeshCommand {
+pub struct MeshBuilderCommand {
     pub pos: ChunkPos,
     pub priority: RemeshPriority,
     pub generation: u64,
 }
 
-impl Keyed<RemeshPriority> for MeshCommand {
+impl Keyed<RemeshPriority> for MeshBuilderCommand {
     type Key = RemeshPriority;
 
     fn key(&self) -> &Self::Key {
@@ -67,7 +67,7 @@ impl Worker {
         let task_label = label.clone();
         let task_interrupt = atomic_interrupt.clone();
         let task = pool.spawn(async move {
-            let mut backlog_cmd = None::<MeshCommand>;
+            let mut backlog_cmd = None::<MeshBuilderCommand>;
 
             while !task_interrupt.load(Ordering::Relaxed) {
                 let cmd = match backlog_cmd.take() {
@@ -153,8 +153,8 @@ pub struct MeshBuilderSettings {
 #[derive(Resource)]
 pub struct MeshBuilder {
     workers: Vec<Worker>,
-    cmds: Sender<MeshCommand>,
-    pending: BinaryHeap<KeyedOrd<MeshCommand, RemeshPriority>>,
+    cmds: Sender<MeshBuilderCommand>,
+    pending: ChunkIndexMap<MeshBuilderCommand>,
     finished: Receiver<FinishedChunkData>,
 }
 
@@ -166,7 +166,7 @@ impl MeshBuilder {
         cm: Arc<ChunkManager>,
     ) -> Self {
         let (cmd_sender, cmd_recver) =
-            channel::bounded::<MeshCommand>(settings.job_channel_capacity);
+            channel::bounded::<MeshBuilderCommand>(settings.job_channel_capacity);
         let (mesh_sender, mesh_recver) = channel::unbounded::<FinishedChunkData>();
         let mut workers = Vec::<Worker>::with_capacity(settings.workers);
 
@@ -193,32 +193,49 @@ impl MeshBuilder {
 
         Self {
             workers,
-            pending: BinaryHeap::default(),
+            pending: ChunkIndexMap::default(),
             cmds: cmd_sender,
             finished: mesh_recver,
         }
     }
 
-    pub fn queue_jobs<I: Iterator<Item = MeshCommand>>(&mut self, cmds: I) {
-        self.pending.extend(cmds.map(KeyedOrd::new));
+    /// Queue jobs for workers based on their priority. The provided commands may not be sent immediately.
+    /// Internally this function places the commands in a sorted buffer ordered by the command priority.
+    /// Then it pops the highest-priority commands out of the buffer until the internal channel used to communicate
+    /// with workers is full. This function must be called periodically (even with just an empty iterator)
+    /// to send the next commands to the workers.
+    pub fn queue_jobs<I: Iterator<Item = MeshBuilderCommand>>(&mut self, cmds: I) {
+        self.pending.extend(cmds.map(|c| (c.pos, c)));
+        self.pending
+            .sort_unstable_by(|_, l, _, r| r.priority.cmp(&l.priority));
 
-        while let Some(next) = self.pending.pop() {
-            let next = next.into_inner();
+        #[cfg(debug_assertions)]
+        if !self.pending.is_empty() {
+            debug_assert!(
+                self.pending.first().unwrap().1.priority <= self.pending.last().unwrap().1.priority
+            );
+        }
 
+        while let Some((_, next)) = self.pending.pop() {
             if let Err(error) = self.cmds.try_send(next) {
                 match error {
                     TrySendError::Disconnected(msg) => {
-                        self.pending.push(KeyedOrd::new(msg));
+                        self.pending.insert(msg.pos, msg);
                         error!("Could not send remesh command to workers because the channel is disconnected.");
                         break;
                     }
                     TrySendError::Full(msg) => {
-                        self.pending.push(KeyedOrd::new(msg));
+                        self.pending.insert(msg.pos, msg);
                         break;
                     }
                 }
             }
         }
+    }
+
+    /// Removes the given chunks from the pending commands.
+    pub fn remove_pending(&mut self, remove: &ChunkSet) {
+        self.pending.retain(|chunk, _| !remove.contains(*chunk));
     }
 
     pub fn shutdown(self) {

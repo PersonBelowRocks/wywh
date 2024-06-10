@@ -20,7 +20,7 @@ use crate::{
 };
 
 use super::{
-    workers::{MeshBuilder, MeshCommand},
+    workers::{MeshBuilder, MeshBuilderCommand},
     ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData, RemeshPriority, RemeshType,
     TimedChunkMeshStatus,
 };
@@ -50,11 +50,11 @@ pub fn queue_chunk_mesh_jobs(
         debug!("Queuing {} chunks for remeshing from events", events.len());
     }
 
-    let mut commands = Vec::<MeshCommand>::with_capacity(events.len());
-    let mut immediate = Vec::<MeshCommand>::new();
+    let mut commands = Vec::<MeshBuilderCommand>::with_capacity(events.len());
+    let mut immediate = Vec::<MeshBuilderCommand>::new();
 
     for event in events.read() {
-        let cmd = MeshCommand {
+        let cmd = MeshBuilderCommand {
             pos: event.pos,
             priority: event.priority,
             generation: event.generation,
@@ -129,12 +129,19 @@ pub fn insert_chunks(
 pub fn remove_chunks(
     mut meshes: ResMut<ExtractableChunkMeshData>,
     mut events: EventReader<UpdatePermitEvent>,
+    mut builder: ResMut<MeshBuilder>,
 ) {
+    let mut remove = ChunkSet::with_capacity(events.len());
     for event in events.read() {
         if event.remove_flags.contains(PermitFlags::RENDER) {
-            meshes.remove.set(event.chunk_pos);
-            meshes.active.remove(event.chunk_pos);
+            remove.set(event.chunk_pos);
         }
+    }
+
+    builder.remove_pending(&remove);
+    for chunk in remove.iter() {
+        meshes.remove.set(chunk);
+        meshes.active.remove(chunk);
     }
 }
 
