@@ -21,30 +21,35 @@ use crate::{
 
 use super::{indirect::IndirectChunkData, DefaultBindGroupLayouts};
 
-// TODO: remove old code dealing with individual chunks, in favor of the indirect multidraw system
-
 pub fn extract_chunk_mesh_data(
     mut unprepared: ResMut<UnpreparedChunkMeshes>,
-    mut remove: ResMut<RemoveChunkMeshes>,
+    mut remove_meshes: ResMut<RemoveChunkMeshes>,
     mut main_world: ResMut<MainWorld>,
 ) {
     main_world.resource_scope(
         |_world, mut extractable_meshes: Mut<ExtractableChunkMeshData>| {
+            let ExtractableChunkMeshData {
+                active,
+                added,
+                remove,
+                should_extract,
+            } = extractable_meshes.as_mut();
+
+            if !*should_extract {
+                return;
+            }
+
+            *should_extract = false;
+
             let mut extracted = 0;
             let mut removed = 0;
 
             // Remove meshes from the render world
-            for chunk_pos in extractable_meshes.removed.drain() {
+            for chunk_pos in remove.drain() {
                 unprepared.remove(chunk_pos);
-                remove.set(chunk_pos);
+                remove_meshes.set(chunk_pos);
                 removed += 1;
             }
-
-            let ExtractableChunkMeshData {
-                active,
-                added,
-                removed: _
-            } = extractable_meshes.as_mut();
 
             // Extract all chunks that were added
             for (chunk_pos, mesh) in added.drain() {
@@ -112,9 +117,6 @@ pub fn upload_chunk_meshes(
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
-    // TODO: every time there's a chunk to upload, we upload it, however this can get very slow and unecessary when we don't care
-    // about rendering the updated chunk immediately. we should batch together chunk uploads when they don't need to happen immediately
-
     let gpu = gpu.as_ref();
     let queue = queue.as_ref();
 

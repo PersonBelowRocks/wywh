@@ -1,4 +1,7 @@
-use std::{cmp::max, time::Duration};
+use std::{
+    cmp::max,
+    time::{Duration, Instant},
+};
 
 use bevy::{
     prelude::*,
@@ -13,11 +16,13 @@ use crate::{
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ChunkObserver,
     },
+    util::{ChunkMap, ChunkSet},
 };
 
 use super::{
     workers::{MeshBuilder, MeshCommand},
-    ChunkMeshStatus, ExtractableChunkMeshData, RemeshPriority, RemeshType, TimedChunkMeshStatus,
+    ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData, RemeshPriority, RemeshType,
+    TimedChunkMeshStatus,
 };
 
 #[derive(Resource, Deref)]
@@ -74,7 +79,8 @@ pub fn insert_chunks(workers: Res<MeshBuilder>, mut meshes: ResMut<ExtractableCh
 
     let ExtractableChunkMeshData {
         active,
-        removed: _,
+        remove: _,
+        should_extract: _,
         added,
     } = meshes.as_mut();
 
@@ -108,8 +114,26 @@ pub fn remove_chunks(
 ) {
     for event in events.read() {
         if event.remove_flags.contains(PermitFlags::RENDER) {
-            meshes.removed.set(event.chunk_pos);
+            meshes.remove.set(event.chunk_pos);
         }
+    }
+}
+
+/// Batches chunks for extraction. Will allow extraction every 500ms (by default).
+pub fn batch_chunk_extraction(
+    time: Res<Time<Real>>,
+    mut meshes: ResMut<ExtractableChunkMeshData>,
+    mut last_extract: Local<Option<Instant>>,
+) {
+    let Some(now) = time.last_update() else {
+        return;
+    };
+
+    let previous = *last_extract.get_or_insert(now);
+
+    if now - previous > Duration::from_millis(500) {
+        *last_extract = Some(now);
+        meshes.should_extract = true;
     }
 }
 

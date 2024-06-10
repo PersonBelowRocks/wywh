@@ -4,7 +4,7 @@ mod workers;
 use std::{cmp, fmt};
 
 use bevy::prelude::*;
-use ecs::remove_chunks;
+use ecs::{batch_chunk_extraction, remove_chunks};
 
 use crate::{
     render::{meshing::controller::ecs::dispatch_updated_chunk_remeshings, quad::GpuQuad},
@@ -93,8 +93,12 @@ impl ChunkMeshStatus {
 #[derive(Resource, Default)]
 pub struct ExtractableChunkMeshData {
     pub active: ChunkMap<TimedChunkMeshStatus>,
-    pub removed: ChunkSet,
+    pub remove: ChunkSet,
     pub added: ChunkMap<ChunkMeshData>,
+    /// Indicates if we should extract chunks to the render world (or remove chunks from the render world).
+    /// Usually used to regulate extraction a bit so that we can extract chunks in bulk instead of extracting them immediately
+    /// as they become available. This helps reduce some lag when meshing lots of chunks.
+    pub should_extract: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, dm::Constructor)]
@@ -119,7 +123,8 @@ impl Plugin for MeshController {
 
         app.add_systems(
             PreUpdate,
-            (remove_chunks, insert_chunks).run_if(in_state(EngineState::Finished)),
+            (remove_chunks, insert_chunks, batch_chunk_extraction)
+                .run_if(in_state(EngineState::Finished)),
         );
 
         app.add_systems(
