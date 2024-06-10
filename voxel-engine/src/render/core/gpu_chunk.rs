@@ -11,7 +11,7 @@ use bevy::{
         world::Mut,
     },
     log::{debug, warn},
-    prelude::{FromWorld, World},
+    prelude::{Deref, DerefMut, FromWorld, World},
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
@@ -38,95 +38,49 @@ use super::{indirect::IndirectChunkData, DefaultBindGroupLayouts};
 
 // TODO: remove old code dealing with individual chunks, in favor of the indirect multidraw system
 
-pub fn extract_chunk_entities(
-    mut cmds: Commands,
-    chunks: Extract<Query<(Entity, &ChunkPos), With<ChunkEntity>>>,
-) {
-    let positions = chunks
-        .iter()
-        .map(|(entity, &pos)| (entity, pos))
-        .collect_vec();
-
-    cmds.insert_or_spawn_batch(
-        positions
-            .into_iter()
-            .map(|(entity, pos)| (entity, (pos, ChunkEntity))),
-    )
-}
-
 pub fn extract_chunk_mesh_data(
-    mut render_meshes: ResMut<ChunkRenderDataStore>,
-    mut multidraw_data: ResMut<IndirectRenderDataStore>,
+    mut unprepared: ResMut<UnpreparedChunkMeshes>,
+    mut remove: ResMut<RemoveChunkMeshes>,
     mut main_world: ResMut<MainWorld>,
 ) {
     main_world.resource_scope(
         |_world, mut extractable_meshes: Mut<ExtractableChunkMeshData>| {
             let mut extracted = 0;
-
-            extractable_meshes
-                .active
-                .for_each_entry_mut(|pos, new_mesh| {
-                    // Skip unfulfilled and extracted chunks
-                    if matches!(
-                        new_mesh.data,
-                        ChunkMeshStatus::Unfulfilled | ChunkMeshStatus::Extracted
-                    ) {
-                        return;
-                    }
-
-                    let status = mem::replace(&mut new_mesh.data, ChunkMeshStatus::Extracted);
-
-                    match status {
-                        // If the new chunk has an empty mesh, remove it from rendering
-                        ChunkMeshStatus::Empty => {
-                            let Some(existing) = render_meshes.map.get(pos) else {
-                                return;
-                            };
-
-                            if existing.generation > new_mesh.generation {
-                                return;
-                            }
-
-                            render_meshes.map.remove(pos);
-                            new_mesh.data = ChunkMeshStatus::Extracted;
-                        }
-                        // Insert the chunk render data if it doesn't exist, and update it
-                        // if this is a newer version
-                        ChunkMeshStatus::Filled(data) => match render_meshes.map.entry(pos) {
-                            Entry::Occupied(mut entry) => {
-                                let tcrd = entry.get_mut();
-                                if tcrd.generation > new_mesh.generation {
-                                    return;
-                                }
-                                tcrd.generation = new_mesh.generation;
-                                tcrd.data = ChunkRenderData::Cpu(data);
-
-                                extracted += 1;
-                            }
-                            Entry::Vacant(entry) => {
-                                entry.insert(TimedChunkRenderData {
-                                    data: ChunkRenderData::Cpu(data),
-                                    generation: new_mesh.generation,
-                                });
-
-                                extracted += 1;
-                            }
-                        },
-                        _ => unreachable!(),
-                    }
-                });
-
             let mut removed = 0;
 
             // Remove meshes from the render world
-            for &chunk_pos in &extractable_meshes.removed {
-                multidraw_data.remove.set(chunk_pos);
-                render_meshes.map.remove(chunk_pos);
+            for chunk_pos in extractable_meshes.removed.drain() {
+                unprepared.remove(chunk_pos);
+                remove.set(chunk_pos);
                 removed += 1;
             }
 
-            // Clear the removed mesh buffer
-            extractable_meshes.removed.clear();
+            let ExtractableChunkMeshData {
+                active,
+                added,
+                removed: _
+            } = extractable_meshes.as_mut();
+
+            // Extract all chunks that were added
+            for (chunk_pos, mesh) in added.drain() {
+                // Only extract chunks if they were present in the activity tracker
+                if let Some(active) = active.get_mut(chunk_pos) {
+                    // We avoid empty chunks. The mesh controller should only queue non-empty chunks for extraction but
+                    // we do an additional error check here just in case.
+                    if active.status == ChunkMeshStatus::Empty {
+                        warn!("Can't extract chunk mesh for {chunk_pos} because it was marked as empty.");
+                        continue;
+                    }
+
+                    unprepared.set(chunk_pos, mesh);
+
+                    // mark the extracted chunk as being extracted
+                    active.status = ChunkMeshStatus::Extracted;
+                    extracted += 1;
+                } else {
+                    warn!("Couldn't extract chunk {chunk_pos} because it wasn't marked as an active chunk.")
+                }
+            }
 
             if extracted > 0 {
                 debug!("Extracted {} chunk meshes to render world", extracted);
@@ -139,10 +93,37 @@ pub fn extract_chunk_mesh_data(
     );
 }
 
-pub fn prepare_chunk_mesh_data(
-    mut chunk_data_store: ResMut<ChunkRenderDataStore>,
-    mut multidraw_data: ResMut<IndirectRenderDataStore>,
-    default_layouts: Res<DefaultBindGroupLayouts>,
+/// Untrack chunk meshes in the render world and remove their data on the GPU
+pub fn remove_chunk_meshes(
+    mut remove: ResMut<RemoveChunkMeshes>,
+    mut indirect_data: ResMut<IndirectRenderDataStore>,
+    mut rebuild: ResMut<RebuildChunkQuadBindGroup>,
+    gpu: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
+) {
+    let gpu = gpu.as_ref();
+    let queue = queue.as_ref();
+
+    // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
+    // is quite sensitive to running with empty vectors and maps.
+    if remove.is_empty() {
+        return;
+    }
+
+    let remove = mem::replace(&mut remove.0, ChunkSet::default());
+    let removed = remove.len();
+    indirect_data.chunks.remove_chunks(gpu, queue, remove);
+
+    rebuild.0 = true;
+
+    debug!("Removed {removed} chunks from the render world");
+}
+
+/// Upload unprepared chunk meshes to the GPU and track them in the render world
+pub fn upload_chunk_meshes(
+    mut unprepared: ResMut<UnpreparedChunkMeshes>,
+    mut indirect_data: ResMut<IndirectRenderDataStore>,
+    mut rebuild: ResMut<RebuildChunkQuadBindGroup>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
@@ -152,81 +133,29 @@ pub fn prepare_chunk_mesh_data(
     let gpu = gpu.as_ref();
     let queue = queue.as_ref();
 
-    let mut total = 0;
+    // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
+    // is quite sensitive to running with empty vectors and maps.
+    if unprepared.is_empty() {
+        return;
+    }
 
-    let mut cpu_render_data = ChunkMap::<ChunkMeshData>::new();
+    let meshes = mem::replace(&mut unprepared.0, ChunkMap::default());
+    let added = meshes.len();
+    indirect_data.chunks.upload_chunks(gpu, queue, meshes);
 
-    chunk_data_store.map.for_each_entry_mut(|pos, timed_data| {
-        if matches!(timed_data.data, ChunkRenderData::Cpu(_)) {
-            let ChunkRenderData::Cpu(ref data) = timed_data.data else {
-                unreachable!();
-            };
+    rebuild.0 = true;
 
-            if data.quad_buffer.is_empty() || data.index_buffer.is_empty() {
-                warn!("Tried to prepare render data for chunk at position {pos}, but it was missing data!");
-                return;
-            }
+    debug!("Uploaded and prepared {added} chunks");
+}
 
-            cpu_render_data.set(pos, data.clone());
-
-            let quads = {
-                let mut buffer = StorageBuffer::from(data.quad_buffer.clone());
-                buffer.set_label(Some("chunk_quad_buffer"));
-                buffer.write_buffer(gpu, queue);
-                buffer
-            };
-
-            let index_count = data.index_buffer.len() as u32;
-            let indices = {
-                let mut buffer =
-                    BufferVec::<u32>::new(BufferUsages::COPY_DST | BufferUsages::INDEX);
-                buffer.set_label(Some("chunk_index_buffer"));
-                buffer.extend(data.index_buffer.iter().copied());
-                buffer.write_buffer(gpu, queue);
-                buffer
-            };
-
-            let position = {
-                let mut buffer = UniformBuffer::from(pos.as_vec3());
-                buffer.set_label(Some("chunk_position_buffer"));
-                buffer.write_buffer(gpu, queue);
-                buffer
-            };
-
-            let bind_group = gpu.create_bind_group(
-                Some("chunk_bind_group"),
-                &default_layouts.chunk_bg_layout,
-                &BindGroupEntries::sequential((
-                    position.binding().unwrap(),
-                    quads.binding().unwrap(),
-                )),
-            );
-
-            timed_data.data = ChunkRenderData::Gpu(GpuChunkMeshData {
-                bind_group,
-                index_count,
-                position: position.buffer().unwrap().clone(),
-                index_buffer: indices.buffer().unwrap().clone(),
-                quad_buffer: quads.buffer().unwrap().clone(),
-            });
-
-            total += 1;
-        }
-    });
-
-    let remove_chunks = mem::replace(&mut multidraw_data.remove, ChunkSet::default());
-
-    let recreate_bind_group = !remove_chunks.is_empty() || !cpu_render_data.is_empty();
-
-    multidraw_data
-        .chunks
-        .remove_chunks(gpu, queue, remove_chunks);
-    multidraw_data
-        .chunks
-        .upload_chunks(gpu, queue, cpu_render_data);
-
-    if recreate_bind_group {
-        let quad_vram_array = &multidraw_data.chunks.buffers().quad;
+pub fn rebuild_chunk_quad_bind_group(
+    mut rebuild: ResMut<RebuildChunkQuadBindGroup>,
+    mut indirect_data: ResMut<IndirectRenderDataStore>,
+    default_layouts: Res<DefaultBindGroupLayouts>,
+    gpu: Res<RenderDevice>,
+) {
+    if rebuild.0 {
+        let quad_vram_array = &indirect_data.chunks.buffers().quad;
 
         // we only make a bind group if the buffer is long enough to be bound
         if quad_vram_array.vram_bytes() > 0 {
@@ -238,27 +167,32 @@ pub fn prepare_chunk_mesh_data(
                 &BindGroupEntries::single(quad_buffer.as_entire_buffer_binding()),
             );
 
-            multidraw_data.bind_group = Some(bg);
-            multidraw_data.ready = true;
+            debug!("Rebuilt chunk quad bind group");
+
+            indirect_data.bind_group = Some(bg);
+            indirect_data.ready = true;
+
+            rebuild.0 = false;
         }
     }
-
-    if total > 0 {
-        debug!("Uploaded {total} chunks to the GPU");
-    }
 }
 
-#[derive(Resource, Default)]
-pub struct ChunkRenderDataStore {
-    pub map: ChunkMap<TimedChunkRenderData>,
-}
+/// A store of unprepared chunk meshes
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct UnpreparedChunkMeshes(pub ChunkMap<ChunkMeshData>);
+
+/// A store of chunks that should be removed from the render world
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct RemoveChunkMeshes(pub ChunkSet);
+
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct RebuildChunkQuadBindGroup(pub bool);
 
 #[derive(Resource)]
 pub struct IndirectRenderDataStore {
     pub chunks: IndirectChunkData,
     pub bind_group: Option<BindGroup>,
     pub ready: bool,
-    pub remove: ChunkSet,
 }
 
 impl FromWorld for IndirectRenderDataStore {
@@ -269,58 +203,6 @@ impl FromWorld for IndirectRenderDataStore {
             chunks: IndirectChunkData::new(gpu),
             bind_group: None,
             ready: false,
-            remove: ChunkSet::default(),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub enum ChunkRenderData {
-    /// Raw chunk data in CPU memory, should be uploaded to GPU memory
-    Cpu(ChunkMeshData),
-    /// Handle to a bind group with the render data for this chunk
-    Gpu(GpuChunkMeshData),
-}
-
-pub struct TimedChunkRenderData {
-    pub data: ChunkRenderData,
-    pub generation: u64,
-}
-
-#[derive(Clone)]
-pub struct GpuChunkMeshData {
-    pub bind_group: BindGroup,
-    pub index_buffer: Buffer,
-    pub index_count: u32,
-    pub position: Buffer,
-    pub quad_buffer: Buffer,
-}
-
-pub struct SetChunkBindGroup<const I: usize>;
-impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetChunkBindGroup<I> {
-    type Param = SRes<ChunkRenderDataStore>;
-
-    type ViewQuery = ();
-    type ItemQuery = (Read<ChunkPos>, Read<ChunkEntity>);
-
-    fn render<'w>(
-        _item: &P,
-        _view: ROQueryItem<'w, Self::ViewQuery>,
-        entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
-        param: SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut TrackedRenderPass<'w>,
-    ) -> RenderCommandResult {
-        let store = param.into_inner();
-
-        if let Some((&chunk_pos, _)) = entity {
-            if let Some(ChunkRenderData::Gpu(data)) = store.map.get(chunk_pos).map(|d| &d.data) {
-                pass.set_bind_group(I, &data.bind_group, &[]);
-                RenderCommandResult::Success
-            } else {
-                RenderCommandResult::Failure
-            }
-        } else {
-            RenderCommandResult::Failure
         }
     }
 }

@@ -14,8 +14,7 @@ use bevy::{
 };
 
 use crate::render::core::{
-    gpu_chunk::{IndirectRenderDataStore, SetChunkBindGroup},
-    gpu_registries::SetRegistryBindGroup,
+    gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
 
 pub struct SetIndirectChunkBindGroup<const I: usize>;

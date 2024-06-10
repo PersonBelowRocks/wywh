@@ -9,7 +9,7 @@ use ecs::remove_chunks;
 use crate::{
     render::{meshing::controller::ecs::dispatch_updated_chunk_remeshings, quad::GpuQuad},
     topo::world::ChunkPos,
-    util::ChunkMap,
+    util::{ChunkMap, ChunkSet},
     CoreEngineSetup, EngineState,
 };
 
@@ -68,16 +68,16 @@ impl fmt::Debug for ChunkMeshData {
 }
 
 #[derive(Clone, Debug)]
-pub struct TimedChunkMeshData {
+pub struct TimedChunkMeshStatus {
     pub generation: u64,
-    pub data: ChunkMeshStatus,
+    pub status: ChunkMeshStatus,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ChunkMeshStatus {
     Unfulfilled,
     Empty,
-    Filled(ChunkMeshData),
+    Filled,
     Extracted,
 }
 
@@ -86,15 +86,16 @@ impl ChunkMeshStatus {
         if data.is_empty() {
             Self::Empty
         } else {
-            Self::Filled(data.clone())
+            Self::Filled
         }
     }
 }
 
 #[derive(Resource, Default)]
 pub struct ExtractableChunkMeshData {
-    pub active: ChunkMap<TimedChunkMeshData>,
-    pub removed: Vec<ChunkPos>,
+    pub active: ChunkMap<TimedChunkMeshStatus>,
+    pub removed: ChunkSet,
+    pub added: ChunkMap<ChunkMeshData>,
 }
 
 #[derive(Copy, Clone, PartialEq, dm::Constructor)]

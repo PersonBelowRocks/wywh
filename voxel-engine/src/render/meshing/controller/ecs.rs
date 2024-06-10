@@ -20,7 +20,7 @@ use crate::{
 
 use super::{
     workers::{MeshBuilder, MeshCommand},
-    ChunkMeshStatus, ExtractableChunkMeshData, RemeshPriority, RemeshType, TimedChunkMeshData,
+    ChunkMeshStatus, ExtractableChunkMeshData, RemeshPriority, RemeshType, TimedChunkMeshStatus,
 };
 
 #[derive(Resource, Deref)]
@@ -73,48 +73,34 @@ pub fn queue_chunk_mesh_jobs(
 
 /// This system makes finished chunk meshes available for extraction by the renderer.
 pub fn insert_chunks(workers: Res<MeshBuilder>, mut meshes: ResMut<ExtractableChunkMeshData>) {
-    let mut total = 0;
-
     let finished = workers.get_finished_meshes();
 
-    if finished.len() > 0 {
-        debug!("Inserting finished chunk meshes");
-    }
+    let ExtractableChunkMeshData {
+        active,
+        removed: _,
+        added,
+    } = meshes.as_mut();
 
-    let mut insert = ChunkMap::<TimedChunkMeshData>::new();
     for mesh in finished.into_iter() {
-        total += 1;
-
-        let Some(existing) = meshes.active.get(mesh.pos) else {
-            insert.set(
-                mesh.pos,
-                TimedChunkMeshData {
-                    generation: mesh.generation,
-                    data: ChunkMeshStatus::from_mesh_data(&mesh.data),
-                },
-            );
-            continue;
-        };
-
-        if existing.generation > mesh.generation {
-            continue;
-        }
-
-        insert.set(
-            mesh.pos,
-            TimedChunkMeshData {
+        let existing: &mut TimedChunkMeshStatus =
+            active.entry(mesh.pos).or_insert(TimedChunkMeshStatus {
                 generation: mesh.generation,
-                data: ChunkMeshStatus::from_mesh_data(&mesh.data),
-            },
-        );
-    }
+                status: ChunkMeshStatus::from_mesh_data(&mesh.data),
+            });
 
-    insert.for_each_entry(|pos, chunk_data| {
-        meshes.active.set(pos, chunk_data.clone());
-    });
+        // If the existing chunk's generation is less than or equal to the new chunk's generation, then we
+        // want to update both the status and the generation, and also add the chunk mesh to the extract data.
+        // This will be done both if the existing chunk is older than the new one, or if we just added (i.e., generation is the same)
+        // a chunk. If we just added the chunk we also want to run this logic because we want to extract its mesh data.
+        if existing.generation <= mesh.generation {
+            existing.generation = mesh.generation;
+            existing.status = ChunkMeshStatus::from_mesh_data(&mesh.data);
 
-    if total > 0 {
-        debug!("Inserted {} chunks", total);
+            // Only extract the chunk mesh if it's not empty.
+            if existing.status != ChunkMeshStatus::Empty {
+                added.set(mesh.pos, mesh.data);
+            }
+        }
     }
 }
 
@@ -125,7 +111,7 @@ pub fn remove_chunks(
 ) {
     for event in events.read() {
         if event.remove_flags.contains(PermitFlags::RENDER) {
-            meshes.removed.push(event.chunk_pos);
+            meshes.removed.set(event.chunk_pos);
         }
     }
 }

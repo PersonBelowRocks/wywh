@@ -24,7 +24,10 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use gpu_chunk::IndirectRenderDataStore;
+use gpu_chunk::{
+    rebuild_chunk_quad_bind_group, remove_chunk_meshes, upload_chunk_meshes,
+    IndirectRenderDataStore, RebuildChunkQuadBindGroup, RemoveChunkMeshes,
+};
 use indirect::{
     prepass_queue_indirect_chunks, render_queue_indirect_chunks, shadow_queue_indirect_chunks,
     IndirectChunkPrepassPipeline, IndirectChunkRenderPipeline, IndirectChunksPrepass,
@@ -38,10 +41,7 @@ use crate::data::{
 };
 
 use self::{
-    gpu_chunk::{
-        extract_chunk_entities, extract_chunk_mesh_data, prepare_chunk_mesh_data,
-        ChunkRenderDataStore,
-    },
+    gpu_chunk::{extract_chunk_mesh_data, UnpreparedChunkMeshes},
     gpu_registries::{
         extract_texreg_faces, prepare_gpu_registry_data, ExtractedTexregFaces, RegistryBindGroup,
     },
@@ -70,14 +70,15 @@ impl Plugin for RenderCore {
         render_app
             .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
-            .init_resource::<ChunkRenderDataStore>();
+            .init_resource::<RebuildChunkQuadBindGroup>()
+            .init_resource::<RemoveChunkMeshes>()
+            .init_resource::<UnpreparedChunkMeshes>();
 
         render_app.add_systems(
             ExtractSchedule,
             (
                 extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
                 (
-                    extract_chunk_entities,
                     extract_chunk_mesh_data
                         .run_if(main_world_res_exists::<ExtractableChunkMeshData>),
                 )
@@ -89,7 +90,12 @@ impl Plugin for RenderCore {
             (
                 (
                     prepare_gpu_registry_data.run_if(not(resource_exists::<RegistryBindGroup>)),
-                    prepare_chunk_mesh_data,
+                    (
+                        remove_chunk_meshes,
+                        upload_chunk_meshes,
+                        rebuild_chunk_quad_bind_group,
+                    )
+                        .chain(),
                 )
                     .in_set(RenderSet::PrepareResources),
                 (
@@ -97,7 +103,7 @@ impl Plugin for RenderCore {
                     prepass_queue_indirect_chunks,
                     shadow_queue_indirect_chunks,
                 )
-                    .in_set(RenderSet::QueueMeshes),
+                    .in_set(RenderSet::Queue),
             ),
         );
     }

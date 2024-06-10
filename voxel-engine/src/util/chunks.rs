@@ -167,6 +167,10 @@ impl ChunkSet {
     pub fn clear(&mut self) {
         self.0.clear()
     }
+
+    pub fn drain(&mut self) -> hb::hash_set::Drain<'_, ChunkPos> {
+        self.0.drain()
+    }
 }
 
 #[derive(Clone)]
