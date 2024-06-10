@@ -6,9 +6,12 @@ use dashmap::{
 };
 
 use hb::hash_map::{Drain, Entry as HashbrownEntry};
+use indexmap::IndexMap;
 use itertools::Itertools;
 
 use crate::topo::world::ChunkPos;
+
+pub type ChunkIndexMap<T> = IndexMap<ChunkPos, T, wyhash2::WyHash>;
 
 #[derive(Clone)]
 pub struct MultiChunkMapEntry<T> {

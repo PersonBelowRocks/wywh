@@ -13,7 +13,7 @@ use rangemap::RangeSet;
 
 use crate::{
     render::{meshing::controller::ChunkMeshData, quad::GpuQuad},
-    util::{ChunkMap, ChunkSet},
+    util::{ChunkIndexMap, ChunkMap, ChunkSet},
 };
 
 use super::buffer_utils::{to_formatted_bytes, VramArray};
@@ -85,7 +85,6 @@ impl MultidrawBuffers {
 
 #[derive(Clone, Debug)]
 pub struct ChunkBufferBounds {
-    pub instance: u64,
     pub indices: Range<u64>,
     pub quads: Range<u64>,
 }
@@ -101,9 +100,12 @@ impl ChunkBufferBounds {
 }
 
 #[inline]
-fn indirect_args_from_bounds(bounds: &ChunkBufferBounds) -> IndexedIndirectArgs {
+fn indirect_args_from_bounds_and_index(
+    bounds: &ChunkBufferBounds,
+    idx: usize,
+) -> IndexedIndirectArgs {
     IndexedIndirectArgs {
-        first_instance: bounds.instance as u32,
+        first_instance: idx as u32,
         instance_count: 1,
         first_index: bounds.indices.start as u32,
         index_count: bounds.num_indices() as u32,
@@ -199,7 +201,7 @@ fn indirect_args_from_bounds(bounds: &ChunkBufferBounds) -> IndexedIndirectArgs 
 #[derive(Resource, Clone)]
 pub struct IndirectChunkData {
     buffers: MultidrawBuffers,
-    bounds: ChunkMap<ChunkBufferBounds>,
+    bounds: ChunkIndexMap<ChunkBufferBounds>,
 }
 
 impl IndirectChunkData {
@@ -207,7 +209,7 @@ impl IndirectChunkData {
     pub fn new(gpu: &RenderDevice) -> Self {
         Self {
             buffers: MultidrawBuffers::new(gpu),
-            bounds: ChunkMap::new(),
+            bounds: ChunkIndexMap::default(),
         }
     }
 
@@ -267,13 +269,12 @@ impl IndirectChunkData {
         &mut self,
         gpu: &RenderDevice,
         queue: &RenderQueue,
-        new_bounds: ChunkMap<ChunkBufferBounds>,
+        new_bounds: ChunkIndexMap<ChunkBufferBounds>,
     ) {
         debug_assert!(chunk_bounds_correctly_formatted(&new_bounds));
 
         let chunk_instances = new_bounds
             .iter()
-            .sorted_unstable_by_key(|(_, b)| b.instance)
             .map(|(chunk, bounds)| ChunkInstanceData {
                 pos: chunk.worldspace_min().as_vec3(),
                 first_quad: bounds.quads.start as u32,
@@ -286,7 +287,8 @@ impl IndirectChunkData {
 
         let indirect_args = new_bounds
             .iter()
-            .map(|(_, bounds)| indirect_args_from_bounds(bounds))
+            .enumerate()
+            .map(|(idx, (_, bounds))| indirect_args_from_bounds_and_index(bounds, idx))
             .collect_vec();
 
         debug!("Setting instance buffer for multidraw data.");
@@ -303,16 +305,17 @@ impl IndirectChunkData {
         &mut self,
         gpu: &RenderDevice,
         queue: &RenderQueue,
-        chunks: ChunkMap<ChunkMeshData>,
+        chunks_to_upload: ChunkMap<ChunkMeshData>,
     ) {
-        // TODO: instead of constantly sorting all the chunks by their instance number,
-        // we should store them in pre-sorted in an IndexMap or something.
-
-        if chunks.is_empty() {
+        if chunks_to_upload.is_empty() {
             return;
         }
 
-        let mut upload_bounds = ChunkMap::<ChunkBufferBounds>::with_capacity(chunks.len());
+        let mut upload_bounds = ChunkIndexMap::<ChunkBufferBounds>::with_capacity_and_hasher(
+            chunks_to_upload.len(),
+            Default::default(),
+        );
+
         // A set of chunks that this multidraw data had beforehand, but that were present in the provided
         // chunk mesh data that we're supposed to upload. These chunks can be considered "updated" and we want to replace
         // the existing mesh data with the provided (new) data. To do this we must remove the data from our existing
@@ -321,9 +324,8 @@ impl IndirectChunkData {
         let mut upload_indices = Vec::<u32>::new();
         let mut upload_quads = Vec::<GpuQuad>::new();
 
-        let mut current_instance = 0;
-        for (chunk, mesh) in chunks.iter() {
-            if self.bounds.contains(chunk) {
+        for (chunk, mesh) in chunks_to_upload.iter() {
+            if self.bounds.contains_key(&chunk) {
                 updated_chunks.set(chunk);
             }
 
@@ -331,15 +333,12 @@ impl IndirectChunkData {
             let quads_len = upload_quads.len() as u64;
 
             let bounds = ChunkBufferBounds {
-                instance: current_instance,
                 indices: indices_len..(indices_len + mesh.index_buffer.len() as u64),
                 quads: quads_len..(quads_len + mesh.quad_buffer.len() as u64),
             };
 
             debug_assert!(bounds.indices.start < bounds.indices.end);
             debug_assert!(bounds.quads.start < bounds.quads.end);
-
-            current_instance += 1;
 
             debug_assert_eq!(upload_indices.len() as u64, bounds.indices.start);
             debug_assert_eq!(upload_quads.len() as u64, bounds.quads.start);
@@ -352,7 +351,7 @@ impl IndirectChunkData {
             debug_assert_eq!(upload_indices.len() as u64, bounds.indices.end);
             debug_assert_eq!(upload_quads.len() as u64, bounds.quads.end);
 
-            upload_bounds.set(chunk, bounds);
+            upload_bounds.insert(chunk, bounds);
         }
 
         // Note down the data ranges for the chunks we want to remove
@@ -360,7 +359,7 @@ impl IndirectChunkData {
         let mut remove_quads = RangeSet::<u64>::new();
 
         for chunk in updated_chunks.iter() {
-            let bounds = self.bounds.get(chunk).expect(
+            let bounds = self.bounds.get(&chunk).expect(
                 "we already checked that this chunk was present in our bounds in the earlier loop",
             );
 
@@ -369,22 +368,20 @@ impl IndirectChunkData {
         }
 
         // Update the data ranges for the chunks we retained (aka. didn't remove)
-        let mut retained_bounds = ChunkMap::<ChunkBufferBounds>::new();
+        let mut retained_bounds = ChunkIndexMap::<ChunkBufferBounds>::with_capacity_and_hasher(
+            self.bounds.len(),
+            Default::default(),
+        );
 
-        // Array of all our chunk bounds not marked for removal sorted by where their share of the index buffer begins.
-        let sorted_retained_chunks = self
+        let ordered_retained_chunks = self
             .bounds
             .iter()
-            .filter(|(chunk, _)| !updated_chunks.contains(*chunk))
-            // We use an unstable sort for the performance gain, no chunks should have equal start indices.
-            .sorted_unstable_by_key(|(_, b)| b.indices.start)
-            .collect_vec();
+            .filter(|&(chunk, _)| !updated_chunks.contains(*chunk));
 
-        let mut current_instance: u64 = 0;
         let mut current_index: u64 = 0;
         let mut current_quad: u64 = 0;
 
-        for (chunk, bounds) in sorted_retained_chunks.iter() {
+        for (chunk, bounds) in ordered_retained_chunks {
             #[cfg(debug_assertions)]
             {
                 let contains_indices = remove_indices.overlaps(&bounds.indices);
@@ -406,16 +403,14 @@ impl IndirectChunkData {
             let num_indices = bounds.num_indices();
             let num_quads = bounds.num_quads();
 
-            retained_bounds.set(
+            retained_bounds.insert(
                 *chunk,
                 ChunkBufferBounds {
-                    instance: current_instance,
                     indices: current_index..(num_indices + current_index),
                     quads: current_quad..(num_quads + current_quad),
                 },
             );
 
-            current_instance += 1;
             current_index += num_indices;
             current_quad += num_quads;
         }
@@ -426,21 +421,19 @@ impl IndirectChunkData {
         self.buffers.quad.remove(gpu, queue, &remove_quads);
 
         // Now we shift the bounds and instance numbers of the chunks we're going to upload so that they're placed after our retained chunks.
-        let max_retained_instance = current_instance;
         let max_retained_index = current_index;
         let max_retained_quad = current_quad;
 
-        for (_, bound) in upload_bounds.iter_mut() {
-            bound.instance += max_retained_instance;
+        retained_bounds.extend(upload_bounds.into_iter().map(|(cpos, mut bounds)| {
+            bounds.indices.start += max_retained_index;
+            bounds.indices.end += max_retained_index;
 
-            bound.indices.start += max_retained_index;
-            bound.indices.end += max_retained_index;
+            bounds.quads.start += max_retained_quad;
+            bounds.quads.end += max_retained_quad;
 
-            bound.quads.start += max_retained_quad;
-            bound.quads.end += max_retained_quad;
-        }
+            (cpos, bounds)
+        }));
 
-        retained_bounds.extend(upload_bounds.into_iter());
         let new_bounds = retained_bounds;
 
         debug!("Uploading indices to the GPU.");
@@ -459,23 +452,20 @@ impl IndirectChunkData {
 
         let mut remove_indices = RangeSet::<u64>::new();
         let mut remove_quads = RangeSet::<u64>::new();
-        let mut chunks_to_retain = ChunkMap::<ChunkBufferBounds>::with_capacity(self.bounds.len());
+        let mut chunks_to_retain = ChunkIndexMap::<ChunkBufferBounds>::with_capacity_and_hasher(
+            self.bounds.len(),
+            Default::default(),
+        );
 
-        let mut current_instance: u64 = 0;
         let mut current_index: u64 = 0;
         let mut current_quad: u64 = 0;
 
-        for (chunk_pos, bounds) in self
-            .bounds
-            .iter()
-            .sorted_unstable_by_key(|(_, b)| b.instance)
-        {
-            if chunks.contains(chunk_pos) {
+        for (chunk_pos, bounds) in self.bounds.iter() {
+            if chunks.contains(*chunk_pos) {
                 remove_indices.insert(bounds.indices.clone());
                 remove_quads.insert(bounds.quads.clone());
             } else {
                 let new_bounds = ChunkBufferBounds {
-                    instance: current_instance,
                     indices: (current_index..(current_index + bounds.num_indices())),
                     quads: (current_quad..(current_quad + bounds.num_quads())),
                 };
@@ -486,9 +476,8 @@ impl IndirectChunkData {
                 debug_assert!(new_bounds.indices.start < new_bounds.indices.end);
                 debug_assert!(new_bounds.quads.start < new_bounds.quads.end);
 
-                chunks_to_retain.set(chunk_pos, new_bounds);
+                chunks_to_retain.insert(*chunk_pos, new_bounds);
 
-                current_instance += 1;
                 current_index += bounds.num_indices();
                 current_quad += bounds.num_quads();
             }
@@ -506,21 +495,15 @@ impl IndirectChunkData {
 }
 
 /// Tests if a chunk map of a bunch of buffer bounds is correctly formatted.
-pub(crate) fn chunk_bounds_correctly_formatted(bounds: &ChunkMap<ChunkBufferBounds>) -> bool {
+pub(crate) fn chunk_bounds_correctly_formatted(bounds: &ChunkIndexMap<ChunkBufferBounds>) -> bool {
     // If there's less than 2 different bounds then it's not really possible to format them incorrectly.
     if bounds.len() < 2 {
         return true;
     }
 
-    let sorted_by_instance = bounds
-        .iter()
-        .sorted_unstable_by_key(|(_, b)| b.instance)
-        .collect_vec();
-
     // The first chunk must be instance 0, and all its bounds must start at 0.
-    let first = sorted_by_instance[0].1;
-    let first_chunk_is_correct =
-        0 == first.instance && 0 == first.indices.start && 0 == first.quads.start;
+    let first = bounds.get_index(0).unwrap().1;
+    let first_chunk_is_correct = 0 == first.indices.start && 0 == first.quads.start;
 
     if !first_chunk_is_correct {
         error!("First chunk bounds in the provided bounds are incorrect!");
@@ -529,16 +512,18 @@ pub(crate) fn chunk_bounds_correctly_formatted(bounds: &ChunkMap<ChunkBufferBoun
         return false;
     }
 
-    for w in sorted_by_instance.windows(2) {
+    let values_in_order = bounds.iter().collect_vec();
+
+    for w in values_in_order.windows(2) {
         // Previous chunk
         let (_p_cpos, p_bounds) = w[0];
         // Next chunk
         let (_n_cpos, n_bounds) = w[1];
 
         let is_correct =
-            // The instance of the next chunk must be larger than the previous one by exactly 1.
-            p_bounds.instance < n_bounds.instance
-            && 1 == (n_bounds.instance - p_bounds.instance)
+            // The previous bounds must start before the next bounds start.
+            p_bounds.indices.start < n_bounds.indices.start
+            && p_bounds.quads.start < n_bounds.quads.start
             // The chunks must share the data buffers contiguously.
             // i.e., the previous chunk's share must end where the next chunk's starts
             && p_bounds.indices.end == n_bounds.indices.start
