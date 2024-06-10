@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use bevy::{
+    ecs::entity::EntityHashMap,
     math::{bounding::BoundingVolume, ivec3},
     prelude::*,
 };
@@ -14,9 +15,9 @@ use crate::{
 };
 
 use super::{
-    ChunkObserver, ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent, ChunkPermitKey,
-    Entry, LastPosition, LoadChunkEvent, LoadReasons, LoadedChunkEvent, PermitFlags,
-    UnloadChunkEvent, UpdatePermitEvent,
+    ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent, ChunkPermitKey, Entry,
+    LastPosition, LoadChunkEvent, LoadReasons, LoadedChunkEvent, ObserverChunks, ObserverSettings,
+    PermitFlags, UnloadChunkEvent, UpdatePermitEvent,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -25,7 +26,10 @@ fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
 
 /// Dispatch movement events for chunk observers.
 pub fn dispatch_move_events(
-    mut observers: Query<(Entity, &Transform, Option<&mut LastPosition>), With<ChunkObserver>>,
+    mut observers: Query<
+        (Entity, &Transform, Option<&mut LastPosition>),
+        (With<ObserverSettings>, With<ObserverChunks>),
+    >,
     mut move_events: EventWriter<ChunkObserverMoveEvent>,
     mut chunk_border_events: EventWriter<ChunkObserverCrossChunkBorderEvent>,
     mut cmds: Commands,
@@ -100,7 +104,7 @@ fn chunk_pos_center_vec3(pos: ChunkPos) -> Vec3 {
 fn is_in_range(
     observer_pos: ChunkPos,
     chunk_pos: ChunkPos,
-    observer_settings: &ChunkObserver,
+    observer_settings: &ObserverSettings,
 ) -> bool {
     let horizontal = Vec2::splat(observer_settings.horizontal_range);
     let above = observer_settings.view_distance_above;
@@ -124,11 +128,11 @@ pub fn unload_out_of_range_chunks(
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
     mut update_permits: EventWriter<UpdatePermitEvent>,
     mut unload_chunks: EventWriter<UnloadChunkEvent>,
-    chunk_observers: Query<&ChunkObserver>,
+    mut chunk_observers: Query<(&ObserverSettings, &mut ObserverChunks)>,
 ) {
     let then = Instant::now();
 
-    let mut moved_observers = ChunkMap::<&ChunkObserver>::default();
+    let mut moved_observers = EntityHashMap::<&ChunkObserverCrossChunkBorderEvent>::default();
     for event in border_events.read() {
         if event.new {
             continue;
@@ -139,7 +143,7 @@ pub fn unload_out_of_range_chunks(
             continue;
         };
 
-        moved_observers.set(event.new_chunk, observer);
+        moved_observers.insert(event.entity, event);
     }
 
     // If there's no non-new border events, we don't do anything
@@ -148,6 +152,12 @@ pub fn unload_out_of_range_chunks(
     }
 
     let mut removed = ChunkMap::<Entry>::new();
+
+    for &event in moved_observers.values() {
+        let (settings, observer_chunks) = todo!();
+
+        // TODO: finish using new observer component here
+    }
 
     for entry in realm.permits().iter() {
         let mut visible = false;
@@ -194,11 +204,11 @@ pub fn load_in_range_chunks(
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
     mut load_chunks: EventWriter<LoadChunkEvent>,
     mut update_permits: EventWriter<UpdatePermitEvent>,
-    chunk_observers: Query<&ChunkObserver>,
+    chunk_observers: Query<&ObserverSettings>,
 ) {
     let then = Instant::now();
 
-    let mut moved_observers = ChunkMap::<&ChunkObserver>::default();
+    let mut moved_observers = ChunkMap::<&ObserverSettings>::default();
     for event in border_events.read() {
         let Ok(observer) = chunk_observers.get(event.entity) else {
             error!("Chunk observer entity described in move event didn't exist in the query");
@@ -278,7 +288,7 @@ fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> GenerationPrior
 }
 
 pub fn generate_chunks_with_priority(
-    observers: Query<&Transform, With<ChunkObserver>>,
+    observers: Query<&Transform, With<ObserverSettings>>,
     mut loaded_chunks: EventReader<LoadedChunkEvent>,
     mut generation_events: EventWriter<GenerateChunk>,
 ) {

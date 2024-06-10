@@ -14,7 +14,7 @@ use crate::{
     topo::{
         controller::{PermitFlags, UpdatePermitEvent},
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
-        ChunkObserver,
+        ObserverSettings,
     },
     util::{ChunkMap, ChunkSet},
 };
@@ -303,7 +303,7 @@ fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> RemeshPriority 
 pub fn dispatch_updated_chunk_remeshings(
     In(detected): In<UpdateDetectionRemeshResults>,
     current_generation: Res<MeshGeneration>,
-    observers: Query<&Transform, With<ChunkObserver>>,
+    observers: Query<&Transform, With<ObserverSettings>>,
     mut writer: EventWriter<RemeshChunk>,
 ) {
     writer.send_batch(

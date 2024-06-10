@@ -9,7 +9,7 @@ use observer_events::{
     unload_out_of_range_chunks,
 };
 
-use crate::EngineState;
+use crate::{util::ChunkSet, EngineState};
 
 use super::world::ChunkPos;
 
@@ -23,10 +23,31 @@ pub use events::*;
 pub use permits::*;
 
 #[derive(Clone, Component, Debug)]
-pub struct ChunkObserver {
+pub struct ObserverSettings {
     pub horizontal_range: f32,
     pub view_distance_above: f32,
     pub view_distance_below: f32,
+}
+
+impl Default for ObserverSettings {
+    fn default() -> Self {
+        Self {
+            horizontal_range: 4.0,
+            view_distance_above: 2.0,
+            view_distance_below: 2.0,
+        }
+    }
+}
+
+#[derive(Clone, Component, Default)]
+pub struct ObserverChunks {
+    pub in_range: ChunkSet,
+}
+
+#[derive(Bundle, Clone, Default)]
+pub struct ObserverBundle {
+    pub settings: ObserverSettings,
+    pub chunks: ObserverChunks,
 }
 
 #[derive(Clone, Component, Debug)]

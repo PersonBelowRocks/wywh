@@ -7,7 +7,7 @@ use ve::{
     topo::{
         controller::{ChunkPermitKey, LastPosition},
         world::VoxelRealm,
-        ChunkObserver,
+        ObserverSettings,
     },
     util::ws_to_chunk_pos,
 };
@@ -114,7 +114,7 @@ pub fn update_direction_text(
     text.sections[0].value = format!("Facing: {0}", direction_letter)
 }
 
-pub fn chunk_borders(mut giz: Gizmos, observers: Query<&LastPosition, With<ChunkObserver>>) {
+pub fn chunk_borders(mut giz: Gizmos, observers: Query<&LastPosition, With<ObserverSettings>>) {
     for last_pos in &observers {
         let pos = last_pos.chunk_pos.worldspace_min().as_vec3() + (Chunk::SIZE as f32 / 2.0);
 

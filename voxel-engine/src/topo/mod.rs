@@ -14,7 +14,7 @@ pub mod util;
 pub mod world;
 pub mod worldgen;
 
-pub use controller::ChunkObserver;
+pub use controller::ObserverSettings;
 
 pub use util::*;
 
