@@ -72,9 +72,15 @@ pub struct UnloadedChunkEvent {
 }
 
 #[derive(Clone, Event, Debug)]
-pub struct UpdatePermitsEvent {
+pub struct AddPermitFlagsEvent {
     pub loadshare: LoadshareId,
-    pub insert_flags: PermitFlags,
+    pub add_flags: PermitFlags,
+    pub chunks: ChunkSet,
+}
+
+#[derive(Clone, Event, Debug)]
+pub struct RemovePermitFlagsEvent {
+    pub loadshare: LoadshareId,
     pub remove_flags: PermitFlags,
     pub chunks: ChunkSet,
 }

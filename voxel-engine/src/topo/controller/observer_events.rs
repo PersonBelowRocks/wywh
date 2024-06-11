@@ -15,10 +15,10 @@ use crate::{
 };
 
 use super::{
-    ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent, ChunkPermitKey, Entry,
-    LastPosition, LoadChunksEvent, LoadReasons, LoadedChunkEvent, LoadshareProvider,
-    ObserverChunks, ObserverLoadshare, ObserverLoadshareType, ObserverSettings, PermitFlags,
-    UnloadChunksEvent, UpdatePermitsEvent,
+    AddPermitFlagsEvent, ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent,
+    ChunkPermitKey, Entry, LastPosition, LoadChunksEvent, LoadReasons, LoadedChunkEvent,
+    LoadshareProvider, ObserverChunks, ObserverLoadshare, ObserverLoadshareType, ObserverSettings,
+    PermitFlags, UnloadChunksEvent,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -142,7 +142,7 @@ fn is_in_range(
 pub fn unload_out_of_range_chunks(
     realm: VoxelRealm,
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
-    mut update_permits: EventWriter<UpdatePermitsEvent>,
+    mut update_permits: EventWriter<AddPermitFlagsEvent>,
     mut unload_chunks: EventWriter<UnloadChunksEvent>,
     mut chunk_observers: Query<(&ObserverSettings, &ObserverLoadshare, &mut ObserverChunks)>,
 ) {
@@ -189,9 +189,9 @@ pub fn unload_out_of_range_chunks(
             chunks: removed.clone(),
         });
 
-        update_permits.send(UpdatePermitsEvent {
+        update_permits.send(AddPermitFlagsEvent {
             loadshare: loadshare_id,
-            insert_flags: PermitFlags::empty(),
+            add_flags: PermitFlags::empty(),
             remove_flags: PermitFlags::RENDER,
             chunks: removed.clone(),
         });
@@ -202,7 +202,7 @@ pub fn load_in_range_chunks(
     realm: VoxelRealm,
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
     mut load_chunks: EventWriter<LoadChunksEvent>,
-    mut update_permits: EventWriter<UpdatePermitsEvent>,
+    mut update_permits: EventWriter<AddPermitFlagsEvent>,
     mut chunk_observers: Query<(&ObserverSettings, &ObserverLoadshare, &mut ObserverChunks)>,
 ) {
     let mut move_events = EntityHashMap::<&ChunkObserverCrossChunkBorderEvent>::default();
@@ -261,9 +261,9 @@ pub fn load_in_range_chunks(
             auto_generate: true,
         });
 
-        update_permits.send(UpdatePermitsEvent {
+        update_permits.send(AddPermitFlagsEvent {
             loadshare: loadshare_id,
-            insert_flags: PermitFlags::RENDER,
+            add_flags: PermitFlags::RENDER,
             remove_flags: PermitFlags::empty(),
             chunks: in_range.clone(),
         });

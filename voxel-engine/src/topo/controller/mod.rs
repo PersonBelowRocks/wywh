@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bitflags::bitflags;
 use hb::HashSet;
 
-use handle_events::{handle_chunk_loads_and_unloads, handle_permit_updates};
+use handle_events::{handle_chunk_loads_and_unloads, handle_permit_flag_additions};
 use observer_events::{
     dispatch_move_events, generate_chunks_with_priority, load_in_range_chunks,
     unload_out_of_range_chunks,
@@ -131,6 +131,11 @@ impl LoadshareProvider {
         id
     }
 
+    /// Check if this loadshare provider contains the given loadshare ID
+    pub fn contains(&self, id: LoadshareId) -> bool {
+        self.loadshares.contains(&id)
+    }
+
     /// Remove a loadshare ID
     pub(crate) fn remove_loadshare(&mut self, id: LoadshareId) {
         self.loadshares.remove(&id);
@@ -216,7 +221,7 @@ impl Plugin for WorldController {
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()
             .add_event::<UnloadedChunkEvent>()
-            .add_event::<UpdatePermitsEvent>()
+            .add_event::<AddPermitFlagsEvent>()
             .add_event::<ChunkObserverMoveEvent>()
             .add_event::<ChunkObserverCrossChunkBorderEvent>();
 
@@ -231,7 +236,7 @@ impl Plugin for WorldController {
                 )
                     .chain()
                     .in_set(WorldControllerSystems::ObserverResponses),
-                (handle_chunk_loads_and_unloads, handle_permit_updates)
+                (handle_chunk_loads_and_unloads, handle_permit_flag_additions)
                     .chain()
                     .in_set(WorldControllerSystems::CoreEvents),
                 generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),
