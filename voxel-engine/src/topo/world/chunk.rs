@@ -11,7 +11,7 @@ use crate::data::registries::Registry;
 use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::block::{BlockVoxel, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
-use crate::topo::controller::LoadReasons;
+use crate::topo::controller::{LoadReasons, LoadshareMap, PermitFlags};
 use crate::topo::storage::containers::data_storage::SyncIndexedChunkContainer;
 
 #[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
@@ -24,10 +24,14 @@ impl ChunkPos {
         Self(ivec3(x, y, z))
     }
 
+    /// The corner of this chunk closest to +infinity
+    /// For a `ChunkPos` of `[0, 0, 0]` this would be `[15, 15, 15]`.
     pub fn worldspace_max(self) -> IVec3 {
         (self.0 * Chunk::SIZE) + (Chunk::SIZE - 1)
     }
 
+    /// The corner of this chunk closest to -infinity
+    /// For a `ChunkPos` of `[0, 0, 0]` this would be `[0, 0, 0]`.
     pub fn worldspace_min(self) -> IVec3 {
         self.0 * Chunk::SIZE
     }
@@ -106,9 +110,30 @@ pub struct VoxelVariantData {
     pub rotation: Option<BlockModelRotation>,
 }
 
+#[derive(Clone)]
+pub struct ChunkLoadReasons {
+    pub loadshares: LoadshareMap<LoadReasons>,
+    pub cached_reasons: LoadReasons,
+}
+
+impl ChunkLoadReasons {
+    /// Updates the cached load reasons and returns them.
+    /// Should be called whenever a loadshare updates load reasons.
+    pub fn update_cached_reasons(&mut self) -> LoadReasons {
+        let mut cached = LoadReasons::empty();
+
+        for &reasons in self.loadshares.values() {
+            cached |= reasons;
+        }
+
+        self.cached_reasons = cached;
+        cached
+    }
+}
+
 pub struct Chunk {
     pub flags: RwLock<ChunkFlags>,
-    pub load_reasons: RwLock<LoadReasons>,
+    pub load_reasons: RwLock<ChunkLoadReasons>,
     pub variants: SyncIndexedChunkContainer<BlockVoxel>,
 }
 

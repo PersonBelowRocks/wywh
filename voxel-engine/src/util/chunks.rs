@@ -167,12 +167,26 @@ impl ChunkSet {
         self.0.iter().cloned()
     }
 
+    pub fn into_iter(self) -> impl Iterator<Item = ChunkPos> {
+        self.0.into_iter()
+    }
+
     pub fn clear(&mut self) {
         self.0.clear()
     }
 
     pub fn drain(&mut self) -> hb::hash_set::Drain<'_, ChunkPos> {
         self.0.drain()
+    }
+
+    pub fn retain<F: FnMut(&ChunkPos) -> bool>(&mut self, mut f: F) {
+        self.0.retain(f)
+    }
+}
+
+impl Extend<ChunkPos> for ChunkSet {
+    fn extend<T: IntoIterator<Item = ChunkPos>>(&mut self, iter: T) {
+        self.0.extend(iter)
     }
 }
 

@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 
 use crate::topo::world::ChunkPos;
+use crate::util::ChunkSet;
 
-use super::{error::EventPosMismatch, LoadReasons, PermitFlags};
+use super::{error::EventPosMismatch, LoadReasons, LoadshareId, PermitFlags};
 
 pub(super) trait MergeEvent: Sized {
     fn pos(&self) -> ChunkPos;
@@ -30,37 +31,18 @@ pub struct ChunkObserverCrossChunkBorderEvent {
     pub new_chunk: ChunkPos,
 }
 
-/// This chunk should be loaded for the given reasons.
-/// Will either load a chunk with the provided reasons, or add the given load reasons to an
-/// already loaded chunk.
-#[derive(Copy, Clone, Event, Debug)]
-pub struct LoadChunkEvent {
-    pub chunk_pos: ChunkPos,
+/// These chunks should be loaded for the given reasons.
+/// Chunks will be loaded under the provided reasons if they aren't already loaded, or they will
+/// receive the given load reasons in addition to their existing ones.
+#[derive(Clone, Event, Debug)]
+pub struct LoadChunksEvent {
+    pub loadshare: LoadshareId,
     pub reasons: LoadReasons,
     pub auto_generate: bool,
+    pub chunks: ChunkSet,
 }
 
-impl MergeEvent for LoadChunkEvent {
-    fn pos(&self) -> ChunkPos {
-        self.chunk_pos
-    }
-
-    fn merge(&mut self, other: Self) -> Result<(), EventPosMismatch> {
-        if self.chunk_pos != other.chunk_pos {
-            Err(EventPosMismatch {
-                this: self.chunk_pos,
-                other: other.chunk_pos,
-            })
-        } else {
-            self.auto_generate |= other.auto_generate;
-            self.reasons |= other.reasons;
-
-            Ok(())
-        }
-    }
-}
-
-/// Event triggered when a chunk is loaded. This event is "downstream" from [`LoadChunkEvent`] in that
+/// Event triggered when a chunk is loaded. This event is "downstream" from [`LoadChunksEvent`] in that
 /// `LoadChunkEvent`'s handler system in the engine also triggers this event. But this event is dispatched
 /// AFTER a chunk is loaded, whereas `LoadChunkEvent` is dispatched TO LOAD a chunk.
 /// This event is not triggered when load reasons are updated, only when a new chunk is loaded.
@@ -73,32 +55,14 @@ pub struct LoadedChunkEvent {
 /// This chunk should be unloaded for the given reasons.
 /// Will remove the provided reasons from an already loaded chunk, and if that chunk ends up having
 /// no load reasons left it will be unloaded.
-#[derive(Copy, Clone, Event, Debug)]
-pub struct UnloadChunkEvent {
-    pub chunk_pos: ChunkPos,
+#[derive(Clone, Event, Debug)]
+pub struct UnloadChunksEvent {
+    pub loadshare: LoadshareId,
     pub reasons: LoadReasons,
+    pub chunks: ChunkSet,
 }
 
-impl MergeEvent for UnloadChunkEvent {
-    fn pos(&self) -> ChunkPos {
-        self.chunk_pos
-    }
-
-    fn merge(&mut self, other: Self) -> Result<(), EventPosMismatch> {
-        if self.chunk_pos != other.chunk_pos {
-            Err(EventPosMismatch {
-                this: self.chunk_pos,
-                other: other.chunk_pos,
-            })
-        } else {
-            self.reasons |= other.reasons;
-
-            Ok(())
-        }
-    }
-}
-
-/// Event triggered when a chunk is unloaded. This event is "downstream" from [`UnloadChunkEvent`] in that
+/// Event triggered when a chunk is unloaded. This event is "downstream" from [`UnloadChunksEvent`] in that
 /// `UnloadChunkEvent`'s handler system in the engine also triggers this event. But this event is dispatched
 /// AFTER a chunk is unloaded, whereas `UnloadChunkEvent` is dispatched TO UNLOAD a chunk.
 /// This event is not triggered when load reasons are updated, only when a chunk is unloaded from the manager.
@@ -107,9 +71,12 @@ pub struct UnloadedChunkEvent {
     pub chunk_pos: ChunkPos,
 }
 
-#[derive(Copy, Clone, Event, Debug)]
-pub struct UpdatePermitEvent {
-    pub chunk_pos: ChunkPos,
+#[derive(Clone, Event, Debug)]
+pub struct UpdatePermitsEvent {
+    pub loadshare: LoadshareId,
     pub insert_flags: PermitFlags,
     pub remove_flags: PermitFlags,
+    pub chunks: ChunkSet,
 }
+
+// TODO: loadshare remove event

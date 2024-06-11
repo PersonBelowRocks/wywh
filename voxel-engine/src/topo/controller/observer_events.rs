@@ -16,12 +16,28 @@ use crate::{
 
 use super::{
     ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent, ChunkPermitKey, Entry,
-    LastPosition, LoadChunkEvent, LoadReasons, LoadedChunkEvent, ObserverChunks, ObserverSettings,
-    PermitFlags, UnloadChunkEvent, UpdatePermitEvent,
+    LastPosition, LoadChunksEvent, LoadReasons, LoadedChunkEvent, LoadshareProvider,
+    ObserverChunks, ObserverLoadshare, ObserverLoadshareType, ObserverSettings, PermitFlags,
+    UnloadChunksEvent, UpdatePermitsEvent,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
     ws_to_chunk_pos(trans.translation.floor().as_ivec3())
+}
+
+/// Grant unique loadshares to observers with an automatic loadshare type.
+pub fn grant_observer_loadshares(
+    mut observers: Query<(Entity, &mut ObserverLoadshare), Added<ObserverLoadshare>>,
+    mut loadshare_provider: ResMut<LoadshareProvider>,
+) {
+    for (entity, observer) in &mut observers {
+        if observer.0 == ObserverLoadshareType::Auto {
+            let loadshare = loadshare_provider.create_loadshare();
+            observer.0 = ObserverLoadshareType::Observer(loadshare);
+
+            debug!("Added loadshare {loadshare:?} to observer entity {entity:?}");
+        }
+    }
 }
 
 /// Dispatch movement events for chunk observers.
@@ -126,121 +142,109 @@ fn is_in_range(
 pub fn unload_out_of_range_chunks(
     realm: VoxelRealm,
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
-    mut update_permits: EventWriter<UpdatePermitEvent>,
-    mut unload_chunks: EventWriter<UnloadChunkEvent>,
-    mut chunk_observers: Query<(&ObserverSettings, &mut ObserverChunks)>,
+    mut update_permits: EventWriter<UpdatePermitsEvent>,
+    mut unload_chunks: EventWriter<UnloadChunksEvent>,
+    mut chunk_observers: Query<(&ObserverSettings, &ObserverLoadshare, &mut ObserverChunks)>,
 ) {
-    let then = Instant::now();
-
-    let mut moved_observers = EntityHashMap::<&ChunkObserverCrossChunkBorderEvent>::default();
+    let mut move_events = EntityHashMap::<&ChunkObserverCrossChunkBorderEvent>::default();
     for event in border_events.read() {
         if event.new {
             continue;
         }
 
-        let Ok(observer) = chunk_observers.get(event.entity) else {
-            error!("Chunk observer entity described in move event didn't exist in the query");
-            continue;
-        };
-
-        moved_observers.insert(event.entity, event);
+        move_events.insert(event.entity, event);
     }
 
     // If there's no non-new border events, we don't do anything
-    if moved_observers.len() <= 0 {
+    if move_events.len() <= 0 {
         return;
     }
 
-    let mut removed = ChunkMap::<Entry>::new();
+    for &event in move_events.values() {
+        let observer_pos = event.new_chunk;
 
-    for &event in moved_observers.values() {
-        let (settings, observer_chunks) = todo!();
+        let Ok((settings, loadshare, mut observer_chunks)) = chunk_observers.get_mut(event.entity)
+        else {
+            continue;
+        };
 
-        // TODO: finish using new observer component here
-    }
+        // Skip observers that don't have a loadshare id (yet)
+        let Some(loadshare_id) = loadshare.get() else {
+            continue;
+        };
 
-    for entry in realm.permits().iter() {
-        let mut visible = false;
-        // This would lead to a bug if we didn't already verify that there are actually events to be handled.
-        // If 'moved_observers' is empty, then 'visible' remains false, and the chunk is unloaded.
-        for (opos, &observer) in moved_observers.iter() {
-            if is_in_range(opos, entry.chunk, observer) {
-                visible = true;
-                break;
-            }
-        }
-
-        if !visible {
-            removed.set(entry.chunk, entry.clone());
-        }
-    }
-
-    for (chunk_pos, _entry) in removed.iter() {
-        // TODO: fix unloading
-        unload_chunks.send(UnloadChunkEvent {
-            chunk_pos,
-            reasons: LoadReasons::RENDER,
+        // TODO: find a good heuristic for the capacity here
+        let mut removed = ChunkSet::with_capacity(10);
+        // Retain the in-range chunks and track the ones that are out of range,
+        // so they can be unloaded
+        observer_chunks.in_range.retain(|&cpos| {
+            is_in_range(observer_pos, cpos, settings)
+                .then(|| removed.set(cpos))
+                .is_some()
         });
-        update_permits.send(UpdatePermitEvent {
-            chunk_pos,
+
+        unload_chunks.send(UnloadChunksEvent {
+            loadshare: loadshare_id,
+            reasons: LoadReasons::RENDER,
+            chunks: removed.clone(),
+        });
+
+        update_permits.send(UpdatePermitsEvent {
+            loadshare: loadshare_id,
             insert_flags: PermitFlags::empty(),
             remove_flags: PermitFlags::RENDER,
+            chunks: removed.clone(),
         });
-    }
-
-    let now = Instant::now();
-    let elapsed = now - then;
-
-    if removed.len() > 0 {
-        info!(
-            "Spent {}ms unloading out of range chunks for observers",
-            elapsed.as_millis()
-        );
     }
 }
 
 pub fn load_in_range_chunks(
     realm: VoxelRealm,
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
-    mut load_chunks: EventWriter<LoadChunkEvent>,
-    mut update_permits: EventWriter<UpdatePermitEvent>,
-    chunk_observers: Query<&ObserverSettings>,
+    mut load_chunks: EventWriter<LoadChunksEvent>,
+    mut update_permits: EventWriter<UpdatePermitsEvent>,
+    mut chunk_observers: Query<(&ObserverSettings, &ObserverLoadshare, &mut ObserverChunks)>,
 ) {
-    let then = Instant::now();
-
-    let mut moved_observers = ChunkMap::<&ObserverSettings>::default();
+    let mut move_events = EntityHashMap::<&ChunkObserverCrossChunkBorderEvent>::default();
     for event in border_events.read() {
-        let Ok(observer) = chunk_observers.get(event.entity) else {
-            error!("Chunk observer entity described in move event didn't exist in the query");
+        move_events.insert(event.entity, event);
+    }
+
+    for &event in move_events.values() {
+        let observer_pos = event.new_chunk;
+
+        let Ok((settings, loadshare, mut observer_chunks)) = chunk_observers.get_mut(event.entity)
+        else {
             continue;
         };
 
-        moved_observers.set(event.new_chunk, observer);
-    }
+        // Skip observers that don't have a loadshare id (yet)
+        let Some(loadshare_id) = loadshare.get() else {
+            continue;
+        };
 
-    let mut in_range = ChunkSet::default();
+        let min_y = (-settings.view_distance_below).floor() as i32;
+        let max_y = settings.view_distance_above.ceil() as i32;
 
-    for (opos, &observer) in moved_observers.iter() {
-        let min_y = (-observer.view_distance_below).floor() as i32;
-        let max_y = observer.view_distance_above.ceil() as i32;
+        let horizontal_min = IVec2::splat((-settings.horizontal_range).floor() as i32);
+        let horizontal_max = IVec2::splat(settings.horizontal_range.ceil() as i32);
 
-        let horizontal_min = IVec2::splat((-observer.horizontal_range).floor() as i32);
-        let horizontal_max = IVec2::splat(observer.horizontal_range.ceil() as i32);
+        let mut in_range = ChunkSet::default();
 
         for y in min_y..=max_y {
             for x in horizontal_min.x..=horizontal_max.x {
                 for z in horizontal_min.y..=horizontal_max.y {
                     let pos = ivec3(x, y, z);
-                    let cpos = ChunkPos::from(pos + opos.as_ivec3());
+                    let cpos = ChunkPos::from(pos + observer_pos.as_ivec3());
 
-                    if !is_in_range(opos, cpos, observer) {
+                    if !is_in_range(observer_pos, cpos, settings) {
                         continue;
                     }
 
                     if realm
                         .permits()
                         .get(ChunkPermitKey::Chunk(cpos))
-                        .is_some_and(|permit| permit.flags.contains(PermitFlags::RENDER))
+                        .is_some_and(|permit| permit.cached_flags.contains(PermitFlags::RENDER))
                     {
                         continue;
                     }
@@ -249,29 +253,22 @@ pub fn load_in_range_chunks(
                 }
             }
         }
-    }
 
-    for chunk_pos in in_range.iter() {
-        load_chunks.send(LoadChunkEvent {
-            chunk_pos,
+        load_chunks.send(LoadChunksEvent {
+            loadshare: loadshare_id,
             reasons: LoadReasons::RENDER,
+            chunks: in_range.clone(),
             auto_generate: true,
         });
-        update_permits.send(UpdatePermitEvent {
-            chunk_pos,
+
+        update_permits.send(UpdatePermitsEvent {
+            loadshare: loadshare_id,
             insert_flags: PermitFlags::RENDER,
             remove_flags: PermitFlags::empty(),
+            chunks: in_range.clone(),
         });
-    }
 
-    let now = Instant::now();
-    let elapsed = now - then;
-
-    if in_range.len() > 0 {
-        info!(
-            "Spent {}ms loading in-range chunks for observers",
-            elapsed.as_millis()
-        );
+        observer_chunks.in_range.extend(in_range.into_iter());
     }
 }
 

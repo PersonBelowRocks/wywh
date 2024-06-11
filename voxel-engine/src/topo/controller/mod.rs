@@ -2,6 +2,7 @@ use std::{fmt, time::Duration};
 
 use bevy::prelude::*;
 use bitflags::bitflags;
+use hb::HashSet;
 
 use handle_events::{handle_chunk_loads_and_unloads, handle_permit_updates};
 use observer_events::{
@@ -20,6 +21,7 @@ mod observer_events;
 mod permits;
 pub use events::*;
 
+use crate::topo::controller::observer_events::grant_observer_loadshares;
 pub use permits::*;
 
 #[derive(Clone, Component, Debug)]
@@ -44,10 +46,102 @@ pub struct ObserverChunks {
     pub in_range: ChunkSet,
 }
 
+/// How an observer should treat its loadshare
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub(crate) enum ObserverLoadshareType {
+    /// Automatically create a new and unique loadshare for this observer. Upon having one created
+    /// the loadshare type will be updated to `ObserverLoadshareType::Observer` with the created
+    /// loadshare ID
+    #[default]
+    Auto,
+    /// Manually given loadshare to the observer. In this case the observer shouldn't clear the
+    /// entire loadshare if it's removed.
+    Manual(LoadshareId),
+    /// The loadshare is owned and controlled by the observer, this variant should never be constructed
+    /// manually and should only be created from the engine giving an `Auto` observer a loadshare.
+    Observer(LoadshareId),
+}
+
+/// The loadshare of an observer.
+#[derive(Default, Component, Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ObserverLoadshare(pub(crate) ObserverLoadshareType);
+
+impl ObserverLoadshare {
+    /// Manually track the given loadshare ID. The observer will not clear the entire loadshare if
+    /// it's removed
+    pub fn manual(id: LoadshareId) -> Self {
+        Self(ObserverLoadshareType::Manual(id))
+    }
+
+    /// Automatically grant a unique loadshare to this observer and clear the entire loadshare if
+    /// the observer is removed.
+    pub fn auto() -> Self {
+        Self(ObserverLoadshareType::default())
+    }
+
+    /// Get the loadshare ID if there is one. Will return `None` if the loadshare type is auto
+    /// and hasn't been granted a loadshare ID yet.
+    pub fn get(&self) -> Option<LoadshareId> {
+        match self.0 {
+            ObserverLoadshareType::Auto => None,
+            ObserverLoadshareType::Observer(id) => Some(id),
+            ObserverLoadshareType::Manual(id) => Some(id),
+        }
+    }
+}
+
+/// A loadshare is a group of engine resources (permits, chunks, etc.) managed by some owner.
+/// This owner is often an observer but doesn't have to be. When a chunk is loaded it's loaded under
+/// a loadshare with some given load reasons. More chunks can be loaded under the same loadshare later.
+/// When a chunk is unloaded, its load reasons are removed for a given loadshare. Chunks will be removed
+/// from the loadshare if they have no remaining reasons. If a chunk isn't present in any loadshare, it can be
+/// unloaded from the engine entirely. This same logic applies to permits.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct LoadshareId(u32);
+
+pub type LoadshareMap<T> = hb::HashMap<LoadshareId, T, fnv::FnvBuildHasher>;
+
+/// Provides unique loadshare IDs. You can leak resources by getting a unique loadshare ID from the
+/// provider, allocating a resource under that loadshare, and forgetting or losing track of the ID.
+/// In this case there's no way to refer to the resources under that loadshare because you don't have
+/// the ID anymore. For this reason always be careful to store your loadshare ID somewhere.
+#[derive(Resource, Default)]
+pub struct LoadshareProvider {
+    loadshares: HashSet<LoadshareId, wyhash2::WyHash>,
+}
+
+const MAX_PROVIDER_RETRIES: usize = 16;
+
+impl LoadshareProvider {
+    /// Create a unique loadshare ID and store it internally so that it won't be provided again.
+    pub fn create_loadshare(&mut self) -> LoadshareId {
+        let mut id = LoadshareId(0);
+        let mut retry = 0;
+
+        while self.loadshares.contains(&id) {
+            if retry >= MAX_PROVIDER_RETRIES {
+                panic!("Couldn't create a unique loadshare within {MAX_PROVIDER_RETRIES} tries");
+            }
+
+            retry += 1;
+            id = LoadshareId(rand::random::<u32>());
+        }
+
+        self.loadshares.insert(id);
+        id
+    }
+
+    /// Remove a loadshare ID
+    pub(crate) fn remove_loadshare(&mut self, id: LoadshareId) {
+        self.loadshares.remove(&id);
+    }
+}
+
 #[derive(Bundle, Clone, Default)]
 pub struct ObserverBundle {
     pub settings: ObserverSettings,
     pub chunks: ObserverChunks,
+    pub loadshare: ObserverLoadshare,
 }
 
 #[derive(Clone, Component, Debug)]
@@ -118,11 +212,11 @@ pub struct WorldController {
 impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings)
-            .add_event::<LoadChunkEvent>()
+            .add_event::<LoadChunksEvent>()
             .add_event::<LoadedChunkEvent>()
-            .add_event::<UnloadChunkEvent>()
+            .add_event::<UnloadChunksEvent>()
             .add_event::<UnloadedChunkEvent>()
-            .add_event::<UpdatePermitEvent>()
+            .add_event::<UpdatePermitsEvent>()
             .add_event::<ChunkObserverMoveEvent>()
             .add_event::<ChunkObserverCrossChunkBorderEvent>();
 
@@ -130,7 +224,11 @@ impl Plugin for WorldController {
             FixedPostUpdate,
             (
                 dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
-                (unload_out_of_range_chunks, load_in_range_chunks)
+                (
+                    grant_observer_loadshares,
+                    unload_out_of_range_chunks,
+                    load_in_range_chunks,
+                )
                     .chain()
                     .in_set(WorldControllerSystems::ObserverResponses),
                 (handle_chunk_loads_and_unloads, handle_permit_updates)

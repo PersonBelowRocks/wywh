@@ -11,8 +11,8 @@ use crate::{
 };
 
 use super::{
-    ChunkEcsPermits, LoadChunkEvent, LoadedChunkEvent, MergeEvent, Permit, UnloadChunkEvent,
-    UnloadedChunkEvent, UpdatePermitEvent, WorldControllerSettings,
+    ChunkEcsPermits, LoadChunksEvent, LoadedChunkEvent, MergeEvent, Permit, UnloadChunksEvent,
+    UnloadedChunkEvent, UpdatePermitsEvent, WorldControllerSettings,
 };
 
 #[derive(Bundle)]
@@ -39,7 +39,7 @@ impl ChunkEcsBundle {
 }
 
 pub fn handle_permit_updates(
-    mut permit_events: EventReader<UpdatePermitEvent>,
+    mut permit_events: EventReader<UpdatePermitsEvent>,
     mut permits: ResMut<ChunkEcsPermits>,
     chunks: Query<(Entity, &ChunkPos), With<ChunkEntity>>,
     mut cmds: Commands,
@@ -48,7 +48,7 @@ pub fn handle_permit_updates(
 
     let has_events = permit_events.len() > 0;
 
-    let mut permit_updates = ChunkMap::<UpdatePermitEvent>::with_capacity(permit_events.len());
+    let mut permit_updates = ChunkMap::<UpdatePermitsEvent>::with_capacity(permit_events.len());
 
     for event in permit_events.read().copied() {
         match permit_updates.get_mut(event.chunk_pos) {
@@ -145,13 +145,13 @@ pub fn handle_chunk_loads_and_unloads(
     time: Res<Time<Real>>,
     mut latest_cycle: Local<Option<Instant>>,
     // Events
-    mut load_events: EventReader<LoadChunkEvent>,
+    mut load_events: EventReader<LoadChunksEvent>,
     mut loaded_chunks: EventWriter<LoadedChunkEvent>,
-    mut unload_events: EventReader<UnloadChunkEvent>,
+    mut unload_events: EventReader<UnloadChunksEvent>,
     mut unloaded_chunks: EventWriter<UnloadedChunkEvent>,
     // Backlogs
-    mut unload_backlog: Local<ChunkMap<UnloadChunkEvent>>,
-    mut load_backlog: Local<ChunkMap<LoadChunkEvent>>,
+    mut unload_backlog: Local<ChunkMap<UnloadChunksEvent>>,
+    mut load_backlog: Local<ChunkMap<LoadChunksEvent>>,
 ) {
     let threshold = settings.chunk_loading_handler_backlog_threshold;
     let timeout = settings.chunk_loading_handler_timeout;

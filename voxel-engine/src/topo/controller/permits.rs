@@ -6,6 +6,7 @@ use bevy::ecs::{
 };
 use bitflags::bitflags;
 
+use crate::topo::controller::LoadshareMap;
 use crate::{topo::world::ChunkPos, util::ChunkMap};
 
 bitflags! {
@@ -32,14 +33,24 @@ impl fmt::Debug for PermitFlags {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Permit {
-    pub flags: PermitFlags,
+    pub loadshares: LoadshareMap<PermitFlags>,
+    pub cached_flags: PermitFlags,
 }
 
 impl Permit {
-    pub fn new(flags: PermitFlags) -> Self {
-        Self { flags }
+    /// Updates the cached permit flags and returns them.
+    /// Should be called whenever a loadshare updates permit flags.
+    pub fn update_cached_flags(&mut self) -> PermitFlags {
+        let mut cached = PermitFlags::empty();
+
+        for &flags in self.loadshares.values() {
+            cached |= flags;
+        }
+
+        self.cached_flags = cached;
+        cached
     }
 }
 

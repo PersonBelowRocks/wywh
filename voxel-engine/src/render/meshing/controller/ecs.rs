@@ -12,7 +12,7 @@ use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
     topo::{
-        controller::{PermitFlags, UpdatePermitEvent},
+        controller::{PermitFlags, UpdatePermitsEvent},
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ObserverSettings,
     },
@@ -128,7 +128,7 @@ pub fn insert_chunks(
 /// Remove the extracted chunks from the render world when their render permits are revoked
 pub fn remove_chunks(
     mut meshes: ResMut<ExtractableChunkMeshData>,
-    mut events: EventReader<UpdatePermitEvent>,
+    mut events: EventReader<UpdatePermitsEvent>,
     mut builder: ResMut<MeshBuilder>,
 ) {
     let mut remove = ChunkSet::with_capacity(events.len());
