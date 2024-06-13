@@ -5,7 +5,9 @@ use bevy::{
     prelude::Resource,
 };
 
-use crate::topo::controller::{ChunkEcsPermits, ChunkPermitKey, PermitFlags};
+use crate::topo::controller::{
+    ChunkEcsPermits, ChunkPermitKey, LoadshareId, LoadshareProvider, PermitFlags,
+};
 
 use super::{chunk_manager::ChunkManager, ChunkPos};
 
@@ -16,6 +18,7 @@ pub struct ChunkManagerResource(pub(crate) Arc<ChunkManager>);
 pub struct VoxelRealm<'w> {
     chunk_manager: Res<'w, ChunkManagerResource>,
     permits: Res<'w, ChunkEcsPermits>,
+    loadshares: Res<'w, LoadshareProvider>,
 }
 
 impl<'w> VoxelRealm<'w> {
@@ -35,5 +38,9 @@ impl<'w> VoxelRealm<'w> {
         self.permits()
             .get(ChunkPermitKey::Chunk(pos))
             .is_some_and(|permit| permit.cached_flags.contains(PermitFlags::RENDER))
+    }
+
+    pub fn has_loadshare(&self, loadshare: LoadshareId) -> bool {
+        self.loadshares.contains(loadshare)
     }
 }

@@ -127,7 +127,7 @@ pub fn handle_permit_flag_additions(
                     permit
                         .loadshares
                         .entry(event.loadshare)
-                        .and_modify(|mut ls_flags| ls_flags.insert(event.add_flags))
+                        .and_modify(|ls_flags| ls_flags.insert(event.add_flags))
                         .or_insert(event.add_flags);
 
                     permit.update_cached_flags();
@@ -206,6 +206,11 @@ pub fn handle_chunk_loads_and_unloads(
             *latest_cycle = Some(now);
 
             for event in load_backlog.drain(..) {
+                // Skip this event if the event loadshare doesn't exist.
+                if !realm.has_loadshare(event.loadshare) {
+                    continue;
+                }
+
                 let mut loadshare = access.loadshare(event.loadshare);
 
                 for chunk_pos in event.chunks.into_iter() {
