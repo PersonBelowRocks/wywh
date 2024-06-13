@@ -11,7 +11,7 @@ use itertools::Itertools;
 
 use crate::topo::world::ChunkPos;
 
-pub type ChunkIndexMap<T> = IndexMap<ChunkPos, T, wyhash2::WyHash>;
+pub type ChunkIndexMap<T> = IndexMap<ChunkPos, T, ahash::RandomState>;
 
 #[derive(Clone)]
 pub struct MultiChunkMapEntry<T> {

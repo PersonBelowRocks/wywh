@@ -13,6 +13,7 @@ use rangemap::RangeSet;
 
 use crate::{
     render::{meshing::controller::ChunkMeshData, quad::GpuQuad},
+    topo::world::ChunkPos,
     util::{ChunkIndexMap, ChunkMap, ChunkSet},
 };
 
@@ -489,8 +490,14 @@ impl IndirectChunkData {
         self.update_bounds(gpu, queue, chunks_to_retain);
     }
 
+    #[inline]
     pub fn num_chunks(&self) -> usize {
         self.bounds.len()
+    }
+
+    #[inline]
+    pub fn get_chunk_bounds(&self, chunk: ChunkPos) -> Option<ChunkBufferBounds> {
+        self.bounds.get(&chunk).cloned()
     }
 }
 

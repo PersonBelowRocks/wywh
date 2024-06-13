@@ -17,8 +17,8 @@ use crate::{
 use super::{
     AddPermitFlagsEvent, ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent,
     ChunkPermitKey, Entry, LastPosition, LoadChunksEvent, LoadReasons, LoadedChunkEvent,
-    LoadshareProvider, ObserverChunks, ObserverLoadshare, ObserverLoadshareType, ObserverSettings,
-    PermitFlags, RemovePermitFlagsEvent, UnloadChunksEvent,
+    LoadshareProvider, ObserverLoadshare, ObserverLoadshareType, ObserverSettings, PermitFlags,
+    RemovePermitFlagsEvent, RenderableObserverChunks, UnloadChunksEvent,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -44,7 +44,7 @@ pub fn grant_observer_loadshares(
 pub fn dispatch_move_events(
     mut observers: Query<
         (Entity, &Transform, Option<&mut LastPosition>),
-        (With<ObserverSettings>, With<ObserverChunks>),
+        (With<ObserverSettings>, With<RenderableObserverChunks>),
     >,
     mut move_events: EventWriter<ChunkObserverMoveEvent>,
     mut chunk_border_events: EventWriter<ChunkObserverCrossChunkBorderEvent>,
@@ -143,7 +143,11 @@ pub fn unload_out_of_range_chunks(
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
     mut remove_permits: EventWriter<RemovePermitFlagsEvent>,
     mut unload_chunks: EventWriter<UnloadChunksEvent>,
-    mut chunk_observers: Query<(&ObserverSettings, &ObserverLoadshare, &mut ObserverChunks)>,
+    mut chunk_observers: Query<(
+        &ObserverSettings,
+        &ObserverLoadshare,
+        &mut RenderableObserverChunks,
+    )>,
 ) {
     let mut move_events = EntityHashMap::<&ChunkObserverCrossChunkBorderEvent>::default();
     for event in border_events.read() {
@@ -209,7 +213,11 @@ pub fn load_in_range_chunks(
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
     mut load_chunks: EventWriter<LoadChunksEvent>,
     mut update_permits: EventWriter<AddPermitFlagsEvent>,
-    mut chunk_observers: Query<(&ObserverSettings, &ObserverLoadshare, &mut ObserverChunks)>,
+    mut chunk_observers: Query<(
+        &ObserverSettings,
+        &ObserverLoadshare,
+        &mut RenderableObserverChunks,
+    )>,
 ) {
     let mut move_events = EntityHashMap::<&ChunkObserverCrossChunkBorderEvent>::default();
     for event in border_events.read() {

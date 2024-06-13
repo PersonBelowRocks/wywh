@@ -46,9 +46,19 @@ impl Default for ObserverSettings {
     }
 }
 
-#[derive(Clone, Component, Default, ExtractComponent)]
-pub struct ObserverChunks {
+#[derive(Clone, Component, ExtractComponent)]
+pub struct RenderableObserverChunks {
+    pub should_extract: bool,
     pub in_range: ChunkSet,
+}
+
+impl Default for RenderableObserverChunks {
+    fn default() -> Self {
+        Self {
+            should_extract: true,
+            in_range: ChunkSet::default(),
+        }
+    }
 }
 
 /// How an observer should treat its loadshare
@@ -152,7 +162,7 @@ impl LoadshareProvider {
 #[derive(Bundle, Clone, Default)]
 pub struct ObserverBundle {
     pub settings: ObserverSettings,
-    pub chunks: ObserverChunks,
+    pub chunks: RenderableObserverChunks,
     pub loadshare: ObserverLoadshare,
 }
 
@@ -225,7 +235,7 @@ impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings)
             .init_resource::<LoadshareProvider>()
-            .add_plugins(ExtractComponentPlugin::<ObserverChunks>::default())
+            .add_plugins(ExtractComponentPlugin::<RenderableObserverChunks>::default())
             .add_event::<LoadChunksEvent>()
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()
