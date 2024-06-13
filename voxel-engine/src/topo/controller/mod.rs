@@ -1,6 +1,9 @@
 use std::{fmt, time::Duration};
 
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    render::extract_component::{ExtractComponent, ExtractComponentPlugin},
+};
 use bitflags::bitflags;
 use hb::HashSet;
 
@@ -43,7 +46,7 @@ impl Default for ObserverSettings {
     }
 }
 
-#[derive(Clone, Component, Default)]
+#[derive(Clone, Component, Default, ExtractComponent)]
 pub struct ObserverChunks {
     pub in_range: ChunkSet,
 }
@@ -222,6 +225,7 @@ impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings)
             .init_resource::<LoadshareProvider>()
+            .add_plugins(ExtractComponentPlugin::<ObserverChunks>::default())
             .add_event::<LoadChunksEvent>()
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()
