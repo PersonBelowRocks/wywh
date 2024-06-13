@@ -85,4 +85,11 @@ pub struct RemovePermitFlagsEvent {
     pub chunks: ChunkSet,
 }
 
+/// Triggered after a permit lost some flags across all loadshares.
+#[derive(Clone, Event, Debug)]
+pub struct PermitLostFlagsEvent {
+    pub chunk_pos: ChunkPos,
+    pub lost_flags: PermitFlags,
+}
+
 // TODO: loadshare remove event

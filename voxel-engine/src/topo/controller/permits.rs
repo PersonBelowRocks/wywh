@@ -176,7 +176,10 @@ mod tests {
             permits.insert(
                 Entity::from_raw(i as u32),
                 ChunkPos::new(0, i as i32, 0),
-                Permit::new(PermitFlags::RENDER),
+                Permit {
+                    loadshares: LoadshareMap::default(),
+                    cached_flags: PermitFlags::RENDER,
+                },
             );
         }
 

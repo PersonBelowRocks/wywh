@@ -33,6 +33,8 @@ pub enum ChunkContainerError {
     DoesntExist,
     #[error("Chunk container is globally locked")]
     GloballyLocked,
+    #[error("Chunk is not loaded under this loadshare")]
+    InvalidLoadshare,
 }
 
 #[derive(te::Error, Debug, PartialEq, Eq, Clone)]

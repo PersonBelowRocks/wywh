@@ -4,7 +4,9 @@ use bevy::prelude::*;
 use bitflags::bitflags;
 use hb::HashSet;
 
-use handle_events::{handle_chunk_loads_and_unloads, handle_permit_flag_additions};
+use handle_events::{
+    handle_chunk_loads_and_unloads, handle_permit_flag_additions, handle_permit_flag_removals,
+};
 use observer_events::{
     dispatch_move_events, generate_chunks_with_priority, load_in_range_chunks,
     unload_out_of_range_chunks,
@@ -99,7 +101,9 @@ impl ObserverLoadshare {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct LoadshareId(u32);
 
-pub type LoadshareMap<T> = hb::HashMap<LoadshareId, T, fnv::FnvBuildHasher>;
+impl nohash::IsEnabled for LoadshareId {}
+
+pub type LoadshareMap<T> = hb::HashMap<LoadshareId, T, nohash::BuildNoHashHasher<LoadshareId>>;
 
 /// Provides unique loadshare IDs. You can leak resources by getting a unique loadshare ID from the
 /// provider, allocating a resource under that loadshare, and forgetting or losing track of the ID.
@@ -217,11 +221,14 @@ pub struct WorldController {
 impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings)
+            .init_resource::<LoadshareProvider>()
             .add_event::<LoadChunksEvent>()
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()
             .add_event::<UnloadedChunkEvent>()
             .add_event::<AddPermitFlagsEvent>()
+            .add_event::<RemovePermitFlagsEvent>()
+            .add_event::<PermitLostFlagsEvent>()
             .add_event::<ChunkObserverMoveEvent>()
             .add_event::<ChunkObserverCrossChunkBorderEvent>();
 
@@ -236,7 +243,11 @@ impl Plugin for WorldController {
                 )
                     .chain()
                     .in_set(WorldControllerSystems::ObserverResponses),
-                (handle_chunk_loads_and_unloads, handle_permit_flag_additions)
+                (
+                    handle_chunk_loads_and_unloads,
+                    handle_permit_flag_additions,
+                    handle_permit_flag_removals,
+                )
                     .chain()
                     .in_set(WorldControllerSystems::CoreEvents),
                 generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),

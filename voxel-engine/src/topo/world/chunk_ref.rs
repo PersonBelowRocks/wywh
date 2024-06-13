@@ -79,26 +79,8 @@ impl<'a> ChunkRef<'a> {
         self.set_flags(new_flags);
     }
 
-    pub fn load_reasons(&self) -> LoadReasons {
-        *self.chunk.load_reasons.read()
-    }
-
-    fn set_load_reasons(&self, reasons: LoadReasons) {
-        let mut old = self.chunk.load_reasons.write();
-        *old = reasons;
-    }
-
-    pub fn update_load_reasons<F>(&self, f: F) -> LoadReasons
-    where
-        F: for<'lr> FnOnce(&'lr mut LoadReasons),
-    {
-        let old_reasons = self.load_reasons();
-        let mut new_reasons = old_reasons;
-        f(&mut new_reasons);
-
-        // TODO: mark chunk for unloading there are no load reasons
-        self.set_load_reasons(new_reasons);
-        new_reasons
+    pub fn cached_load_reasons(&self) -> LoadReasons {
+        self.chunk.load_reasons.read().cached_reasons
     }
 
     pub fn with_access<F, U>(&self, manual_update_ctrl: bool, f: F) -> Result<U, ChunkManagerError>

@@ -18,7 +18,7 @@ use super::{
     AddPermitFlagsEvent, ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent,
     ChunkPermitKey, Entry, LastPosition, LoadChunksEvent, LoadReasons, LoadedChunkEvent,
     LoadshareProvider, ObserverChunks, ObserverLoadshare, ObserverLoadshareType, ObserverSettings,
-    PermitFlags, UnloadChunksEvent,
+    PermitFlags, RemovePermitFlagsEvent, UnloadChunksEvent,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -30,7 +30,7 @@ pub fn grant_observer_loadshares(
     mut observers: Query<(Entity, &mut ObserverLoadshare), Added<ObserverLoadshare>>,
     mut loadshare_provider: ResMut<LoadshareProvider>,
 ) {
-    for (entity, observer) in &mut observers {
+    for (entity, mut observer) in &mut observers {
         if observer.0 == ObserverLoadshareType::Auto {
             let loadshare = loadshare_provider.create_loadshare();
             observer.0 = ObserverLoadshareType::Observer(loadshare);
@@ -140,9 +140,8 @@ fn is_in_range(
 }
 
 pub fn unload_out_of_range_chunks(
-    realm: VoxelRealm,
     mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
-    mut update_permits: EventWriter<AddPermitFlagsEvent>,
+    mut remove_permits: EventWriter<RemovePermitFlagsEvent>,
     mut unload_chunks: EventWriter<UnloadChunksEvent>,
     mut chunk_observers: Query<(&ObserverSettings, &ObserverLoadshare, &mut ObserverChunks)>,
 ) {
@@ -163,6 +162,11 @@ pub fn unload_out_of_range_chunks(
     for &event in move_events.values() {
         let observer_pos = event.new_chunk;
 
+        // Don't unload anything if this was the first movement event for the observer
+        if event.new {
+            continue;
+        }
+
         let Ok((settings, loadshare, mut observer_chunks)) = chunk_observers.get_mut(event.entity)
         else {
             continue;
@@ -178,9 +182,12 @@ pub fn unload_out_of_range_chunks(
         // Retain the in-range chunks and track the ones that are out of range,
         // so they can be unloaded
         observer_chunks.in_range.retain(|&cpos| {
-            is_in_range(observer_pos, cpos, settings)
-                .then(|| removed.set(cpos))
-                .is_some()
+            if is_in_range(observer_pos, cpos, settings) {
+                true
+            } else {
+                removed.set(cpos);
+                false
+            }
         });
 
         unload_chunks.send(UnloadChunksEvent {
@@ -189,9 +196,8 @@ pub fn unload_out_of_range_chunks(
             chunks: removed.clone(),
         });
 
-        update_permits.send(AddPermitFlagsEvent {
+        remove_permits.send(RemovePermitFlagsEvent {
             loadshare: loadshare_id,
-            add_flags: PermitFlags::empty(),
             remove_flags: PermitFlags::RENDER,
             chunks: removed.clone(),
         });
@@ -264,7 +270,6 @@ pub fn load_in_range_chunks(
         update_permits.send(AddPermitFlagsEvent {
             loadshare: loadshare_id,
             add_flags: PermitFlags::RENDER,
-            remove_flags: PermitFlags::empty(),
             chunks: in_range.clone(),
         });
 

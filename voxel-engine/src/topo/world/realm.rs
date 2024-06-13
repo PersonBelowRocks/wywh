@@ -34,6 +34,6 @@ impl<'w> VoxelRealm<'w> {
     pub fn has_render_permit(&self, pos: ChunkPos) -> bool {
         self.permits()
             .get(ChunkPermitKey::Chunk(pos))
-            .is_some_and(|permit| permit.flags.contains(PermitFlags::RENDER))
+            .is_some_and(|permit| permit.cached_flags.contains(PermitFlags::RENDER))
     }
 }

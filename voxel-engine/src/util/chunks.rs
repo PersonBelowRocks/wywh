@@ -133,13 +133,13 @@ impl<T> MultiChunkMap<T> {
 }
 
 #[derive(Clone, Default, Debug)]
-pub struct ChunkSet(hb::HashSet<ChunkPos, wyhash2::WyHash>);
+pub struct ChunkSet(hb::HashSet<ChunkPos, ahash::RandomState>);
 
 impl ChunkSet {
     pub fn with_capacity(capacity: usize) -> Self {
         Self(hb::HashSet::with_capacity_and_hasher(
             capacity,
-            wyhash2::WyHash::default(),
+            ahash::RandomState::default(),
         ))
     }
 
@@ -191,7 +191,7 @@ impl Extend<ChunkPos> for ChunkSet {
 }
 
 #[derive(Clone)]
-pub struct SyncChunkMap<T>(DashMap<ChunkPos, T, wyhash2::WyHash>);
+pub struct SyncChunkMap<T>(DashMap<ChunkPos, T, ahash::RandomState>);
 
 impl<T> Default for SyncChunkMap<T> {
     fn default() -> Self {
@@ -201,14 +201,14 @@ impl<T> Default for SyncChunkMap<T> {
 
 impl<T> SyncChunkMap<T> {
     pub fn new() -> Self {
-        Self(DashMap::with_hasher(wyhash2::WyHash::default()))
+        Self(DashMap::with_hasher(ahash::RandomState::default()))
     }
 
     pub fn set(&self, pos: ChunkPos, data: T) -> Option<T> {
         self.0.insert(pos, data)
     }
 
-    pub fn get(&self, pos: ChunkPos) -> Option<DashMapRef<ChunkPos, T, wyhash2::WyHash>> {
+    pub fn get(&self, pos: ChunkPos) -> Option<DashMapRef<ChunkPos, T, ahash::RandomState>> {
         self.0.get(&pos)
     }
 
@@ -220,7 +220,7 @@ impl<T> SyncChunkMap<T> {
         self.0.contains_key(&pos)
     }
 
-    pub fn entry(&self, pos: ChunkPos) -> DashMapEntry<'_, ChunkPos, T, wyhash2::WyHash> {
+    pub fn entry(&self, pos: ChunkPos) -> DashMapEntry<'_, ChunkPos, T, ahash::RandomState> {
         self.0.entry(pos)
     }
 
@@ -251,7 +251,7 @@ impl<T> SyncChunkMap<T> {
 }
 
 #[derive(Clone)]
-pub struct ChunkMap<T>(hb::HashMap<ChunkPos, T, wyhash2::WyHash>);
+pub struct ChunkMap<T>(hb::HashMap<ChunkPos, T, ahash::RandomState>);
 
 impl<T> Default for ChunkMap<T> {
     fn default() -> Self {
@@ -261,13 +261,13 @@ impl<T> Default for ChunkMap<T> {
 
 impl<T> ChunkMap<T> {
     pub fn new() -> Self {
-        Self(hb::HashMap::with_hasher(wyhash2::WyHash::default()))
+        Self(hb::HashMap::with_hasher(ahash::RandomState::default()))
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         Self(hb::HashMap::with_capacity_and_hasher(
             capacity,
-            wyhash2::WyHash::default(),
+            ahash::RandomState::default(),
         ))
     }
 
@@ -291,7 +291,7 @@ impl<T> ChunkMap<T> {
         self.0.contains_key(&pos)
     }
 
-    pub fn entry(&mut self, pos: ChunkPos) -> HashbrownEntry<'_, ChunkPos, T, wyhash2::WyHash> {
+    pub fn entry(&mut self, pos: ChunkPos) -> HashbrownEntry<'_, ChunkPos, T, ahash::RandomState> {
         self.0.entry(pos)
     }
 

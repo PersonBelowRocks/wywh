@@ -156,7 +156,11 @@ impl Chunk {
     };
 
     #[inline]
-    pub fn new(filling: BlockVoxel, initial_flags: ChunkFlags, load_reasons: LoadReasons) -> Self {
+    pub fn new(
+        filling: BlockVoxel,
+        initial_flags: ChunkFlags,
+        load_reasons: ChunkLoadReasons,
+    ) -> Self {
         Self {
             flags: RwLock::new(initial_flags),
             load_reasons: RwLock::new(load_reasons),

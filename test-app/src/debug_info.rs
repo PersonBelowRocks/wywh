@@ -46,13 +46,13 @@ pub fn update_spatial_debug_text(
     let permit_flags = realm
         .permits()
         .get(ChunkPermitKey::Chunk(chunk_pos))
-        .map(|permit| permit.flags);
+        .map(|permit| permit.cached_flags);
 
     let load_reasons = realm
         .cm()
         .get_loaded_chunk(chunk_pos, true)
         .ok()
-        .map(|cref| cref.load_reasons());
+        .map(|cref| cref.cached_load_reasons());
 
     let chunk_flags = realm
         .cm()

@@ -1,4 +1,6 @@
+use bevy::log::warn;
 use std::{
+    mem,
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
@@ -6,8 +8,13 @@ use std::{
 
 use bevy::math::{ivec3, IVec3};
 use dashmap::DashSet;
-use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{
+    MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
+};
 
+use crate::topo::controller::{LoadshareId, LoadshareMap};
+use crate::topo::world::chunk::ChunkLoadReasons;
+use crate::util::ChunkSet;
 use crate::{
     topo::{
         block::{BlockVoxel, FullBlock},
@@ -76,15 +83,15 @@ impl LoadedChunkContainer {
     /// for your write lock. This is essentially like getting priority over other lock consumers.
     /// IMPORTANT: if `force` is set and this function times out, then other threads will be prevented from getting
     /// a read lock until this function succeeds again.
-    pub fn with_write_lock<F, U>(&self, timeout: Option<Duration>, force: bool, f: F) -> Option<U>
+    pub fn with_write_lock<F>(&self, timeout: Option<Duration>, force: bool, f: F) -> bool
     where
-        F: for<'a> FnOnce(&'a mut ChunkMap<Chunk>) -> U,
+        F: for<'a> FnOnce(&'a mut ChunkMap<Chunk>),
     {
         if force {
             self.force_write.store(true, Ordering::Release);
         }
 
-        let mut guard = timeout
+        let guard = timeout
             .map(|timeout| {
                 self.map.try_write_for(timeout).map(|guard| {
                     self.force_write.store(false, Ordering::Release);
@@ -95,10 +102,16 @@ impl LoadedChunkContainer {
                 let guard = self.map.write();
                 self.force_write.store(false, Ordering::Relaxed);
                 Some(guard)
-            })?;
+            });
 
-        let mut_ref = guard.deref_mut();
-        Some(f(mut_ref))
+        match guard {
+            Some(mut guard) => {
+                let c = guard.deref_mut();
+                f(c);
+                true
+            }
+            None => false,
+        }
     }
 }
 
@@ -134,6 +147,8 @@ impl PendingChunkChanges {
 #[derive(Default)]
 pub struct ChunkStatuses {
     pub updated: DashSet<ChunkPos, fxhash::FxBuildHasher>,
+    // TODO: remove these statuses, we don't care about them and we can use an atomic counter if we
+    //  want to count the number of fresh and generating chunks
     pub generating: DashSet<ChunkPos, fxhash::FxBuildHasher>,
     pub fresh: DashSet<ChunkPos, fxhash::FxBuildHasher>,
 }
@@ -149,13 +164,27 @@ pub enum ChunkLoadResult {
     Updated(LoadReasons),
 }
 
-pub struct ChunkManagerAccess<'a> {
-    chunks: &'a mut ChunkMap<Chunk>,
-    statuses: RwLockWriteGuard<'a, ChunkStatuses>,
-    default_block: FullBlock,
+/// Indicates what happened when we tried to unload a chunk
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ChunkUnloadResult {
+    /// The chunk was completely unloaded
+    Unloaded,
+    /// The chunk's load reasons were updated but it was not unloaded
+    ReasonsUpdated,
+    /// The chunk was unloaded from the loadshare but is still loaded under another loadshare
+    UnloadedInLoadshare,
 }
 
-impl<'a> ChunkManagerAccess<'a> {
+/// The chunks loaded under a loadshare
+pub struct LoadshareChunks<'a> {
+    loadshare: LoadshareId,
+    default_block: FullBlock,
+    loadshare_chunks: &'a mut ChunkSet,
+    statuses: &'a mut ChunkStatuses,
+    chunks: &'a mut ChunkMap<Chunk>,
+}
+
+impl<'a> LoadshareChunks<'a> {
     /// Unload the chunk at the given position for the given reasons. This function will remove load reasons
     /// from the chunk and automatically unload the chunk if no reasons remain.
     /// Returns true if the chunk was unloaded, and false if not.
@@ -163,29 +192,46 @@ impl<'a> ChunkManagerAccess<'a> {
         &mut self,
         pos: ChunkPos,
         unload_reasons: LoadReasons,
-    ) -> Result<bool, ChunkContainerError> {
+    ) -> Result<ChunkUnloadResult, ChunkContainerError> {
         let Some(chunk) = self.chunks.get(pos) else {
             return Err(ChunkContainerError::DoesntExist);
         };
 
         let mut load_reasons = chunk.load_reasons.write();
-        load_reasons.remove(unload_reasons);
+        let mut loadshare_load_reasons = load_reasons
+            .loadshares
+            .get_mut(&self.loadshare)
+            .ok_or(ChunkContainerError::InvalidLoadshare)?;
 
-        if load_reasons.is_empty() {
-            // Remove the chunk from the statuses
-            self.statuses.fresh.remove(&pos);
-            self.statuses.generating.remove(&pos);
-            self.statuses.updated.remove(&pos);
+        loadshare_load_reasons.remove(unload_reasons);
+        // Make a copy so we can drop our mutable reference and update the cached reasons
+        let reasons = *loadshare_load_reasons;
+        load_reasons.update_cached_reasons();
 
-            // Need to drop this immutable reference so we can mutate ourselves.
-            drop(load_reasons);
+        // If there are no more load reasons under this loadshare, we can unload this chunk from this loadshare
+        if reasons.is_empty() {
+            if load_reasons.cached_reasons.is_empty() {
+                // Remove the chunk from the statuses
+                self.statuses.fresh.remove(&pos);
+                self.statuses.generating.remove(&pos);
+                self.statuses.updated.remove(&pos);
 
-            // Remove the chunk from storage
-            self.chunks.remove(pos);
+                // Need to drop this immutable reference so we can mutate ourselves.
+                drop(load_reasons);
 
-            Ok(true)
+                // Remove the chunk from storage
+                self.chunks.remove(pos);
+                self.loadshare_chunks.remove(pos);
+
+                Ok(ChunkUnloadResult::Unloaded)
+            } else {
+                load_reasons.loadshares.remove(&self.loadshare);
+                self.loadshare_chunks.remove(pos);
+
+                Ok(ChunkUnloadResult::UnloadedInLoadshare)
+            }
         } else {
-            Ok(false)
+            Ok(ChunkUnloadResult::ReasonsUpdated)
         }
     }
 
@@ -197,19 +243,29 @@ impl<'a> ChunkManagerAccess<'a> {
         match self.initialize_new_chunk(pos, load_reasons) {
             Ok(()) => Ok(ChunkLoadResult::New),
             // If the chunk is already loaded we update its load reasons by inserting the
-            // reasons passed to this function
+            // reasons passed to this function under our current loadshare
             Err(ChunkManagerError::AlreadyLoaded) => {
                 let chunk = self.chunks.get(pos).expect(
-                    "chunk should be present in storage because 
+                    "chunk should be present in storage because
                         initialize_new_chunk returned AlreadyLoaded",
                 );
 
                 let mut existing_load_reasons = chunk.load_reasons.write();
+                existing_load_reasons
+                    .loadshares
+                    .entry(self.loadshare)
+                    .and_modify(|mut reasons| reasons.insert(load_reasons))
+                    .or_insert_with(|| {
+                        self.loadshare_chunks.set(pos);
+                        load_reasons
+                    });
 
-                existing_load_reasons.insert(load_reasons);
-                Ok(ChunkLoadResult::Updated(existing_load_reasons.clone()))
+                existing_load_reasons.update_cached_reasons();
+                Ok(ChunkLoadResult::Updated(
+                    existing_load_reasons.cached_reasons.clone(),
+                ))
             }
-            // Just forward the error to the caller, not much we can do here anyways
+            // Just forward the error to the caller, not much we can do here anyway
             Err(error) => Err(error),
         }
     }
@@ -229,10 +285,56 @@ impl<'a> ChunkManagerAccess<'a> {
         let chunk = Chunk::new(
             BlockVoxel::Full(self.default_block),
             ChunkFlags::PRIMORDIAL,
-            load_reasons,
+            ChunkLoadReasons {
+                loadshares: LoadshareMap::from_iter([(self.loadshare, load_reasons)]),
+                cached_reasons: load_reasons,
+            },
         );
         self.chunks.set(pos, chunk);
         Ok(())
+    }
+
+    /// Unload all chunks under this loadshare but don't remove the loadshare itself from the map tracking
+    /// the chunks that loadshares own. This leaves the chunk manager in a broken state and this must
+    /// be resolved manually after running this function
+    pub(crate) fn partially_unload_all_chunks(&mut self) {
+        let chunks = mem::replace(self.loadshare_chunks, ChunkSet::default());
+        for chunk_pos in chunks.into_iter() {
+            if let Err(error) = self.unload_chunk(chunk_pos, LoadReasons::all()) {
+                warn!("Error unloading chunk {chunk_pos} as part of a complete loadshare removal: {error}");
+                continue;
+            }
+        }
+    }
+}
+
+pub struct ChunkManagerAccess<'a> {
+    chunks: &'a mut ChunkMap<Chunk>,
+    loadshares: &'a mut LoadshareMap<ChunkSet>,
+    statuses: &'a mut ChunkStatuses,
+    default_block: FullBlock,
+}
+
+impl<'a> ChunkManagerAccess<'a> {
+    pub fn loadshare(&mut self, loadshare: LoadshareId) -> LoadshareChunks<'_> {
+        LoadshareChunks {
+            loadshare,
+            loadshare_chunks: self
+                .loadshares
+                .entry(loadshare)
+                .or_insert(ChunkSet::default()),
+            chunks: self.chunks,
+            statuses: &mut self.statuses,
+            default_block: self.default_block,
+        }
+    }
+
+    pub fn remove_loadshare(&mut self, loadshare: LoadshareId) {
+        let mut loadshare_chunks = self.loadshare(loadshare);
+
+        loadshare_chunks.partially_unload_all_chunks();
+
+        self.loadshares.remove(&loadshare);
     }
 }
 
@@ -244,6 +346,7 @@ pub enum GlobalLockState {
 
 pub struct ChunkManager {
     loaded_chunks: LoadedChunkContainer,
+    loadshares: RwLock<LoadshareMap<ChunkSet>>,
     status: RwLock<ChunkStatuses>,
     default_block: FullBlock,
 }
@@ -252,6 +355,7 @@ impl ChunkManager {
     pub fn new(default_block: FullBlock) -> Self {
         Self {
             loaded_chunks: LoadedChunkContainer::default(),
+            loadshares: RwLock::new(LoadshareMap::default()),
             status: RwLock::new(ChunkStatuses::default()),
             default_block,
         }
@@ -266,10 +370,8 @@ impl ChunkManager {
     ) -> Result<ChunkRef<'_>, ChunkManagerError> {
         let chunk = self.loaded_chunks.get(pos)?;
 
-        if !get_primordial {
-            if chunk.flags.read().contains(ChunkFlags::PRIMORDIAL) {
-                return Err(ChunkManagerError::Primordial);
-            }
+        if !get_primordial && chunk.flags.read().contains(ChunkFlags::PRIMORDIAL) {
+            return Err(ChunkManagerError::Primordial);
         }
 
         Ok(ChunkRef {
@@ -305,10 +407,13 @@ impl ChunkManager {
     /// ### Warning
     /// If `force` is set and this function times out, then other threads will be prevented from getting
     /// a read lock until this function succeeds again.
-    pub fn with_global_lock<F, U>(&self, timeout: Option<Duration>, force: bool, f: F) -> Option<U>
+    pub fn with_global_lock<F>(&self, timeout: Option<Duration>, force: bool, f: F) -> bool
     where
-        F: for<'a> FnOnce(ChunkManagerAccess<'a>) -> U,
+        F: for<'a> FnOnce(ChunkManagerAccess<'a>),
     {
+        // TODO: this should be a DashMap (or some other concurrent data structure) and the global lock
+        //  should be a separate field or something (like an RwLock<()>) so that we can manage chunks
+        //  concurrently
         self.loaded_chunks
             .with_write_lock(timeout, force, |chunks| {
                 // We get the status lock in here because the only permitted way to update statuses is
@@ -316,15 +421,17 @@ impl ChunkManager {
                 // thus we can assume that any thread that wanted to update statuses has done so by now.
                 // There's also no need for any kind of timeout system here because status locks are never
                 // held for long (unlike the chunk data lock in a chunk ref).
-                let statuses = self.status.write();
+                let mut statuses = self.status.write();
+                let mut loadshares = self.loadshares.write();
 
                 let access = ChunkManagerAccess {
                     chunks,
-                    statuses,
+                    loadshares: &mut loadshares,
+                    statuses: &mut statuses,
                     default_block: self.default_block,
                 };
 
-                f(access)
+                f(access);
             })
     }
 
