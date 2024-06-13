@@ -29,6 +29,8 @@ pub const PBR_INPUT_HANDLE: Handle<Shader> = Handle::weak_from_u128(771684695769
 pub const REGISTRY_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128(8499327436868843);
 pub const TYPES_HANDLE: Handle<Shader> = Handle::weak_from_u128(1378018199763387);
 pub const UTILS_HANDLE: Handle<Shader> = Handle::weak_from_u128(4464360603291233);
+pub const POPULATE_OBSERVER_BUFFERS_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(2398076348923761);
 
 /// Loads the built-in voxel engine shaders.
 pub fn load_internal_shaders(app: &mut App) {
@@ -50,6 +52,12 @@ pub fn load_internal_shaders(app: &mut App) {
     );
     load_internal_asset!(app, TYPES_HANDLE, "types.wgsl", Shader::from_wgsl);
     load_internal_asset!(app, UTILS_HANDLE, "utils.wgsl", Shader::from_wgsl);
+    load_internal_asset!(
+        app,
+        POPULATE_OBSERVER_BUFFERS_HANDLE,
+        "populate_observer_buffers.wgsl",
+        Shader::from_wgsl
+    );
 
     // Shader stages
     embedded_asset!(app, "multidraw_chunk_vert.wgsl");

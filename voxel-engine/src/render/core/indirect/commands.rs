@@ -67,15 +67,18 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
             return RenderCommandResult::Failure;
         }
 
-        let index_buffer = store.chunks.buffers().index.buffer();
-        let instance_buffer = &store.chunks.buffers().instance;
+        // let index_buffer = store.chunks.buffers().index.buffer();
+        // let instance_buffer = &store.chunks.buffers().instance;
 
-        pass.set_index_buffer(index_buffer.slice(..), 0, IndexFormat::Uint32);
-        pass.set_vertex_buffer(0, instance_buffer.slice(..));
+        // pass.set_index_buffer(index_buffer.slice(..), 0, IndexFormat::Uint32);
+        // pass.set_vertex_buffer(0, instance_buffer.slice(..));
 
-        let indirect_buffer = &store.chunks.buffers().indirect;
+        // let indirect_buffer = &store.chunks.buffers().indirect;
 
-        pass.multi_draw_indexed_indirect(indirect_buffer, 0, store.chunks.num_chunks() as _);
+        // pass.multi_draw_indexed_indirect(indirect_buffer, 0, store.chunks.num_chunks() as _);
+
+        // TODO: get instance and indirect buffers from the view entity
+        todo!();
 
         RenderCommandResult::Success
     }

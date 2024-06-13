@@ -24,7 +24,7 @@ pub fn to_formatted_bytes<T: ShaderType + ShaderSize + WriteInto>(slice: &[T]) -
 #[derive(Clone)]
 pub struct VramArray<T: ShaderType + ShaderSize + WriteInto> {
     buffer: Buffer,
-    buffer_len: u64,
+    buffer_len: u32,
     label: &'static str,
     usages: BufferUsages,
 
@@ -66,14 +66,14 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
     }
 
     /// How many items of type `T` are in the buffer on the GPU.
-    pub fn len(&self) -> u64 {
+    pub fn len(&self) -> u32 {
         self.buffer_len
     }
 
     /// How many bytes this buffer takes up on the GPU.
     /// Equivalent to `VramArray::len() * T::SHADER_SIZE`
     pub fn vram_bytes(&self) -> u64 {
-        self.len() * Self::item_size()
+        (self.len() as u64) * Self::item_size()
     }
 
     /// The GPU buffer containing all our data.
@@ -110,20 +110,20 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
 
         // set the buffer and bump our length
         self.buffer = buffer;
-        self.buffer_len += data.len() as u64;
+        self.buffer_len += data.len() as u32;
     }
 
     /// Removes all the data between the different provided ranges. Think of this as copying all the data
     /// contained in the buffer that does NOT fall between any of the provided ranges.
     /// The range bounds are indices of `T` in the GPU buffer. Not indices of bytes!
-    pub fn remove(&mut self, gpu: &RenderDevice, queue: &RenderQueue, ranges: &RangeSet<u64>) {
+    pub fn remove(&mut self, gpu: &RenderDevice, queue: &RenderQueue, ranges: &RangeSet<u32>) {
         // we collect the ranges into a vector here so we don't have to do any duplicate calculation of gaps
         let remaining = ranges.gaps(&(0..self.len())).collect_vec();
         // the end of the range should always be greater than the start
-        let new_length: u64 = remaining.iter().map(|r| r.end - r.start).sum();
+        let new_length: u32 = remaining.iter().map(|r| r.end - r.start).sum();
 
         // allocate a new buffer on the GPU
-        let new_buffer = self.create_buffer(gpu, new_length * Self::item_size());
+        let new_buffer = self.create_buffer(gpu, (new_length as u64) * Self::item_size());
 
         let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
             label: Some(&format!("{}-remove_cmd_encoder", self.label)),
@@ -132,8 +132,8 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
         // copy everything we want to keep into our new buffer
         let mut current_index: u64 = 0;
         for range in remaining {
-            let min = range.start * Self::item_size();
-            let max = range.end * Self::item_size();
+            let min = (range.start as u64) * Self::item_size();
+            let max = (range.end as u64) * Self::item_size();
             let copy_size = max - min;
 
             encoder.copy_buffer_to_buffer(&self.buffer, min, &new_buffer, current_index, copy_size);

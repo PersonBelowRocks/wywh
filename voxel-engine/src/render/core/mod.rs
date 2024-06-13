@@ -30,8 +30,8 @@ use gpu_chunk::{
 };
 use indirect::{
     prepass_queue_indirect_chunks, render_queue_indirect_chunks, shadow_queue_indirect_chunks,
-    IndirectChunkPrepassPipeline, IndirectChunkRenderPipeline, IndirectChunksPrepass,
-    IndirectChunksRender,
+    ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkPrepassPipeline,
+    IndirectChunkRenderPipeline, IndirectChunksPrepass, IndirectChunksRender,
 };
 use shaders::load_internal_shaders;
 
@@ -123,6 +123,8 @@ impl Plugin for RenderCore {
 pub(crate) struct DefaultBindGroupLayouts {
     pub registry_bg_layout: BindGroupLayout,
     pub indirect_chunk_bg_layout: BindGroupLayout,
+    pub observer_buffers_input_layout: BindGroupLayout,
+    pub observer_buffers_output_layout: BindGroupLayout,
 }
 
 impl FromWorld for DefaultBindGroupLayouts {
@@ -148,6 +150,26 @@ impl FromWorld for DefaultBindGroupLayouts {
                 &BindGroupLayoutEntries::single(
                     ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     binding_types::storage_buffer_read_only::<GpuQuad>(false),
+                ),
+            ),
+            observer_buffers_input_layout: gpu.create_bind_group_layout(
+                Some("observer_buffers_input_layout"),
+                &BindGroupLayoutEntries::sequential(
+                    ShaderStages::COMPUTE,
+                    (
+                        binding_types::storage_buffer_read_only::<GpuChunkMetadata>(false),
+                        binding_types::storage_buffer_read_only::<u32>(false),
+                    ),
+                ),
+            ),
+            observer_buffers_output_layout: gpu.create_bind_group_layout(
+                Some("observer_buffers_output_layout"),
+                &BindGroupLayoutEntries::sequential(
+                    ShaderStages::COMPUTE,
+                    (
+                        binding_types::storage_buffer::<ChunkInstanceData>(false),
+                        binding_types::storage_buffer::<IndexedIndirectArgs>(false),
+                    ),
                 ),
             ),
         }
