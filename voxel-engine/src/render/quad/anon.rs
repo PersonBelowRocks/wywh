@@ -19,7 +19,7 @@ impl Quad {
 
     #[inline]
     pub fn new(dims: UVec2) -> Result<Self, QuadError> {
-        if dims.x <= 0 || dims.y <= 0 {
+        if dims.x == 0 || dims.y == 0 {
             return Err(QuadError::InvalidDimensions);
         }
 

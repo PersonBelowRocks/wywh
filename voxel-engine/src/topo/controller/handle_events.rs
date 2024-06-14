@@ -191,7 +191,7 @@ pub fn handle_chunk_loads_and_unloads(
     };
 
     // Nothing to process, so just return early.
-    if unload_backlog.len() <= 0 || load_backlog.len() <= 0 {
+    if unload_backlog.is_empty() || load_backlog.is_empty() {
         return;
     }
 

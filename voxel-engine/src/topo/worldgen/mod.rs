@@ -44,7 +44,7 @@ pub struct WorkerParams {
     pub timeout: Duration,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GenerationPriority(u32);
 
 impl GenerationPriority {
@@ -58,7 +58,13 @@ impl GenerationPriority {
 
 impl PartialOrd for GenerationPriority {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        other.0.partial_cmp(&self.0)
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for GenerationPriority {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        other.0.cmp(&self.0)
     }
 }
 

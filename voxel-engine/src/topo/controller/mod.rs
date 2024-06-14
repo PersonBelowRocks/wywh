@@ -124,7 +124,7 @@ pub type LoadshareMap<T> = hb::HashMap<LoadshareId, T, nohash::BuildNoHashHasher
 /// the ID anymore. For this reason always be careful to store your loadshare ID somewhere.
 #[derive(Resource, Default)]
 pub struct LoadshareProvider {
-    loadshares: HashSet<LoadshareId, wyhash2::WyHash>,
+    loadshares: HashSet<LoadshareId, nohash::BuildNoHashHasher<LoadshareId>>,
 }
 
 const MAX_PROVIDER_RETRIES: usize = 16;

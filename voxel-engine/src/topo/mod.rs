@@ -6,7 +6,6 @@ pub mod access;
 pub mod block;
 pub mod bounding_box;
 pub mod controller;
-mod ecs;
 pub mod error;
 pub mod neighbors;
 pub mod storage;
