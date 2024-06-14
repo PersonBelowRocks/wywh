@@ -116,7 +116,7 @@ pub const INDIRECT_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
 pub struct MultidrawBuffers {
     pub index: VramArray<u32>,
     pub quad: VramArray<GpuQuad>,
-    pub chunks: Buffer,
+    pub metadata: Buffer,
 }
 
 impl MultidrawBuffers {
@@ -124,7 +124,7 @@ impl MultidrawBuffers {
         Self {
             index: VramArray::new("ICD_index_buffer", BufferUsages::INDEX, gpu),
             quad: VramArray::new("ICD_quad_buffer", BufferUsages::STORAGE, gpu),
-            chunks: gpu.create_buffer(&BufferDescriptor {
+            metadata: gpu.create_buffer(&BufferDescriptor {
                 label: Some("ICD_chunk_buffer"),
                 size: 0,
                 usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
@@ -276,7 +276,7 @@ impl IndirectChunkData {
         debug_assert!(chunk_bounds_correctly_formatted(&new_metadata));
 
         let bytes = to_formatted_bytes(&new_metadata.values().collect_vec());
-        self.buffers.chunks = gpu.create_buffer_with_data(&BufferInitDescriptor {
+        self.buffers.metadata = gpu.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("ICD_chunk_metadata_buffer"),
             usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
             contents: &bytes,
@@ -484,6 +484,11 @@ impl IndirectChunkData {
     #[inline]
     pub fn get_chunk_metadata(&self, chunk: ChunkPos) -> Option<GpuChunkMetadata> {
         self.metadata.get(&chunk).cloned()
+    }
+
+    #[inline]
+    pub fn get_chunk_metadata_index(&self, chunk: ChunkPos) -> Option<u32> {
+        self.metadata.get_index_of(&chunk).map(|v| v as u32)
     }
 }
 

@@ -1,10 +1,12 @@
 use bevy::{
+    core::cast_slice,
     prelude::*,
     render::{
         render_resource::{
-            BindGroupLayout, Buffer, BufferDescriptor, BufferInitDescriptor, BufferUsages,
-            CommandEncoderDescriptor, ComputePipelineDescriptor, ShaderSize,
-            SpecializedComputePipeline,
+            BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor, BufferInitDescriptor,
+            BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
+            ComputePipelineDescriptor, PipelineCache, ShaderSize, SpecializedComputePipeline,
+            SpecializedComputePipelines,
         },
         renderer::{RenderDevice, RenderQueue},
         Extract,
@@ -24,7 +26,6 @@ use super::{
 pub struct ObserverIndirectBuffers {
     pub indirect_buffer: Buffer,
     pub instance_buffer: Buffer,
-    pub count: Buffer,
 }
 
 #[derive(Component, Clone, Default)]
@@ -39,6 +40,23 @@ impl ExtractedObserverChunks {
             in_range: chunks,
             buffers: None,
         }
+    }
+
+    /// Get the indices for the metadata of this observer's in-range chunks on the GPU as described by the provided indirect chunk data.
+    /// If the metadata didn't exist in the provided indirect chunk data, then its index is not part of the returned vector.
+    /// The caller must handle this (or do what this function does manually) if it's an issue.
+    pub fn get_metadata_indices(&self, indirect_data: &IndirectChunkData) -> Vec<u32> {
+        let mut chunk_metadata_indices = Vec::<u32>::with_capacity(self.in_range.len());
+
+        for &chunk_pos in self.in_range.iter() {
+            let Some(metadata_index) = indirect_data.get_chunk_metadata_index(chunk_pos) else {
+                continue;
+            };
+
+            chunk_metadata_indices.push(metadata_index);
+        }
+
+        chunk_metadata_indices
     }
 }
 
@@ -136,24 +154,75 @@ fn create_count_buffer(gpu: &RenderDevice) -> Buffer {
     })
 }
 
-pub fn prepare_observer_multi_draw_buffers(
+pub fn populate_observer_multi_draw_buffers(
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     indirect_data: Res<IndirectChunkData>,
-    observers: Query<&mut ExtractedObserverChunks>,
+    pipeline_cache: Res<PipelineCache>,
+    mut pipelines: ResMut<SpecializedComputePipelines<PopulateObserverBuffersPipeline>>,
+    pipeline: Res<PopulateObserverBuffersPipeline>,
+    default_layouts: Res<DefaultBindGroupLayouts>,
+    mut observers: Query<&mut ExtractedObserverChunks>,
 ) {
-    for ob_chunks in &observers {
+    let pipeline_id = pipelines.specialize(&pipeline_cache, &pipeline, ());
+
+    let compute_pipeline = pipeline_cache
+        .get_compute_pipeline(pipeline_id)
+        .expect("We don't support async pipeline compilation yet");
+
+    for mut ob_chunks in &mut observers {
         if ob_chunks.buffers.is_some() {
             continue;
         }
 
-        let num_chunks = ob_chunks.in_range.len() as u32;
-        let indirect_buffer = create_indirect_buffer(&gpu, num_chunks);
-        let instance_buffer = create_instance_buffer(&gpu, num_chunks);
+        let num_chunks = ob_chunks.in_range.len();
+        let chunk_metadata_indices = ob_chunks.get_metadata_indices(&indirect_data);
+
+        let metadata_index_buffer = gpu.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some("observer_chunks_metadata_indices_buffer"),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            contents: cast_slice(&chunk_metadata_indices),
+        });
+
+        let metadata_buffer = &indirect_data.buffers().metadata;
+
+        let buffers = ObserverIndirectBuffers {
+            indirect_buffer: create_indirect_buffer(&gpu, num_chunks as _),
+            instance_buffer: create_instance_buffer(&gpu, num_chunks as _),
+        };
+
+        let input_bg = gpu.create_bind_group(
+            Some("observer_population_input_bind_group"),
+            &default_layouts.observer_buffers_input_layout,
+            &BindGroupEntries::sequential((
+                metadata_buffer.as_entire_binding(),
+                metadata_index_buffer.as_entire_binding(),
+            )),
+        );
+
+        let output_bg = gpu.create_bind_group(
+            Some("observer_population_output_bind_group"),
+            &default_layouts.observer_buffers_output_layout,
+            &BindGroupEntries::sequential((
+                buffers.instance_buffer.as_entire_binding(),
+                buffers.indirect_buffer.as_entire_binding(),
+            )),
+        );
 
         let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("populate_observer_indirect_instance_buffers_encoder"),
+            label: Some("populate_observer_buffers_encoder"),
         });
+
+        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("populate_observer_buffers_compute_pass"),
+            timestamp_writes: None,
+        });
+
+        pass.set_bind_group(0, &input_bg, &[]);
+        pass.set_bind_group(1, &output_bg, &[]);
+
+        let num_chunks = ob_chunks.in_range.len() as u32;
+        pass.dispatch_workgroups(1, 1, num_chunks);
 
         // TODO: keep implementing
     }

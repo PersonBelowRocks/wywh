@@ -16,9 +16,9 @@ use bevy::{
         extract_resource::ExtractResourcePlugin,
         render_phase::AddRenderCommand,
         render_resource::{
-            binding_types::{self},
-            BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType, ShaderStages,
-            SpecializedRenderPipelines, TextureSampleType,
+            binding_types, BindGroupLayout, BindGroupLayoutEntries, SamplerBindingType,
+            ShaderStages, SpecializedComputePipelines, SpecializedRenderPipelines,
+            TextureSampleType,
         },
         renderer::RenderDevice,
         Render, RenderApp, RenderSet,
@@ -30,8 +30,12 @@ use gpu_chunk::{
 };
 use indirect::{
     prepass_queue_indirect_chunks, render_queue_indirect_chunks, shadow_queue_indirect_chunks,
-    ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkPrepassPipeline,
-    IndirectChunkRenderPipeline, IndirectChunksPrepass, IndirectChunksRender,
+    ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkData,
+    IndirectChunkPrepassPipeline, IndirectChunkRenderPipeline, IndirectChunksPrepass,
+    IndirectChunksRender,
+};
+use observers::{
+    extract_observer_chunks, populate_observer_multi_draw_buffers, PopulateObserverBuffersPipeline,
 };
 use shaders::load_internal_shaders;
 
@@ -70,6 +74,7 @@ impl Plugin for RenderCore {
         render_app
             .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
+            .init_resource::<SpecializedComputePipelines<PopulateObserverBuffersPipeline>>()
             .init_resource::<RebuildChunkQuadBindGroup>()
             .init_resource::<RemoveChunkMeshes>()
             .init_resource::<UnpreparedChunkMeshes>();
@@ -81,6 +86,7 @@ impl Plugin for RenderCore {
                 (
                     extract_chunk_mesh_data
                         .run_if(main_world_res_exists::<ExtractableChunkMeshData>),
+                    extract_observer_chunks,
                 )
                     .chain(),
             ),
@@ -94,6 +100,8 @@ impl Plugin for RenderCore {
                         remove_chunk_meshes,
                         upload_chunk_meshes,
                         rebuild_chunk_quad_bind_group,
+                        populate_observer_multi_draw_buffers
+                            .run_if(resource_exists::<IndirectChunkData>),
                     )
                         .chain(),
                 )
@@ -116,6 +124,7 @@ impl Plugin for RenderCore {
 
         render_app.init_resource::<IndirectChunkRenderPipeline>();
         render_app.init_resource::<IndirectChunkPrepassPipeline>();
+        render_app.init_resource::<PopulateObserverBuffersPipeline>();
     }
 }
 

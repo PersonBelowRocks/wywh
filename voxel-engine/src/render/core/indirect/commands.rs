@@ -50,7 +50,6 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
     type Param = SRes<IndirectRenderDataStore>;
 
     type ViewQuery = ();
-
     type ItemQuery = ();
 
     fn render<'w>(
