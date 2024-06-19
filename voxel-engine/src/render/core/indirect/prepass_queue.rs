@@ -11,6 +11,7 @@ use bevy::{
 };
 
 use crate::render::core::{gpu_chunk::IndirectRenderDataStore, gpu_registries::RegistryBindGroup};
+use crate::{render::core::observers::RenderWorldObservers, topo::controller::ObserverId};
 
 use super::{
     prepass_pipeline::IndirectChunkPrepassPipeline, IndirectChunkPipelineKey, IndirectChunksPrepass,
@@ -23,7 +24,9 @@ pub fn prepass_queue_indirect_chunks(
     mut pipelines: ResMut<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     prepass_pipeline: Res<IndirectChunkPrepassPipeline>,
+    observers: Res<RenderWorldObservers>,
     mut views: Query<(
+        &ObserverId,
         &ExtractedView,
         &VisibleEntities,
         &mut RenderPhase<Opaque3dPrepass>,
@@ -44,6 +47,7 @@ pub fn prepass_queue_indirect_chunks(
     let draw_function = functions.read().get_id::<IndirectChunksPrepass>().unwrap();
 
     for (
+        id,
         _view,
         _visible_entities,
         mut phase,
@@ -52,6 +56,14 @@ pub fn prepass_queue_indirect_chunks(
         motion_vector_prepass,
     ) in &mut views
     {
+        if !observers
+            .get(id)
+            .and_then(|data| data.buffers.as_ref())
+            .is_some()
+        {
+            continue;
+        }
+
         let mut view_key = MeshPipelineKey::empty();
 
         if depth_prepass {

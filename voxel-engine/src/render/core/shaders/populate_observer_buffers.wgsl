@@ -8,11 +8,12 @@
     indexed_args_from_metadata_and_instance,
 }
 
-@group(0) @location(0) var<storage, read_only> all_metadata: array<GpuChunkMetadata>;
-@group(0) @location(1) var<storage, read_only> metadata_indices: array<u32>;
+@group(0) @binding(0) var<storage, read> all_metadata: array<GpuChunkMetadata>;
+@group(0) @binding(1) var<storage, read> metadata_indices: array<u32>;
 
-@group(1) @location(0) var<storage, write_only> instance_data: array<ChunkInstanceData>;
-@group(1) @location(1) var<storage, write_only> indirect_args: array<IndexedIndirectArgs>;
+@group(1) @binding(0) var<storage, read_write> instance_data: array<ChunkInstanceData>;
+@group(1) @binding(1) var<storage, read_write> indirect_args: array<IndexedIndirectArgs>;
+@group(1) @binding(2) var<storage, read_write> count: atomic<u32>;
 
 @compute @workgroup_size(64)
 fn populate_buffers(
@@ -22,7 +23,7 @@ fn populate_buffers(
     instance_data[index] = empty_instance_data();
     indirect_args[index] = empty_indexed_indirect_args();
 
-    if arrayLength(metadata_indices) <= index {
+    if arrayLength(&metadata_indices) <= index {
         return;
     }
 
@@ -32,4 +33,5 @@ fn populate_buffers(
     instance_data[index] = instance_data_from_metadata(metadata);
     // Metadata index is the same as the instance number
     indirect_args[index] = indexed_args_from_metadata_and_instance(metadata, metadata_index);
+    atomicAdd(&count, 1u);
 }

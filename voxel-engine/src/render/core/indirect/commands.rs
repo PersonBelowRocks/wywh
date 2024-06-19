@@ -1,3 +1,5 @@
+use bevy::ecs::system::lifetimeless::Read;
+use bevy::prelude::Entity;
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -13,9 +15,11 @@ use bevy::{
     },
 };
 
+use crate::render::core::observers::RenderWorldObservers;
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
+use crate::topo::controller::ObserverId;
 
 pub struct SetIndirectChunkBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkBindGroup<I> {
@@ -47,37 +51,43 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkBindGrou
 
 pub struct IndirectChunkDraw;
 impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
-    type Param = SRes<IndirectRenderDataStore>;
+    type Param = (SRes<IndirectRenderDataStore>, SRes<RenderWorldObservers>);
 
-    type ViewQuery = ();
+    type ViewQuery = (Read<ObserverId>);
     type ItemQuery = ();
 
     fn render<'w>(
         _item: &P,
-        _view: ROQueryItem<'w, Self::ViewQuery>,
+        view: ROQueryItem<'w, Self::ViewQuery>,
         _entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let store = param.into_inner();
+        let (store, observers) = (param.0.into_inner(), param.1.into_inner());
+        let id = view;
 
         if !store.ready {
-            error!("Multidraw render data is not ready and cannot be rendered");
+            error!("Indirect render data is not ready and cannot be rendered");
             return RenderCommandResult::Failure;
         }
 
-        // let index_buffer = store.chunks.buffers().index.buffer();
-        // let instance_buffer = &store.chunks.buffers().instance;
+        let Some(buffers) = observers.get(id).and_then(|data| data.buffers.as_ref()) else {
+            error!("View entity {id:?} did not have buffers stored in the observer data resource, it should not have been queued with this render command.");
+            return RenderCommandResult::Failure;
+        };
 
-        // pass.set_index_buffer(index_buffer.slice(..), 0, IndexFormat::Uint32);
-        // pass.set_vertex_buffer(0, instance_buffer.slice(..));
+        let index_buffer = store.chunks.buffers().index.buffer();
 
-        // let indirect_buffer = &store.chunks.buffers().indirect;
+        pass.set_index_buffer(index_buffer.slice(..), 0, IndexFormat::Uint32);
+        pass.set_vertex_buffer(0, buffers.instance.slice(..));
 
-        // pass.multi_draw_indexed_indirect(indirect_buffer, 0, store.chunks.num_chunks() as _);
-
-        // TODO: get instance and indirect buffers from the view entity
-        todo!();
+        pass.multi_draw_indexed_indirect_count(
+            &buffers.indirect,
+            0,
+            &buffers.count,
+            0,
+            store.chunks.num_chunks() as _,
+        );
 
         RenderCommandResult::Success
     }

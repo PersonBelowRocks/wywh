@@ -37,7 +37,8 @@ struct IndexedIndirectArgs {
 fn indexed_args_from_metadata_and_instance(metadata: GpuChunkMetadata, instance: u32) -> IndexedIndirectArgs {
     var args: IndexedIndirectArgs;
     args.index_count = metadata.end_index - metadata.start_index;
-    args.instance_count = 0;
+    // TODO: might wanna set this to 0 as a default, but not sure, investigate
+    args.instance_count = 1u;
     args.first_index = metadata.start_index;
     args.first_instance = instance;
     args.base_vertex = 0;

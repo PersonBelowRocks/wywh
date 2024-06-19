@@ -17,7 +17,7 @@ use bevy::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, FpsText, SpatialDebugText};
-use ve::topo::controller::ObserverBundle;
+use ve::topo::controller::{ObserverBundle, ObserverId};
 use ve::topo::ObserverSettings;
 use ve::EngineState;
 
@@ -195,7 +195,7 @@ fn setup(
                 ..default()
             },
             camera::PlayerCamController::default(),
-            ObserverBundle::default(),
+            ObserverBundle::new(ObserverId::new(0)),
             VisibilityBundle::default(),
             ScreenSpaceAmbientOcclusionBundle::default(),
         ))

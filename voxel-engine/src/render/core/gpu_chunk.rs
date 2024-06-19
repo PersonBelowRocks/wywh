@@ -14,6 +14,7 @@ use bevy::{
     },
 };
 
+use crate::render::core::observers::RenderWorldObservers;
 use crate::{
     render::meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
     util::{ChunkMap, ChunkSet},
@@ -87,7 +88,7 @@ pub fn extract_chunk_mesh_data(
 pub fn remove_chunk_meshes(
     mut remove: ResMut<RemoveChunkMeshes>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
-    mut rebuild: ResMut<RebuildChunkQuadBindGroup>,
+    mut rebuild: ResMut<ShouldUpdateChunkDataDependants>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
@@ -113,7 +114,7 @@ pub fn remove_chunk_meshes(
 pub fn upload_chunk_meshes(
     mut unprepared: ResMut<UnpreparedChunkMeshes>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
-    mut rebuild: ResMut<RebuildChunkQuadBindGroup>,
+    mut rebuild: ResMut<ShouldUpdateChunkDataDependants>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
@@ -135,13 +136,18 @@ pub fn upload_chunk_meshes(
     debug!("Uploaded and prepared {added} chunks");
 }
 
-pub fn rebuild_chunk_quad_bind_group(
-    mut rebuild: ResMut<RebuildChunkQuadBindGroup>,
+pub fn update_indirect_chunk_data_dependants(
+    mut observers: ResMut<RenderWorldObservers>,
+    mut update: ResMut<ShouldUpdateChunkDataDependants>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
     default_layouts: Res<DefaultBindGroupLayouts>,
     gpu: Res<RenderDevice>,
 ) {
-    if rebuild.0 {
+    if update.0 {
+        for data in observers.values_mut() {
+            data.buffers = None;
+        }
+
         let quad_vram_array = &indirect_data.chunks.buffers().quad;
 
         // we only make a bind group if the buffer is long enough to be bound
@@ -159,7 +165,7 @@ pub fn rebuild_chunk_quad_bind_group(
             indirect_data.bind_group = Some(bg);
             indirect_data.ready = true;
 
-            rebuild.0 = false;
+            update.0 = false;
         }
     }
 }
@@ -173,7 +179,7 @@ pub struct UnpreparedChunkMeshes(pub ChunkMap<ChunkMeshData>);
 pub struct RemoveChunkMeshes(pub ChunkSet);
 
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct RebuildChunkQuadBindGroup(pub bool);
+pub struct ShouldUpdateChunkDataDependants(pub bool);
 
 #[derive(Resource)]
 pub struct IndirectRenderDataStore {

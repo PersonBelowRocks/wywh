@@ -6,6 +6,7 @@ mod observers;
 mod shaders;
 mod utils;
 
+use bevy::render::render_resource::ShaderSize;
 use bevy::{
     app::{App, Plugin},
     core_pipeline::{core_3d::Opaque3d, prepass::Opaque3dPrepass},
@@ -25,8 +26,8 @@ use bevy::{
     },
 };
 use gpu_chunk::{
-    rebuild_chunk_quad_bind_group, remove_chunk_meshes, upload_chunk_meshes,
-    IndirectRenderDataStore, RebuildChunkQuadBindGroup, RemoveChunkMeshes,
+    remove_chunk_meshes, update_indirect_chunk_data_dependants, upload_chunk_meshes,
+    IndirectRenderDataStore, RemoveChunkMeshes, ShouldUpdateChunkDataDependants,
 };
 use indirect::{
     prepass_queue_indirect_chunks, render_queue_indirect_chunks, shadow_queue_indirect_chunks,
@@ -43,6 +44,7 @@ use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     texture::GpuFaceTexture,
 };
+use crate::render::core::observers::RenderWorldObservers;
 
 use self::{
     gpu_chunk::{extract_chunk_mesh_data, UnpreparedChunkMeshes},
@@ -75,7 +77,8 @@ impl Plugin for RenderCore {
             .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
             .init_resource::<SpecializedComputePipelines<PopulateObserverBuffersPipeline>>()
-            .init_resource::<RebuildChunkQuadBindGroup>()
+            .init_resource::<RenderWorldObservers>()
+            .init_resource::<ShouldUpdateChunkDataDependants>()
             .init_resource::<RemoveChunkMeshes>()
             .init_resource::<UnpreparedChunkMeshes>();
 
@@ -99,9 +102,9 @@ impl Plugin for RenderCore {
                     (
                         remove_chunk_meshes,
                         upload_chunk_meshes,
-                        rebuild_chunk_quad_bind_group,
+                        update_indirect_chunk_data_dependants,
                         populate_observer_multi_draw_buffers
-                            .run_if(resource_exists::<IndirectChunkData>),
+                            .run_if(resource_exists::<IndirectRenderDataStore>),
                     )
                         .chain(),
                 )
@@ -109,7 +112,8 @@ impl Plugin for RenderCore {
                 (
                     render_queue_indirect_chunks,
                     prepass_queue_indirect_chunks,
-                    shadow_queue_indirect_chunks,
+                    // TODO: fix up light view entities to use GPU frustum culling like normal cameras
+                    // shadow_queue_indirect_chunks,
                 )
                     .in_set(RenderSet::Queue),
             ),
@@ -178,6 +182,7 @@ impl FromWorld for DefaultBindGroupLayouts {
                     (
                         binding_types::storage_buffer::<ChunkInstanceData>(false),
                         binding_types::storage_buffer::<IndexedIndirectArgs>(false),
+                        binding_types::storage_buffer_sized(false, Some(u32::SHADER_SIZE)),
                     ),
                 ),
             ),

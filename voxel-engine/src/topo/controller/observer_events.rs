@@ -1,3 +1,4 @@
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use bevy::{
@@ -194,6 +195,10 @@ pub fn unload_out_of_range_chunks(
             }
         });
 
+        observer_chunks
+            .should_extract
+            .store(true, Ordering::Relaxed);
+
         unload_chunks.send(UnloadChunksEvent {
             loadshare: loadshare_id,
             reasons: LoadReasons::RENDER,
@@ -282,6 +287,9 @@ pub fn load_in_range_chunks(
         });
 
         observer_chunks.in_range.extend(in_range.into_iter());
+        observer_chunks
+            .should_extract
+            .store(true, Ordering::Relaxed);
     }
 }
 

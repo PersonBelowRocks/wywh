@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicBool;
 use std::{fmt, time::Duration};
 
 use bevy::{
@@ -46,16 +47,16 @@ impl Default for ObserverSettings {
     }
 }
 
-#[derive(Clone, Component, ExtractComponent)]
+#[derive(Component)]
 pub struct RenderableObserverChunks {
-    pub should_extract: bool,
+    pub should_extract: AtomicBool,
     pub in_range: ChunkSet,
 }
 
 impl Default for RenderableObserverChunks {
     fn default() -> Self {
         Self {
-            should_extract: true,
+            should_extract: AtomicBool::new(true),
             in_range: ChunkSet::default(),
         }
     }
@@ -159,11 +160,38 @@ impl LoadshareProvider {
     }
 }
 
-#[derive(Bundle, Clone, Default)]
+#[derive(
+    Component,
+    Clone,
+    Copy,
+    Debug,
+    Deref,
+    DerefMut,
+    dm::Constructor,
+    Hash,
+    PartialEq,
+    Eq,
+    ExtractComponent,
+)]
+pub struct ObserverId(u32);
+
+#[derive(Bundle)]
 pub struct ObserverBundle {
     pub settings: ObserverSettings,
     pub chunks: RenderableObserverChunks,
     pub loadshare: ObserverLoadshare,
+    pub id: ObserverId,
+}
+
+impl ObserverBundle {
+    pub fn new(id: ObserverId) -> Self {
+        Self {
+            settings: Default::default(),
+            chunks: Default::default(),
+            loadshare: Default::default(),
+            id,
+        }
+    }
 }
 
 #[derive(Clone, Component, Debug)]
@@ -235,7 +263,7 @@ impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings)
             .init_resource::<LoadshareProvider>()
-            .add_plugins(ExtractComponentPlugin::<RenderableObserverChunks>::default())
+            .add_plugins(ExtractComponentPlugin::<ObserverId>::default())
             .add_event::<LoadChunksEvent>()
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()

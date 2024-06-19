@@ -19,6 +19,7 @@ use bevy::{
 };
 
 use crate::render::core::{gpu_chunk::IndirectRenderDataStore, gpu_registries::RegistryBindGroup};
+use crate::{render::core::observers::RenderWorldObservers, topo::controller::ObserverId};
 
 use super::{IndirectChunkPipelineKey, IndirectChunkRenderPipeline, IndirectChunksRender};
 
@@ -29,7 +30,9 @@ pub fn render_queue_indirect_chunks(
     pipeline_cache: Res<PipelineCache>,
     mut pipelines: ResMut<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>,
     pipeline: Res<IndirectChunkRenderPipeline>,
+    observers: Res<RenderWorldObservers>,
     mut views: Query<(
+        &ObserverId,
         &ExtractedView,
         &VisibleEntities,
         &mut RenderPhase<Opaque3d>,
@@ -59,6 +62,7 @@ pub fn render_queue_indirect_chunks(
     let func = functions.read().id::<IndirectChunksRender>();
 
     for (
+        id,
         view,
         _visible_entities,
         mut phase,
@@ -71,6 +75,14 @@ pub fn render_queue_indirect_chunks(
         temporal_jitter,
     ) in views.iter_mut()
     {
+        if !observers
+            .get(id)
+            .and_then(|data| data.buffers.as_ref())
+            .is_some()
+        {
+            continue;
+        }
+
         let mut view_key = MeshPipelineKey::from_hdr(view.hdr);
 
         if normal_prepass {
