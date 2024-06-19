@@ -31,7 +31,7 @@ fn populate_buffers(
     let metadata = all_metadata[metadata_index];
 
     instance_data[index] = instance_data_from_metadata(metadata);
-    // Metadata index is the same as the instance number
-    indirect_args[index] = indexed_args_from_metadata_and_instance(metadata, metadata_index);
+    // Index is the same as the instance number
+    indirect_args[index] = indexed_args_from_metadata_and_instance(metadata, index);
     atomicAdd(&count, 1u);
 }
