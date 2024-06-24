@@ -4,9 +4,13 @@ mod graph;
 mod impls;
 mod indirect;
 mod observers;
+mod phase;
 mod shaders;
 mod utils;
 
+use bevy::core_pipeline::core_3d::graph::Core3d;
+use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
+use bevy::render::render_phase::{DrawFunctions, SortedRenderPhasePlugin, ViewSortedRenderPhases};
 use bevy::render::render_resource::ShaderSize;
 use bevy::{
     app::{App, Plugin},
@@ -30,6 +34,7 @@ use gpu_chunk::{
     remove_chunk_meshes, update_indirect_chunk_data_dependants, upload_chunk_meshes,
     IndirectRenderDataStore, RemoveChunkMeshes, ShouldUpdateChunkDataDependants,
 };
+use graph::{ChunkPrepassNode, Nodes};
 use indirect::{
     prepass_queue_indirect_chunks, render_queue_indirect_chunks, shadow_queue_indirect_chunks,
     ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkData,
@@ -39,6 +44,7 @@ use indirect::{
 use observers::{
     extract_observer_chunks, populate_observer_multi_draw_buffers, PopulateObserverBuffersPipeline,
 };
+use phase::PrepassChunkPhaseItem;
 use shaders::load_internal_shaders;
 
 use crate::data::{
@@ -63,18 +69,17 @@ impl Plugin for RenderCore {
     fn build(&self, app: &mut App) {
         load_internal_shaders(app);
 
-        app.add_plugins(ExtractResourcePlugin::<VoxelColorArrayTexture>::default());
-        app.add_plugins(ExtractResourcePlugin::<VoxelNormalArrayTexture>::default());
+        app.add_plugins((
+            ExtractResourcePlugin::<VoxelColorArrayTexture>::default(),
+            ExtractResourcePlugin::<VoxelNormalArrayTexture>::default(),
+        ));
 
         // Render app logic
         let render_app = app.sub_app_mut(RenderApp);
 
         render_app
-            .add_render_command::<Opaque3dPrepass, IndirectChunksPrepass>()
-            .add_render_command::<Opaque3d, IndirectChunksRender>()
-            .add_render_command::<Shadow, IndirectChunksPrepass>();
-
-        render_app
+            .init_resource::<DrawFunctions<PrepassChunkPhaseItem>>()
+            .init_resource::<ViewSortedRenderPhases<PrepassChunkPhaseItem>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
             .init_resource::<SpecializedComputePipelines<PopulateObserverBuffersPipeline>>()
@@ -82,6 +87,14 @@ impl Plugin for RenderCore {
             .init_resource::<ShouldUpdateChunkDataDependants>()
             .init_resource::<RemoveChunkMeshes>()
             .init_resource::<UnpreparedChunkMeshes>();
+
+        render_app
+            .add_render_command::<Opaque3dPrepass, IndirectChunksPrepass>()
+            .add_render_command::<Opaque3d, IndirectChunksRender>()
+            .add_render_command::<Shadow, IndirectChunksPrepass>();
+
+        render_app
+            .add_render_graph_node::<ViewNodeRunner<ChunkPrepassNode>>(Core3d, Nodes::Prepass);
 
         render_app.add_systems(
             ExtractSchedule,

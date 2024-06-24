@@ -104,6 +104,30 @@ pub struct IndirectChunkPipelineKey {
     pub inner: MeshPipelineKey,
 }
 
+impl IndirectChunkPipelineKey {
+    pub fn new() -> Self {
+        Self {
+            inner: MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList),
+        }
+    }
+
+    pub fn depth_prepass(mut self, enabled: bool) -> Self {
+        self.inner.set(MeshPipelineKey::DEPTH_PREPASS, enabled);
+        self
+    }
+
+    pub fn normal_prepass(mut self, enabled: bool) -> Self {
+        self.inner.set(MeshPipelineKey::NORMAL_PREPASS, enabled);
+        self
+    }
+
+    pub fn motion_vector_prepass(mut self, enabled: bool) -> Self {
+        self.inner
+            .set(MeshPipelineKey::MOTION_VECTOR_PREPASS, enabled);
+        self
+    }
+}
+
 impl SpecializedRenderPipeline for IndirectChunkRenderPipeline {
     type Key = IndirectChunkPipelineKey;
 

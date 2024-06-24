@@ -1,17 +1,27 @@
+use std::ops::Range;
+
 use bevy::{
     core_pipeline::{
         core_3d::graph::Core3d,
         prepass::{DepthPrepass, MotionVectorPrepass, NormalPrepass, ViewPrepassTextures},
     },
     ecs::{query::QueryItem, system::lifetimeless::Read},
+    pbr::MeshPipelineKey,
     prelude::*,
     render::{
         camera::ExtractedCamera,
+        diagnostic::RecordDiagnostics,
         render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
         },
+        render_phase::{
+            BinnedPhaseItem, BinnedRenderPhasePlugin, DrawFunctionId, DrawFunctions, PhaseItem,
+            PhaseItemExtraIndex, SortedPhaseItem, SortedRenderPhasePlugin, TrackedRenderPass,
+            ViewSortedRenderPhases,
+        },
         render_resource::{
-            CommandEncoderDescriptor, RenderPassColorAttachment, RenderPassDescriptor, StoreOp,
+            CachedRenderPipelineId, CommandEncoderDescriptor, RenderPassColorAttachment,
+            RenderPassDescriptor, StoreOp,
         },
         renderer::RenderContext,
         view::{ViewDepthTexture, ViewUniformOffset},
@@ -24,23 +34,14 @@ use crate::{
     topo::controller::ObserverId,
 };
 
+use super::phase::PrepassChunkPhaseItem;
+
 pub struct CoreGraphPlugin;
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, RenderLabel)]
 pub enum Nodes {
     Prepass,
     MainPass,
-}
-
-impl Plugin for CoreGraphPlugin {
-    fn build(&self, app: &mut App) {
-        let render_app = app.sub_app_mut(RenderApp);
-
-        render_app
-            .add_render_graph_node::<ViewNodeRunner<ChunkPrepassNode>>(Core3d, Nodes::Prepass);
-
-        todo!();
-    }
 }
 
 fn color_attachments(
@@ -73,6 +74,7 @@ pub struct ChunkPrepassNode;
 
 impl ViewNode for ChunkPrepassNode {
     type ViewQuery = (
+        Entity,
         Read<ObserverId>,
         Read<ExtractedCamera>,
         Read<ViewDepthTexture>,
@@ -85,29 +87,21 @@ impl ViewNode for ChunkPrepassNode {
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext<'w>,
         (
+            view_entity,
             observer,
             camera,
             view_depth_texture,
             view_prepass_textures,
-            view_uniform_offset
+            view_uniform_offset,
         ): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        let render_world_observers = world.resource::<RenderWorldObservers>();
-        let indirect_render_data_store = world.resource::<IndirectRenderDataStore>();
-
-        // Return early if our indirect data isn't ready to be rendered
-        if !indirect_render_data_store.ready || indirect_render_data_store.bind_group.is_none() {
-            return Ok(());
-        }
-
-        let Some(observer_data) = render_world_observers.get(observer) else {
+        let phases = world.resource::<ViewSortedRenderPhases<PrepassChunkPhaseItem>>();
+        let Some(phase) = phases.get(&view_entity) else {
             return Ok(());
         };
 
-        let Some(ref observer_buffers) = observer_data.buffers else {
-            return Ok(());
-        };
+        let diagnostics = render_context.diagnostic_recorder();
 
         let color_attachments = color_attachments(&view_prepass_textures);
         let depth_stencil_attachment = Some(view_depth_texture.get_attachment(StoreOp::Store));
@@ -126,7 +120,27 @@ impl ViewNode for ChunkPrepassNode {
                 occlusion_query_set: None,
             });
 
-            todo!()
+            let mut pass = TrackedRenderPass::new(&gpu, pass);
+            let pass_span = diagnostics.pass_span(&mut pass, "chunk_prepass");
+
+            if let Some(viewport) = camera.viewport.as_ref() {
+                pass.set_camera_viewport(viewport);
+            }
+
+            phase.render(&mut pass, world, view_entity);
+
+            pass_span.end(&mut pass);
+            drop(pass);
+
+            if let Some(prepass_depth_texture) = &view_prepass_textures.depth {
+                encoder.copy_texture_to_texture(
+                    view_depth_texture.texture.as_image_copy(),
+                    prepass_depth_texture.texture.texture.as_image_copy(),
+                    view_prepass_textures.size,
+                );
+            }
+
+            encoder.finish()
         });
 
         Ok(())
