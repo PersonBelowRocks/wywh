@@ -20,7 +20,7 @@ enum AppState {
 #[derive(Component, Copy, Clone)]
 struct TestingTextureArray;
 
-fn main() {
+fn main() -> AppExit {
     let mut app = App::new();
     app.add_plugins((
         DefaultPlugins,
@@ -75,7 +75,7 @@ fn insert_example(
 
     for handle in handles.0.iter() {
         builder
-            .add_image(handle.clone().into(), images.as_ref())
+            .add_image(handle.clone().id(), images.as_ref())
             .unwrap();
     }
 

@@ -24,38 +24,40 @@ pub struct MipGeneratorPipelineMeta {
     pub(crate) pipeline_id: CachedComputePipelineId,
 }
 
-impl FromWorld for MipGeneratorPipelineMeta {
-    fn from_world(world: &mut World) -> Self {
-        world.resource_scope::<SpecializedComputePipelines<MipGeneratorPipeline>, Self>(
-            |world, mut specialized_pipelines| {
-                let gpu = world.resource::<RenderDevice>();
-                let cache = world.resource::<PipelineCache>();
+pub(crate) fn create_mip_generator_pipeline(
+    mut cmds: Commands,
+    mut cache: ResMut<PipelineCache>,
+    mut pipelines: ResMut<SpecializedComputePipelines<MipGeneratorPipeline>>,
+    gpu: Res<RenderDevice>,
+) {
+    let bg_layout = gpu.create_bind_group_layout(
+        "compute_mipmap_bg_layout",
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::COMPUTE,
+            (
+                texture_2d_array(TextureSampleType::Float { filterable: true }),
+                texture_storage_2d_array(STORAGE_TEXTURE_FORMAT, StorageTextureAccess::WriteOnly),
+            ),
+        ),
+    );
 
-                let bg_layout = gpu.create_bind_group_layout(
-                    "compute_mipmap_bg_layout",
-                    &BindGroupLayoutEntries::sequential(
-                        ShaderStages::COMPUTE,
-                        (
-                            texture_2d_array(TextureSampleType::Float { filterable: true }),
-                            texture_storage_2d_array(
-                                STORAGE_TEXTURE_FORMAT,
-                                StorageTextureAccess::WriteOnly,
-                            ),
-                        ),
-                    ),
-                );
+    let pipeline_id = pipelines.specialize(
+        &cache,
+        &MipGeneratorPipeline {
+            layout: bg_layout.clone(),
+        },
+        MipGeneratorPipelineKey,
+    );
 
-                Self {
-                    bg_layout: bg_layout.clone(),
-                    pipeline_id: specialized_pipelines.specialize(
-                        cache,
-                        &MipGeneratorPipeline { layout: bg_layout },
-                        MipGeneratorPipelineKey,
-                    ),
-                }
-            },
-        )
-    }
+    // Need to process the queue after we specialize our pipeline so
+    // that it's usable later on. Bevy does this automatically but we need
+    // to do it earlier because we're using the pipeline in the prepare stage.
+    cache.process_queue();
+
+    cmds.insert_resource(MipGeneratorPipelineMeta {
+        bg_layout,
+        pipeline_id,
+    });
 }
 
 #[derive(Clone)]

@@ -1,20 +1,21 @@
 extern crate thiserror as te;
 
-use asset::MippedArrayTexture;
+use asset::{GpuMippedArrayTex, MippedArrayTexture};
 use bevy::{
     asset::load_internal_asset,
     prelude::*,
     render::{
         render_asset::{RenderAssetPlugin, RenderAssetUsages, RenderAssets},
         render_resource::{Extent3d, SpecializedComputePipelines, TextureDimension, TextureFormat},
-        texture::TextureFormatPixelInfo,
+        texture::{GpuImage, TextureFormatPixelInfo},
         Render, RenderApp, RenderSet,
     },
-    utils::Uuid,
 };
 
 mod error;
 pub use error::*;
+use mipmap::create_mip_generator_pipeline;
+use uuid::Uuid;
 
 use crate::mipmap::{MipGeneratorPipeline, MipGeneratorPipelineMeta, MIPMAP_COMPUTE_SHADER_HANDLE};
 
@@ -42,7 +43,7 @@ impl Plugin for MippedArrayTexturePlugin {
         );
 
         app.init_asset::<MippedArrayTexture>();
-        app.add_plugins(RenderAssetPlugin::<MippedArrayTexture>::default());
+        app.add_plugins(RenderAssetPlugin::<GpuMippedArrayTex>::default());
 
         let render_app = app.sub_app_mut(RenderApp);
         render_app.init_resource::<SpecializedComputePipelines<MipGeneratorPipeline>>();
@@ -57,18 +58,23 @@ impl Plugin for MippedArrayTexturePlugin {
 
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
-        render_app.init_resource::<MipGeneratorPipelineMeta>();
+        render_app.add_systems(
+            Render,
+            create_mip_generator_pipeline
+                .run_if(not(resource_exists::<MipGeneratorPipelineMeta>))
+                .in_set(RenderSet::Prepare),
+        );
     }
 }
 
 fn inject_array_textures_into_render_images(
-    array_textures: Res<RenderAssets<MippedArrayTexture>>,
-    mut images: ResMut<RenderAssets<Image>>,
+    array_textures: Res<RenderAssets<GpuMippedArrayTex>>,
+    mut images: ResMut<RenderAssets<GpuImage>>,
 ) {
-    for (id, image) in array_textures.iter() {
+    for (id, gpu_mat) in array_textures.iter() {
         // this is so sketchy but bevy's AsBindGroup trait only gives you access to RenderAssets<Image>
         // so to make it easier for myself to test this crap we do this
-        images.insert(id.untyped().typed_unchecked::<Image>(), image.clone());
+        images.insert(id.untyped().typed_unchecked::<Image>(), gpu_mat.gpu_image());
     }
 }
 

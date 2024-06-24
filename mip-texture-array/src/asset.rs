@@ -4,10 +4,11 @@ use bevy::{
     render::{
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetUsages},
         render_resource::{
-            AddressMode, BindGroupEntries, CommandEncoderDescriptor, ComputePassDescriptor,
-            Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, Origin3d, PipelineCache,
-            SamplerDescriptor, Texture, TextureAspect, TextureDescriptor, TextureDimension,
-            TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
+            AddressMode, BindGroupEntries, CachedPipelineState, CommandEncoderDescriptor,
+            ComputePassDescriptor, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout,
+            Origin3d, Pipeline, PipelineCache, Sampler, SamplerDescriptor, Texture, TextureAspect,
+            TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
+            TextureViewDescriptor, TextureViewDimension,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
@@ -39,6 +40,29 @@ impl MippedArrayTexture {
 
     pub fn mipmap_levels(&self) -> u32 {
         self.dims.ilog2()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GpuMippedArrayTex {
+    pub texture: Texture,
+    pub view: TextureView,
+    pub sampler: Sampler,
+    pub mip_levels: u32,
+    pub size: UVec2,
+    pub format: TextureFormat,
+}
+
+impl GpuMippedArrayTex {
+    pub fn gpu_image(&self) -> GpuImage {
+        GpuImage {
+            texture: self.texture.clone(),
+            sampler: self.sampler.clone(),
+            texture_view: self.view.clone(),
+            size: self.size,
+            mip_level_count: self.mip_levels,
+            texture_format: self.format,
+        }
     }
 }
 
@@ -163,38 +187,47 @@ fn create_mip_storage_views(
     views
 }
 
-impl RenderAsset for MippedArrayTexture {
-    type PreparedAsset = GpuImage;
+#[derive(te::Error, Debug, Copy, Clone)]
+#[error("Mipmap generation pipeline is not created yet")]
+pub struct PipelineNotCreated;
+
+impl RenderAsset for GpuMippedArrayTex {
+    type SourceAsset = MippedArrayTexture;
 
     type Param = (
         SRes<RenderDevice>,
         SRes<RenderQueue>,
-        SRes<MipGeneratorPipelineMeta>,
+        Option<SRes<MipGeneratorPipelineMeta>>,
         SRes<PipelineCache>,
     );
 
-    fn asset_usage(&self) -> RenderAssetUsages {
+    fn asset_usage(_: &Self::SourceAsset) -> RenderAssetUsages {
         RenderAssetUsages::all()
     }
 
     fn prepare_asset(
-        self,
+        src: Self::SourceAsset,
         param: &mut SystemParamItem<Self::Param>,
-    ) -> Result<Self::PreparedAsset, PrepareAssetError<Self>> {
+    ) -> Result<Self, PrepareAssetError<Self::SourceAsset>> {
         let (gpu, queue, pipeline_meta, pipeline_cache) = param;
-        let mip_levels = self.mipmap_levels();
+
+        let Some(pipeline_meta) = pipeline_meta else {
+            return Err(PrepareAssetError::RetryNextUpdate(src));
+        };
+
+        let mip_levels = src.mipmap_levels();
 
         info!(
             "Generating {} mip levels for array texture '{:?}'",
-            mip_levels, self.label
+            mip_levels, src.label
         );
 
-        let texture = create_array_texture_with_filled_mip_level_0(&self, gpu, queue);
+        let texture = create_array_texture_with_filled_mip_level_0(&src, gpu, queue);
 
-        let views = create_mip_views(mip_levels, &texture, self.array_layers);
-        let storage_views = create_mip_storage_views(mip_levels, &texture, self.array_layers);
+        let views = create_mip_views(mip_levels, &texture, src.array_layers);
+        let storage_views = create_mip_storage_views(mip_levels, &texture, src.array_layers);
 
-        let view_sizes = create_mip_view_sizes(mip_levels, self.dims);
+        let view_sizes = create_mip_view_sizes(mip_levels, src.dims);
 
         let mut bind_groups = vec![];
         for mip_level in 1..mip_levels {
@@ -208,9 +241,17 @@ impl RenderAsset for MippedArrayTexture {
             ))
         }
 
-        let gpu_pipeline = pipeline_cache
-            .get_compute_pipeline(pipeline_meta.pipeline_id)
-            .unwrap();
+        let gpu_pipeline = match pipeline_cache
+            .get_compute_pipeline_state(pipeline_meta.pipeline_id)
+        {
+            CachedPipelineState::Err(error) => panic!("Mipmap generation pipeline error: {error}"),
+            CachedPipelineState::Queued => panic!("Pipeline is still queued"),
+            CachedPipelineState::Ok(Pipeline::ComputePipeline(pl)) => pl,
+            CachedPipelineState::Creating(_) => {
+                return Err(PrepareAssetError::RetryNextUpdate(src))
+            }
+            _ => unreachable!(),
+        };
 
         let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
             label: "mipmap_generation_cmd_encoder".into(),
@@ -231,7 +272,7 @@ impl RenderAsset for MippedArrayTexture {
             let size = view_sizes[mip_level as usize];
             let workgroup_count: u32 = (size + WORKGROUP_SIZE_PER_DIM - 1) / WORKGROUP_SIZE_PER_DIM;
 
-            pass.dispatch_workgroups(workgroup_count, workgroup_count, self.array_layers);
+            pass.dispatch_workgroups(workgroup_count, workgroup_count, src.array_layers);
         }
 
         // wgpu automatically ends the compute pass when dropping it.
@@ -242,12 +283,12 @@ impl RenderAsset for MippedArrayTexture {
 
         info!(
             "Command buffer for array texture '{:?}' submitted to queue.",
-            self.label
+            src.label
         );
 
         let main_view = texture.create_view(&TextureViewDescriptor {
             label: Some("mipped_array_texture_main_view"),
-            format: Some(if self.srgb {
+            format: Some(if src.srgb {
                 TEXTURE_FORMAT
             } else {
                 STORAGE_TEXTURE_FORMAT
@@ -260,10 +301,10 @@ impl RenderAsset for MippedArrayTexture {
             array_layer_count: None,
         });
 
-        Ok(GpuImage {
+        Ok(Self {
             texture,
-            texture_view: main_view,
-            texture_format: STORAGE_TEXTURE_FORMAT,
+            view: main_view,
+            format: STORAGE_TEXTURE_FORMAT,
             sampler: gpu.create_sampler(&SamplerDescriptor {
                 label: Some("mipped_array_texture_sampler"),
                 address_mode_u: AddressMode::ClampToEdge,
@@ -278,8 +319,8 @@ impl RenderAsset for MippedArrayTexture {
                 anisotropy_clamp: 1,
                 border_color: None,
             }),
-            size: UVec2::splat(self.dims).as_vec2(),
-            mip_level_count: mip_levels,
+            size: UVec2::splat(src.dims),
+            mip_levels,
         })
     }
 }
