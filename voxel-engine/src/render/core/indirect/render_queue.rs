@@ -14,7 +14,7 @@ use bevy::{
         mesh::PrimitiveTopology,
         render_phase::{DrawFunctions, ViewBinnedRenderPhases},
         render_resource::{PipelineCache, SpecializedRenderPipelines},
-        view::{ExtractedView, VisibleEntities},
+        view::ExtractedView,
     },
 };
 

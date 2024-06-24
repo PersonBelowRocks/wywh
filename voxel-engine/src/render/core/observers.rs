@@ -1,5 +1,3 @@
-use bevy::ecs::entity::EntityHashMap;
-use bevy::ecs::query::QueryEntityError;
 use bevy::render::render_resource::{CachedPipelineState, Pipeline};
 use bevy::{
     prelude::*,

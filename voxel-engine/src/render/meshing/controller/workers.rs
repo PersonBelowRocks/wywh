@@ -1,5 +1,4 @@
 use std::{
-    collections::BinaryHeap,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -19,7 +18,7 @@ use crate::{
     data::registries::Registries,
     render::meshing::{error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context},
     topo::world::{ChunkManager, ChunkPos},
-    util::{result::ResultFlattening, ChunkIndexMap, ChunkSet, Keyed, KeyedOrd},
+    util::{result::ResultFlattening, ChunkIndexMap, ChunkSet, Keyed},
 };
 
 use super::{ChunkMeshData, RemeshPriority};

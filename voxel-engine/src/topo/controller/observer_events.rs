@@ -1,5 +1,4 @@
 use std::sync::atomic::Ordering;
-use std::time::Instant;
 
 use bevy::{
     ecs::entity::EntityHashMap,
@@ -12,12 +11,12 @@ use crate::{
         world::{Chunk, ChunkPos, VoxelRealm},
         worldgen::{generator::GenerateChunk, GenerationPriority},
     },
-    util::{ws_to_chunk_pos, ChunkMap, ChunkSet},
+    util::{ws_to_chunk_pos, ChunkSet},
 };
 
 use super::{
     AddPermitFlagsEvent, ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent,
-    ChunkPermitKey, Entry, LastPosition, LoadChunksEvent, LoadReasons, LoadedChunkEvent,
+    ChunkPermitKey, LastPosition, LoadChunksEvent, LoadReasons, LoadedChunkEvent,
     LoadshareProvider, ObserverLoadshare, ObserverLoadshareType, ObserverSettings, PermitFlags,
     RemovePermitFlagsEvent, RenderableObserverChunks, UnloadChunksEvent,
 };

@@ -11,7 +11,7 @@ use crate::data::registries::Registry;
 use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::block::{BlockVoxel, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
-use crate::topo::controller::{LoadReasons, LoadshareMap, PermitFlags};
+use crate::topo::controller::{LoadReasons, LoadshareMap};
 use crate::topo::storage::containers::data_storage::SyncIndexedChunkContainer;
 
 #[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]

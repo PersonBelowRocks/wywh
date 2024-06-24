@@ -1,38 +1,21 @@
-use std::ops::Range;
-
 use bevy::{
-    core_pipeline::{
-        core_3d::graph::Core3d,
-        prepass::{DepthPrepass, MotionVectorPrepass, NormalPrepass, ViewPrepassTextures},
-    },
+    core_pipeline::prepass::ViewPrepassTextures,
     ecs::{query::QueryItem, system::lifetimeless::Read},
-    pbr::MeshPipelineKey,
     prelude::*,
     render::{
         camera::ExtractedCamera,
         diagnostic::RecordDiagnostics,
-        render_graph::{
-            NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
-        },
-        render_phase::{
-            BinnedPhaseItem, BinnedRenderPhasePlugin, DrawFunctionId, DrawFunctions, PhaseItem,
-            PhaseItemExtraIndex, SortedPhaseItem, SortedRenderPhasePlugin, TrackedRenderPass,
-            ViewSortedRenderPhases,
-        },
+        render_graph::{NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
+        render_phase::{BinnedPhaseItem, TrackedRenderPass, ViewSortedRenderPhases},
         render_resource::{
-            CachedRenderPipelineId, CommandEncoderDescriptor, RenderPassColorAttachment,
-            RenderPassDescriptor, StoreOp,
+            CommandEncoderDescriptor, RenderPassColorAttachment, RenderPassDescriptor, StoreOp,
         },
         renderer::RenderContext,
         view::{ViewDepthTexture, ViewUniformOffset},
-        RenderApp,
     },
 };
 
-use crate::{
-    render::core::{gpu_chunk::IndirectRenderDataStore, observers::RenderWorldObservers},
-    topo::controller::ObserverId,
-};
+use crate::topo::controller::ObserverId;
 
 use super::phase::PrepassChunkPhaseItem;
 

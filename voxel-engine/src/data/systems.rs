@@ -1,10 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use bevy::{
-    asset::LoadedFolder,
-    ecs::system::SystemParam,
-    prelude::*,
-    render::{render_asset::RenderAssets, texture::GpuImage},
+    asset::LoadedFolder, ecs::system::SystemParam, prelude::*, render::render_asset::RenderAssets,
 };
 use mip_texture_array::asset::{GpuMippedArrayTex, MippedArrayTexture};
 

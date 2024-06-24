@@ -8,9 +8,7 @@ use std::{
 
 use bevy::math::{ivec3, IVec3};
 use dashmap::DashSet;
-use parking_lot::{
-    MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
-};
+use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
 use crate::topo::controller::{LoadshareId, LoadshareMap};
 use crate::topo::world::chunk::ChunkLoadReasons;
@@ -198,7 +196,7 @@ impl<'a> LoadshareChunks<'a> {
         };
 
         let mut load_reasons = chunk.load_reasons.write();
-        let mut loadshare_load_reasons = load_reasons
+        let loadshare_load_reasons = load_reasons
             .loadshares
             .get_mut(&self.loadshare)
             .ok_or(ChunkContainerError::InvalidLoadshare)?;
@@ -254,7 +252,7 @@ impl<'a> LoadshareChunks<'a> {
                 existing_load_reasons
                     .loadshares
                     .entry(self.loadshare)
-                    .and_modify(|mut reasons| reasons.insert(load_reasons))
+                    .and_modify(|reasons| reasons.insert(load_reasons))
                     .or_insert_with(|| {
                         self.loadshare_chunks.set(pos);
                         load_reasons

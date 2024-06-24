@@ -6,11 +6,8 @@ use bevy::{
     prelude::*,
     render::{
         mesh::PrimitiveTopology,
-        render_phase::{
-            BinnedRenderPhase, DrawFunctions, PhaseItemExtraIndex, ViewBinnedRenderPhases,
-        },
+        render_phase::{DrawFunctions, ViewBinnedRenderPhases},
         render_resource::{PipelineCache, SpecializedRenderPipelines},
-        view::{ExtractedView, VisibleEntities},
     },
 };
 

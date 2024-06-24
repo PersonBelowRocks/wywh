@@ -179,7 +179,7 @@ impl ChunkSet {
         self.0.drain()
     }
 
-    pub fn retain<F: FnMut(&ChunkPos) -> bool>(&mut self, mut f: F) {
+    pub fn retain<F: FnMut(&ChunkPos) -> bool>(&mut self, f: F) {
         self.0.retain(f)
     }
 }

@@ -2,21 +2,18 @@ use std::time::Instant;
 
 use bevy::{prelude::*, render::primitives::Aabb};
 
-use crate::{
-    topo::{
-        controller::ChunkPermitKey,
-        world::{
-            chunk_manager::{ChunkLoadResult, ChunkUnloadResult},
-            Chunk, ChunkEntity, ChunkPos, VoxelRealm,
-        },
+use crate::topo::{
+    controller::ChunkPermitKey,
+    world::{
+        chunk_manager::{ChunkLoadResult, ChunkUnloadResult},
+        Chunk, ChunkEntity, ChunkPos, VoxelRealm,
     },
-    util::ChunkMap,
 };
 
 use super::{
     AddPermitFlagsEvent, ChunkEcsPermits, LoadChunksEvent, LoadedChunkEvent, LoadshareMap,
-    LoadshareProvider, MergeEvent, Permit, PermitLostFlagsEvent, RemovePermitFlagsEvent,
-    UnloadChunksEvent, UnloadedChunkEvent, WorldControllerSettings,
+    LoadshareProvider, Permit, PermitLostFlagsEvent, RemovePermitFlagsEvent, UnloadChunksEvent,
+    UnloadedChunkEvent, WorldControllerSettings,
 };
 
 #[derive(Bundle)]

@@ -12,17 +12,16 @@ use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
     topo::{
-        controller::{AddPermitFlagsEvent, PermitFlags, PermitLostFlagsEvent},
+        controller::{PermitFlags, PermitLostFlagsEvent},
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ObserverSettings,
     },
-    util::{ChunkMap, ChunkSet},
+    util::ChunkSet,
 };
 
 use super::{
     workers::{MeshBuilder, MeshBuilderCommand},
-    ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData, RemeshPriority, RemeshType,
-    TimedChunkMeshStatus,
+    ChunkMeshStatus, ExtractableChunkMeshData, RemeshPriority, RemeshType, TimedChunkMeshStatus,
 };
 
 #[derive(Resource, Deref)]

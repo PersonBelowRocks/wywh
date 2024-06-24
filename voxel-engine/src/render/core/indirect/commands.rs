@@ -1,5 +1,4 @@
 use bevy::ecs::system::lifetimeless::Read;
-use bevy::prelude::Entity;
 use bevy::{
     ecs::{
         query::ROQueryItem,

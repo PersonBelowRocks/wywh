@@ -10,7 +10,7 @@ mod utils;
 
 use bevy::core_pipeline::core_3d::graph::Core3d;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
-use bevy::render::render_phase::{DrawFunctions, SortedRenderPhasePlugin, ViewSortedRenderPhases};
+use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
 use bevy::render::render_resource::ShaderSize;
 use bevy::{
     app::{App, Plugin},
@@ -36,10 +36,9 @@ use gpu_chunk::{
 };
 use graph::{ChunkPrepassNode, Nodes};
 use indirect::{
-    prepass_queue_indirect_chunks, render_queue_indirect_chunks, shadow_queue_indirect_chunks,
-    ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkData,
-    IndirectChunkPrepassPipeline, IndirectChunkRenderPipeline, IndirectChunksPrepass,
-    IndirectChunksRender,
+    prepass_queue_indirect_chunks, render_queue_indirect_chunks, ChunkInstanceData,
+    GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkPrepassPipeline,
+    IndirectChunkRenderPipeline, IndirectChunksPrepass, IndirectChunksRender,
 };
 use observers::{
     extract_observer_chunks, populate_observer_multi_draw_buffers, PopulateObserverBuffersPipeline,

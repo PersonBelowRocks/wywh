@@ -14,7 +14,7 @@ use bevy::{
         Extract,
     },
 };
-use mip_texture_array::asset::{GpuMippedArrayTex, MippedArrayTexture};
+use mip_texture_array::asset::GpuMippedArrayTex;
 
 use crate::data::{
     registries::texture::TexregFaces, systems::ArrayTextureHandles, texture::GpuFaceTexture,

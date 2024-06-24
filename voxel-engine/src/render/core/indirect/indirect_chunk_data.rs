@@ -4,7 +4,7 @@ use bevy::{
     prelude::*,
     render::{
         render_resource::{
-            Buffer, BufferDescriptor, BufferInitDescriptor, BufferUsages, ShaderSize, ShaderType,
+            Buffer, BufferDescriptor, BufferInitDescriptor, BufferUsages, ShaderType,
         },
         renderer::{RenderDevice, RenderQueue},
     },
