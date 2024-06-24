@@ -1,5 +1,6 @@
 mod gpu_chunk;
 mod gpu_registries;
+mod graph;
 mod impls;
 mod indirect;
 mod observers;
