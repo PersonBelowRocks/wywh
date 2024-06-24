@@ -2,7 +2,6 @@ use bevy::ecs::entity::EntityHashMap;
 use bevy::ecs::query::QueryEntityError;
 use bevy::render::render_resource::{CachedPipelineState, Pipeline};
 use bevy::{
-    core::cast_slice,
     prelude::*,
     render::{
         render_resource::{
@@ -15,6 +14,7 @@ use bevy::{
         Extract,
     },
 };
+use bytemuck::cast_slice;
 use itertools::Itertools;
 use std::sync::atomic::Ordering;
 

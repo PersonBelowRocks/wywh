@@ -6,7 +6,7 @@ use bevy::{
     prelude::*,
     render::{render_asset::RenderAssets, texture::GpuImage},
 };
-use mip_texture_array::asset::MippedArrayTexture;
+use mip_texture_array::asset::{GpuMippedArrayTex, MippedArrayTexture};
 
 use crate::{
     data::{registries::texture::TextureRegistryLoader, resourcepath::ResourcePath},
@@ -59,8 +59,8 @@ pub struct ArrayTextures<'a> {
 }
 
 pub struct GpuArrayTextures<'a> {
-    pub color: &'a GpuImage,
-    pub normal: &'a GpuImage,
+    pub color: &'a GpuMippedArrayTex,
+    pub normal: &'a GpuMippedArrayTex,
 }
 
 impl<'w> ArrayTextureHandles<'w> {
@@ -89,7 +89,7 @@ impl<'w> ArrayTextureHandles<'w> {
 
     pub fn get_render_assets<'a>(
         &self,
-        assets: &'a RenderAssets<MippedArrayTexture>,
+        assets: &'a RenderAssets<GpuMippedArrayTex>,
     ) -> Result<GpuArrayTextures<'a>, TextureAtlasesGetAssetError> {
         let Some(handle) = self.color.as_deref() else {
             return Err(TextureAtlasesGetAssetError::MissingColorHandle);

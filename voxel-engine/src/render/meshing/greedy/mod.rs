@@ -31,7 +31,6 @@ use self::error::CqsError;
 pub mod algorithm;
 pub mod error;
 pub mod greedy_mesh;
-pub mod material;
 
 #[derive(Clone)]
 pub struct ChunkQuadSlice<'a, 'chunk> {

@@ -1,6 +1,6 @@
 use bevy::{
     core_pipeline::{
-        core_3d::Opaque3d,
+        core_3d::{Opaque3d, Opaque3dBinKey},
         prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass},
         tonemapping::{DebandDither, Tonemapping},
     },
@@ -12,7 +12,7 @@ use bevy::{
     render::{
         camera::TemporalJitter,
         mesh::PrimitiveTopology,
-        render_phase::{DrawFunctions, RenderPhase},
+        render_phase::{DrawFunctions, ViewBinnedRenderPhases},
         render_resource::{PipelineCache, SpecializedRenderPipelines},
         view::{ExtractedView, VisibleEntities},
     },
@@ -31,11 +31,11 @@ pub fn render_queue_indirect_chunks(
     mut pipelines: ResMut<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>,
     pipeline: Res<IndirectChunkRenderPipeline>,
     observers: Res<RenderWorldObservers>,
-    mut views: Query<(
-        &ObserverId,
+    mut phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
+    views: Query<(
+        Entity,
         &ExtractedView,
-        &VisibleEntities,
-        &mut RenderPhase<Opaque3d>,
+        &ObserverId,
         Option<&Tonemapping>,
         Option<&DebandDither>,
         Option<&ShadowFilteringMethod>,
@@ -59,13 +59,12 @@ pub fn render_queue_indirect_chunks(
         return;
     }
 
-    let func = functions.read().id::<IndirectChunksRender>();
+    let draw_function = functions.read().id::<IndirectChunksRender>();
 
     for (
-        id,
+        view_entity,
         view,
-        _visible_entities,
-        mut phase,
+        id,
         tonemapping,
         dither,
         shadow_filter_method,
@@ -73,8 +72,12 @@ pub fn render_queue_indirect_chunks(
         (normal_prepass, depth_prepass, motion_vector_prepass, deferred_prepass),
         ssao,
         temporal_jitter,
-    ) in views.iter_mut()
+    ) in &views
     {
+        let Some(phase) = phases.get_mut(&view_entity) else {
+            continue;
+        };
+
         if !observers
             .get(id)
             .and_then(|data| data.buffers.as_ref())
@@ -120,11 +123,11 @@ pub fn render_queue_indirect_chunks(
             ShadowFilteringMethod::Hardware2x2 => {
                 view_key |= MeshPipelineKey::SHADOW_FILTER_METHOD_HARDWARE_2X2;
             }
-            ShadowFilteringMethod::Castano13 => {
-                view_key |= MeshPipelineKey::SHADOW_FILTER_METHOD_CASTANO_13;
+            ShadowFilteringMethod::Gaussian => {
+                view_key |= MeshPipelineKey::SHADOW_FILTER_METHOD_GAUSSIAN;
             }
-            ShadowFilteringMethod::Jimenez14 => {
-                view_key |= MeshPipelineKey::SHADOW_FILTER_METHOD_JIMENEZ_14;
+            ShadowFilteringMethod::Temporal => {
+                view_key |= MeshPipelineKey::SHADOW_FILTER_METHOD_TEMPORAL;
             }
         }
 
@@ -147,13 +150,14 @@ pub fn render_queue_indirect_chunks(
             },
         );
 
-        phase.add(Opaque3d {
+        let phase_item_key = Opaque3dBinKey {
             pipeline: pipeline_id,
+            draw_function,
             asset_id: AssetId::default(),
-            entity: Entity::PLACEHOLDER,
-            draw_function: func,
-            batch_range: 0..1,
-            dynamic_offset: None,
-        })
+            material_bind_group_id: None,
+            lightmap_image: None,
+        };
+
+        phase.add(phase_item_key, Entity::PLACEHOLDER, false);
     }
 }

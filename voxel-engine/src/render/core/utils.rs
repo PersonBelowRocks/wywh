@@ -78,6 +78,15 @@ pub fn add_mesh_pipeline_shader_defs(key: MeshPipelineKey, shader_defs: &mut Vec
     if key.contains(MeshPipelineKey::TONEMAP_IN_SHADER) {
         shader_defs.push("TONEMAP_IN_SHADER".into());
 
+        shader_defs.push(ShaderDefVal::UInt(
+            "TONEMAPPING_LUT_TEXTURE_BINDING_INDEX".into(),
+            20,
+        ));
+        shader_defs.push(ShaderDefVal::UInt(
+            "TONEMAPPING_LUT_SAMPLER_BINDING_INDEX".into(),
+            21,
+        ));
+
         let method = key.intersection(MeshPipelineKey::TONEMAP_METHOD_RESERVED_BITS);
 
         if method == MeshPipelineKey::TONEMAP_METHOD_NONE {
@@ -128,10 +137,10 @@ pub fn add_mesh_pipeline_shader_defs(key: MeshPipelineKey, shader_defs: &mut Vec
         key.intersection(MeshPipelineKey::SHADOW_FILTER_METHOD_RESERVED_BITS);
     if shadow_filter_method == MeshPipelineKey::SHADOW_FILTER_METHOD_HARDWARE_2X2 {
         shader_defs.push("SHADOW_FILTER_METHOD_HARDWARE_2X2".into());
-    } else if shadow_filter_method == MeshPipelineKey::SHADOW_FILTER_METHOD_CASTANO_13 {
-        shader_defs.push("SHADOW_FILTER_METHOD_CASTANO_13".into());
-    } else if shadow_filter_method == MeshPipelineKey::SHADOW_FILTER_METHOD_JIMENEZ_14 {
-        shader_defs.push("SHADOW_FILTER_METHOD_JIMENEZ_14".into());
+    } else if shadow_filter_method == MeshPipelineKey::SHADOW_FILTER_METHOD_GAUSSIAN {
+        shader_defs.push("SHADOW_FILTER_METHOD_GAUSSIAN".into());
+    } else if shadow_filter_method == MeshPipelineKey::SHADOW_FILTER_METHOD_TEMPORAL {
+        shader_defs.push("SHADOW_FILTER_METHOD_TEMPORAL".into());
     }
 
     let blur_quality =

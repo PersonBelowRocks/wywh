@@ -1,9 +1,9 @@
 use bevy::{
     core_pipeline::{
         core_3d::CORE_3D_DEPTH_FORMAT,
-        prepass::{MOTION_VECTOR_PREPASS_FORMAT, NORMAL_PREPASS_FORMAT},
+        prepass::{PreviousViewData, MOTION_VECTOR_PREPASS_FORMAT, NORMAL_PREPASS_FORMAT},
     },
-    pbr::{MeshPipelineKey, PreviousViewProjection},
+    pbr::MeshPipelineKey,
     prelude::*,
     render::{
         globals::GlobalsUniform,
@@ -51,7 +51,7 @@ impl FromWorld for IndirectChunkPrepassPipeline {
                     // Globals
                     uniform_buffer::<GlobalsUniform>(false),
                     // PreviousViewProjection
-                    uniform_buffer::<PreviousViewProjection>(true),
+                    uniform_buffer::<PreviousViewData>(true),
                 ),
             ),
         );

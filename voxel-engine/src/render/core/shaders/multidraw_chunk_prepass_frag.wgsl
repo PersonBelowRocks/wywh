@@ -8,8 +8,8 @@
 
 #import bevy_pbr::{
     prepass_io::FragmentOutput,
-    prepass_bindings,
-    mesh_view_bindings::{view, previous_view_proj},
+    prepass_bindings::previous_view_uniforms,
+    mesh_view_bindings::view,
 }
 
 @fragment
@@ -31,9 +31,9 @@ fn fragment(
 #endif
 
 #ifdef MOTION_VECTOR_PREPASS
-    let clip_position_t = view.unjittered_view_proj * in.world_position;
+    let clip_position_t = view.unjittered_clip_from_world * in.world_position;
     let clip_position = clip_position_t.xy / clip_position_t.w;
-    let previous_clip_position_t = prepass_bindings::previous_view_proj * in.previous_world_position;
+    let previous_clip_position_t = previous_view_uniforms.clip_from_world * in.previous_world_position;
     let previous_clip_position = previous_clip_position_t.xy / previous_clip_position_t.w;
 
     out.motion_vector = (clip_position - previous_clip_position) * vec2(0.5, -0.5);

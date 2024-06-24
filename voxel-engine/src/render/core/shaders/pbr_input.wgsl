@@ -83,7 +83,7 @@ fn calculate_view(
     var V: vec3<f32>;
     if is_orthographic {
         // Orthographic view vector
-        V = normalize(vec3<f32>(view_bindings::view.view_proj[0].z, view_bindings::view.view_proj[1].z, view_bindings::view.view_proj[2].z));
+        V = normalize(vec3<f32>(view_bindings::view.clip_from_world[0].z, view_bindings::view.clip_from_world[1].z, view_bindings::view.clip_from_world[2].z));
     } else {
         // Only valid for a perpective projection
         V = normalize(view_bindings::view.world_position.xyz - world_position.xyz);
@@ -119,7 +119,7 @@ fn create_pbr_input(
     );
 
     pbr_input.flags = DEFAULT_PBR_INPUT_FLAGS;
-    pbr_input.is_orthographic = view.projection[3].w == 1.0;
+    pbr_input.is_orthographic = view.clip_from_view[3].w == 1.0;
     pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
     pbr_input.frag_coord = in.position;
     pbr_input.world_position = in.world_position;

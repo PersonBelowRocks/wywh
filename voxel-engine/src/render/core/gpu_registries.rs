@@ -14,7 +14,7 @@ use bevy::{
         Extract,
     },
 };
-use mip_texture_array::asset::MippedArrayTexture;
+use mip_texture_array::asset::{GpuMippedArrayTex, MippedArrayTexture};
 
 use crate::data::{
     registries::texture::TexregFaces, systems::ArrayTextureHandles, texture::GpuFaceTexture,
@@ -47,7 +47,7 @@ pub fn prepare_gpu_registry_data(
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     layouts: Res<DefaultBindGroupLayouts>,
-    array_textures: Res<RenderAssets<MippedArrayTexture>>,
+    array_textures: Res<RenderAssets<GpuMippedArrayTex>>,
     handles: ArrayTextureHandles,
 ) {
     // we can only initialize the registry bind group resource if the faces and textures have been extracted
@@ -74,9 +74,9 @@ pub fn prepare_gpu_registry_data(
                 offset: 0,
                 size: None,
             }),
-            &gpu_array_textures.color.texture_view,
+            &gpu_array_textures.color.view,
             &gpu_array_textures.color.sampler,
-            &gpu_array_textures.normal.texture_view,
+            &gpu_array_textures.normal.view,
             &gpu_array_textures.normal.sampler,
         )),
     );

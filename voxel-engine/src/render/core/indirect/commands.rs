@@ -53,7 +53,7 @@ pub struct IndirectChunkDraw;
 impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
     type Param = (SRes<IndirectRenderDataStore>, SRes<RenderWorldObservers>);
 
-    type ViewQuery = (Read<ObserverId>);
+    type ViewQuery = Read<ObserverId>;
     type ItemQuery = ();
 
     fn render<'w>(

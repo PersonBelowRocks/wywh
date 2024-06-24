@@ -119,7 +119,7 @@ pub fn chunk_borders(mut giz: Gizmos, observers: Query<&LastPosition, With<Obser
         let pos = last_pos.chunk_pos.worldspace_min().as_vec3() + (Chunk::SIZE as f32 / 2.0);
 
         let gizmo_tf = Transform::from_translation(pos).with_scale(Vec3::splat(Chunk::SIZE as _));
-        giz.cuboid(gizmo_tf, Color::LIME_GREEN);
+        giz.cuboid(gizmo_tf, Color::srgb(1.0, 0.33, 0.33));
     }
 }
 

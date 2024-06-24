@@ -1,10 +1,14 @@
 use bevy::{
-    core_pipeline::prepass::{DepthPrepass, MotionVectorPrepass, NormalPrepass, Opaque3dPrepass},
+    core_pipeline::prepass::{
+        DepthPrepass, MotionVectorPrepass, NormalPrepass, Opaque3dPrepass, OpaqueNoLightmap3dBinKey,
+    },
     pbr::MeshPipelineKey,
     prelude::*,
     render::{
         mesh::PrimitiveTopology,
-        render_phase::{DrawFunctions, RenderPhase},
+        render_phase::{
+            BinnedRenderPhase, DrawFunctions, PhaseItemExtraIndex, ViewBinnedRenderPhases,
+        },
         render_resource::{PipelineCache, SpecializedRenderPipelines},
         view::{ExtractedView, VisibleEntities},
     },
@@ -25,11 +29,10 @@ pub fn prepass_queue_indirect_chunks(
     pipeline_cache: Res<PipelineCache>,
     prepass_pipeline: Res<IndirectChunkPrepassPipeline>,
     observers: Res<RenderWorldObservers>,
-    mut views: Query<(
+    mut phases: ResMut<ViewBinnedRenderPhases<Opaque3dPrepass>>,
+    views: Query<(
+        Entity,
         &ObserverId,
-        &ExtractedView,
-        &VisibleEntities,
-        &mut RenderPhase<Opaque3dPrepass>,
         Has<DepthPrepass>,
         Has<NormalPrepass>,
         Has<MotionVectorPrepass>,
@@ -46,16 +49,11 @@ pub fn prepass_queue_indirect_chunks(
 
     let draw_function = functions.read().get_id::<IndirectChunksPrepass>().unwrap();
 
-    for (
-        id,
-        _view,
-        _visible_entities,
-        mut phase,
-        depth_prepass,
-        normal_prepass,
-        motion_vector_prepass,
-    ) in &mut views
-    {
+    for (view_entity, id, depth_prepass, normal_prepass, motion_vector_prepass) in &views {
+        let Some(phase) = phases.get_mut(&view_entity) else {
+            continue;
+        };
+
         if !observers
             .get(id)
             .and_then(|data| data.buffers.as_ref())
@@ -85,15 +83,13 @@ pub fn prepass_queue_indirect_chunks(
             },
         );
 
-        phase.add(Opaque3dPrepass {
-            entity: Entity::PLACEHOLDER,
-            draw_function: draw_function,
-            pipeline_id,
-            // this asset ID is seemingly just for some sorting stuff bevy does, but we have our own
-            // logic so we don't care about what bevy would use this field for, so we set it to the default asset ID
+        let phase_item_key = OpaqueNoLightmap3dBinKey {
+            pipeline: pipeline_id,
+            draw_function,
             asset_id: AssetId::default(),
-            batch_range: 0..1,
-            dynamic_offset: None,
-        });
+            material_bind_group_id: None,
+        };
+
+        phase.add(phase_item_key, Entity::PLACEHOLDER, false);
     }
 }
