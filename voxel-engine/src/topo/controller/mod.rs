@@ -171,36 +171,19 @@ impl LoadshareProvider {
     }
 }
 
-#[derive(
-    Component,
-    Clone,
-    Copy,
-    Debug,
-    Deref,
-    DerefMut,
-    dm::Constructor,
-    Hash,
-    PartialEq,
-    Eq,
-    ExtractComponent,
-)]
-pub struct ObserverId(u32);
-
 #[derive(Bundle)]
 pub struct ObserverBundle {
     pub settings: ObserverSettings,
     pub chunks: RenderableObserverChunks,
     pub loadshare: ObserverLoadshare,
-    pub id: ObserverId,
 }
 
 impl ObserverBundle {
-    pub fn new(id: ObserverId) -> Self {
+    pub fn new() -> Self {
         Self {
             settings: Default::default(),
             chunks: Default::default(),
             loadshare: Default::default(),
-            id,
         }
     }
 }
@@ -274,7 +257,6 @@ impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings)
             .init_resource::<LoadshareProvider>()
-            .add_plugins(ExtractComponentPlugin::<ObserverId>::default())
             .add_event::<LoadChunksEvent>()
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()

@@ -14,13 +14,14 @@ use bevy::{
     },
 };
 
-use crate::render::core::observers::RenderWorldObservers;
 use crate::{
     render::meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
     util::{ChunkMap, ChunkSet},
 };
 
-use super::{indirect::IndirectChunkData, DefaultBindGroupLayouts};
+use super::{
+    chunk_batches::RenderChunkBatches, indirect::IndirectChunkData, DefaultBindGroupLayouts,
+};
 
 pub fn extract_chunk_mesh_data(
     mut unprepared: ResMut<UnpreparedChunkMeshes>,
@@ -137,14 +138,14 @@ pub fn upload_chunk_meshes(
 }
 
 pub fn update_indirect_chunk_data_dependants(
-    mut observers: ResMut<RenderWorldObservers>,
     mut update: ResMut<ShouldUpdateChunkDataDependants>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
+    mut batches: ResMut<RenderChunkBatches>,
     default_layouts: Res<DefaultBindGroupLayouts>,
     gpu: Res<RenderDevice>,
 ) {
     if update.0 {
-        observers.drop_buffers();
+        batches.drop_buffers();
 
         let quad_vram_array = &indirect_data.chunks.buffers().quad;
 

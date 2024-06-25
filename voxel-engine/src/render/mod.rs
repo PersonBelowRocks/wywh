@@ -7,18 +7,20 @@ pub mod quad;
 use bevy::{
     ecs::component::{ComponentHooks, StorageType},
     prelude::*,
+    render::extract_component::ExtractComponent,
 };
 pub use lod::*;
 
 use crate::util::ChunkSet;
 
 /// A batch of chunks that can be rendered
-#[derive(Clone)]
+#[derive(Clone, ExtractComponent)]
 pub struct ChunkBatch {
     /// The observer that owns this batch. If this is `None` then this batch is orphaned.
     pub owner: Option<Entity>,
     pub lod: LevelOfDetail,
     pub chunks: ChunkSet,
+    pub tick: u64,
 }
 
 impl Component for ChunkBatch {
@@ -72,7 +74,7 @@ impl Component for ChunkBatch {
 }
 
 /// The batches that an observer can render and update
-#[derive(Clone)]
+#[derive(Clone, ExtractComponent)]
 pub struct ObserverBatches {
     /// The batches this observer owns. Should never be manually updated, rather you should spawn batches and
     /// specify this entity as their owner. The engine will automatically update the owner's batches accordingly.

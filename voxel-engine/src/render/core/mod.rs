@@ -1,3 +1,4 @@
+mod chunk_batches;
 mod gpu_chunk;
 mod gpu_registries;
 mod graph;
@@ -9,6 +10,7 @@ mod shaders;
 mod utils;
 
 use bevy::core_pipeline::core_3d::graph::Core3d;
+use bevy::render::extract_component::ExtractComponentPlugin;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
 use bevy::render::render_resource::ShaderSize;
@@ -30,6 +32,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
+use chunk_batches::{extract_chunk_batches, RenderChunkBatches};
 use gpu_chunk::{
     remove_chunk_meshes, update_indirect_chunk_data_dependants, upload_chunk_meshes,
     IndirectRenderDataStore, RemoveChunkMeshes, ShouldUpdateChunkDataDependants,
@@ -40,9 +43,7 @@ use indirect::{
     GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkPrepassPipeline,
     IndirectChunkRenderPipeline, IndirectChunksPrepass, IndirectChunksRender,
 };
-use observers::{
-    extract_observer_chunks, populate_observer_multi_draw_buffers, PopulateObserverBuffersPipeline,
-};
+use observers::{populate_observer_multi_draw_buffers, PopulateBatchBuffersPipeline};
 use phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
 use shaders::load_internal_shaders;
 
@@ -50,7 +51,6 @@ use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     texture::GpuFaceTexture,
 };
-use crate::render::core::observers::RenderWorldObservers;
 
 use self::{
     gpu_chunk::{extract_chunk_mesh_data, UnpreparedChunkMeshes},
@@ -61,6 +61,7 @@ use self::{
 };
 
 use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
+use super::{ChunkBatch, ObserverBatches};
 
 pub struct RenderCore;
 
@@ -71,6 +72,8 @@ impl Plugin for RenderCore {
         app.add_plugins((
             ExtractResourcePlugin::<VoxelColorArrayTexture>::default(),
             ExtractResourcePlugin::<VoxelNormalArrayTexture>::default(),
+            ExtractComponentPlugin::<ChunkBatch>::default(),
+            ExtractComponentPlugin::<ObserverBatches>::default(),
         ));
 
         // Render app logic
@@ -83,10 +86,10 @@ impl Plugin for RenderCore {
             .init_resource::<ViewSortedRenderPhases<RenderChunkPhaseItem>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
-            .init_resource::<SpecializedComputePipelines<PopulateObserverBuffersPipeline>>()
-            .init_resource::<RenderWorldObservers>()
+            .init_resource::<SpecializedComputePipelines<PopulateBatchBuffersPipeline>>()
             .init_resource::<ShouldUpdateChunkDataDependants>()
             .init_resource::<RemoveChunkMeshes>()
+            .init_resource::<RenderChunkBatches>()
             .init_resource::<UnpreparedChunkMeshes>();
 
         render_app
@@ -104,7 +107,7 @@ impl Plugin for RenderCore {
                 (
                     extract_chunk_mesh_data
                         .run_if(main_world_res_exists::<ExtractableChunkMeshData>),
-                    extract_observer_chunks,
+                    extract_chunk_batches,
                 )
                     .chain(),
             ),
@@ -143,7 +146,7 @@ impl Plugin for RenderCore {
 
         render_app.init_resource::<IndirectChunkRenderPipeline>();
         render_app.init_resource::<IndirectChunkPrepassPipeline>();
-        render_app.init_resource::<PopulateObserverBuffersPipeline>();
+        render_app.init_resource::<PopulateBatchBuffersPipeline>();
     }
 }
 

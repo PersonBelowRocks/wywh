@@ -14,11 +14,10 @@ use bevy::{
     },
 };
 
-use crate::render::core::observers::{ChunkBatch, RenderWorldObservers};
+use crate::render::core::chunk_batches::RenderChunkBatches;
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
-use crate::topo::controller::ObserverId;
 
 pub struct SetIndirectChunkBindGroup<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkBindGroup<I> {
@@ -50,37 +49,27 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkBindGrou
 
 pub struct IndirectChunkDraw;
 impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
-    type Param = (SRes<IndirectRenderDataStore>, SRes<RenderWorldObservers>);
+    type Param = (SRes<IndirectRenderDataStore>, SRes<RenderChunkBatches>);
 
-    type ViewQuery = Read<ObserverId>;
-    type ItemQuery = Read<ChunkBatch>;
+    type ViewQuery = ();
+    type ItemQuery = ();
 
     fn render<'w>(
-        _item: &P,
-        view: ROQueryItem<'w, Self::ViewQuery>,
-        entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
+        item: &P,
+        _view: ROQueryItem<'w, Self::ViewQuery>,
+        _entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (store, observers) = (param.0.into_inner(), param.1.into_inner());
-        let id = view;
-        let Some(lod) = entity.map(|e| e.lod) else {
-            error!("Cannot run this render command on an entity without a 'ChunkBatch' component.");
-            return RenderCommandResult::Failure;
-        };
+        let (store, batches) = (param.0.into_inner(), param.1.into_inner());
 
         if !store.ready {
             error!("Indirect render data is not ready and cannot be rendered");
             return RenderCommandResult::Failure;
         }
 
-        let Some(batches) = observers.get(id) else {
-            error!("View entity {id:?} wasn't present in the render world observer store");
-            return RenderCommandResult::Failure;
-        };
-
-        let Some(ref batch) = batches.get(lod) else {
-            error!("Observer didn't have data for this chunk batch's LOD");
+        let Some(batch) = batches.get(item.entity()) else {
+            error!("Batch entity wasn't present in the global render batch store");
             return RenderCommandResult::Failure;
         };
 

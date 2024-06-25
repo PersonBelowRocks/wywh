@@ -10,7 +10,7 @@ use bevy::{
     render::{
         camera::ExtractedCamera,
         diagnostic::RecordDiagnostics,
-        render_graph::{NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
+        render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_phase::{BinnedPhaseItem, TrackedRenderPass, ViewSortedRenderPhases},
         render_resource::{
             BindGroupEntries, BufferInitDescriptor, BufferUsages, CommandEncoderDescriptor,
@@ -23,11 +23,11 @@ use bevy::{
 };
 use bytemuck::cast_slice;
 
-use crate::topo::controller::ObserverId;
+use crate::render::{ChunkBatch, ObserverBatches};
 
 use super::{
+    chunk_batches::{PopulateBatchBuffers, PopulateBatchBuffersPipelineId, RenderChunkBatches},
     gpu_chunk::IndirectRenderDataStore,
-    observers::{PopulateObserverBuffersPipelineId, RenderWorldObservers},
     phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem},
     DefaultBindGroupLayouts,
 };
@@ -200,62 +200,71 @@ impl ViewNode for ChunkRenderNode {
 #[derive(Component, Copy, Clone, Debug)]
 pub struct PopulateObserverBuffers;
 
-#[derive(Default)]
-pub struct ObserverBufferBuilderNode;
+pub struct BuildBatchBuffersNode {
+    query: QueryState<Read<ChunkBatch>>,
+}
 
-impl ViewNode for ObserverBufferBuilderNode {
-    type ViewQuery = (Entity, Read<ObserverId>, Has<PopulateObserverBuffers>);
+impl Node for BuildBatchBuffersNode {
+    fn update(&mut self, world: &mut World) {
+        self.query.update_archetypes(world);
+    }
 
     fn run<'w>(
         &self,
         graph: &mut RenderGraphContext,
         render_context: &mut RenderContext<'w>,
-        (entity, observer_id, should_populate_buffers): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        if !should_populate_buffers {
-            return Ok(());
-        }
-
         let gpu = world.resource::<RenderDevice>();
         let queue = world.resource::<RenderQueue>();
         let default_layouts = world.resource::<DefaultBindGroupLayouts>();
-        let observers = world.resource::<RenderWorldObservers>();
         let indirect_data = world.resource::<IndirectRenderDataStore>();
-        let pipeline_id = world.resource::<PopulateObserverBuffersPipelineId>();
+        let pipeline_id = world.resource::<PopulateBatchBuffersPipelineId>();
         let pipeline_cache = world.resource::<PipelineCache>();
+        let render_chunk_batches = world.resource::<RenderChunkBatches>();
+        let populate_batches = world.resource::<PopulateBatchBuffers>();
 
-        // Skip this observer if it's not present in the global map.
-        let Some(observer_lods) = observers.get(observer_id) else {
+        // Return early if there's no batches whose buffers need populating
+        if populate_batches.is_empty() {
             return Ok(());
-        };
+        }
+
+        // Encode compute pass
+        let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("populate_batch_buffers_encoder"),
+        });
 
         let Some(compute_pipeline) = pipeline_cache.get_compute_pipeline(pipeline_id.0) else {
-            error!("Cannot get buffer population compute pipeline");
+            error!("Cannot get batch buffer population compute pipeline");
             return Ok(());
         };
 
-        // Populate each LOD individually
-        for (lod, batch) in observer_lods.iter() {
-            let Some(ref buffers) = batch.buffers else {
+        for &batch_entity in populate_batches.iter() {
+            let Ok(batch) = self.query.get_manual(world, batch_entity) else {
                 continue;
             };
-
-            // If the buffers are already populated then we bail
-            if buffers.ready.load(Ordering::Relaxed) {
-                continue;
-            }
 
             // Skip if there's no chunks
             if batch.chunks.is_empty() {
                 continue;
             }
 
-            let num_chunks = batch.chunks.len();
-            let chunk_metadata_indices = batch.get_metadata_indices(&indirect_data.chunks);
+            // Skip all batches that don't have initialized buffers. We are not allowed to initialize the buffers here due to mutability
+            // rules so we are forced to just do whatever the previous render stages tell us.
+            let Some(render_batch) = render_chunk_batches.get(batch_entity) else {
+                continue;
+            };
 
+            let Some(buffers) = &render_batch.buffers else {
+                continue;
+            };
+
+            let num_chunks = batch.chunks.len();
+
+            // An array of the indices to the chunk metadata on the GPU.
+            let chunk_metadata_indices = batch.get_metadata_indices(&indirect_data.chunks);
             let metadata_index_buffer = gpu.create_buffer_with_data(&BufferInitDescriptor {
-                label: Some("observer_chunks_metadata_indices_buffer"),
+                label: Some("BBB_chunk_metadata_indices_buffer"),
                 usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
                 contents: cast_slice(&chunk_metadata_indices),
             });
@@ -263,8 +272,9 @@ impl ViewNode for ObserverBufferBuilderNode {
             let metadata_buffer = &indirect_data.chunks.buffers().metadata;
 
             // Build bind groups
+            // This bind group is for all the data we want to read from.
             let input_bg = gpu.create_bind_group(
-                Some("observer_population_input_bind_group"),
+                Some("BBB_input_bind_group"),
                 &default_layouts.observer_buffers_input_layout,
                 &BindGroupEntries::sequential((
                     metadata_buffer.as_entire_binding(),
@@ -272,8 +282,9 @@ impl ViewNode for ObserverBufferBuilderNode {
                 )),
             );
 
+            // This bind group has the buffers that we want to populate.
             let output_bg = gpu.create_bind_group(
-                Some("observer_population_output_bind_group"),
+                Some("BBB_output_bind_group"),
                 &default_layouts.observer_buffers_output_layout,
                 &BindGroupEntries::sequential((
                     buffers.instance.as_entire_binding(),
@@ -282,14 +293,9 @@ impl ViewNode for ObserverBufferBuilderNode {
                 )),
             );
 
-            // Encode compute pass
-            let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("populate_observer_buffers_encoder"),
-            });
-
             {
                 let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor {
-                    label: Some("populate_observer_buffers_compute_pass"),
+                    label: Some("BBB_compute_pass"),
                     timestamp_writes: None,
                 });
 
@@ -300,10 +306,9 @@ impl ViewNode for ObserverBufferBuilderNode {
 
                 pass.dispatch_workgroups(1, 1, num_chunks as u32);
             }
-
-            queue.submit([encoder.finish()]);
-            buffers.ready.store(true, Ordering::Relaxed);
         }
+
+        queue.submit([encoder.finish()]);
 
         Ok(())
     }
