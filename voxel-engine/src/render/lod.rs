@@ -24,8 +24,65 @@ pub enum LevelOfDetail {
     X16Subdiv = 5,
 }
 
-/// Type alias for an enum map that maps levels of detail to values of a type.
-pub type LodMap<T> = EnumMap<LevelOfDetail, T>;
+/// Maps levels of detail to values of a type.
+#[derive(Default, Clone)]
+pub struct LodMap<T>(EnumMap<LevelOfDetail, Option<T>>);
+
+impl<T> LodMap<T> {
+    pub fn new() -> Self {
+        Self(EnumMap::default())
+    }
+
+    pub fn get(&self, lod: LevelOfDetail) -> Option<&T> {
+        self.0[lod].as_ref()
+    }
+
+    pub fn get_mut(&mut self, lod: LevelOfDetail) -> Option<&mut T> {
+        self.0[lod].as_mut()
+    }
+
+    pub fn insert(&mut self, lod: LevelOfDetail, value: T) -> Option<T> {
+        self.0[lod].replace(value)
+    }
+
+    pub fn remove(&mut self, lod: LevelOfDetail) -> Option<T> {
+        self.0[lod].take()
+    }
+
+    pub fn clear(&mut self) {
+        for (_, item) in self.0.iter_mut() {
+            *item = None;
+        }
+    }
+
+    pub fn retain(&mut self, lods: LODs) {
+        for (lod, item) in self.0.iter_mut() {
+            if !lods.contains_lod(lod) {
+                *item = None;
+            }
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (LevelOfDetail, &T)> {
+        self.0
+            .iter()
+            .filter_map(|(lod, item)| item.as_ref().map(|item| (lod, item)))
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (LevelOfDetail, &mut T)> {
+        self.0
+            .iter_mut()
+            .filter_map(|(lod, item)| item.as_mut().map(|item| (lod, item)))
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &T> {
+        self.iter().map(|(_, item)| item)
+    }
+
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.iter_mut().map(|(_, item)| item)
+    }
+}
 
 impl LevelOfDetail {
     pub const LODS: [Self; 6] = [
