@@ -79,7 +79,7 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
             return RenderCommandResult::Failure;
         };
 
-        let Some(ref batch) = batches[lod] else {
+        let Some(ref batch) = batches.get(lod) else {
             error!("Observer didn't have data for this chunk batch's LOD");
             return RenderCommandResult::Failure;
         };

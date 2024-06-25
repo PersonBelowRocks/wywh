@@ -237,10 +237,6 @@ impl ViewNode for ObserverBufferBuilderNode {
 
         // Populate each LOD individually
         for (lod, batch) in observer_lods.iter() {
-            let Some(batch) = batch else {
-                continue;
-            };
-
             let Some(ref buffers) = batch.buffers else {
                 continue;
             };

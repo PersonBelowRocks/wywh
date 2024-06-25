@@ -31,7 +31,7 @@ use super::{
 
 #[derive(Resource, Deref, DerefMut, Default)]
 pub struct RenderWorldObservers(
-    hb::HashMap<ObserverId, LodMap<Option<ExtractedChunkBatch>>, rustc_hash::FxBuildHasher>,
+    hb::HashMap<ObserverId, LodMap<ExtractedChunkBatch>, rustc_hash::FxBuildHasher>,
 );
 
 impl RenderWorldObservers {
@@ -40,15 +40,15 @@ impl RenderWorldObservers {
     pub fn insert_batch(&mut self, observer: ObserverId, lod: LevelOfDetail, chunks: &ChunkSet) {
         self.0
             .entry(observer)
-            .and_modify(|batches| match &mut batches[lod] {
-                Some(ref mut batch) => batch.chunks = chunks.clone(),
+            .and_modify(|batches| match batches.get_mut(lod) {
+                Some(batch) => batch.chunks = chunks.clone(),
                 None => {
-                    batches[lod] = Some(ExtractedChunkBatch::new(chunks.clone()));
+                    batches.insert(lod, ExtractedChunkBatch::new(chunks.clone()));
                 }
             })
             .or_insert_with(|| {
-                let mut new = LodMap::<Option<ExtractedChunkBatch>>::default();
-                new[lod] = Some(ExtractedChunkBatch::new(chunks.clone()));
+                let mut new = LodMap::<ExtractedChunkBatch>::default();
+                new.insert(lod, ExtractedChunkBatch::new(chunks.clone()));
                 new
             });
     }
@@ -57,7 +57,6 @@ impl RenderWorldObservers {
     pub fn drop_buffers(&mut self) {
         for batches in self.0.values_mut() {
             for (_, batch) in batches.iter_mut() {
-                let Some(batch) = batch else { continue };
                 batch.buffers = None;
             }
         }
