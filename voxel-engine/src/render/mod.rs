@@ -37,7 +37,7 @@ impl Component for ChunkBatch {
             let Some(owner) = owner else {
                 return
             };
-            
+
             let Some(mut observer_batches) = world.get_mut::<ObserverBatches>(owner) else {
                 error!("Chunk batch for entity {batch_entity:?} wants to be owned by {owner:?}, 
                     but that entity either doesn't exist or doesn't have an 'ObserverBatches' component.");
@@ -59,7 +59,7 @@ impl Component for ChunkBatch {
             let Some(owner) = owner else {
                 return
             };
-            
+
             let Some(mut observer_batches) = world.get_mut::<ObserverBatches>(owner) else {
                 error!("Chunk batch for entity {batch_entity:?} wants to be owned by {owner:?}, 
                     but that entity either doesn't exist or doesn't have an 'ObserverBatches' component.");
