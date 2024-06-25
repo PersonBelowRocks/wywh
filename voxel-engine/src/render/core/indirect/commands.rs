@@ -14,7 +14,7 @@ use bevy::{
     },
 };
 
-use crate::render::core::observers::RenderWorldObservers;
+use crate::render::core::observers::{ChunkBatch, RenderWorldObservers};
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
@@ -53,25 +53,39 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
     type Param = (SRes<IndirectRenderDataStore>, SRes<RenderWorldObservers>);
 
     type ViewQuery = Read<ObserverId>;
-    type ItemQuery = ();
+    type ItemQuery = Read<ChunkBatch>;
 
     fn render<'w>(
         _item: &P,
         view: ROQueryItem<'w, Self::ViewQuery>,
-        _entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
+        entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let (store, observers) = (param.0.into_inner(), param.1.into_inner());
         let id = view;
+        let Some(lod) = entity.map(|e| e.lod) else {
+            error!("Cannot run this render command on an entity without a 'ChunkBatch' component.");
+            return RenderCommandResult::Failure;
+        };
 
         if !store.ready {
             error!("Indirect render data is not ready and cannot be rendered");
             return RenderCommandResult::Failure;
         }
 
-        let Some(buffers) = observers.get(id).and_then(|data| data.buffers.as_ref()) else {
-            error!("View entity {id:?} did not have buffers stored in the observer data resource, it should not have been queued with this render command.");
+        let Some(batches) = observers.get(id) else {
+            error!("View entity {id:?} wasn't present in the render world observer store");
+            return RenderCommandResult::Failure;
+        };
+
+        let Some(ref batch) = batches[lod] else {
+            error!("Observer didn't have data for this chunk batch's LOD");
+            return RenderCommandResult::Failure;
+        };
+
+        let Some(ref buffers) = batch.buffers else {
+            error!("Chunk batch didn't have initialized buffers");
             return RenderCommandResult::Failure;
         };
 

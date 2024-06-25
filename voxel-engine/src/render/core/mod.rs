@@ -43,7 +43,7 @@ use indirect::{
 use observers::{
     extract_observer_chunks, populate_observer_multi_draw_buffers, PopulateObserverBuffersPipeline,
 };
-use phase::PrepassChunkPhaseItem;
+use phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
 use shaders::load_internal_shaders;
 
 use crate::data::{
@@ -78,7 +78,9 @@ impl Plugin for RenderCore {
 
         render_app
             .init_resource::<DrawFunctions<PrepassChunkPhaseItem>>()
+            .init_resource::<DrawFunctions<RenderChunkPhaseItem>>()
             .init_resource::<ViewSortedRenderPhases<PrepassChunkPhaseItem>>()
+            .init_resource::<ViewSortedRenderPhases<RenderChunkPhaseItem>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
             .init_resource::<SpecializedComputePipelines<PopulateObserverBuffersPipeline>>()

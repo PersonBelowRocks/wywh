@@ -144,9 +144,7 @@ pub fn update_indirect_chunk_data_dependants(
     gpu: Res<RenderDevice>,
 ) {
     if update.0 {
-        for data in observers.values_mut() {
-            data.buffers = None;
-        }
+        observers.drop_buffers();
 
         let quad_vram_array = &indirect_data.chunks.buffers().quad;
 
@@ -183,6 +181,7 @@ pub struct ShouldUpdateChunkDataDependants(pub bool);
 
 #[derive(Resource)]
 pub struct IndirectRenderDataStore {
+    // TODO: split into LODs
     pub chunks: IndirectChunkData,
     pub bind_group: Option<BindGroup>,
     pub ready: bool,

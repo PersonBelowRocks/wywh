@@ -1,3 +1,4 @@
+use std::convert::identity;
 use std::sync::atomic::AtomicBool;
 use std::{fmt, time::Duration};
 
@@ -6,6 +7,7 @@ use bevy::{
     render::extract_component::{ExtractComponent, ExtractComponentPlugin},
 };
 use bitflags::bitflags;
+use enum_map::EnumMap;
 use hb::HashSet;
 
 use handle_events::{
@@ -16,6 +18,7 @@ use observer_events::{
     unload_out_of_range_chunks,
 };
 
+use crate::render::LevelOfDetail;
 use crate::{util::ChunkSet, EngineState};
 
 use super::world::ChunkPos;
@@ -50,14 +53,22 @@ impl Default for ObserverSettings {
 #[derive(Component)]
 pub struct RenderableObserverChunks {
     pub should_extract: AtomicBool,
-    pub in_range: ChunkSet,
+    pub in_range: EnumMap<LevelOfDetail, Option<ChunkSet>>,
+}
+
+impl RenderableObserverChunks {
+    pub fn in_range(&self) -> impl Iterator<Item = (LevelOfDetail, &ChunkSet)> + '_ {
+        self.in_range
+            .iter()
+            .filter_map(|(lod, option)| option.as_ref().map(|chunks| (lod, chunks)))
+    }
 }
 
 impl Default for RenderableObserverChunks {
     fn default() -> Self {
         Self {
             should_extract: AtomicBool::new(true),
-            in_range: ChunkSet::default(),
+            in_range: EnumMap::default(),
         }
     }
 }
