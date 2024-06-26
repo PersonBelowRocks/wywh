@@ -94,7 +94,7 @@ impl SpecializedRenderPipeline for IndirectChunkPrepassPipeline {
 
         bind_group_layouts.extend_from_slice(&[
             self.layouts.registry_bg_layout.clone(),
-            self.layouts.indirect_chunk_bg_layout.clone(),
+            self.layouts.icd_quad_bg_layout.clone(),
         ]);
 
         let mut shader_defs: Vec<ShaderDefVal> = vec![

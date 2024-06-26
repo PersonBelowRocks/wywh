@@ -24,7 +24,6 @@ use crate::render::{ChunkBatch, LODs, LevelOfDetail, LodMap, VisibleBatches};
 use crate::topo::{controller::RenderableObserverChunks, world::ChunkPos};
 use crate::util::ChunkSet;
 
-use super::chunk_batches::ChunkBatchGpuData;
 use super::gpu_chunk::IndirectRenderDataStore;
 use super::phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
 use super::{
@@ -35,6 +34,7 @@ use super::{
 };
 
 /// Copies of the indirect, instance, and count buffers for each observer so they can cull individually.
+// TODO: clear this out whenever theres newer data afoot
 #[derive(Resource, Clone, Default, Deref, DerefMut)]
 pub struct ObserverBatchBuffersStore(EntityHashMap<ObserverBatches>);
 

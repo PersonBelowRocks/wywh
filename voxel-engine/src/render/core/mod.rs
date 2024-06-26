@@ -34,8 +34,7 @@ use bevy::{
     },
 };
 use chunk_batches::{
-    extract_chunk_batches, BuildBatchBuffersPipeline, ObserverBatchFrustumCullPipeline,
-    RenderChunkBatches,
+    BuildBatchBuffersPipeline, ObserverBatchFrustumCullPipeline, RenderChunkBatches,
 };
 use gpu_chunk::{
     remove_chunk_meshes, update_indirect_chunk_data_dependants, upload_chunk_meshes,
@@ -77,6 +76,7 @@ impl Plugin for RenderCore {
         app.add_plugins((
             ExtractResourcePlugin::<VoxelColorArrayTexture>::default(),
             ExtractResourcePlugin::<VoxelNormalArrayTexture>::default(),
+            ExtractComponentPlugin::<ChunkBatch>::default(),
         ));
 
         // Render app logic
@@ -121,7 +121,6 @@ impl Plugin for RenderCore {
                 (
                     extract_chunk_mesh_data
                         .run_if(main_world_res_exists::<ExtractableChunkMeshData>),
-                    extract_chunk_batches,
                 )
                     .chain(),
             ),
@@ -166,7 +165,7 @@ impl Plugin for RenderCore {
 #[derive(Resource, Clone)]
 pub(crate) struct DefaultBindGroupLayouts {
     pub registry_bg_layout: BindGroupLayout,
-    pub indirect_chunk_bg_layout: BindGroupLayout,
+    pub icd_quad_bg_layout: BindGroupLayout,
     pub build_batch_buffers_layout: BindGroupLayout,
     pub observer_batch_cull_layout: BindGroupLayout,
 }
@@ -189,8 +188,8 @@ impl FromWorld for DefaultBindGroupLayouts {
                     ),
                 ),
             ),
-            indirect_chunk_bg_layout: gpu.create_bind_group_layout(
-                Some("indirect_chunks_bind_group_layout"),
+            icd_quad_bg_layout: gpu.create_bind_group_layout(
+                Some("ICD_quad_bind_group_layout"),
                 &BindGroupLayoutEntries::single(
                     ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     binding_types::storage_buffer_read_only::<GpuQuad>(false),

@@ -18,13 +18,19 @@ pub use lod::*;
 use crate::util::ChunkSet;
 
 /// A batch of chunks that can be rendered
-#[derive(Clone)]
+#[derive(Clone, ExtractComponent)]
 pub struct ChunkBatch {
     /// The observer that owns this batch. If this is `None` then this batch is orphaned.
     pub owner: Option<Entity>,
     pub lod: LevelOfDetail,
     pub chunks: ChunkSet,
     pub tick: u64,
+}
+
+impl ChunkBatch {
+    pub fn num_chunks(&self) -> u32 {
+        self.chunks.len() as _
+    }
 }
 
 impl Component for ChunkBatch {

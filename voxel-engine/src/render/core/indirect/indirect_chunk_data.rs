@@ -4,7 +4,7 @@ use bevy::{
     prelude::*,
     render::{
         render_resource::{
-            Buffer, BufferDescriptor, BufferInitDescriptor, BufferUsages, ShaderType,
+            BindGroup, Buffer, BufferDescriptor, BufferInitDescriptor, BufferUsages, ShaderType,
         },
         renderer::{RenderDevice, RenderQueue},
     },
@@ -224,6 +224,7 @@ impl RawIndirectChunkData {
 #[derive(Clone)]
 pub struct IndirectChunkData {
     raw: RawIndirectChunkData,
+    quad_bind_group: Option<BindGroup>,
     metadata: ChunkIndexMap<GpuChunkMetadata>,
 }
 
@@ -231,8 +232,13 @@ impl IndirectChunkData {
     pub fn new(gpu: &RenderDevice) -> Self {
         Self {
             raw: RawIndirectChunkData::new(gpu),
+            quad_bind_group: None,
             metadata: ChunkIndexMap::default(),
         }
+    }
+
+    pub fn quad_bind_group(&self) -> Option<&BindGroup> {
+        self.quad_bind_group.as_ref()
     }
 
     pub fn buffers(&self) -> &RawIndirectChunkData {

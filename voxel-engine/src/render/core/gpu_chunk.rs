@@ -145,7 +145,7 @@ pub fn update_indirect_chunk_data_dependants(
     gpu: Res<RenderDevice>,
 ) {
     if update.0 {
-        batches.drop_buffers();
+        batches.clear();
 
         let quad_vram_array = &indirect_data.chunks.buffers().quad;
 
@@ -154,15 +154,14 @@ pub fn update_indirect_chunk_data_dependants(
             let quad_buffer = quad_vram_array.buffer();
 
             let bg = gpu.create_bind_group(
-                "indirect_chunks_bind_group",
-                &default_layouts.indirect_chunk_bg_layout,
+                "ICD_quad_bind_group",
+                &default_layouts.icd_quad_bg_layout,
                 &BindGroupEntries::single(quad_buffer.as_entire_buffer_binding()),
             );
 
             debug!("Rebuilt chunk quad bind group");
 
             indirect_data.bind_group = Some(bg);
-            indirect_data.ready = true;
 
             update.0 = false;
         }
@@ -185,7 +184,6 @@ pub struct IndirectRenderDataStore {
     // TODO: split into LODs
     pub chunks: IndirectChunkData,
     pub bind_group: Option<BindGroup>,
-    pub ready: bool,
 }
 
 impl FromWorld for IndirectRenderDataStore {
@@ -195,7 +193,6 @@ impl FromWorld for IndirectRenderDataStore {
         Self {
             chunks: IndirectChunkData::new(gpu),
             bind_group: None,
-            ready: false,
         }
     }
 }

@@ -31,64 +31,58 @@ use super::{
 pub struct RenderChunkBatches(EntityHashMap<RenderChunkBatch>);
 
 impl RenderChunkBatches {
-    pub fn insert(&mut self, entity: Entity, batch: &ChunkBatch) {
+    /// Tries to insert the given batch entity and initialize its indirect buffer. Will only insert if the
+    /// batch doesn't exist from before or if the existing batch is older (had a smaller `tick`).
+    /// Returns true if the batch was inserted (in which case the batch should be queued for
+    /// buffer building).
+    pub fn try_insert(&mut self, entity: Entity, batch: &ChunkBatch, gpu: &RenderDevice) -> bool {
         let num_chunks = batch.chunks.len() as u32;
+        let mut did_insert = false;
 
         self.0
             .entry(entity)
             .and_modify(|render_batch| {
                 if render_batch.tick < batch.tick {
-                    *render_batch = RenderChunkBatch::new(batch.tick, num_chunks);
+                    *render_batch = RenderChunkBatch {
+                        indirect: create_primary_indirect_buffer(gpu, num_chunks),
+                        num_chunks,
+                        tick: batch.tick,
+                    };
+
+                    did_insert = true;
                 }
             })
-            .or_insert_with(|| RenderChunkBatch::new(batch.tick, num_chunks));
+            .or_insert_with(|| {
+                did_insert = true;
+
+                RenderChunkBatch {
+                    indirect: create_primary_indirect_buffer(gpu, num_chunks),
+                    num_chunks,
+                    tick: batch.tick,
+                }
+            });
+
+        did_insert
     }
 
-    pub fn drop_buffers(&mut self) {
-        for batch in self.0.values_mut() {
-            batch.gpu_data = None;
-        }
+    pub fn clear(&mut self) {
+        self.0.clear();
     }
 
     pub fn get(&self, entity: Entity) -> Option<&RenderChunkBatch> {
         self.0.get(&entity)
     }
 
-    pub fn set_buffers(&mut self, batch_entity: Entity, buffers: ChunkBatchGpuData) {
-        self.0
-            .get_mut(&batch_entity)
-            .map(|batch| batch.gpu_data = Some(buffers));
-    }
-
     pub fn contains(&self, batch_entity: Entity) -> bool {
         self.0.contains_key(&batch_entity)
     }
-
-    pub fn has_buffers(&self, batch_entity: Entity) -> bool {
-        self.get(batch_entity).is_some_and(|b| b.gpu_data.is_some())
-    }
-}
-
-#[derive(Clone)]
-pub struct ChunkBatchGpuData {
-    pub indirect: Buffer,
 }
 
 #[derive(Clone)]
 pub struct RenderChunkBatch {
-    pub gpu_data: Option<ChunkBatchGpuData>,
+    pub indirect: Buffer,
     pub num_chunks: u32,
     pub tick: u64,
-}
-
-impl RenderChunkBatch {
-    pub fn new(tick: u64, num_chunks: u32) -> Self {
-        Self {
-            tick,
-            num_chunks,
-            gpu_data: None,
-        }
-    }
 }
 
 #[derive(Resource, Clone)]
@@ -135,18 +129,6 @@ impl ChunkBatch {
         }
 
         chunk_metadata_indices
-    }
-}
-
-// TODO: handle chunk batch removals
-pub fn extract_chunk_batches(
-    query: Extract<Query<(Entity, &ChunkBatch)>>,
-    mut render_batches: ResMut<RenderChunkBatches>,
-    mut cmds: Commands,
-) {
-    for (entity, batch) in &query {
-        render_batches.insert(entity, batch);
-        cmds.get_or_spawn(entity).insert(batch.clone());
     }
 }
 
@@ -208,52 +190,43 @@ pub fn initialize_and_queue_batch_buffers(
             .or_insert(EntityHashMap::default());
 
         for &batch_entity in visible_batches.iter() {
-            // This batch is already initialized so we skip it
-            if render_batches.has_buffers(batch_entity) {
-                continue;
-            }
-
             // We need to initialize the buffers at the appropriate size.
-            let num_chunks = all_batches
+            let batch = all_batches
                 .get(batch_entity)
-                .expect("Earlier in the extract phase we ensured that all visible batches are also actually present in the ECS world")
-                .chunks.len() as u32;
+                .expect("Earlier in the extract phase we ensured that all visible batches are also actually present in the ECS world");
 
-            // Initialize the buffers here
-            let buffers = ChunkBatchGpuData {
-                indirect: create_primary_indirect_buffer(&gpu, num_chunks),
-            };
+            let did_insert = render_batches.try_insert(batch_entity, batch, &gpu);
 
-            let observer_indirect_buf = create_observer_indirect_buffer(&gpu, num_chunks);
-            let observer_count_buf = create_count_buffer(&gpu);
+            if did_insert {
+                let observer_indirect_buf =
+                    create_observer_indirect_buffer(&gpu, batch.num_chunks());
+                let observer_count_buf = create_count_buffer(&gpu);
 
-            let cull_bind_group = view_uniforms.uniforms.binding().map(|binding| {
-                gpu.create_bind_group(
-                    Some("observer_batch_frustum_cull_bind_group"),
-                    &default_layouts.observer_batch_cull_layout,
-                    &BindGroupEntries::sequential((
-                        store.chunks.buffers().instances.as_entire_binding(),
-                        binding,
-                        observer_indirect_buf.as_entire_binding(),
-                        observer_count_buf.as_entire_binding(),
-                    )),
-                )
-            });
+                let cull_bind_group = view_uniforms.uniforms.binding().map(|binding| {
+                    gpu.create_bind_group(
+                        Some("observer_batch_frustum_cull_bind_group"),
+                        &default_layouts.observer_batch_cull_layout,
+                        &BindGroupEntries::sequential((
+                            store.chunks.buffers().instances.as_entire_binding(),
+                            binding,
+                            observer_indirect_buf.as_entire_binding(),
+                            observer_count_buf.as_entire_binding(),
+                        )),
+                    )
+                });
 
-            // Set the empty buffers and queue this batch for buffer population
-            render_batches.set_buffers(batch_entity, buffers);
+                observer_batch_buffers.insert(
+                    batch_entity,
+                    ObserverBatchGpuData {
+                        bind_group: cull_bind_group,
+                        indirect: observer_indirect_buf,
+                        count: observer_count_buf,
+                        num_chunks: batch.num_chunks(),
+                    },
+                );
 
-            observer_batch_buffers.insert(
-                batch_entity,
-                ObserverBatchGpuData {
-                    bind_group: cull_bind_group,
-                    indirect: observer_indirect_buf,
-                    count: observer_count_buf,
-                    num_chunks,
-                },
-            );
-
-            populate_buffers.queue(batch_entity, observer_entity);
+                populate_buffers.queue(batch_entity, observer_entity);
+            }
         }
     }
 }

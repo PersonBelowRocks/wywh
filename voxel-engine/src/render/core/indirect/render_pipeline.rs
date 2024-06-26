@@ -92,7 +92,7 @@ impl FromWorld for IndirectChunkRenderPipeline {
                 visibility_ranges_buffer_binding_type,
             ),
             registry_layout: layouts.registry_bg_layout.clone(),
-            indirect_chunk_bg_layout: layouts.indirect_chunk_bg_layout.clone(),
+            indirect_chunk_bg_layout: layouts.icd_quad_bg_layout.clone(),
             vert: server.load(SHADER_PATHS.indirect_vert),
             frag: server.load(SHADER_PATHS.indirect_frag),
         }
