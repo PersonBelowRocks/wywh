@@ -73,7 +73,7 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
             return RenderCommandResult::Failure;
         };
 
-        let Some(ref buffers) = batch.buffers else {
+        let Some(ref buffers) = batch.gpu_data else {
             error!("Chunk batch didn't have initialized buffers");
             return RenderCommandResult::Failure;
         };

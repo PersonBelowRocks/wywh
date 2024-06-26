@@ -29,8 +29,9 @@ pub const PBR_INPUT_HANDLE: Handle<Shader> = Handle::weak_from_u128(771684695769
 pub const REGISTRY_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128(8499327436868843);
 pub const TYPES_HANDLE: Handle<Shader> = Handle::weak_from_u128(1378018199763387);
 pub const UTILS_HANDLE: Handle<Shader> = Handle::weak_from_u128(4464360603291233);
-pub const POPULATE_OBSERVER_BUFFERS_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(2398076348923761);
+pub const BUILD_BATCH_BUFFERS_HANDLE: Handle<Shader> = Handle::weak_from_u128(2398076348923761);
+pub const OBSERVER_BATCH_FRUSTUM_CULL_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(6547967980067631);
 
 /// Loads the built-in voxel engine shaders.
 pub fn load_internal_shaders(app: &mut App) {
@@ -54,8 +55,14 @@ pub fn load_internal_shaders(app: &mut App) {
     load_internal_asset!(app, UTILS_HANDLE, "utils.wgsl", Shader::from_wgsl);
     load_internal_asset!(
         app,
-        POPULATE_OBSERVER_BUFFERS_HANDLE,
+        BUILD_BATCH_BUFFERS_HANDLE,
         "populate_observer_buffers.wgsl",
+        Shader::from_wgsl
+    );
+    load_internal_asset!(
+        app,
+        OBSERVER_BATCH_FRUSTUM_CULL_HANDLE,
+        "observer_batch_frustum_cull.wgsl",
         Shader::from_wgsl
     );
 

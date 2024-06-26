@@ -28,7 +28,10 @@ use bytemuck::{cast_slice, Contiguous};
 use crate::render::{ChunkBatch, ObserverBatches, VisibleBatches};
 
 use super::{
-    chunk_batches::{PopulateBatchBuffers, PopulateBatchBuffersPipelineId, RenderChunkBatches},
+    chunk_batches::{
+        BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId, PopulateBatchBuffers,
+        RenderChunkBatches,
+    },
     gpu_chunk::IndirectRenderDataStore,
     indirect::IndexedIndirectArgs,
     observers::ObserverBatchBuffersStore,
@@ -220,18 +223,17 @@ impl Node for BuildBatchBuffersNode {
     fn run<'w>(
         &self,
         graph: &mut RenderGraphContext,
-        render_context: &mut RenderContext<'w>,
+        ctx: &mut RenderContext<'w>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        let gpu = world.resource::<RenderDevice>();
-        let queue = world.resource::<RenderQueue>();
         let default_layouts = world.resource::<DefaultBindGroupLayouts>();
         let indirect_data = world.resource::<IndirectRenderDataStore>();
-        let pipeline_id = world.resource::<PopulateBatchBuffersPipelineId>();
+        let pipeline_id = world.resource::<BuildBatchBuffersPipelineId>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let render_chunk_batches = world.resource::<RenderChunkBatches>();
         let populate_batches = world.resource::<PopulateBatchBuffers>();
         let observer_batch_buf_store = world.resource::<ObserverBatchBuffersStore>();
+        let gpu = ctx.render_device();
 
         // Return early if there's no batches whose buffers need populating
         if populate_batches.is_empty() {
@@ -243,15 +245,20 @@ impl Node for BuildBatchBuffersNode {
             return Ok(());
         };
 
-        // Encode compute pass
-        let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("populate_batch_buffers_encoder"),
-        });
-
         let mut built = EntityHashSet::with_capacity_and_hasher(
             populate_batches.batches.len(),
             EntityHash::default(),
         );
+
+        // Encode compute pass
+        let mut pass = ctx
+            .command_encoder()
+            .begin_compute_pass(&ComputePassDescriptor {
+                label: Some("BBB_compute_pass"),
+                timestamp_writes: None,
+            });
+
+        pass.set_pipeline(&compute_pipeline);
 
         // Build all the initial batch buffers
         for &batch_entity in populate_batches.batches.iter() {
@@ -271,7 +278,7 @@ impl Node for BuildBatchBuffersNode {
                 continue;
             };
 
-            let Some(buffers) = &render_batch.buffers else {
+            let Some(buffers) = &render_batch.gpu_data else {
                 error!("Batch buffer was queued for building but the buffer was not initialized");
                 continue;
             };
@@ -286,43 +293,27 @@ impl Node for BuildBatchBuffersNode {
 
             let metadata_buffer = &indirect_data.chunks.buffers().metadata;
 
-            // Build bind groups
-            // This bind group is for all the data we want to read from.
-            let input_bg = gpu.create_bind_group(
-                Some("BBB_input_bind_group"),
-                &default_layouts.observer_buffers_input_layout,
+            // Build bind group
+            // TODO: prepare bind groups in the prepare stage, not in the graph
+            let bbb_bind_group = gpu.create_bind_group(
+                Some("BBB_bind_group"),
+                &default_layouts.build_batch_buffers_layout,
                 &BindGroupEntries::sequential((
                     metadata_buffer.as_entire_binding(),
                     metadata_index_buffer.as_entire_binding(),
-                )),
-            );
-
-            // This bind group has the buffers that we want to populate.
-            let output_bg = gpu.create_bind_group(
-                Some("BBB_output_bind_group"),
-                &default_layouts.observer_buffers_output_layout,
-                &BindGroupEntries::sequential((
                     buffers.instance.as_entire_binding(),
                     buffers.indirect.as_entire_binding(),
                 )),
             );
 
-            {
-                let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor {
-                    label: Some("BBB_compute_pass"),
-                    timestamp_writes: None,
-                });
+            pass.set_bind_group(0, &bbb_bind_group, &[]);
 
-                pass.set_pipeline(&compute_pipeline);
-
-                pass.set_bind_group(0, &input_bg, &[]);
-                pass.set_bind_group(1, &output_bg, &[]);
-
-                pass.dispatch_workgroups(1, 1, render_batch.num_chunks);
-            }
+            pass.dispatch_workgroups(1, 1, render_batch.num_chunks);
 
             built.insert(batch_entity);
         }
+
+        drop(pass);
 
         // Make copies of all the primary batch buffers for each observer that wants to render those batches
         for (observer, visible) in populate_batches.observers.iter() {
@@ -341,7 +332,7 @@ impl Node for BuildBatchBuffersNode {
                     continue;
                 };
 
-                let Some(ref batch_buffers) = render_batch.buffers else {
+                let Some(ref batch_buffers) = render_batch.gpu_data else {
                     error!("Observer tried to get indirect batch data but the batch didn't have any buffers");
                     continue;
                 };
@@ -350,7 +341,7 @@ impl Node for BuildBatchBuffersNode {
                     continue;
                 };
 
-                encoder.copy_buffer_to_buffer(
+                ctx.command_encoder().copy_buffer_to_buffer(
                     &batch_buffers.indirect,
                     0,
                     &dst_buffers.indirect,
@@ -360,7 +351,57 @@ impl Node for BuildBatchBuffersNode {
             }
         }
 
-        queue.submit([encoder.finish()]);
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct GpuFrustumCullBatchesNode;
+
+impl ViewNode for GpuFrustumCullBatchesNode {
+    type ViewQuery = (Entity, Read<ViewUniformOffset>, Read<VisibleBatches>);
+
+    fn run<'w>(
+        &self,
+        _graph: &mut RenderGraphContext,
+        ctx: &mut RenderContext<'w>,
+        (view_entity, view_uniform_offset, visible_batches): QueryItem<'w, Self::ViewQuery>,
+        world: &'w World,
+    ) -> Result<(), NodeRunError> {
+        let pipeline_cache = world.resource::<PipelineCache>();
+        let pipeline_id = world.resource::<ObserverBatchFrustumCullPipelineId>();
+        let store = world.resource::<ObserverBatchBuffersStore>();
+
+        let Some(pipeline) = pipeline_cache.get_compute_pipeline(pipeline_id.0) else {
+            error!("Couldn't get observer batch frustum cull compute pipeline");
+            return Ok(());
+        };
+
+        let Some(observer_batches) = store.get(&view_entity) else {
+            return Ok(());
+        };
+
+        let mut pass = ctx
+            .command_encoder()
+            .begin_compute_pass(&ComputePassDescriptor {
+                label: Some("observer_batch_frustum_cull_pass"),
+                timestamp_writes: None,
+            });
+
+        pass.set_pipeline(pipeline);
+
+        for (batch_entity, gpu_data) in observer_batches.iter() {
+            if !visible_batches.contains(batch_entity) {
+                continue;
+            }
+
+            let Some(ref bind_group) = gpu_data.bind_group else {
+                continue;
+            };
+
+            pass.set_bind_group(0, bind_group, &[view_uniform_offset.offset]);
+            pass.dispatch_workgroups(0, 0, gpu_data.num_chunks)
+        }
 
         Ok(())
     }

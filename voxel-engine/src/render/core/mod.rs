@@ -14,6 +14,7 @@ use bevy::render::extract_component::ExtractComponentPlugin;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
 use bevy::render::render_resource::ShaderSize;
+use bevy::render::view::ViewUniform;
 use bevy::{
     app::{App, Plugin},
     core_pipeline::{core_3d::Opaque3d, prepass::Opaque3dPrepass},
@@ -32,12 +33,17 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use chunk_batches::{extract_chunk_batches, PopulateBatchBuffersPipeline, RenderChunkBatches};
+use chunk_batches::{
+    extract_chunk_batches, BuildBatchBuffersPipeline, ObserverBatchFrustumCullPipeline,
+    RenderChunkBatches,
+};
 use gpu_chunk::{
     remove_chunk_meshes, update_indirect_chunk_data_dependants, upload_chunk_meshes,
     IndirectRenderDataStore, RemoveChunkMeshes, ShouldUpdateChunkDataDependants,
 };
-use graph::{BuildBatchBuffersNode, ChunkPrepassNode, ChunkRenderNode, Nodes};
+use graph::{
+    BuildBatchBuffersNode, ChunkPrepassNode, ChunkRenderNode, GpuFrustumCullBatchesNode, Nodes,
+};
 use indirect::{
     prepass_queue_indirect_chunks, render_queue_indirect_chunks, ChunkInstanceData,
     GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkPrepassPipeline,
@@ -83,7 +89,8 @@ impl Plugin for RenderCore {
             .init_resource::<ViewSortedRenderPhases<RenderChunkPhaseItem>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
-            .init_resource::<SpecializedComputePipelines<PopulateBatchBuffersPipeline>>()
+            .init_resource::<SpecializedComputePipelines<BuildBatchBuffersPipeline>>()
+            .init_resource::<SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>>()
             .init_resource::<ShouldUpdateChunkDataDependants>()
             .init_resource::<RemoveChunkMeshes>()
             .init_resource::<RenderChunkBatches>()
@@ -97,6 +104,10 @@ impl Plugin for RenderCore {
         render_app
             .add_render_graph_node::<ViewNodeRunner<ChunkPrepassNode>>(Core3d, Nodes::Prepass)
             .add_render_graph_node::<ViewNodeRunner<ChunkRenderNode>>(Core3d, Nodes::Render)
+            .add_render_graph_node::<ViewNodeRunner<GpuFrustumCullBatchesNode>>(
+                Core3d,
+                Nodes::BatchFrustumCulling,
+            )
             .add_render_graph_node::<BuildBatchBuffersNode>(Core3d, Nodes::BuildBatchBuffers);
 
         render_app.add_systems(
@@ -138,12 +149,13 @@ impl Plugin for RenderCore {
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
 
-        render_app.init_resource::<DefaultBindGroupLayouts>();
-        render_app.init_resource::<IndirectRenderDataStore>();
-
-        render_app.init_resource::<IndirectChunkRenderPipeline>();
-        render_app.init_resource::<IndirectChunkPrepassPipeline>();
-        render_app.init_resource::<PopulateBatchBuffersPipeline>();
+        render_app
+            .init_resource::<DefaultBindGroupLayouts>()
+            .init_resource::<IndirectRenderDataStore>()
+            .init_resource::<IndirectChunkRenderPipeline>()
+            .init_resource::<IndirectChunkPrepassPipeline>()
+            .init_resource::<BuildBatchBuffersPipeline>()
+            .init_resource::<ObserverBatchFrustumCullPipeline>();
     }
 }
 
@@ -151,8 +163,8 @@ impl Plugin for RenderCore {
 pub(crate) struct DefaultBindGroupLayouts {
     pub registry_bg_layout: BindGroupLayout,
     pub indirect_chunk_bg_layout: BindGroupLayout,
-    pub observer_buffers_input_layout: BindGroupLayout,
-    pub observer_buffers_output_layout: BindGroupLayout,
+    pub build_batch_buffers_layout: BindGroupLayout,
+    pub observer_batch_cull_layout: BindGroupLayout,
 }
 
 impl FromWorld for DefaultBindGroupLayouts {
@@ -180,22 +192,25 @@ impl FromWorld for DefaultBindGroupLayouts {
                     binding_types::storage_buffer_read_only::<GpuQuad>(false),
                 ),
             ),
-            observer_buffers_input_layout: gpu.create_bind_group_layout(
-                Some("observer_buffers_input_layout"),
+            build_batch_buffers_layout: gpu.create_bind_group_layout(
+                Some("build_batch_buffers_bg_layout"),
                 &BindGroupLayoutEntries::sequential(
                     ShaderStages::COMPUTE,
                     (
                         binding_types::storage_buffer_read_only::<GpuChunkMetadata>(false),
                         binding_types::storage_buffer_read_only::<u32>(false),
+                        binding_types::storage_buffer::<ChunkInstanceData>(false),
+                        binding_types::storage_buffer::<IndexedIndirectArgs>(false),
                     ),
                 ),
             ),
-            observer_buffers_output_layout: gpu.create_bind_group_layout(
-                Some("observer_buffers_output_layout"),
+            observer_batch_cull_layout: gpu.create_bind_group_layout(
+                Some("observer_batch_cull_bind_group_layout"),
                 &BindGroupLayoutEntries::sequential(
                     ShaderStages::COMPUTE,
                     (
-                        binding_types::storage_buffer::<ChunkInstanceData>(false),
+                        binding_types::storage_buffer_read_only::<ChunkInstanceData>(false),
+                        binding_types::uniform_buffer::<ViewUniform>(true),
                         binding_types::storage_buffer::<IndexedIndirectArgs>(false),
                         binding_types::storage_buffer_sized(false, Some(u32::SHADER_SIZE)),
                     ),

@@ -3,11 +3,12 @@ use bevy::{
     prelude::*,
     render::{
         render_resource::{
-            BindGroupLayout, Buffer, BufferDescriptor, BufferInitDescriptor, BufferUsages,
-            CachedComputePipelineId, ComputePipelineDescriptor, PipelineCache, ShaderSize,
-            SpecializedComputePipeline, SpecializedComputePipelines,
+            BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor, BufferInitDescriptor,
+            BufferUsages, CachedComputePipelineId, ComputePipelineDescriptor, PipelineCache,
+            ShaderSize, SpecializedComputePipeline, SpecializedComputePipelines,
         },
         renderer::RenderDevice,
+        view::ViewUniforms,
         Extract,
     },
 };
@@ -19,8 +20,8 @@ use crate::{
 
 use super::{
     indirect::{ChunkInstanceData, IndexedIndirectArgs, IndirectChunkData},
-    observers::{ObserverBatchBuffers, ObserverBatchBuffersStore},
-    shaders::POPULATE_OBSERVER_BUFFERS_HANDLE,
+    observers::{ObserverBatchBuffersStore, ObserverBatchGpuData},
+    shaders::{BUILD_BATCH_BUFFERS_HANDLE, OBSERVER_BATCH_FRUSTUM_CULL_HANDLE},
     utils::add_shader_constants,
     DefaultBindGroupLayouts,
 };
@@ -44,7 +45,7 @@ impl RenderChunkBatches {
 
     pub fn drop_buffers(&mut self) {
         for batch in self.0.values_mut() {
-            batch.buffers = None;
+            batch.gpu_data = None;
         }
     }
 
@@ -52,10 +53,10 @@ impl RenderChunkBatches {
         self.0.get(&entity)
     }
 
-    pub fn set_buffers(&mut self, batch_entity: Entity, buffers: ChunkBatchBuffers) {
+    pub fn set_buffers(&mut self, batch_entity: Entity, buffers: ChunkBatchGpuData) {
         self.0
             .get_mut(&batch_entity)
-            .map(|batch| batch.buffers = Some(buffers));
+            .map(|batch| batch.gpu_data = Some(buffers));
     }
 
     pub fn contains(&self, batch_entity: Entity) -> bool {
@@ -63,19 +64,20 @@ impl RenderChunkBatches {
     }
 
     pub fn has_buffers(&self, batch_entity: Entity) -> bool {
-        self.get(batch_entity).is_some_and(|b| b.buffers.is_some())
+        self.get(batch_entity).is_some_and(|b| b.gpu_data.is_some())
     }
 }
 
 #[derive(Clone)]
-pub struct ChunkBatchBuffers {
+pub struct ChunkBatchGpuData {
     pub indirect: Buffer,
+    // TODO: instance buffer should be global, we only need to change the indirect buffers
     pub instance: Buffer,
 }
 
 #[derive(Clone)]
 pub struct RenderChunkBatch {
-    pub buffers: Option<ChunkBatchBuffers>,
+    pub gpu_data: Option<ChunkBatchGpuData>,
     pub num_chunks: u32,
     pub tick: u64,
 }
@@ -85,7 +87,7 @@ impl RenderChunkBatch {
         Self {
             tick,
             num_chunks,
-            buffers: None,
+            gpu_data: None,
         }
     }
 }
@@ -190,6 +192,8 @@ pub fn initialize_and_queue_batch_buffers(
     mut populate_buffers: ResMut<PopulateBatchBuffers>,
     mut render_batches: ResMut<RenderChunkBatches>,
     mut all_observer_batch_buffers: ResMut<ObserverBatchBuffersStore>,
+    view_uniforms: Res<ViewUniforms>,
+    default_layouts: Res<DefaultBindGroupLayouts>,
     observer_batch_query: Query<(Entity, &VisibleBatches)>,
     all_batches: Query<&ChunkBatch>,
     gpu: Res<RenderDevice>,
@@ -216,19 +220,37 @@ pub fn initialize_and_queue_batch_buffers(
                 .chunks.len() as u32;
 
             // Initialize the buffers here
-            let buffers = ChunkBatchBuffers {
+            let buffers = ChunkBatchGpuData {
                 indirect: create_primary_indirect_buffer(&gpu, num_chunks),
                 instance: create_instance_buffer(&gpu, num_chunks),
             };
+
+            let observer_indirect_buf = create_observer_indirect_buffer(&gpu, num_chunks);
+            let observer_count_buf = create_count_buffer(&gpu);
+
+            let cull_bind_group = view_uniforms.uniforms.binding().map(|binding| {
+                gpu.create_bind_group(
+                    Some("observer_batch_frustum_cull_bind_group"),
+                    &default_layouts.observer_batch_cull_layout,
+                    &BindGroupEntries::sequential((
+                        buffers.instance.as_entire_binding(),
+                        binding,
+                        observer_indirect_buf.as_entire_binding(),
+                        observer_count_buf.as_entire_binding(),
+                    )),
+                )
+            });
 
             // Set the empty buffers and queue this batch for buffer population
             render_batches.set_buffers(batch_entity, buffers);
 
             observer_batch_buffers.insert(
                 batch_entity,
-                ObserverBatchBuffers {
-                    indirect: create_observer_indirect_buffer(&gpu, num_chunks),
-                    count: create_count_buffer(&gpu),
+                ObserverBatchGpuData {
+                    bind_group: cull_bind_group,
+                    indirect: observer_indirect_buf,
+                    count: observer_count_buf,
+                    num_chunks,
                 },
             );
 
@@ -238,28 +260,26 @@ pub fn initialize_and_queue_batch_buffers(
 }
 
 #[derive(Resource, Clone, Debug)]
-pub struct PopulateBatchBuffersPipelineId(pub CachedComputePipelineId);
+pub struct BuildBatchBuffersPipelineId(pub CachedComputePipelineId);
 
 #[derive(Resource)]
-pub struct PopulateBatchBuffersPipeline {
+pub struct BuildBatchBuffersPipeline {
     pub shader: Handle<Shader>,
-    pub input_layout: BindGroupLayout,
-    pub output_layout: BindGroupLayout,
+    pub bg_layout: BindGroupLayout,
 }
 
-impl FromWorld for PopulateBatchBuffersPipeline {
+impl FromWorld for BuildBatchBuffersPipeline {
     fn from_world(world: &mut World) -> Self {
         let default_layouts = world.resource::<DefaultBindGroupLayouts>();
 
         Self {
-            shader: POPULATE_OBSERVER_BUFFERS_HANDLE,
-            input_layout: default_layouts.observer_buffers_input_layout.clone(),
-            output_layout: default_layouts.observer_buffers_output_layout.clone(),
+            shader: BUILD_BATCH_BUFFERS_HANDLE,
+            bg_layout: default_layouts.build_batch_buffers_layout.clone(),
         }
     }
 }
 
-impl SpecializedComputePipeline for PopulateBatchBuffersPipeline {
+impl SpecializedComputePipeline for BuildBatchBuffersPipeline {
     type Key = ();
 
     fn specialize(&self, _key: Self::Key) -> ComputePipelineDescriptor {
@@ -267,22 +287,66 @@ impl SpecializedComputePipeline for PopulateBatchBuffersPipeline {
         add_shader_constants(&mut shader_defs);
 
         ComputePipelineDescriptor {
-            label: Some("populate_observer_buffers_pipeline".into()),
-            entry_point: "populate_buffers".into(),
+            label: Some("build_batch_buffers_pipeline".into()),
+            entry_point: "build_buffers".into(),
             shader: self.shader.clone(),
             push_constant_ranges: vec![],
             shader_defs,
-            layout: vec![self.input_layout.clone(), self.output_layout.clone()],
+            layout: vec![self.bg_layout.clone()],
         }
     }
 }
 
-pub fn create_buffer_population_pipeline(
+#[derive(Resource, Clone, Debug)]
+pub struct ObserverBatchFrustumCullPipelineId(pub CachedComputePipelineId);
+
+#[derive(Resource)]
+pub struct ObserverBatchFrustumCullPipeline {
+    pub shader: Handle<Shader>,
+    pub bg_layout: BindGroupLayout,
+}
+
+impl FromWorld for ObserverBatchFrustumCullPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let default_layouts = world.resource::<DefaultBindGroupLayouts>();
+
+        Self {
+            shader: OBSERVER_BATCH_FRUSTUM_CULL_HANDLE,
+            bg_layout: default_layouts.observer_batch_cull_layout.clone(),
+        }
+    }
+}
+
+impl SpecializedComputePipeline for ObserverBatchFrustumCullPipeline {
+    type Key = ();
+
+    fn specialize(&self, _key: Self::Key) -> ComputePipelineDescriptor {
+        let mut shader_defs = vec![];
+        add_shader_constants(&mut shader_defs);
+
+        ComputePipelineDescriptor {
+            label: Some("observer_batch_frustum_cull_pipeline".into()),
+            entry_point: "batch_frustum_cull".into(),
+            shader: self.shader.clone(),
+            shader_defs,
+            layout: vec![self.bg_layout.clone()],
+            push_constant_ranges: vec![],
+        }
+    }
+}
+
+pub fn create_pipelines(
     cache: Res<PipelineCache>,
-    pipeline: Res<PopulateBatchBuffersPipeline>,
-    mut pipelines: SpecializedComputePipelines<PopulateBatchBuffersPipeline>,
+    buffer_build: Res<BuildBatchBuffersPipeline>,
+    batch_cull: Res<ObserverBatchFrustumCullPipeline>,
+    mut buffer_builder_pipelines: ResMut<SpecializedComputePipelines<BuildBatchBuffersPipeline>>,
+    mut cull_observer_batch_pipelines: ResMut<
+        SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>,
+    >,
     mut cmds: Commands,
 ) {
-    let id = pipelines.specialize(&cache, &pipeline, ());
-    cmds.insert_resource(PopulateBatchBuffersPipelineId(id));
+    let id = buffer_builder_pipelines.specialize(&cache, &buffer_build, ());
+    cmds.insert_resource(BuildBatchBuffersPipelineId(id));
+    let id = cull_observer_batch_pipelines.specialize(&cache, &batch_cull, ());
+    cmds.insert_resource(ObserverBatchFrustumCullPipelineId(id));
 }

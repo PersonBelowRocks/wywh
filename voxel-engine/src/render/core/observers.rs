@@ -1,6 +1,8 @@
 use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::render::render_phase::ViewSortedRenderPhases;
-use bevy::render::render_resource::{CachedComputePipelineId, CachedPipelineState, Pipeline};
+use bevy::render::render_resource::{
+    BindGroup, CachedComputePipelineId, CachedPipelineState, Pipeline,
+};
 use bevy::{
     prelude::*,
     render::{
@@ -22,12 +24,12 @@ use crate::render::{ChunkBatch, LODs, LevelOfDetail, LodMap, VisibleBatches};
 use crate::topo::{controller::RenderableObserverChunks, world::ChunkPos};
 use crate::util::ChunkSet;
 
-use super::chunk_batches::ChunkBatchBuffers;
+use super::chunk_batches::ChunkBatchGpuData;
 use super::gpu_chunk::IndirectRenderDataStore;
 use super::phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
 use super::{
     indirect::{ChunkInstanceData, IndexedIndirectArgs, IndirectChunkData},
-    shaders::POPULATE_OBSERVER_BUFFERS_HANDLE,
+    shaders::BUILD_BATCH_BUFFERS_HANDLE,
     utils::add_shader_constants,
     DefaultBindGroupLayouts,
 };
@@ -37,12 +39,14 @@ use super::{
 pub struct ObserverBatchBuffersStore(EntityHashMap<ObserverBatches>);
 
 #[derive(Clone)]
-pub struct ObserverBatchBuffers {
+pub struct ObserverBatchGpuData {
+    pub bind_group: Option<BindGroup>,
+    pub num_chunks: u32,
     pub indirect: Buffer,
     pub count: Buffer,
 }
 
-pub type ObserverBatches = EntityHashMap<ObserverBatchBuffers>;
+pub type ObserverBatches = EntityHashMap<ObserverBatchGpuData>;
 
 pub fn extract_observer_visible_batches(
     query: Extract<Query<(Entity, &VisibleBatches)>>,

@@ -134,37 +134,6 @@ impl MultidrawBuffers {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ChunkBufferBounds {
-    pub indices: Range<u64>,
-    pub quads: Range<u64>,
-}
-
-impl ChunkBufferBounds {
-    pub fn num_indices(&self) -> u64 {
-        self.indices.end - self.indices.start
-    }
-
-    pub fn num_quads(&self) -> u64 {
-        self.quads.end - self.quads.start
-    }
-}
-
-#[inline]
-fn indirect_args_from_bounds_and_index(
-    bounds: &ChunkBufferBounds,
-    idx: usize,
-) -> IndexedIndirectArgs {
-    IndexedIndirectArgs {
-        first_instance: idx as u32,
-        instance_count: 1,
-        first_index: bounds.indices.start as u32,
-        index_count: bounds.num_indices() as u32,
-        // We're only using an index buffer and an instance buffer, so we'll never end up using this
-        base_vertex: 0,
-    }
-}
-
 /// Stores chunk rendering data in contiguous buffers on the GPU and associated chunk positions with shares of these buffers.
 /// Meant to be used to set up data correctly for indirect multidraw rendering.
 ///
