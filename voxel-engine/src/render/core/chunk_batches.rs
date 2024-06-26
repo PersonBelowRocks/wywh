@@ -3,15 +3,16 @@ use bevy::{
     prelude::*,
     render::{
         render_resource::{
-            BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor, BufferInitDescriptor,
-            BufferUsages, CachedComputePipelineId, ComputePipelineDescriptor, PipelineCache,
-            ShaderSize, SpecializedComputePipeline, SpecializedComputePipelines,
+            BindGroup, BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor,
+            BufferInitDescriptor, BufferUsages, CachedComputePipelineId, ComputePipelineDescriptor,
+            PipelineCache, ShaderSize, SpecializedComputePipeline, SpecializedComputePipelines,
         },
         renderer::RenderDevice,
         view::ViewUniforms,
         Extract,
     },
 };
+use bytemuck::cast_slice;
 
 use crate::{
     render::{ChunkBatch, LevelOfDetail, VisibleBatches},
@@ -88,7 +89,7 @@ pub struct RenderChunkBatch {
 #[derive(Resource, Clone)]
 pub struct PopulateBatchBuffers {
     pub observers: EntityHashMap<EntityHashSet>,
-    pub batches: EntityHashSet,
+    pub batches: EntityHashMap<BindGroup>,
 }
 
 impl PopulateBatchBuffers {
@@ -101,8 +102,12 @@ impl PopulateBatchBuffers {
         self.batches.is_empty() && self.observers.is_empty()
     }
 
-    pub fn queue(&mut self, batch: Entity, observer: Entity) {
-        self.batches.insert(batch);
+    pub fn queue<F>(&mut self, batch: Entity, observer: Entity, bbb_bg_factory: F)
+    where
+        F: FnOnce() -> BindGroup,
+    {
+        // This dance here is to avoid cloning the bind group unless we really have to, since it's a somewhat expensive operation
+        self.batches.entry(batch).or_insert_with(bbb_bg_factory);
 
         self.observers
             .entry(observer)
@@ -208,26 +213,56 @@ pub fn initialize_and_queue_batch_buffers(
                     create_observer_indirect_buffer(&gpu, batch.num_chunks());
                 let observer_count_buf = create_count_buffer(&gpu);
 
+                let cull_bind_group = gpu.create_bind_group(
+                    Some("observer_batch_frustum_cull_bind_group"),
+                    &default_layouts.observer_batch_cull_layout,
+                    &BindGroupEntries::sequential((
+                        store.chunks.buffers().instances.as_entire_binding(),
+                        view_uniforms_binding.clone(),
+                        observer_indirect_buf.as_entire_binding(),
+                        observer_count_buf.as_entire_binding(),
+                    )),
+                );
+
                 observer_batch_buffers.insert(
                     batch_entity,
                     ObserverBatchGpuData {
-                        cull_bind_group: gpu.create_bind_group(
-                            Some("observer_batch_frustum_cull_bind_group"),
-                            &default_layouts.observer_batch_cull_layout,
-                            &BindGroupEntries::sequential((
-                                store.chunks.buffers().instances.as_entire_binding(),
-                                view_uniforms_binding.clone(),
-                                observer_indirect_buf.as_entire_binding(),
-                                observer_count_buf.as_entire_binding(),
-                            )),
-                        ),
+                        cull_bind_group,
                         indirect: observer_indirect_buf,
                         count: observer_count_buf,
                         num_chunks: batch.num_chunks(),
                     },
                 );
 
-                populate_buffers.queue(batch_entity, observer_entity);
+                let factory = || {
+                    // An array of the indices to the chunk metadata on the GPU.
+                    let chunk_metadata_indices = batch.get_metadata_indices(&store.chunks);
+                    let metadata_index_buffer =
+                        gpu.create_buffer_with_data(&BufferInitDescriptor {
+                            label: Some("BBB_chunk_metadata_indices_buffer"),
+                            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+                            contents: cast_slice(&chunk_metadata_indices),
+                        });
+
+                    let metadata_buffer = &store.chunks.buffers().metadata;
+                    let render_batch_indirect_buf = &render_batches
+                        .get(batch_entity)
+                        .expect("We just inserted the render batch for this entity")
+                        .indirect;
+
+                    // Build bind group
+                    gpu.create_bind_group(
+                        Some("BBB_bind_group"),
+                        &default_layouts.build_batch_buffers_layout,
+                        &BindGroupEntries::sequential((
+                            metadata_buffer.as_entire_binding(),
+                            metadata_index_buffer.as_entire_binding(),
+                            render_batch_indirect_buf.as_entire_binding(),
+                        )),
+                    )
+                };
+
+                populate_buffers.queue(batch_entity, observer_entity, factory);
             }
         }
     }

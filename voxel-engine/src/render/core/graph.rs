@@ -261,7 +261,7 @@ impl Node for BuildBatchBuffersNode {
         pass.set_pipeline(&compute_pipeline);
 
         // Build all the initial batch buffers
-        for &batch_entity in populate_batches.batches.iter() {
+        for (&batch_entity, bbb_bind_group) in populate_batches.batches.iter() {
             let Ok(batch) = self.batch_query.get_manual(world, batch_entity) else {
                 continue;
             };
@@ -278,36 +278,7 @@ impl Node for BuildBatchBuffersNode {
                 continue;
             };
 
-            let Some(buffers) = &render_batch.gpu_data else {
-                error!("Batch buffer was queued for building but the buffer was not initialized");
-                continue;
-            };
-
-            // An array of the indices to the chunk metadata on the GPU.
-            let chunk_metadata_indices = batch.get_metadata_indices(&indirect_data.chunks);
-            let metadata_index_buffer = gpu.create_buffer_with_data(&BufferInitDescriptor {
-                label: Some("BBB_chunk_metadata_indices_buffer"),
-                usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-                contents: cast_slice(&chunk_metadata_indices),
-            });
-
-            let metadata_buffer = &indirect_data.chunks.buffers().metadata;
-
-            // Build bind group
-            // TODO: prepare bind groups in the prepare stage, not in the graph
-            let bbb_bind_group = gpu.create_bind_group(
-                Some("BBB_bind_group"),
-                &default_layouts.build_batch_buffers_layout,
-                &BindGroupEntries::sequential((
-                    metadata_buffer.as_entire_binding(),
-                    metadata_index_buffer.as_entire_binding(),
-                    buffers.instance.as_entire_binding(),
-                    buffers.indirect.as_entire_binding(),
-                )),
-            );
-
-            pass.set_bind_group(0, &bbb_bind_group, &[]);
-
+            pass.set_bind_group(0, bbb_bind_group, &[]);
             pass.dispatch_workgroups(1, 1, render_batch.num_chunks);
 
             built.insert(batch_entity);
@@ -332,17 +303,12 @@ impl Node for BuildBatchBuffersNode {
                     continue;
                 };
 
-                let Some(ref batch_buffers) = render_batch.gpu_data else {
-                    error!("Observer tried to get indirect batch data but the batch didn't have any buffers");
-                    continue;
-                };
-
                 let Some(dst_buffers) = observer_buffers.get(batch_entity) else {
                     continue;
                 };
 
                 ctx.command_encoder().copy_buffer_to_buffer(
-                    &batch_buffers.indirect,
+                    &render_batch.indirect,
                     0,
                     &dst_buffers.indirect,
                     0,
@@ -395,11 +361,7 @@ impl ViewNode for GpuFrustumCullBatchesNode {
                 continue;
             }
 
-            let Some(ref bind_group) = gpu_data.cull_bind_group else {
-                continue;
-            };
-
-            pass.set_bind_group(0, bind_group, &[view_uniform_offset.offset]);
+            pass.set_bind_group(0, &gpu_data.cull_bind_group, &[view_uniform_offset.offset]);
             pass.dispatch_workgroups(0, 0, gpu_data.num_chunks)
         }
 

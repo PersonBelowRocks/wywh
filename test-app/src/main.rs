@@ -194,7 +194,7 @@ fn setup(
                 ..default()
             },
             camera::PlayerCamController::default(),
-            ObserverBundle::new(ObserverId::new(0)),
+            ObserverBundle::new(),
             VisibilityBundle::default(),
             ScreenSpaceAmbientOcclusionBundle::default(),
         ))
