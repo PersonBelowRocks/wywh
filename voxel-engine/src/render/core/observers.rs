@@ -38,6 +38,12 @@ use super::{
 #[derive(Resource, Clone, Default, Deref, DerefMut)]
 pub struct ObserverBatchBuffersStore(EntityHashMap<ObserverBatches>);
 
+impl ObserverBatchBuffersStore {
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+}
+
 #[derive(Clone)]
 pub struct ObserverBatchGpuData {
     pub bind_group: Option<BindGroup>,

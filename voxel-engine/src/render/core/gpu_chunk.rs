@@ -20,7 +20,8 @@ use crate::{
 };
 
 use super::{
-    chunk_batches::RenderChunkBatches, indirect::IndirectChunkData, DefaultBindGroupLayouts,
+    chunk_batches::RenderChunkBatches, indirect::IndirectChunkData,
+    observers::ObserverBatchBuffersStore, DefaultBindGroupLayouts,
 };
 
 pub fn extract_chunk_mesh_data(
@@ -141,11 +142,13 @@ pub fn update_indirect_chunk_data_dependants(
     mut update: ResMut<ShouldUpdateChunkDataDependants>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
     mut batches: ResMut<RenderChunkBatches>,
+    mut observer_batches: ResMut<ObserverBatchBuffersStore>,
     default_layouts: Res<DefaultBindGroupLayouts>,
     gpu: Res<RenderDevice>,
 ) {
     if update.0 {
         batches.clear();
+        observer_batches.clear();
 
         let quad_vram_array = &indirect_data.chunks.buffers().quad;
 
