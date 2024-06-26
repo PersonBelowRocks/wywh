@@ -10,10 +10,30 @@ use bevy::render::{
 use itertools::Itertools;
 use rangemap::RangeSet;
 
+use crate::util::ChunkIndexMap;
+
+use super::{ChunkInstanceData, GpuChunkMetadata};
+
 pub fn to_formatted_bytes<T: ShaderType + ShaderSize + WriteInto>(slice: &[T]) -> Vec<u8> {
     let capacity = slice.len() * u64::from(T::SHADER_SIZE) as usize;
     let mut scratch = FormattedBuffer::<Vec<u8>>::new(Vec::with_capacity(capacity));
     scratch.write(&slice).unwrap();
+    scratch.into_inner()
+}
+
+pub fn instance_bytes_from_metadata(metadata: &ChunkIndexMap<GpuChunkMetadata>) -> Vec<u8> {
+    let capacity = metadata.len() * u64::from(ChunkInstanceData::SHADER_SIZE) as usize;
+    let mut scratch = FormattedBuffer::<Vec<u8>>::new(Vec::with_capacity(capacity));
+
+    for (chunk, data) in metadata {
+        scratch
+            .write(&ChunkInstanceData {
+                pos: chunk.worldspace_min().as_vec3(),
+                first_quad: data.start_quad,
+            })
+            .unwrap();
+    }
+
     scratch.into_inner()
 }
 

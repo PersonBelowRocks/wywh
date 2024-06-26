@@ -14,7 +14,10 @@ use once_cell::unsync::Lazy;
 use rangemap::RangeSet;
 
 use crate::{
-    render::{meshing::controller::ChunkMeshData, quad::GpuQuad},
+    render::{
+        core::indirect::buffer_utils::instance_bytes_from_metadata,
+        meshing::controller::ChunkMeshData, quad::GpuQuad,
+    },
     topo::world::ChunkPos,
     util::{ChunkIndexMap, ChunkMap, ChunkSet},
 };
@@ -50,8 +53,8 @@ pub struct IndexedIndirectArgs {
 /// indirect index and quad buffers.
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct GpuChunkMetadata {
-    /// The world position of this chunk's minimum corner
-    pub position: Vec3,
+    // TODO: thorough testing of the logic here, not sure if I managed to get the order of stuff correctly
+    pub instance: u32,
     pub start_index: u32,
     pub end_index: u32,
     pub start_quad: u32,
@@ -59,12 +62,12 @@ pub struct GpuChunkMetadata {
 }
 
 impl GpuChunkMetadata {
-    pub fn new(position: ChunkPos, indices: Range<u32>, quads: Range<u32>) -> Self {
+    pub fn new(instance: u32, indices: Range<u32>, quads: Range<u32>) -> Self {
         debug_assert!(indices.start < indices.end);
         debug_assert!(quads.start < quads.end);
 
         Self {
-            position: position.worldspace_min().as_vec3(),
+            instance,
             start_index: indices.start,
             end_index: indices.end,
             start_quad: quads.start,
@@ -100,34 +103,34 @@ fn writable_buffer_desc(label: &'static str, usages: BufferUsages) -> BufferDesc
     }
 }
 
-pub const INDEX_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
-    Lazy::new(|| writable_buffer_desc("chunk_multidraw_index_buffer", BufferUsages::INDEX));
-
-pub const QUAD_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
-    Lazy::new(|| writable_buffer_desc("chunk_multidraw_quad_buffer", BufferUsages::STORAGE));
-
-pub const INSTANCE_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
-    Lazy::new(|| writable_buffer_desc("chunk_multidraw_instance_buffer", BufferUsages::VERTEX));
-
-pub const INDIRECT_BUFFER_DESC: Lazy<BufferDescriptor<'static>> =
-    Lazy::new(|| writable_buffer_desc("chunk_multidraw_indirect_buffer", BufferUsages::INDIRECT));
+pub static ICD_INDEX_BUFFER_LABEL: &'static str = "ICD_index_buffer";
+pub static ICD_QUAD_BUFFER_LABEL: &'static str = "ICD_quad_buffer";
+pub static ICD_CHUNK_METADATA_BUFFER_LABEL: &'static str = "ICD_chunk_metadata_buffer";
+pub static ICD_CHUNK_INSTANCE_BUFFER_LABEL: &'static str = "ICD_chunk_instance_buffer";
 
 #[derive(Clone)]
-pub struct MultidrawBuffers {
+pub struct RawIndirectChunkData {
     pub index: VramArray<u32>,
     pub quad: VramArray<GpuQuad>,
     pub metadata: Buffer,
+    pub instances: Buffer,
 }
 
-impl MultidrawBuffers {
+impl RawIndirectChunkData {
     pub fn new(gpu: &RenderDevice) -> Self {
         Self {
-            index: VramArray::new("ICD_index_buffer", BufferUsages::INDEX, gpu),
-            quad: VramArray::new("ICD_quad_buffer", BufferUsages::STORAGE, gpu),
+            index: VramArray::new(ICD_INDEX_BUFFER_LABEL, BufferUsages::INDEX, gpu),
+            quad: VramArray::new(ICD_QUAD_BUFFER_LABEL, BufferUsages::STORAGE, gpu),
             metadata: gpu.create_buffer(&BufferDescriptor {
-                label: Some("ICD_chunk_buffer"),
+                label: Some(ICD_CHUNK_METADATA_BUFFER_LABEL),
                 size: 0,
                 usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
+            instances: gpu.create_buffer(&BufferDescriptor {
+                label: Some(ICD_CHUNK_INSTANCE_BUFFER_LABEL),
+                size: 0,
+                usage: BufferUsages::VERTEX | BufferUsages::STORAGE | BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             }),
         }
@@ -220,21 +223,20 @@ impl MultidrawBuffers {
 /// overwrite. After everything has been removed, we just tack on the extra data for our uploaded chunks on the end of our existing data.
 #[derive(Clone)]
 pub struct IndirectChunkData {
-    buffers: MultidrawBuffers,
+    raw: RawIndirectChunkData,
     metadata: ChunkIndexMap<GpuChunkMetadata>,
 }
 
 impl IndirectChunkData {
-    #[allow(dead_code)]
     pub fn new(gpu: &RenderDevice) -> Self {
         Self {
-            buffers: MultidrawBuffers::new(gpu),
+            raw: RawIndirectChunkData::new(gpu),
             metadata: ChunkIndexMap::default(),
         }
     }
 
-    pub fn buffers(&self) -> &MultidrawBuffers {
-        &self.buffers
+    pub fn buffers(&self) -> &RawIndirectChunkData {
+        &self.raw
     }
 
     fn update_metadata(
@@ -244,11 +246,19 @@ impl IndirectChunkData {
     ) {
         debug_assert!(chunk_bounds_correctly_formatted(&new_metadata));
 
-        let bytes = to_formatted_bytes(&new_metadata.values().collect_vec());
-        self.buffers.metadata = gpu.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("ICD_chunk_metadata_buffer"),
+        let metadata_bytes = to_formatted_bytes(&new_metadata.values().collect_vec());
+        let instance_bytes = instance_bytes_from_metadata(&new_metadata);
+
+        self.raw.metadata = gpu.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some(ICD_CHUNK_METADATA_BUFFER_LABEL),
             usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
-            contents: &bytes,
+            contents: &metadata_bytes,
+        });
+
+        self.raw.instances = gpu.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some(ICD_CHUNK_INSTANCE_BUFFER_LABEL),
+            usage: BufferUsages::COPY_DST | BufferUsages::VERTEX | BufferUsages::STORAGE,
+            contents: &instance_bytes,
         });
 
         self.metadata = new_metadata;
@@ -277,7 +287,7 @@ impl IndirectChunkData {
         let mut upload_indices = Vec::<u32>::new();
         let mut upload_quads = Vec::<GpuQuad>::new();
 
-        for (chunk, mesh) in chunks_to_upload.iter() {
+        for (i, (chunk, mesh)) in chunks_to_upload.iter().enumerate() {
             if self.metadata.contains_key(&chunk) {
                 updated_chunks.set(chunk);
             }
@@ -286,7 +296,9 @@ impl IndirectChunkData {
             let quads_len = upload_quads.len() as u32;
 
             let metadata = GpuChunkMetadata::new(
-                chunk,
+                // We'll let this be our instance number for now. These will all be tacked on to the end of our existing metadata so we just
+                // increase this number accordingly when we get that far.
+                i as u32,
                 indices_len..(indices_len + mesh.index_buffer.len() as u32),
                 quads_len..(quads_len + mesh.quad_buffer.len() as u32),
             );
@@ -335,14 +347,14 @@ impl IndirectChunkData {
         let mut current_index: u32 = 0;
         let mut current_quad: u32 = 0;
 
-        for (chunk, metadata) in ordered_retained_chunks {
+        for (i, (chunk, metadata)) in ordered_retained_chunks.enumerate() {
             #[cfg(debug_assertions)]
             {
                 let contains_indices = remove_indices.overlaps(&metadata.index_range());
                 let contains_quads = remove_quads.overlaps(&metadata.quad_range());
 
                 // Both must be true, otherwise we're removing quads but not indices, or vice versa.
-                // Doing so would massively mess up the format of the data, and should never happen.
+                // Doing so would severely mess up the format of the data, and should never happen.
                 debug_assert!(!(contains_indices ^ contains_quads));
 
                 // If this chunk's buffer bounds were marked for removal, then the chunk must also
@@ -360,7 +372,7 @@ impl IndirectChunkData {
             retained_bounds.insert(
                 *chunk,
                 GpuChunkMetadata::new(
-                    *chunk,
+                    i as u32,
                     current_index..(num_indices + current_index),
                     current_quad..(num_quads + current_quad),
                 ),
@@ -372,12 +384,13 @@ impl IndirectChunkData {
 
         // Okay now we actually queue up the copying commands for the GPU.
         // After this the bounds in 'retained_bounds' should map correctly into the buffers on the GPU.
-        self.buffers.index.remove(gpu, queue, &remove_indices);
-        self.buffers.quad.remove(gpu, queue, &remove_quads);
+        self.raw.index.remove(gpu, queue, &remove_indices);
+        self.raw.quad.remove(gpu, queue, &remove_quads);
 
         // Now we shift the bounds of the chunks we're going to upload so that they're placed after our retained chunks.
         let max_retained_index = current_index;
         let max_retained_quad = current_quad;
+        let max_instance = retained_bounds.len() as u32;
 
         retained_bounds.extend(upload_metadata.into_iter().map(|(cpos, mut metadata)| {
             metadata.start_index += max_retained_index;
@@ -386,15 +399,17 @@ impl IndirectChunkData {
             metadata.start_quad += max_retained_quad;
             metadata.end_quad += max_retained_quad;
 
+            metadata.instance += max_instance;
+
             (cpos, metadata)
         }));
 
         let new_bounds = retained_bounds;
 
         debug!("Uploading indices to the GPU.");
-        self.buffers.index.append(queue, gpu, &upload_indices);
+        self.raw.index.append(queue, gpu, &upload_indices);
         debug!("Uploading quads to the GPU.");
-        self.buffers.quad.append(queue, gpu, &upload_quads);
+        self.raw.quad.append(queue, gpu, &upload_quads);
         debug!("Successfully uploaded indices and quads to the GPU.");
 
         self.update_metadata(gpu, new_bounds);
@@ -414,6 +429,7 @@ impl IndirectChunkData {
 
         let mut current_index: u32 = 0;
         let mut current_quad: u32 = 0;
+        let mut current_instance: u32 = 0;
 
         for (chunk_pos, metadata) in self.metadata.iter() {
             if chunks.contains(*chunk_pos) {
@@ -421,7 +437,7 @@ impl IndirectChunkData {
                 remove_quads.insert(metadata.quad_range());
             } else {
                 let new_metadata = GpuChunkMetadata::new(
-                    *chunk_pos,
+                    current_instance,
                     current_index..(current_index + metadata.indices()),
                     current_quad..(current_quad + metadata.quads()),
                 );
@@ -436,11 +452,12 @@ impl IndirectChunkData {
 
                 current_index += metadata.indices();
                 current_quad += metadata.quads();
+                current_instance += 1;
             }
         }
 
-        self.buffers.index.remove(gpu, queue, &remove_indices);
-        self.buffers.quad.remove(gpu, queue, &remove_quads);
+        self.raw.index.remove(gpu, queue, &remove_indices);
+        self.raw.quad.remove(gpu, queue, &remove_quads);
 
         self.update_metadata(gpu, chunks_to_retain);
     }

@@ -83,14 +83,18 @@ impl Plugin for RenderCore {
         let render_app = app.sub_app_mut(RenderApp);
 
         render_app
+            // Draw functions
             .init_resource::<DrawFunctions<PrepassChunkPhaseItem>>()
             .init_resource::<DrawFunctions<RenderChunkPhaseItem>>()
+            // Render phases
             .init_resource::<ViewSortedRenderPhases<PrepassChunkPhaseItem>>()
             .init_resource::<ViewSortedRenderPhases<RenderChunkPhaseItem>>()
+            // Pipeline stores
             .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
             .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
             .init_resource::<SpecializedComputePipelines<BuildBatchBuffersPipeline>>()
             .init_resource::<SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>>()
+            // Misc
             .init_resource::<ShouldUpdateChunkDataDependants>()
             .init_resource::<RemoveChunkMeshes>()
             .init_resource::<RenderChunkBatches>()

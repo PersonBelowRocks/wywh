@@ -19,6 +19,7 @@ use crate::{
 };
 
 use super::{
+    gpu_chunk::IndirectRenderDataStore,
     indirect::{ChunkInstanceData, IndexedIndirectArgs, IndirectChunkData},
     observers::{ObserverBatchBuffersStore, ObserverBatchGpuData},
     shaders::{BUILD_BATCH_BUFFERS_HANDLE, OBSERVER_BATCH_FRUSTUM_CULL_HANDLE},
@@ -71,8 +72,6 @@ impl RenderChunkBatches {
 #[derive(Clone)]
 pub struct ChunkBatchGpuData {
     pub indirect: Buffer,
-    // TODO: instance buffer should be global, we only need to change the indirect buffers
-    pub instance: Buffer,
 }
 
 #[derive(Clone)]
@@ -192,6 +191,7 @@ pub fn initialize_and_queue_batch_buffers(
     mut populate_buffers: ResMut<PopulateBatchBuffers>,
     mut render_batches: ResMut<RenderChunkBatches>,
     mut all_observer_batch_buffers: ResMut<ObserverBatchBuffersStore>,
+    store: Res<IndirectRenderDataStore>,
     view_uniforms: Res<ViewUniforms>,
     default_layouts: Res<DefaultBindGroupLayouts>,
     observer_batch_query: Query<(Entity, &VisibleBatches)>,
@@ -222,7 +222,6 @@ pub fn initialize_and_queue_batch_buffers(
             // Initialize the buffers here
             let buffers = ChunkBatchGpuData {
                 indirect: create_primary_indirect_buffer(&gpu, num_chunks),
-                instance: create_instance_buffer(&gpu, num_chunks),
             };
 
             let observer_indirect_buf = create_observer_indirect_buffer(&gpu, num_chunks);
@@ -233,7 +232,7 @@ pub fn initialize_and_queue_batch_buffers(
                     Some("observer_batch_frustum_cull_bind_group"),
                     &default_layouts.observer_batch_cull_layout,
                     &BindGroupEntries::sequential((
-                        buffers.instance.as_entire_binding(),
+                        store.chunks.buffers().instances.as_entire_binding(),
                         binding,
                         observer_indirect_buf.as_entire_binding(),
                         observer_count_buf.as_entire_binding(),
