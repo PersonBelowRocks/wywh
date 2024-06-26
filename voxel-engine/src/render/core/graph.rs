@@ -36,8 +36,10 @@ pub struct CoreGraphPlugin;
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, RenderLabel)]
 pub enum Nodes {
+    BuildBatchBuffers,
+    BatchFrustumCulling,
     Prepass,
-    MainPass,
+    Render,
 }
 
 fn color_attachments(
@@ -137,6 +139,7 @@ impl ViewNode for ChunkPrepassNode {
     }
 }
 
+#[derive(Default)]
 pub struct ChunkRenderNode;
 
 impl ViewNode for ChunkRenderNode {
@@ -197,11 +200,16 @@ impl ViewNode for ChunkRenderNode {
     }
 }
 
-#[derive(Component, Copy, Clone, Debug)]
-pub struct PopulateObserverBuffers;
-
 pub struct BuildBatchBuffersNode {
     query: QueryState<Read<ChunkBatch>>,
+}
+
+impl FromWorld for BuildBatchBuffersNode {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            query: QueryState::from_world(world),
+        }
+    }
 }
 
 impl Node for BuildBatchBuffersNode {

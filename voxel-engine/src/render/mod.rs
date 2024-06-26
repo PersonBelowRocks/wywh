@@ -5,7 +5,10 @@ pub mod meshing;
 pub mod quad;
 
 use bevy::{
-    ecs::component::{ComponentHooks, StorageType},
+    ecs::{
+        component::{ComponentHooks, StorageType},
+        entity::EntityHashSet,
+    },
     prelude::*,
     render::extract_component::ExtractComponent,
 };
@@ -46,7 +49,7 @@ impl Component for ChunkBatch {
                 panic!();
             };
 
-            observer_batches.owned_batches.insert(lod, owner);
+            observer_batches.owned.insert(batch_entity);
         });
 
         // Remove this batch entity from its owner when the component is removed
@@ -68,7 +71,7 @@ impl Component for ChunkBatch {
                 panic!();
             };
 
-            observer_batches.owned_batches.remove(lod);
+            observer_batches.owned.remove(&batch_entity);
         });
     }
 }
@@ -78,7 +81,7 @@ impl Component for ChunkBatch {
 pub struct ObserverBatches {
     /// The batches this observer owns. Should never be manually updated, rather you should spawn batches and
     /// specify this entity as their owner. The engine will automatically update the owner's batches accordingly.
-    pub owned_batches: LodMap<Entity>,
+    pub owned: EntityHashSet,
 }
 
 impl Component for ObserverBatches {
@@ -86,13 +89,9 @@ impl Component for ObserverBatches {
 
     fn register_component_hooks(hooks: &mut ComponentHooks) {
         hooks.on_remove(|mut world, observer_entity, _id| {
-            let batches = world
-                .get::<Self>(observer_entity)
-                .unwrap()
-                .owned_batches
-                .clone();
+            let batches = world.get::<Self>(observer_entity).unwrap().owned.clone();
 
-            for &entity in batches.values() {
+            for &entity in batches.iter() {
                 let Some(mut batch) = world.get_mut::<ChunkBatch>(entity) else {
                     continue;
                 };
@@ -101,4 +100,16 @@ impl Component for ObserverBatches {
             }
         });
     }
+}
+
+#[derive(Component, Clone, Debug, ExtractComponent)]
+pub struct VisibleBatches {
+    pub visible: EntityHashSet,
+    pub auto: AutoBatchVisibility,
+}
+
+#[derive(Clone, Debug, Default)]
+pub enum AutoBatchVisibility {
+    #[default]
+    Disabled,
 }

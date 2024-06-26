@@ -32,18 +32,17 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use chunk_batches::{extract_chunk_batches, RenderChunkBatches};
+use chunk_batches::{extract_chunk_batches, PopulateBatchBuffersPipeline, RenderChunkBatches};
 use gpu_chunk::{
     remove_chunk_meshes, update_indirect_chunk_data_dependants, upload_chunk_meshes,
     IndirectRenderDataStore, RemoveChunkMeshes, ShouldUpdateChunkDataDependants,
 };
-use graph::{ChunkPrepassNode, Nodes};
+use graph::{BuildBatchBuffersNode, ChunkPrepassNode, ChunkRenderNode, Nodes};
 use indirect::{
     prepass_queue_indirect_chunks, render_queue_indirect_chunks, ChunkInstanceData,
     GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkPrepassPipeline,
     IndirectChunkRenderPipeline, IndirectChunksPrepass, IndirectChunksRender,
 };
-use observers::{populate_observer_multi_draw_buffers, PopulateBatchBuffersPipeline};
 use phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
 use shaders::load_internal_shaders;
 
@@ -61,7 +60,7 @@ use self::{
 };
 
 use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
-use super::{ChunkBatch, ObserverBatches};
+use super::{ChunkBatch, ObserverBatches, VisibleBatches};
 
 pub struct RenderCore;
 
@@ -74,6 +73,7 @@ impl Plugin for RenderCore {
             ExtractResourcePlugin::<VoxelNormalArrayTexture>::default(),
             ExtractComponentPlugin::<ChunkBatch>::default(),
             ExtractComponentPlugin::<ObserverBatches>::default(),
+            ExtractComponentPlugin::<VisibleBatches>::default(),
         ));
 
         // Render app logic
@@ -98,7 +98,9 @@ impl Plugin for RenderCore {
             .add_render_command::<Shadow, IndirectChunksPrepass>();
 
         render_app
-            .add_render_graph_node::<ViewNodeRunner<ChunkPrepassNode>>(Core3d, Nodes::Prepass);
+            .add_render_graph_node::<ViewNodeRunner<ChunkPrepassNode>>(Core3d, Nodes::Prepass)
+            .add_render_graph_node::<ViewNodeRunner<ChunkRenderNode>>(Core3d, Nodes::Render)
+            .add_render_graph_node::<BuildBatchBuffersNode>(Core3d, Nodes::BuildBatchBuffers);
 
         render_app.add_systems(
             ExtractSchedule,
@@ -121,8 +123,6 @@ impl Plugin for RenderCore {
                         remove_chunk_meshes,
                         upload_chunk_meshes,
                         update_indirect_chunk_data_dependants,
-                        populate_observer_multi_draw_buffers
-                            .run_if(resource_exists::<IndirectRenderDataStore>),
                     )
                         .chain(),
                 )
@@ -177,7 +177,7 @@ impl FromWorld for DefaultBindGroupLayouts {
                 ),
             ),
             indirect_chunk_bg_layout: gpu.create_bind_group_layout(
-                Some("multidraw_chunks_bind_group_layout"),
+                Some("indirect_chunks_bind_group_layout"),
                 &BindGroupLayoutEntries::single(
                     ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                     binding_types::storage_buffer_read_only::<GpuQuad>(false),
