@@ -71,9 +71,6 @@ impl Plugin for RenderCore {
         app.add_plugins((
             ExtractResourcePlugin::<VoxelColorArrayTexture>::default(),
             ExtractResourcePlugin::<VoxelNormalArrayTexture>::default(),
-            ExtractComponentPlugin::<ChunkBatch>::default(),
-            ExtractComponentPlugin::<ObserverBatches>::default(),
-            ExtractComponentPlugin::<VisibleBatches>::default(),
         ));
 
         // Render app logic

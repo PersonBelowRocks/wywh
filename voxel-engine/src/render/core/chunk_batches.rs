@@ -13,12 +13,13 @@ use bevy::{
 };
 
 use crate::{
-    render::{ChunkBatch, LevelOfDetail},
+    render::{ChunkBatch, LevelOfDetail, VisibleBatches},
     util::ChunkSet,
 };
 
 use super::{
     indirect::{ChunkInstanceData, IndexedIndirectArgs, IndirectChunkData},
+    observers::{ObserverBatchBuffers, ObserverBatchBuffersStore},
     shaders::POPULATE_OBSERVER_BUFFERS_HANDLE,
     utils::add_shader_constants,
     DefaultBindGroupLayouts,
@@ -29,14 +30,16 @@ pub struct RenderChunkBatches(EntityHashMap<RenderChunkBatch>);
 
 impl RenderChunkBatches {
     pub fn insert(&mut self, entity: Entity, batch: &ChunkBatch) {
+        let num_chunks = batch.chunks.len() as u32;
+
         self.0
             .entry(entity)
             .and_modify(|render_batch| {
                 if render_batch.tick < batch.tick {
-                    *render_batch = RenderChunkBatch::from_tick(batch.tick);
+                    *render_batch = RenderChunkBatch::new(batch.tick, num_chunks);
                 }
             })
-            .or_insert_with(|| RenderChunkBatch::from_tick(batch.tick));
+            .or_insert_with(|| RenderChunkBatch::new(batch.tick, num_chunks));
     }
 
     pub fn drop_buffers(&mut self) {
@@ -48,32 +51,72 @@ impl RenderChunkBatches {
     pub fn get(&self, entity: Entity) -> Option<&RenderChunkBatch> {
         self.0.get(&entity)
     }
+
+    pub fn set_buffers(&mut self, batch_entity: Entity, buffers: ChunkBatchBuffers) {
+        self.0
+            .get_mut(&batch_entity)
+            .map(|batch| batch.buffers = Some(buffers));
+    }
+
+    pub fn contains(&self, batch_entity: Entity) -> bool {
+        self.0.contains_key(&batch_entity)
+    }
+
+    pub fn has_buffers(&self, batch_entity: Entity) -> bool {
+        self.get(batch_entity).is_some_and(|b| b.buffers.is_some())
+    }
 }
 
 #[derive(Clone)]
 pub struct ChunkBatchBuffers {
     pub indirect: Buffer,
     pub instance: Buffer,
-    pub count: Buffer,
 }
 
 #[derive(Clone)]
 pub struct RenderChunkBatch {
     pub buffers: Option<ChunkBatchBuffers>,
+    pub num_chunks: u32,
     pub tick: u64,
 }
 
 impl RenderChunkBatch {
-    pub fn from_tick(tick: u64) -> Self {
+    pub fn new(tick: u64, num_chunks: u32) -> Self {
         Self {
             tick,
+            num_chunks,
             buffers: None,
         }
     }
 }
 
-#[derive(Resource, Clone, Deref, DerefMut)]
-pub struct PopulateBatchBuffers(EntityHashSet);
+#[derive(Resource, Clone)]
+pub struct PopulateBatchBuffers {
+    pub observers: EntityHashMap<EntityHashSet>,
+    pub batches: EntityHashSet,
+}
+
+impl PopulateBatchBuffers {
+    pub fn clear(&mut self) {
+        self.observers.clear();
+        self.batches.clear();
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.batches.is_empty() && self.observers.is_empty()
+    }
+
+    pub fn queue(&mut self, batch: Entity, observer: Entity) {
+        self.batches.insert(batch);
+
+        self.observers
+            .entry(observer)
+            .and_modify(|visible| {
+                visible.insert(batch);
+            })
+            .or_insert_with(|| EntityHashSet::from_iter([batch]));
+    }
+}
 
 impl ChunkBatch {
     /// Get the indices for the metadata of this observer's in-range chunks on the GPU as described by the provided indirect chunk data.
@@ -98,17 +141,28 @@ impl ChunkBatch {
 pub fn extract_chunk_batches(
     query: Extract<Query<(Entity, &ChunkBatch)>>,
     mut render_batches: ResMut<RenderChunkBatches>,
+    mut cmds: Commands,
 ) {
     for (entity, batch) in &query {
         render_batches.insert(entity, batch);
+        cmds.get_or_spawn(entity).insert(batch.clone());
     }
 }
 
-fn create_indirect_buffer(gpu: &RenderDevice, chunks: u32) -> Buffer {
+fn create_primary_indirect_buffer(gpu: &RenderDevice, chunks: u32) -> Buffer {
     gpu.create_buffer(&BufferDescriptor {
         label: Some("chunk_batch_indirect_buffer"),
         size: (chunks as u64) * u64::from(IndexedIndirectArgs::SHADER_SIZE),
-        usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
+        usage: BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    })
+}
+
+fn create_observer_indirect_buffer(gpu: &RenderDevice, chunks: u32) -> Buffer {
+    gpu.create_buffer(&BufferDescriptor {
+        label: Some("observer_batch_indirect_buffer"),
+        size: (chunks as u64) * u64::from(IndexedIndirectArgs::SHADER_SIZE),
+        usage: BufferUsages::STORAGE | BufferUsages::INDIRECT | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     })
 }
@@ -124,9 +178,9 @@ fn create_instance_buffer(gpu: &RenderDevice, chunks: u32) -> Buffer {
 
 fn create_count_buffer(gpu: &RenderDevice) -> Buffer {
     gpu.create_buffer_with_data(&BufferInitDescriptor {
-        label: Some("chunk_batch_num_chunks"),
+        label: Some("observer_batch_chunk_count_buffer"),
         contents: &[0; 4],
-        usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
+        usage: BufferUsages::STORAGE,
     })
 }
 
@@ -135,32 +189,51 @@ fn create_count_buffer(gpu: &RenderDevice) -> Buffer {
 pub fn initialize_and_queue_batch_buffers(
     mut populate_buffers: ResMut<PopulateBatchBuffers>,
     mut render_batches: ResMut<RenderChunkBatches>,
-    batch_query: Query<&ChunkBatch>,
+    mut all_observer_batch_buffers: ResMut<ObserverBatchBuffersStore>,
+    observer_batch_query: Query<(Entity, &VisibleBatches)>,
+    all_batches: Query<&ChunkBatch>,
     gpu: Res<RenderDevice>,
 ) {
     // Clear out the previous queued population buffers
     populate_buffers.clear();
 
-    for (&entity, batch) in render_batches.0.iter_mut() {
-        // This batch is already initialized so we skip it
-        if batch.buffers.is_some() {
-            continue;
+    for (observer_entity, visible_batches) in &observer_batch_query {
+        // All the per-observer batch buffers for this observer.
+        let observer_batch_buffers = all_observer_batch_buffers
+            .entry(observer_entity)
+            .or_insert(EntityHashMap::default());
+
+        for &batch_entity in visible_batches.iter() {
+            // This batch is already initialized so we skip it
+            if render_batches.has_buffers(batch_entity) {
+                continue;
+            }
+
+            // We need to initialize the buffers at the appropriate size.
+            let num_chunks = all_batches
+                .get(batch_entity)
+                .expect("Earlier in the extract phase we ensured that all visible batches are also actually present in the ECS world")
+                .chunks.len() as u32;
+
+            // Initialize the buffers here
+            let buffers = ChunkBatchBuffers {
+                indirect: create_primary_indirect_buffer(&gpu, num_chunks),
+                instance: create_instance_buffer(&gpu, num_chunks),
+            };
+
+            // Set the empty buffers and queue this batch for buffer population
+            render_batches.set_buffers(batch_entity, buffers);
+
+            observer_batch_buffers.insert(
+                batch_entity,
+                ObserverBatchBuffers {
+                    indirect: create_observer_indirect_buffer(&gpu, num_chunks),
+                    count: create_count_buffer(&gpu),
+                },
+            );
+
+            populate_buffers.queue(batch_entity, observer_entity);
         }
-
-        // We need to initialize the buffers at the appropriate size.
-        let num_chunks = batch_query.get(entity).unwrap().chunks.len() as u32;
-
-        // Initialize the buffers here
-        let buffers = ChunkBatchBuffers {
-            indirect: create_indirect_buffer(&gpu, num_chunks),
-            instance: create_instance_buffer(&gpu, num_chunks),
-            count: create_count_buffer(&gpu),
-        };
-
-        batch.buffers = Some(buffers);
-
-        // Queue this batch for buffer population
-        populate_buffers.insert(entity);
     }
 }
 

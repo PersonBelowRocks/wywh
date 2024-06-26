@@ -1,4 +1,4 @@
-use bevy::ecs::entity::EntityHashSet;
+use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::render::render_phase::ViewSortedRenderPhases;
 use bevy::render::render_resource::{CachedComputePipelineId, CachedPipelineState, Pipeline};
 use bevy::{
@@ -18,10 +18,11 @@ use bytemuck::cast_slice;
 use itertools::Itertools;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::render::{LODs, LevelOfDetail, LodMap};
+use crate::render::{ChunkBatch, LODs, LevelOfDetail, LodMap, VisibleBatches};
 use crate::topo::{controller::RenderableObserverChunks, world::ChunkPos};
 use crate::util::ChunkSet;
 
+use super::chunk_batches::ChunkBatchBuffers;
 use super::gpu_chunk::IndirectRenderDataStore;
 use super::phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
 use super::{
@@ -30,6 +31,35 @@ use super::{
     utils::add_shader_constants,
     DefaultBindGroupLayouts,
 };
+
+/// Copies of the indirect, instance, and count buffers for each observer so they can cull individually.
+#[derive(Resource, Clone, Default, Deref, DerefMut)]
+pub struct ObserverBatchBuffersStore(EntityHashMap<ObserverBatches>);
+
+#[derive(Clone)]
+pub struct ObserverBatchBuffers {
+    pub indirect: Buffer,
+    pub count: Buffer,
+}
+
+pub type ObserverBatches = EntityHashMap<ObserverBatchBuffers>;
+
+pub fn extract_observer_visible_batches(
+    query: Extract<Query<(Entity, &VisibleBatches)>>,
+    batch_query: Query<&ChunkBatch>,
+    mut cmds: Commands,
+) {
+    for (entity, visible) in &query {
+        let visible = visible
+            .iter()
+            .filter(|&entity| batch_query.contains(*entity))
+            .cloned()
+            .collect::<EntityHashSet>();
+
+        cmds.get_or_spawn(entity)
+            .insert(VisibleBatches::new(visible));
+    }
+}
 
 /// Sets up chunk render phases for camera entities
 pub fn extract_chunk_camera_phases(

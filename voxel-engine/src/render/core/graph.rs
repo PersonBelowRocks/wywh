@@ -3,6 +3,8 @@ use std::sync::atomic::Ordering;
 use bevy::{
     core_pipeline::prepass::ViewPrepassTextures,
     ecs::{
+        entity::{EntityHash, EntityHashSet},
+        observer,
         query::QueryItem,
         system::lifetimeless::{Read, SResMut},
     },
@@ -15,19 +17,21 @@ use bevy::{
         render_resource::{
             BindGroupEntries, BufferInitDescriptor, BufferUsages, CommandEncoderDescriptor,
             ComputePassDescriptor, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
-            StoreOp,
+            ShaderSize, StoreOp,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
         view::{ViewDepthTexture, ViewTarget, ViewUniformOffset},
     },
 };
-use bytemuck::cast_slice;
+use bytemuck::{cast_slice, Contiguous};
 
-use crate::render::{ChunkBatch, ObserverBatches};
+use crate::render::{ChunkBatch, ObserverBatches, VisibleBatches};
 
 use super::{
     chunk_batches::{PopulateBatchBuffers, PopulateBatchBuffersPipelineId, RenderChunkBatches},
     gpu_chunk::IndirectRenderDataStore,
+    indirect::IndexedIndirectArgs,
+    observers::ObserverBatchBuffersStore,
     phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem},
     DefaultBindGroupLayouts,
 };
@@ -201,22 +205,18 @@ impl ViewNode for ChunkRenderNode {
 }
 
 pub struct BuildBatchBuffersNode {
-    query: QueryState<Read<ChunkBatch>>,
+    batch_query: QueryState<Read<ChunkBatch>>,
 }
 
 impl FromWorld for BuildBatchBuffersNode {
     fn from_world(world: &mut World) -> Self {
         Self {
-            query: QueryState::from_world(world),
+            batch_query: QueryState::from_world(world),
         }
     }
 }
 
 impl Node for BuildBatchBuffersNode {
-    fn update(&mut self, world: &mut World) {
-        self.query.update_archetypes(world);
-    }
-
     fn run<'w>(
         &self,
         graph: &mut RenderGraphContext,
@@ -231,24 +231,31 @@ impl Node for BuildBatchBuffersNode {
         let pipeline_cache = world.resource::<PipelineCache>();
         let render_chunk_batches = world.resource::<RenderChunkBatches>();
         let populate_batches = world.resource::<PopulateBatchBuffers>();
+        let observer_batch_buf_store = world.resource::<ObserverBatchBuffersStore>();
 
         // Return early if there's no batches whose buffers need populating
         if populate_batches.is_empty() {
             return Ok(());
         }
 
-        // Encode compute pass
-        let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("populate_batch_buffers_encoder"),
-        });
-
         let Some(compute_pipeline) = pipeline_cache.get_compute_pipeline(pipeline_id.0) else {
             error!("Cannot get batch buffer population compute pipeline");
             return Ok(());
         };
 
-        for &batch_entity in populate_batches.iter() {
-            let Ok(batch) = self.query.get_manual(world, batch_entity) else {
+        // Encode compute pass
+        let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("populate_batch_buffers_encoder"),
+        });
+
+        let mut built = EntityHashSet::with_capacity_and_hasher(
+            populate_batches.batches.len(),
+            EntityHash::default(),
+        );
+
+        // Build all the initial batch buffers
+        for &batch_entity in populate_batches.batches.iter() {
+            let Ok(batch) = self.batch_query.get_manual(world, batch_entity) else {
                 continue;
             };
 
@@ -260,14 +267,14 @@ impl Node for BuildBatchBuffersNode {
             // Skip all batches that don't have initialized buffers. We are not allowed to initialize the buffers here due to mutability
             // rules so we are forced to just do whatever the previous render stages tell us.
             let Some(render_batch) = render_chunk_batches.get(batch_entity) else {
+                error!("Batch buffer was queued for building but the buffer was not initialized");
                 continue;
             };
 
             let Some(buffers) = &render_batch.buffers else {
+                error!("Batch buffer was queued for building but the buffer was not initialized");
                 continue;
             };
-
-            let num_chunks = batch.chunks.len();
 
             // An array of the indices to the chunk metadata on the GPU.
             let chunk_metadata_indices = batch.get_metadata_indices(&indirect_data.chunks);
@@ -297,7 +304,6 @@ impl Node for BuildBatchBuffersNode {
                 &BindGroupEntries::sequential((
                     buffers.instance.as_entire_binding(),
                     buffers.indirect.as_entire_binding(),
-                    buffers.count.as_entire_binding(),
                 )),
             );
 
@@ -312,7 +318,45 @@ impl Node for BuildBatchBuffersNode {
                 pass.set_bind_group(0, &input_bg, &[]);
                 pass.set_bind_group(1, &output_bg, &[]);
 
-                pass.dispatch_workgroups(1, 1, num_chunks as u32);
+                pass.dispatch_workgroups(1, 1, render_batch.num_chunks);
+            }
+
+            built.insert(batch_entity);
+        }
+
+        // Make copies of all the primary batch buffers for each observer that wants to render those batches
+        for (observer, visible) in populate_batches.observers.iter() {
+            let Some(observer_buffers) = observer_batch_buf_store.get(observer) else {
+                error!("Queued observer did not have initialized buffers.");
+                continue;
+            };
+
+            for batch_entity in visible.iter() {
+                if !built.contains(batch_entity) {
+                    continue;
+                }
+
+                let Some(render_batch) = render_chunk_batches.get(*batch_entity) else {
+                    error!("Observer tried to get indirect batch data but the batch didn't have any buffers");
+                    continue;
+                };
+
+                let Some(ref batch_buffers) = render_batch.buffers else {
+                    error!("Observer tried to get indirect batch data but the batch didn't have any buffers");
+                    continue;
+                };
+
+                let Some(dst_buffers) = observer_buffers.get(batch_entity) else {
+                    continue;
+                };
+
+                encoder.copy_buffer_to_buffer(
+                    &batch_buffers.indirect,
+                    0,
+                    &dst_buffers.indirect,
+                    0,
+                    (render_batch.num_chunks as u64) * u64::from(IndexedIndirectArgs::SHADER_SIZE),
+                );
             }
         }
 

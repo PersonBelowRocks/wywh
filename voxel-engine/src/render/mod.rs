@@ -8,6 +8,7 @@ use bevy::{
     ecs::{
         component::{ComponentHooks, StorageType},
         entity::EntityHashSet,
+        system::SystemId,
     },
     prelude::*,
     render::extract_component::ExtractComponent,
@@ -17,7 +18,7 @@ pub use lod::*;
 use crate::util::ChunkSet;
 
 /// A batch of chunks that can be rendered
-#[derive(Clone, ExtractComponent)]
+#[derive(Clone)]
 pub struct ChunkBatch {
     /// The observer that owns this batch. If this is `None` then this batch is orphaned.
     pub owner: Option<Entity>,
@@ -32,11 +33,7 @@ impl Component for ChunkBatch {
     fn register_component_hooks(hooks: &mut ComponentHooks) {
         // Add this batch entity to its owner when the component is added
         hooks.on_insert(|mut world, batch_entity, _id| {
-            let (owner, lod) = {
-                let batch = world.get::<Self>(batch_entity).unwrap();
-
-                (batch.owner, batch.lod)
-            };
+            let owner = world.get::<Self>(batch_entity).unwrap().owner;
 
             // Do nothing if this batch is an orphan
             let Some(owner) = owner else {
@@ -54,11 +51,7 @@ impl Component for ChunkBatch {
 
         // Remove this batch entity from its owner when the component is removed
         hooks.on_remove(|mut world, batch_entity, _id| {
-            let (owner, lod) = {
-                let batch = world.get::<Self>(batch_entity).unwrap();
-
-                (batch.owner, batch.lod)
-            };
+            let owner = world.get::<Self>(batch_entity).unwrap().owner;
 
             // Do nothing if this batch is an orphan
             let Some(owner) = owner else {
@@ -77,7 +70,7 @@ impl Component for ChunkBatch {
 }
 
 /// The batches that an observer can render and update
-#[derive(Clone, ExtractComponent)]
+#[derive(Clone)]
 pub struct ObserverBatches {
     /// The batches this observer owns. Should never be manually updated, rather you should spawn batches and
     /// specify this entity as their owner. The engine will automatically update the owner's batches accordingly.
@@ -102,14 +95,5 @@ impl Component for ObserverBatches {
     }
 }
 
-#[derive(Component, Clone, Debug, ExtractComponent)]
-pub struct VisibleBatches {
-    pub visible: EntityHashSet,
-    pub auto: AutoBatchVisibility,
-}
-
-#[derive(Clone, Debug, Default)]
-pub enum AutoBatchVisibility {
-    #[default]
-    Disabled,
-}
+#[derive(Component, Clone, Debug, Deref, DerefMut, dm::Constructor)]
+pub struct VisibleBatches(EntityHashSet);
