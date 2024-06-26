@@ -46,7 +46,7 @@ impl ObserverBatchBuffersStore {
 
 #[derive(Clone)]
 pub struct ObserverBatchGpuData {
-    pub bind_group: Option<BindGroup>,
+    pub cull_bind_group: BindGroup,
     pub num_chunks: u32,
     pub indirect: Buffer,
     pub count: Buffer,

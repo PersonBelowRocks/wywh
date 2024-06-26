@@ -395,7 +395,7 @@ impl ViewNode for GpuFrustumCullBatchesNode {
                 continue;
             }
 
-            let Some(ref bind_group) = gpu_data.bind_group else {
+            let Some(ref bind_group) = gpu_data.cull_bind_group else {
                 continue;
             };
 

@@ -183,6 +183,12 @@ pub fn initialize_and_queue_batch_buffers(
     // Clear out the previous queued population buffers
     populate_buffers.clear();
 
+    // We want to avoid doing anything here if the view bindings aren't here (yet).
+    let Some(view_uniforms_binding) = view_uniforms.uniforms.binding() else {
+        warn!("Couldn't initialize and queue batch buffers and observer batch buffers because the view uniforms binding wasn't present.");
+        return;
+    };
+
     for (observer_entity, visible_batches) in &observer_batch_query {
         // All the per-observer batch buffers for this observer.
         let observer_batch_buffers = all_observer_batch_buffers
@@ -202,23 +208,19 @@ pub fn initialize_and_queue_batch_buffers(
                     create_observer_indirect_buffer(&gpu, batch.num_chunks());
                 let observer_count_buf = create_count_buffer(&gpu);
 
-                let cull_bind_group = view_uniforms.uniforms.binding().map(|binding| {
-                    gpu.create_bind_group(
-                        Some("observer_batch_frustum_cull_bind_group"),
-                        &default_layouts.observer_batch_cull_layout,
-                        &BindGroupEntries::sequential((
-                            store.chunks.buffers().instances.as_entire_binding(),
-                            binding,
-                            observer_indirect_buf.as_entire_binding(),
-                            observer_count_buf.as_entire_binding(),
-                        )),
-                    )
-                });
-
                 observer_batch_buffers.insert(
                     batch_entity,
                     ObserverBatchGpuData {
-                        bind_group: cull_bind_group,
+                        cull_bind_group: gpu.create_bind_group(
+                            Some("observer_batch_frustum_cull_bind_group"),
+                            &default_layouts.observer_batch_cull_layout,
+                            &BindGroupEntries::sequential((
+                                store.chunks.buffers().instances.as_entire_binding(),
+                                view_uniforms_binding.clone(),
+                                observer_indirect_buf.as_entire_binding(),
+                                observer_count_buf.as_entire_binding(),
+                            )),
+                        ),
                         indirect: observer_indirect_buf,
                         count: observer_count_buf,
                         num_chunks: batch.num_chunks(),
