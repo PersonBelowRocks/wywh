@@ -1,10 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use bevy::{
-    ecs::entity::EntityHashMap,
-    math::{bounding::BoundingVolume, ivec3},
-    prelude::*,
-};
+use bevy::{ecs::entity::EntityHashMap, math::ivec3, prelude::*};
 
 use crate::{
     topo::{
@@ -15,10 +11,10 @@ use crate::{
 };
 
 use super::{
-    AddPermitFlagsEvent, ChunkObserverCrossChunkBorderEvent, ChunkObserverMoveEvent,
-    ChunkPermitKey, LastPosition, LoadChunksEvent, LoadReasons, LoadedChunkEvent,
-    LoadshareProvider, ObserverLoadshare, ObserverLoadshareType, ObserverSettings, PermitFlags,
-    RemovePermitFlagsEvent, RenderableObserverChunks, UnloadChunksEvent,
+    AddPermitFlagsEvent, ChunkPermitKey, LastPosition, LoadChunksEvent, LoadReasons,
+    LoadedChunkEvent, LoadshareProvider, ObserverCrossChunkBorder, ObserverLoadshare,
+    ObserverLoadshareType, ObserverSettings, PermitFlags, RemovePermitFlagsEvent,
+    UnloadChunksEvent,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -40,14 +36,9 @@ pub fn grant_observer_loadshares(
     }
 }
 
-/// Dispatch movement events for chunk observers.
 pub fn dispatch_move_events(
-    mut observers: Query<
-        (Entity, &Transform, Option<&mut LastPosition>),
-        (With<ObserverSettings>, With<RenderableObserverChunks>),
-    >,
-    mut move_events: EventWriter<ChunkObserverMoveEvent>,
-    mut chunk_border_events: EventWriter<ChunkObserverCrossChunkBorderEvent>,
+    mut observers: Query<(Entity, &Transform, Option<&mut LastPosition>), With<ObserverSettings>>,
+    mut chunk_border_events: EventWriter<ObserverCrossChunkBorder>,
     mut cmds: Commands,
 ) {
     for (entity, transform, last_pos) in &mut observers {
@@ -57,13 +48,6 @@ pub fn dispatch_move_events(
                 if last_pos.ws_pos == transform.translation {
                     continue;
                 }
-
-                move_events.send(ChunkObserverMoveEvent {
-                    new: false,
-                    entity,
-                    old_pos: last_pos.ws_pos,
-                    new_pos: transform.translation,
-                });
 
                 last_pos.ws_pos = transform.translation;
 
@@ -75,12 +59,14 @@ pub fn dispatch_move_events(
                     continue;
                 }
 
-                chunk_border_events.send(ChunkObserverCrossChunkBorderEvent {
-                    new: false,
+                cmds.trigger_targets(
+                    ObserverCrossChunkBorder {
+                        new: false,
+                        old_chunk: last_pos.chunk_pos,
+                        new_chunk: chunk_pos,
+                    },
                     entity,
-                    old_chunk: last_pos.chunk_pos,
-                    new_chunk: chunk_pos,
-                });
+                );
 
                 last_pos.chunk_pos = chunk_pos;
             }
@@ -88,21 +74,16 @@ pub fn dispatch_move_events(
                 // If this entity doesn't have a LastPosition component we add one and send events
                 // with "new" set to true. This indicates to any readers that the events are for entities
                 // that were just inserted and didn't have any position history.
-                move_events.send(ChunkObserverMoveEvent {
-                    new: true,
-                    entity,
-                    old_pos: transform.translation,
-                    new_pos: transform.translation,
-                });
-
                 let chunk_pos = transform_chunk_pos(transform);
 
-                chunk_border_events.send(ChunkObserverCrossChunkBorderEvent {
-                    new: true,
+                cmds.trigger_targets(
+                    ObserverCrossChunkBorder {
+                        new: true,
+                        old_chunk: chunk_pos,
+                        new_chunk: chunk_pos,
+                    },
                     entity,
-                    old_chunk: chunk_pos,
-                    new_chunk: chunk_pos,
-                });
+                );
 
                 cmds.entity(entity).insert(LastPosition {
                     ws_pos: transform.translation,
@@ -117,180 +98,9 @@ fn chunk_pos_center_vec3(pos: ChunkPos) -> Vec3 {
     pos.as_vec3() + Vec3::splat(0.5)
 }
 
-fn is_in_range(
-    observer_pos: ChunkPos,
-    chunk_pos: ChunkPos,
-    observer_settings: &ObserverSettings,
-) -> bool {
-    let horizontal = Vec2::splat(observer_settings.horizontal_range);
-    let above = observer_settings.view_distance_above;
-    let below = -observer_settings.view_distance_below;
+pub fn unload_out_of_range_chunks() {}
 
-    let observer_pos = chunk_pos_center_vec3(observer_pos);
-    let chunk_pos = chunk_pos_center_vec3(chunk_pos);
-
-    let local_cpos = chunk_pos - observer_pos;
-
-    let in_horizontal_range =
-        local_cpos.xz().cmpge(-horizontal).all() && local_cpos.xz().cmple(horizontal).all();
-
-    let in_vertical_range = (below..=above).contains(&local_cpos.y);
-
-    in_horizontal_range && in_vertical_range
-}
-
-pub fn unload_out_of_range_chunks(
-    mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
-    mut remove_permits: EventWriter<RemovePermitFlagsEvent>,
-    mut unload_chunks: EventWriter<UnloadChunksEvent>,
-    mut chunk_observers: Query<(
-        &ObserverSettings,
-        &ObserverLoadshare,
-        &mut RenderableObserverChunks,
-    )>,
-) {
-    let mut move_events = EntityHashMap::<&ChunkObserverCrossChunkBorderEvent>::default();
-    for event in border_events.read() {
-        if event.new {
-            continue;
-        }
-
-        move_events.insert(event.entity, event);
-    }
-
-    // If there's no non-new border events, we don't do anything
-    if move_events.len() <= 0 {
-        return;
-    }
-
-    for &event in move_events.values() {
-        let observer_pos = event.new_chunk;
-
-        // Don't unload anything if this was the first movement event for the observer
-        if event.new {
-            continue;
-        }
-
-        let Ok((settings, loadshare, mut observer_chunks)) = chunk_observers.get_mut(event.entity)
-        else {
-            continue;
-        };
-
-        // Skip observers that don't have a loadshare id (yet)
-        let Some(loadshare_id) = loadshare.get() else {
-            continue;
-        };
-
-        // TODO: find a good heuristic for the capacity here
-        let mut removed = ChunkSet::with_capacity(10);
-        // Retain the in-range chunks and track the ones that are out of range,
-        // so they can be unloaded
-        observer_chunks.in_range.retain(|&cpos| {
-            if is_in_range(observer_pos, cpos, settings) {
-                true
-            } else {
-                removed.set(cpos);
-                false
-            }
-        });
-
-        observer_chunks
-            .should_extract
-            .store(true, Ordering::Relaxed);
-
-        unload_chunks.send(UnloadChunksEvent {
-            loadshare: loadshare_id,
-            reasons: LoadReasons::RENDER,
-            chunks: removed.clone(),
-        });
-
-        remove_permits.send(RemovePermitFlagsEvent {
-            loadshare: loadshare_id,
-            remove_flags: PermitFlags::RENDER,
-            chunks: removed.clone(),
-        });
-    }
-}
-
-pub fn load_in_range_chunks(
-    realm: VoxelRealm,
-    mut border_events: EventReader<ChunkObserverCrossChunkBorderEvent>,
-    mut load_chunks: EventWriter<LoadChunksEvent>,
-    mut update_permits: EventWriter<AddPermitFlagsEvent>,
-    mut chunk_observers: Query<(
-        &ObserverSettings,
-        &ObserverLoadshare,
-        &mut RenderableObserverChunks,
-    )>,
-) {
-    let mut move_events = EntityHashMap::<&ChunkObserverCrossChunkBorderEvent>::default();
-    for event in border_events.read() {
-        move_events.insert(event.entity, event);
-    }
-
-    for &event in move_events.values() {
-        let observer_pos = event.new_chunk;
-
-        let Ok((settings, loadshare, mut observer_chunks)) = chunk_observers.get_mut(event.entity)
-        else {
-            continue;
-        };
-
-        // Skip observers that don't have a loadshare id (yet)
-        let Some(loadshare_id) = loadshare.get() else {
-            continue;
-        };
-
-        let min_y = (-settings.view_distance_below).floor() as i32;
-        let max_y = settings.view_distance_above.ceil() as i32;
-
-        let horizontal_min = IVec2::splat((-settings.horizontal_range).floor() as i32);
-        let horizontal_max = IVec2::splat(settings.horizontal_range.ceil() as i32);
-
-        let mut in_range = ChunkSet::default();
-
-        for y in min_y..=max_y {
-            for x in horizontal_min.x..=horizontal_max.x {
-                for z in horizontal_min.y..=horizontal_max.y {
-                    let pos = ivec3(x, y, z);
-                    let cpos = ChunkPos::from(pos + observer_pos.as_ivec3());
-
-                    if !is_in_range(observer_pos, cpos, settings) {
-                        continue;
-                    }
-
-                    if realm
-                        .permits()
-                        .get(ChunkPermitKey::Chunk(cpos))
-                        .is_some_and(|permit| permit.cached_flags.contains(PermitFlags::RENDER))
-                    {
-                        continue;
-                    }
-
-                    in_range.set(cpos);
-                }
-            }
-        }
-
-        load_chunks.send(LoadChunksEvent {
-            loadshare: loadshare_id,
-            reasons: LoadReasons::RENDER,
-            chunks: in_range.clone(),
-            auto_generate: true,
-        });
-
-        update_permits.send(AddPermitFlagsEvent {
-            loadshare: loadshare_id,
-            add_flags: PermitFlags::RENDER,
-            chunks: in_range.clone(),
-        });
-
-        observer_chunks.in_range.extend(in_range.into_iter());
-        observer_chunks
-            .should_extract
-            .store(true, Ordering::Relaxed);
-    }
-}
+pub fn load_in_range_chunks() {}
 
 fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> GenerationPriority {
     const CHUNK_SIZE_F32: f32 = Chunk::SIZE as f32;

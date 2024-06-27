@@ -17,7 +17,7 @@ use bevy::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, FpsText, SpatialDebugText};
-use ve::topo::controller::{ObserverBundle, ObserverId};
+use ve::topo::controller::ObserverBundle;
 use ve::EngineState;
 
 fn main() {

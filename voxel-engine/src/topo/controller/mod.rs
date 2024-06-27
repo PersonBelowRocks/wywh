@@ -18,7 +18,7 @@ use observer_events::{
     unload_out_of_range_chunks,
 };
 
-use crate::render::LevelOfDetail;
+use crate::render::{LevelOfDetail, VisibleBatches};
 use crate::{util::ChunkSet, EngineState};
 
 use super::world::ChunkPos;
@@ -33,42 +33,20 @@ pub use events::*;
 use crate::topo::controller::observer_events::grant_observer_loadshares;
 pub use permits::*;
 
+// TODO: use ints not floats!
 #[derive(Clone, Component, Debug)]
 pub struct ObserverSettings {
-    pub horizontal_range: f32,
-    pub view_distance_above: f32,
-    pub view_distance_below: f32,
+    pub horizontal_range: u32,
+    pub view_distance_above: u32,
+    pub view_distance_below: u32,
 }
 
 impl Default for ObserverSettings {
     fn default() -> Self {
         Self {
-            horizontal_range: 4.0,
-            view_distance_above: 2.0,
-            view_distance_below: 2.0,
-        }
-    }
-}
-
-#[derive(Component)]
-pub struct RenderableObserverChunks {
-    pub should_extract: AtomicBool,
-    pub in_range: EnumMap<LevelOfDetail, Option<ChunkSet>>,
-}
-
-impl RenderableObserverChunks {
-    pub fn in_range(&self) -> impl Iterator<Item = (LevelOfDetail, &ChunkSet)> + '_ {
-        self.in_range
-            .iter()
-            .filter_map(|(lod, option)| option.as_ref().map(|chunks| (lod, chunks)))
-    }
-}
-
-impl Default for RenderableObserverChunks {
-    fn default() -> Self {
-        Self {
-            should_extract: AtomicBool::new(true),
-            in_range: EnumMap::default(),
+            horizontal_range: 4,
+            view_distance_above: 2,
+            view_distance_below: 2,
         }
     }
 }
@@ -174,7 +152,7 @@ impl LoadshareProvider {
 #[derive(Bundle)]
 pub struct ObserverBundle {
     pub settings: ObserverSettings,
-    pub chunks: RenderableObserverChunks,
+    pub visible: VisibleBatches,
     pub loadshare: ObserverLoadshare,
 }
 
@@ -182,7 +160,7 @@ impl ObserverBundle {
     pub fn new() -> Self {
         Self {
             settings: Default::default(),
-            chunks: Default::default(),
+            visible: Default::default(),
             loadshare: Default::default(),
         }
     }
@@ -263,9 +241,7 @@ impl Plugin for WorldController {
             .add_event::<UnloadedChunkEvent>()
             .add_event::<AddPermitFlagsEvent>()
             .add_event::<RemovePermitFlagsEvent>()
-            .add_event::<PermitLostFlagsEvent>()
-            .add_event::<ChunkObserverMoveEvent>()
-            .add_event::<ChunkObserverCrossChunkBorderEvent>();
+            .add_event::<PermitLostFlagsEvent>();
 
         app.add_systems(
             FixedPostUpdate,

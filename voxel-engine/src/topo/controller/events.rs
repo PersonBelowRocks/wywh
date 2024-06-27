@@ -11,22 +11,12 @@ pub(super) trait MergeEvent: Sized {
 }
 
 #[derive(Clone, Event, Debug)]
-pub struct ChunkObserverMoveEvent {
+pub struct ObserverCrossChunkBorder {
     /// Indicates if this observer entity was just inserted.
-    /// i.e. instead of a regular movement where its current position was different from its last position,
-    /// this movement event was because the entity didn't even have a last position, and this was the first time
-    /// we recorded its position.
+    /// i.e. instead of a regular movement where its current chunk was different from its previous chunk,
+    /// this movement event was because the entity didn't even have a previous chunk position,
+    /// and this is the first time we recorded its chunk position.
     pub new: bool,
-    pub entity: Entity,
-    pub old_pos: Vec3,
-    pub new_pos: Vec3,
-}
-
-#[derive(Clone, Event, Debug)]
-pub struct ChunkObserverCrossChunkBorderEvent {
-    /// Same as for ChunkObserverMoveEvent.
-    pub new: bool,
-    pub entity: Entity,
     pub old_chunk: ChunkPos,
     pub new_chunk: ChunkPos,
 }

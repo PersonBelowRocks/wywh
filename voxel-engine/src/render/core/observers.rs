@@ -1,37 +1,14 @@
 use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::render::render_phase::ViewSortedRenderPhases;
-use bevy::render::render_resource::{
-    BindGroup, CachedComputePipelineId, CachedPipelineState, Pipeline,
-};
+use bevy::render::render_resource::BindGroup;
 use bevy::{
     prelude::*,
-    render::{
-        render_resource::{
-            BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor, BufferInitDescriptor,
-            BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
-            ComputePipelineDescriptor, PipelineCache, ShaderSize, SpecializedComputePipeline,
-            SpecializedComputePipelines,
-        },
-        renderer::{RenderDevice, RenderQueue},
-        Extract,
-    },
+    render::{render_resource::Buffer, Extract},
 };
-use bytemuck::cast_slice;
-use itertools::Itertools;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::render::{ChunkBatch, LODs, LevelOfDetail, LodMap, VisibleBatches};
-use crate::topo::{controller::RenderableObserverChunks, world::ChunkPos};
-use crate::util::ChunkSet;
+use crate::render::{ChunkBatch, VisibleBatches};
 
-use super::gpu_chunk::IndirectRenderDataStore;
 use super::phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
-use super::{
-    indirect::{ChunkInstanceData, IndexedIndirectArgs, IndirectChunkData},
-    shaders::BUILD_BATCH_BUFFERS_HANDLE,
-    utils::add_shader_constants,
-    DefaultBindGroupLayouts,
-};
 
 /// Copies of the indirect, instance, and count buffers for each observer so they can cull individually.
 #[derive(Resource, Clone, Default, Deref, DerefMut)]

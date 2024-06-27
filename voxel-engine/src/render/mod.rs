@@ -101,5 +101,5 @@ impl Component for ObserverBatches {
     }
 }
 
-#[derive(Component, Clone, Debug, Deref, DerefMut, dm::Constructor)]
+#[derive(Component, Clone, Debug, Deref, DerefMut, dm::Constructor, Default)]
 pub struct VisibleBatches(EntityHashSet);
