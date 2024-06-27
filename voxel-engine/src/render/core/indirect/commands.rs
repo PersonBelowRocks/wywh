@@ -1,4 +1,5 @@
 use bevy::ecs::system::lifetimeless::Read;
+use bevy::prelude::Entity;
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -15,6 +16,7 @@ use bevy::{
 };
 
 use crate::render::core::chunk_batches::RenderChunkBatches;
+use crate::render::core::observers::ObserverBatchBuffersStore;
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
@@ -29,18 +31,35 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I>
     type ItemQuery = Read<ChunkBatch>;
 
     fn render<'w>(
-        _item: &P,
+        item: &P,
         _view: ROQueryItem<'w, Self::ViewQuery>,
-        _entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
+        entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let store = param.into_inner();
 
-        let Some(bind_group) = store.bind_group.as_ref() else {
-            error!("Bind group hasn't been created for multidraw chunk quads");
+        let Some(batch) = entity else {
+            error!(
+                "Couldn't get chunk batch component for entity {}",
+                item.entity()
+            );
             return RenderCommandResult::Failure;
         };
+
+        let lod_data = store.lod(batch.lod);
+        if !lod_data.is_ready() {
+            error!(
+                "Indirect chunk data for LOD {:?} is not ready for rendering",
+                batch.lod
+            );
+            return RenderCommandResult::Failure;
+        }
+
+        let bind_group = store
+            .lod(batch.lod)
+            .quad_bind_group()
+            .expect("Bind group must be present if the LOD data is ready, which we just checked");
 
         pass.set_bind_group(I, bind_group, &[]);
 
@@ -50,46 +69,53 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I>
 
 pub struct IndirectChunkDraw;
 impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
-    type Param = (SRes<IndirectRenderDataStore>, SRes<RenderChunkBatches>);
+    type Param = (
+        SRes<IndirectRenderDataStore>,
+        SRes<ObserverBatchBuffersStore>,
+    );
 
-    type ViewQuery = ();
-    type ItemQuery = ();
+    type ViewQuery = Entity;
+    type ItemQuery = Read<ChunkBatch>;
 
     fn render<'w>(
         item: &P,
-        _view: ROQueryItem<'w, Self::ViewQuery>,
-        _entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
+        view: ROQueryItem<'w, Self::ViewQuery>,
+        entity: Option<ROQueryItem<'w, Self::ItemQuery>>,
         param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (store, batches) = (param.0.into_inner(), param.1.into_inner());
+        let (store, observer_batches) = (param.0.into_inner(), param.1.into_inner());
 
-        if !store.ready {
-            error!("Indirect render data is not ready and cannot be rendered");
+        let view_entity = view;
+        let batch_entity = item.entity();
+
+        let Some(batch) = entity else {
+            error!("Couldn't get chunk batch component for entity {batch_entity}");
+            return RenderCommandResult::Failure;
+        };
+
+        let lod_data = store.lod(batch.lod);
+        if !lod_data.is_ready() {
+            let lod = batch.lod;
+            error!("Indirect chunk data for LOD {lod:?} is not ready for rendering");
             return RenderCommandResult::Failure;
         }
 
-        let Some(batch) = batches.get(item.entity()) else {
-            error!("Batch entity wasn't present in the global render batch store");
+        let Some(observer_batch) = observer_batches.get_batch_gpu_data(view_entity, batch_entity)
+        else {
+            error!("View {view_entity} did not have any data for batch {batch_entity}");
             return RenderCommandResult::Failure;
         };
 
-        let Some(ref buffers) = batch.gpu_data else {
-            error!("Chunk batch didn't have initialized buffers");
-            return RenderCommandResult::Failure;
-        };
-
-        let index_buffer = store.chunks.buffers().index.buffer();
-
-        pass.set_index_buffer(index_buffer.slice(..), 0, IndexFormat::Uint32);
-        pass.set_vertex_buffer(0, buffers.instance.slice(..));
+        pass.set_index_buffer(lod_data.index_buffer().slice(..), 0, IndexFormat::Uint32);
+        pass.set_vertex_buffer(0, lod_data.instance_buffer().slice(..));
 
         pass.multi_draw_indexed_indirect_count(
-            &buffers.indirect,
+            &observer_batch.indirect,
             0,
-            &buffers.count,
+            &observer_batch.count,
             0,
-            store.chunks.num_chunks() as _,
+            observer_batch.num_chunks,
         );
 
         RenderCommandResult::Success

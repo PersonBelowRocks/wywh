@@ -41,6 +41,14 @@ impl ObserverBatchBuffersStore {
     pub fn clear(&mut self) {
         self.0.clear();
     }
+
+    pub fn get_batch_gpu_data(
+        &self,
+        observer_entity: Entity,
+        batch_entity: Entity,
+    ) -> Option<&ObserverBatchGpuData> {
+        self.0.get(&observer_entity)?.get(&batch_entity)
+    }
 }
 
 #[derive(Clone)]

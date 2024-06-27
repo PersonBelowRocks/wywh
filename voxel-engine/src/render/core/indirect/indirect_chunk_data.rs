@@ -249,6 +249,22 @@ impl IndirectChunkData {
         self.quad_bind_group.as_ref()
     }
 
+    pub fn index_buffer(&self) -> &Buffer {
+        self.buffers().index.buffer()
+    }
+
+    pub fn quad_buffer(&self) -> &Buffer {
+        self.buffers().quad.buffer()
+    }
+
+    pub fn instance_buffer(&self) -> &Buffer {
+        &self.buffers().instances
+    }
+
+    pub fn metadata_buffer(&self) -> &Buffer {
+        &self.buffers().metadata
+    }
+
     pub fn buffers(&self) -> &RawIndirectChunkData {
         &self.raw
     }
