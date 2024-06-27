@@ -3,7 +3,9 @@ use std::sync::atomic::Ordering;
 use bevy::{ecs::entity::EntityHashMap, math::ivec3, prelude::*};
 
 use crate::{
+    render::{ChunkBatch, ObserverBatches, VisibleBatches},
     topo::{
+        bounding_box::BoundingBox,
         world::{Chunk, ChunkPos, VoxelRealm},
         worldgen::{generator::GenerateChunk, GenerationPriority},
     },
@@ -11,34 +13,18 @@ use crate::{
 };
 
 use super::{
-    AddPermitFlagsEvent, ChunkPermitKey, LastPosition, LoadChunksEvent, LoadReasons,
-    LoadedChunkEvent, LoadshareProvider, ObserverCrossChunkBorder, ObserverLoadshare,
-    ObserverLoadshareType, ObserverSettings, PermitFlags, RemovePermitFlagsEvent,
-    UnloadChunksEvent,
+    AddPermitFlagsEvent, ChunkPermitKey, CrossChunkBorder, LastPosition, LoadChunksEvent,
+    LoadReasons, LoadedChunkEvent, LoadshareProvider, ObserverLoadshare, ObserverLoadshareType,
+    ObserverSettings, PermitFlags, RemovePermitFlagsEvent, UnloadChunksEvent,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
     ws_to_chunk_pos(trans.translation.floor().as_ivec3())
 }
 
-/// Grant unique loadshares to observers with an automatic loadshare type.
-pub fn grant_observer_loadshares(
-    mut observers: Query<(Entity, &mut ObserverLoadshare), Added<ObserverLoadshare>>,
-    mut loadshare_provider: ResMut<LoadshareProvider>,
-) {
-    for (entity, mut observer) in &mut observers {
-        if observer.0 == ObserverLoadshareType::Auto {
-            let loadshare = loadshare_provider.create_loadshare();
-            observer.0 = ObserverLoadshareType::Observer(loadshare);
-
-            debug!("Added loadshare {loadshare:?} to observer entity {entity:?}");
-        }
-    }
-}
-
 pub fn dispatch_move_events(
     mut observers: Query<(Entity, &Transform, Option<&mut LastPosition>), With<ObserverSettings>>,
-    mut chunk_border_events: EventWriter<ObserverCrossChunkBorder>,
+    mut chunk_border_events: EventWriter<CrossChunkBorder>,
     mut cmds: Commands,
 ) {
     for (entity, transform, last_pos) in &mut observers {
@@ -60,7 +46,7 @@ pub fn dispatch_move_events(
                 }
 
                 cmds.trigger_targets(
-                    ObserverCrossChunkBorder {
+                    CrossChunkBorder {
                         new: false,
                         old_chunk: last_pos.chunk_pos,
                         new_chunk: chunk_pos,
@@ -77,7 +63,7 @@ pub fn dispatch_move_events(
                 let chunk_pos = transform_chunk_pos(transform);
 
                 cmds.trigger_targets(
-                    ObserverCrossChunkBorder {
+                    CrossChunkBorder {
                         new: true,
                         old_chunk: chunk_pos,
                         new_chunk: chunk_pos,
@@ -98,7 +84,25 @@ fn chunk_pos_center_vec3(pos: ChunkPos) -> Vec3 {
     pos.as_vec3() + Vec3::splat(0.5)
 }
 
-pub fn unload_out_of_range_chunks() {}
+pub fn unload_out_of_range_chunks(
+    trigger: Trigger<CrossChunkBorder>,
+    q_observers: Query<(&ObserverBatches, &ObserverSettings)>,
+    mut q_batches: Query<&mut ChunkBatch>,
+) {
+    let observer_entity = trigger.entity();
+    let event = trigger.event();
+    let (observer_batches, settings) = q_observers.get(observer_entity).unwrap();
+
+    for &batch_entity in observer_batches.owned.iter() {
+        let mut batch = q_batches
+            .get_mut(batch_entity)
+            .expect("Batches should automatically track their own ownership with lifecycle hooks, so if this observer owns this batch, it should exist in the world");
+
+        batch
+            .chunks
+            .retain(|cpos| settings.within_range(event.new_chunk, *cpos));
+    }
+}
 
 pub fn load_in_range_chunks() {}
 

@@ -11,7 +11,7 @@ pub(super) trait MergeEvent: Sized {
 }
 
 #[derive(Clone, Event, Debug)]
-pub struct ObserverCrossChunkBorder {
+pub struct CrossChunkBorder {
     /// Indicates if this observer entity was just inserted.
     /// i.e. instead of a regular movement where its current chunk was different from its previous chunk,
     /// this movement event was because the entity didn't even have a previous chunk position,

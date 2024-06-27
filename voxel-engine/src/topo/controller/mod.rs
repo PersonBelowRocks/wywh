@@ -2,10 +2,8 @@ use std::convert::identity;
 use std::sync::atomic::AtomicBool;
 use std::{fmt, time::Duration};
 
-use bevy::{
-    prelude::*,
-    render::extract_component::{ExtractComponent, ExtractComponentPlugin},
-};
+use bevy::ecs::component::{ComponentHooks, StorageType};
+use bevy::prelude::*;
 use bitflags::bitflags;
 use enum_map::EnumMap;
 use hb::HashSet;
@@ -18,8 +16,8 @@ use observer_events::{
     unload_out_of_range_chunks,
 };
 
-use crate::render::{LevelOfDetail, VisibleBatches};
-use crate::{util::ChunkSet, EngineState};
+use crate::render::VisibleBatches;
+use crate::EngineState;
 
 use super::world::ChunkPos;
 
@@ -30,7 +28,6 @@ mod observer_events;
 mod permits;
 pub use events::*;
 
-use crate::topo::controller::observer_events::grant_observer_loadshares;
 pub use permits::*;
 
 // TODO: use ints not floats!
@@ -51,6 +48,20 @@ impl Default for ObserverSettings {
     }
 }
 
+impl ObserverSettings {
+    pub fn within_range(&self, opos: ChunkPos, cpos: ChunkPos) -> bool {
+        let diff = cpos.as_ivec3() - opos.as_ivec3();
+
+        let max_hor_diff = i32::max(diff.x.abs(), diff.z.abs()) as u32;
+        // Positive if chunk is above the observer, negative if it's below
+        let height_diff = diff.y;
+
+        max_hor_diff <= self.horizontal_range
+            && height_diff <= (self.view_distance_above as i32)
+            && height_diff >= -(self.view_distance_below as i32)
+    }
+}
+
 /// How an observer should treat its loadshare
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub(crate) enum ObserverLoadshareType {
@@ -68,7 +79,7 @@ pub(crate) enum ObserverLoadshareType {
 }
 
 /// The loadshare of an observer.
-#[derive(Default, Component, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ObserverLoadshare(pub(crate) ObserverLoadshareType);
 
 impl ObserverLoadshare {
@@ -92,6 +103,28 @@ impl ObserverLoadshare {
             ObserverLoadshareType::Observer(id) => Some(id),
             ObserverLoadshareType::Manual(id) => Some(id),
         }
+    }
+}
+
+impl Component for ObserverLoadshare {
+    const STORAGE_TYPE: StorageType = StorageType::Table;
+
+    fn register_component_hooks(hooks: &mut ComponentHooks) {
+        // Automatically create a loadshare if this component is marked as auto
+        hooks.on_insert(|mut world, entity, _id| {
+            let loadshare_type = world.get_mut::<Self>(entity).unwrap().0;
+
+            if loadshare_type == ObserverLoadshareType::Auto {
+                let mut provider = world.resource_mut::<LoadshareProvider>();
+                let loadshare_id = provider.create_loadshare();
+
+                // Need to get the entity again here because we can't hold 2 mutable references to the world at the same time.
+                world.get_mut::<Self>(entity).unwrap().0 =
+                    ObserverLoadshareType::Observer(loadshare_id);
+            }
+        });
+
+        // TODO: hook for removing an entire loadshare if this component is removed
     }
 }
 
@@ -248,13 +281,6 @@ impl Plugin for WorldController {
             (
                 dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
                 (
-                    grant_observer_loadshares,
-                    unload_out_of_range_chunks,
-                    load_in_range_chunks,
-                )
-                    .chain()
-                    .in_set(WorldControllerSystems::ObserverResponses),
-                (
                     handle_chunk_loads_and_unloads,
                     handle_permit_flag_additions,
                     handle_permit_flag_removals,
@@ -275,5 +301,31 @@ impl Plugin for WorldController {
                 .chain()
                 .run_if(in_state(EngineState::Finished)),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_observer_ranges() {
+        let settings = ObserverSettings {
+            horizontal_range: 10,
+            view_distance_above: 8,
+            view_distance_below: 5,
+        };
+
+        for x in -10..=10 {
+            for z in -10..=10 {
+                for y in -5..=8 {
+                    let cpos = ChunkPos::new(x, y, z);
+
+                    assert!(settings.within_range(ChunkPos::ZERO, cpos))
+                }
+            }
+        }
+
+        assert!(!settings.within_range(ChunkPos::ZERO, ChunkPos::new(11, 5, -7)));
     }
 }

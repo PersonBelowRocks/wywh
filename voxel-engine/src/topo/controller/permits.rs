@@ -73,6 +73,7 @@ pub enum ChunkPermitKeys<'a> {
     Entity(&'a [Entity]),
 }
 
+// TODO: maybe replace this thing with a new fancy ECS observer and component life cycle hooks based system?
 #[derive(Resource, Default)]
 pub struct ChunkEcsPermits {
     entity_keys: EntityHashMap<usize>,

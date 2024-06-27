@@ -18,6 +18,7 @@ pub use lod::*;
 use crate::util::ChunkSet;
 
 /// A batch of chunks that can be rendered
+// TODO: remove orphaned chunk batches
 #[derive(Clone, ExtractComponent)]
 pub struct ChunkBatch {
     /// The observer that owns this batch. If this is `None` then this batch is orphaned.
