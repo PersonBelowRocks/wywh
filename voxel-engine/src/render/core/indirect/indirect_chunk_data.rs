@@ -4,7 +4,8 @@ use bevy::{
     prelude::*,
     render::{
         render_resource::{
-            BindGroup, Buffer, BufferDescriptor, BufferInitDescriptor, BufferUsages, ShaderType,
+            BindGroup, BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor,
+            BufferInitDescriptor, BufferUsages, ShaderType,
         },
         renderer::{RenderDevice, RenderQueue},
     },
@@ -225,16 +226,23 @@ impl RawIndirectChunkData {
 pub struct IndirectChunkData {
     raw: RawIndirectChunkData,
     quad_bind_group: Option<BindGroup>,
+    quad_bg_layout: BindGroupLayout,
     metadata: ChunkIndexMap<GpuChunkMetadata>,
 }
 
 impl IndirectChunkData {
-    pub fn new(gpu: &RenderDevice) -> Self {
+    pub fn new(gpu: &RenderDevice, quad_bg_layout: BindGroupLayout) -> Self {
         Self {
             raw: RawIndirectChunkData::new(gpu),
             quad_bind_group: None,
+            quad_bg_layout,
             metadata: ChunkIndexMap::default(),
         }
+    }
+
+    /// Whether or not this indirect chunk data is in a state where it can be used for rendering
+    pub fn is_ready(&self) -> bool {
+        self.quad_bind_group.is_some() && !self.metadata.is_empty()
     }
 
     pub fn quad_bind_group(&self) -> Option<&BindGroup> {
@@ -268,6 +276,28 @@ impl IndirectChunkData {
         });
 
         self.metadata = new_metadata;
+    }
+
+    fn update_quad_bind_group(&mut self, gpu: &RenderDevice) {
+        // Remove our old bind group
+        self.quad_bind_group = None;
+
+        let quad_vram_array = &self.buffers().quad;
+
+        // We only make a new bind group if the buffer is long enough to be bound
+        if quad_vram_array.vram_bytes() > 0 {
+            let quad_buffer = quad_vram_array.buffer();
+
+            let bg = gpu.create_bind_group(
+                "ICD_quad_bind_group",
+                &self.quad_bg_layout,
+                &BindGroupEntries::single(quad_buffer.as_entire_buffer_binding()),
+            );
+
+            debug!("Rebuilt ICD quad bind group");
+
+            self.quad_bind_group = Some(bg);
+        }
     }
 
     pub fn upload_chunks(
@@ -419,6 +449,7 @@ impl IndirectChunkData {
         debug!("Successfully uploaded indices and quads to the GPU.");
 
         self.update_metadata(gpu, new_bounds);
+        self.update_quad_bind_group(gpu);
     }
 
     pub fn remove_chunks(&mut self, gpu: &RenderDevice, queue: &RenderQueue, chunks: ChunkSet) {
@@ -466,6 +497,7 @@ impl IndirectChunkData {
         self.raw.quad.remove(gpu, queue, &remove_quads);
 
         self.update_metadata(gpu, chunks_to_retain);
+        self.update_quad_bind_group(gpu);
     }
 
     #[inline]

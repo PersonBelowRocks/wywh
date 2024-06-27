@@ -15,7 +15,10 @@ use bevy::{
 };
 
 use crate::{
-    render::meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
+    render::{
+        meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
+        LODs, LevelOfDetail, LodMap,
+    },
     util::{ChunkMap, ChunkSet},
 };
 
@@ -25,177 +28,123 @@ use super::{
 };
 
 pub fn extract_chunk_mesh_data(
-    mut unprepared: ResMut<UnpreparedChunkMeshes>,
+    mut unprepared: ResMut<AddChunkMeshes>,
     mut remove_meshes: ResMut<RemoveChunkMeshes>,
     mut main_world: ResMut<MainWorld>,
 ) {
-    main_world.resource_scope(
-        |_world, mut extractable_meshes: Mut<ExtractableChunkMeshData>| {
-            let ExtractableChunkMeshData {
-                active,
-                added,
-                remove,
-                should_extract,
-            } = extractable_meshes.as_mut();
-
-            if !*should_extract {
-                return;
-            }
-
-            *should_extract = false;
-
-            let mut extracted = 0;
-            let mut removed = 0;
-
-            // Remove meshes from the render world
-            for chunk_pos in remove.drain() {
-                unprepared.remove(chunk_pos);
-                remove_meshes.set(chunk_pos);
-                removed += 1;
-            }
-
-            // Extract all chunks that were added
-            for (chunk_pos, mesh) in added.drain() {
-                // Only extract chunks if they were present in the activity tracker
-                if let Some(active) = active.get_mut(chunk_pos) {
-                    // We avoid empty chunks. The mesh controller should only queue non-empty chunks for extraction but
-                    // we do an additional error check here just in case.
-                    if active.status == ChunkMeshStatus::Empty {
-                        warn!("Can't extract chunk mesh for {chunk_pos} because it was marked as empty.");
-                        continue;
-                    }
-
-                    unprepared.set(chunk_pos, mesh);
-
-                    // mark the extracted chunk as being extracted
-                    active.status = ChunkMeshStatus::Extracted;
-                    extracted += 1;
-                } else {
-                    warn!("Couldn't extract chunk {chunk_pos} because it wasn't marked as an active chunk.")
-                }
-            }
-
-            if extracted > 0 {
-                debug!("Extracted {} chunk meshes to render world", extracted);
-            }
-
-            if removed > 0 {
-                debug!("Removed {} chunk meshes from render world", removed);
-            }
-        },
-    );
+    // TODO: new extract logic that considers mesh LODs
+    todo!()
 }
 
 /// Untrack chunk meshes in the render world and remove their data on the GPU
 pub fn remove_chunk_meshes(
     mut remove: ResMut<RemoveChunkMeshes>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
-    mut rebuild: ResMut<ShouldUpdateChunkDataDependants>,
+    mut rebuild: ResMut<UpdateIndirectLODs>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
     let gpu = gpu.as_ref();
     let queue = queue.as_ref();
 
-    // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
-    // is quite sensitive to running with empty vectors and maps.
-    if remove.is_empty() {
-        return;
+    let remove = mem::replace(&mut remove.0, LodMap::default());
+
+    for (lod, chunks) in remove.into_iter() {
+        // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
+        // is quite sensitive to running with empty vectors and maps.
+        if chunks.is_empty() {
+            return;
+        }
+
+        indirect_data.lod_mut(lod).remove_chunks(gpu, queue, chunks);
+        // This LOD had its indirect data updated so we note it down to update the dependants of it later
+        rebuild.insert_lod(lod);
     }
-
-    let remove = mem::replace(&mut remove.0, ChunkSet::default());
-    let removed = remove.len();
-    indirect_data.chunks.remove_chunks(gpu, queue, remove);
-
-    rebuild.0 = true;
-
-    debug!("Removed {removed} chunks from the render world");
 }
 
 /// Upload unprepared chunk meshes to the GPU and track them in the render world
 pub fn upload_chunk_meshes(
-    mut unprepared: ResMut<UnpreparedChunkMeshes>,
+    mut add: ResMut<AddChunkMeshes>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
-    mut rebuild: ResMut<ShouldUpdateChunkDataDependants>,
+    mut update: ResMut<UpdateIndirectLODs>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
     let gpu = gpu.as_ref();
     let queue = queue.as_ref();
 
-    // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
-    // is quite sensitive to running with empty vectors and maps.
-    if unprepared.is_empty() {
-        return;
+    let add = mem::replace(&mut add.0, LodMap::default());
+
+    for (lod, meshes) in add.into_iter() {
+        // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
+        // is quite sensitive to running with empty vectors and maps.
+        if meshes.is_empty() {
+            continue;
+        }
+
+        indirect_data.lod_mut(lod).upload_chunks(gpu, queue, meshes);
+        // This LOD had its indirect data updated so we note it down to update the dependants of it later
+        update.insert_lod(lod);
     }
-
-    let meshes = mem::replace(&mut unprepared.0, ChunkMap::default());
-    let added = meshes.len();
-    indirect_data.chunks.upload_chunks(gpu, queue, meshes);
-
-    rebuild.0 = true;
-
-    debug!("Uploaded and prepared {added} chunks");
 }
 
 pub fn update_indirect_chunk_data_dependants(
-    mut update: ResMut<ShouldUpdateChunkDataDependants>,
-    mut indirect_data: ResMut<IndirectRenderDataStore>,
+    mut update: ResMut<UpdateIndirectLODs>,
     mut batches: ResMut<RenderChunkBatches>,
     mut observer_batches: ResMut<ObserverBatchBuffersStore>,
-    default_layouts: Res<DefaultBindGroupLayouts>,
-    gpu: Res<RenderDevice>,
 ) {
-    if update.0 {
+    for lod in update.contained_lods() {
+        // TODO: need to split this up into per-LOD stuff as well
         batches.clear();
         observer_batches.clear();
-
-        let quad_vram_array = &indirect_data.chunks.buffers().quad;
-
-        // we only make a bind group if the buffer is long enough to be bound
-        if quad_vram_array.vram_bytes() > 0 {
-            let quad_buffer = quad_vram_array.buffer();
-
-            let bg = gpu.create_bind_group(
-                "ICD_quad_bind_group",
-                &default_layouts.icd_quad_bg_layout,
-                &BindGroupEntries::single(quad_buffer.as_entire_buffer_binding()),
-            );
-
-            debug!("Rebuilt chunk quad bind group");
-
-            indirect_data.bind_group = Some(bg);
-
-            update.0 = false;
-        }
     }
+
+    // We just processed the updated LODs so we clear the update tracker
+    update.0 = LODs::empty();
 }
 
 /// A store of unprepared chunk meshes
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct UnpreparedChunkMeshes(pub ChunkMap<ChunkMeshData>);
+pub struct AddChunkMeshes(pub LodMap<ChunkMap<ChunkMeshData>>);
 
 /// A store of chunks that should be removed from the render world
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct RemoveChunkMeshes(pub ChunkSet);
+pub struct RemoveChunkMeshes(pub LodMap<ChunkSet>);
 
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct ShouldUpdateChunkDataDependants(pub bool);
+pub struct UpdateIndirectLODs(pub LODs);
 
 #[derive(Resource)]
 pub struct IndirectRenderDataStore {
-    // TODO: split into LODs
-    pub chunks: IndirectChunkData,
-    pub bind_group: Option<BindGroup>,
+    lods: LodMap<IndirectChunkData>,
 }
 
 impl FromWorld for IndirectRenderDataStore {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
+        let default_bg_layouts = world.resource::<DefaultBindGroupLayouts>();
 
         Self {
-            chunks: IndirectChunkData::new(gpu),
-            bind_group: None,
+            lods: LodMap::from_fn(|_lod| {
+                Some(IndirectChunkData::new(
+                    gpu,
+                    default_bg_layouts.icd_quad_bg_layout.clone(),
+                ))
+            }),
         }
+    }
+}
+
+impl IndirectRenderDataStore {
+    pub fn lod(&self, lod: LevelOfDetail) -> &IndirectChunkData {
+        self.lods
+            .get(lod)
+            .expect("This LOD map should not have any empty values")
+    }
+
+    pub fn lod_mut(&mut self, lod: LevelOfDetail) -> &mut IndirectChunkData {
+        self.lods
+            .get_mut(lod)
+            .expect("This LOD map should not have any empty values")
     }
 }

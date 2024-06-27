@@ -38,7 +38,7 @@ use chunk_batches::{
 };
 use gpu_chunk::{
     remove_chunk_meshes, update_indirect_chunk_data_dependants, upload_chunk_meshes,
-    IndirectRenderDataStore, RemoveChunkMeshes, ShouldUpdateChunkDataDependants,
+    IndirectRenderDataStore, RemoveChunkMeshes, UpdateIndirectLODs,
 };
 use graph::{
     BuildBatchBuffersNode, ChunkPrepassNode, ChunkRenderNode, GpuFrustumCullBatchesNode, Nodes,
@@ -57,7 +57,7 @@ use crate::data::{
 };
 
 use self::{
-    gpu_chunk::{extract_chunk_mesh_data, UnpreparedChunkMeshes},
+    gpu_chunk::{extract_chunk_mesh_data, AddChunkMeshes},
     gpu_registries::{
         extract_texreg_faces, prepare_gpu_registry_data, ExtractedTexregFaces, RegistryBindGroup,
     },
@@ -95,10 +95,10 @@ impl Plugin for RenderCore {
             .init_resource::<SpecializedComputePipelines<BuildBatchBuffersPipeline>>()
             .init_resource::<SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>>()
             // Misc
-            .init_resource::<ShouldUpdateChunkDataDependants>()
+            .init_resource::<UpdateIndirectLODs>()
             .init_resource::<RemoveChunkMeshes>()
             .init_resource::<RenderChunkBatches>()
-            .init_resource::<UnpreparedChunkMeshes>();
+            .init_resource::<AddChunkMeshes>();
 
         render_app
             .add_render_command::<Opaque3dPrepass, IndirectChunksPrepass>()

@@ -18,14 +18,15 @@ use crate::render::core::chunk_batches::RenderChunkBatches;
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
+use crate::render::ChunkBatch;
 
-pub struct SetIndirectChunkBindGroup<const I: usize>;
-impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkBindGroup<I> {
+pub struct SetIndirectChunkQuads<const I: usize>;
+impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I> {
     type Param = SRes<IndirectRenderDataStore>;
 
     type ViewQuery = ();
 
-    type ItemQuery = ();
+    type ItemQuery = Read<ChunkBatch>;
 
     fn render<'w>(
         _item: &P,
@@ -99,7 +100,7 @@ pub type IndirectChunksRender = (
     SetItemPipeline,
     SetMeshViewBindGroup<0>,
     SetRegistryBindGroup<1>,
-    SetIndirectChunkBindGroup<2>,
+    SetIndirectChunkQuads<2>,
     IndirectChunkDraw,
 );
 
@@ -107,6 +108,6 @@ pub type IndirectChunksPrepass = (
     SetItemPipeline,
     SetPrepassViewBindGroup<0>,
     SetRegistryBindGroup<1>,
-    SetIndirectChunkBindGroup<2>,
+    SetIndirectChunkQuads<2>,
     IndirectChunkDraw,
 );

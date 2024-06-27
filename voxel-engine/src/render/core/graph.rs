@@ -1,42 +1,35 @@
-use std::sync::atomic::Ordering;
-
 use bevy::{
     core_pipeline::prepass::ViewPrepassTextures,
     ecs::{
         entity::{EntityHash, EntityHashSet},
-        observer,
         query::QueryItem,
-        system::lifetimeless::{Read, SResMut},
+        system::lifetimeless::Read,
     },
     prelude::*,
     render::{
         camera::ExtractedCamera,
         diagnostic::RecordDiagnostics,
         render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
-        render_phase::{BinnedPhaseItem, TrackedRenderPass, ViewSortedRenderPhases},
+        render_phase::{TrackedRenderPass, ViewSortedRenderPhases},
         render_resource::{
-            BindGroupEntries, BufferInitDescriptor, BufferUsages, CommandEncoderDescriptor,
-            ComputePassDescriptor, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
-            ShaderSize, StoreOp,
+            CommandEncoderDescriptor, ComputePassDescriptor, PipelineCache,
+            RenderPassColorAttachment, RenderPassDescriptor, ShaderSize, StoreOp,
         },
-        renderer::{RenderContext, RenderDevice, RenderQueue},
+        renderer::RenderContext,
         view::{ViewDepthTexture, ViewTarget, ViewUniformOffset},
     },
 };
-use bytemuck::{cast_slice, Contiguous};
 
-use crate::render::{ChunkBatch, ObserverBatches, VisibleBatches};
+use crate::render::{ChunkBatch, VisibleBatches};
 
 use super::{
     chunk_batches::{
         BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId, PopulateBatchBuffers,
         RenderChunkBatches,
     },
-    gpu_chunk::IndirectRenderDataStore,
     indirect::IndexedIndirectArgs,
     observers::ObserverBatchBuffersStore,
     phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem},
-    DefaultBindGroupLayouts,
 };
 
 pub struct CoreGraphPlugin;
@@ -222,18 +215,15 @@ impl FromWorld for BuildBatchBuffersNode {
 impl Node for BuildBatchBuffersNode {
     fn run<'w>(
         &self,
-        graph: &mut RenderGraphContext,
+        _graph: &mut RenderGraphContext,
         ctx: &mut RenderContext<'w>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        let default_layouts = world.resource::<DefaultBindGroupLayouts>();
-        let indirect_data = world.resource::<IndirectRenderDataStore>();
         let pipeline_id = world.resource::<BuildBatchBuffersPipelineId>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let render_chunk_batches = world.resource::<RenderChunkBatches>();
         let populate_batches = world.resource::<PopulateBatchBuffers>();
         let observer_batch_buf_store = world.resource::<ObserverBatchBuffersStore>();
-        let gpu = ctx.render_device();
 
         // Return early if there's no batches whose buffers need populating
         if populate_batches.is_empty() {

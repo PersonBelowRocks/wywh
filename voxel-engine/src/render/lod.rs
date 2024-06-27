@@ -25,12 +25,22 @@ pub enum LevelOfDetail {
 }
 
 /// Maps levels of detail to values of a type.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct LodMap<T>(EnumMap<LevelOfDetail, Option<T>>);
+
+impl<T> Default for LodMap<T> {
+    fn default() -> Self {
+        Self(EnumMap::from_fn(|_| None))
+    }
+}
 
 impl<T> LodMap<T> {
     pub fn new() -> Self {
         Self(EnumMap::default())
+    }
+
+    pub fn from_fn<F: Fn(LevelOfDetail) -> Option<T>>(f: F) -> Self {
+        Self(EnumMap::from_fn(f))
     }
 
     pub fn get(&self, lod: LevelOfDetail) -> Option<&T> {
@@ -67,6 +77,12 @@ impl<T> LodMap<T> {
         self.0
             .iter()
             .filter_map(|(lod, item)| item.as_ref().map(|item| (lod, item)))
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = (LevelOfDetail, T)> {
+        self.0
+            .into_iter()
+            .filter_map(|(lod, item)| item.map(|item| (lod, item)))
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (LevelOfDetail, &mut T)> {
@@ -123,7 +139,7 @@ impl PartialOrd for LevelOfDetail {
 
 bitflags! {
     /// A set of LODs as flags
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
     pub struct LODs: u8 {
         const X1 = 1 << LevelOfDetail::X1.as_byte();
         const X2 = 1 << LevelOfDetail::X2.as_byte();

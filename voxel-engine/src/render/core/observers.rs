@@ -34,7 +34,6 @@ use super::{
 };
 
 /// Copies of the indirect, instance, and count buffers for each observer so they can cull individually.
-// TODO: clear this out whenever theres newer data afoot
 #[derive(Resource, Clone, Default, Deref, DerefMut)]
 pub struct ObserverBatchBuffersStore(EntityHashMap<ObserverBatches>);
 

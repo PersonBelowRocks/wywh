@@ -213,11 +213,13 @@ pub fn initialize_and_queue_batch_buffers(
                     create_observer_indirect_buffer(&gpu, batch.num_chunks());
                 let observer_count_buf = create_count_buffer(&gpu);
 
+                let lod_data = &store.lod(batch.lod);
+
                 let cull_bind_group = gpu.create_bind_group(
                     Some("observer_batch_frustum_cull_bind_group"),
                     &default_layouts.observer_batch_cull_layout,
                     &BindGroupEntries::sequential((
-                        store.chunks.buffers().instances.as_entire_binding(),
+                        lod_data.buffers().instances.as_entire_binding(),
                         view_uniforms_binding.clone(),
                         observer_indirect_buf.as_entire_binding(),
                         observer_count_buf.as_entire_binding(),
@@ -236,7 +238,7 @@ pub fn initialize_and_queue_batch_buffers(
 
                 let factory = || {
                     // An array of the indices to the chunk metadata on the GPU.
-                    let chunk_metadata_indices = batch.get_metadata_indices(&store.chunks);
+                    let chunk_metadata_indices = batch.get_metadata_indices(&lod_data);
                     let metadata_index_buffer =
                         gpu.create_buffer_with_data(&BufferInitDescriptor {
                             label: Some("BBB_chunk_metadata_indices_buffer"),
@@ -244,7 +246,7 @@ pub fn initialize_and_queue_batch_buffers(
                             contents: cast_slice(&chunk_metadata_indices),
                         });
 
-                    let metadata_buffer = &store.chunks.buffers().metadata;
+                    let metadata_buffer = &lod_data.buffers().metadata;
                     let render_batch_indirect_buf = &render_batches
                         .get(batch_entity)
                         .expect("We just inserted the render batch for this entity")
