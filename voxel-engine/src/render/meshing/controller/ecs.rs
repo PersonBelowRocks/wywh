@@ -12,7 +12,7 @@ use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
     topo::{
-        controller::{BatchFlags, PermitLostFlagsEvent, VoxelWorldTick},
+        controller::{BatchFlags, BatchMembership, RemovedBatchChunks, VoxelWorldTick},
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ObserverSettings,
     },
@@ -75,67 +75,34 @@ pub fn insert_chunks(
 ) {
     let finished = workers.get_finished_meshes();
 
-    let ExtractableChunkMeshData {
-        active,
-        remove,
-        should_extract: _,
-        added,
-    } = meshes.as_mut();
-
     for mesh in finished.into_iter() {
         if !realm.has_render_permit(mesh.pos) {
             continue;
         }
 
-        let existing: &mut TimedChunkMeshStatus =
-            active.entry(mesh.pos).or_insert(TimedChunkMeshStatus {
-                generation: mesh.generation,
-                status: ChunkMeshStatus::from_mesh_data(&mesh.data),
-            });
-
-        // If the existing chunk's generation is less than or equal to the new chunk's generation, then we
-        // want to update both the status and the generation, and also add the chunk mesh to the extract data.
-        // This will be done both if the existing chunk is older than the new one, or if we just added (i.e., generation is the same)
-        // a chunk. If we just added the chunk we also want to run this logic because we want to extract its mesh data.
-        if existing.generation <= mesh.generation {
-            existing.generation = mesh.generation;
-            existing.status = ChunkMeshStatus::from_mesh_data(&mesh.data);
-
-            match existing.status {
-                // If the chunk mesh is empty, we remove it from the render world
-                ChunkMeshStatus::Empty => {
-                    remove.set(mesh.pos);
-                }
-                // If it's filled, extract it
-                ChunkMeshStatus::Filled => {
-                    if realm.has_render_permit(mesh.pos) {
-                        added.set(mesh.pos, mesh.data);
-                    }
-                }
-                // We just updated this field and know it can't be any of these values
-                ChunkMeshStatus::Unfulfilled | ChunkMeshStatus::Extracted => unreachable!(),
-            }
-        }
+        meshes.add_chunk_mesh(mesh.pos, mesh.tick, mesh.data);
     }
 }
 
 /// Remove the extracted chunks from the render world when their render permits are revoked
 pub fn remove_chunks(
     mut meshes: ResMut<ExtractableChunkMeshData>,
-    mut events: EventReader<PermitLostFlagsEvent>,
+    mut events: EventReader<RemovedBatchChunks>,
+    members: Res<BatchMembership>,
     mut builder: ResMut<MeshBuilder>,
 ) {
     let mut remove = ChunkSet::with_capacity(events.len());
     for event in events.read() {
-        if event.lost_flags.contains(BatchFlags::RENDER) {
-            remove.set(event.chunk_pos);
+        for chunk in event.chunks.iter() {
+            if !members.has_flags(chunk, BatchFlags::RENDER) {
+                remove.set(chunk);
+            }
         }
     }
 
     builder.remove_pending(&remove);
     for chunk in remove.iter() {
-        meshes.remove.set(chunk);
-        meshes.active.remove(chunk);
+        meshes.remove_chunk(chunk)
     }
 }
 

@@ -60,7 +60,7 @@ impl BatchedChunk {
 }
 
 impl BatchMembership {
-    pub fn add(&mut self, chunk: ChunkPos, batch: Entity) {
+    pub(super) fn add(&mut self, chunk: ChunkPos, batch: Entity) {
         self.0
             .entry(chunk)
             .and_modify(|batched| {
@@ -70,7 +70,7 @@ impl BatchMembership {
             .or_insert_with(|| BatchedChunk::new(&[batch]));
     }
 
-    pub fn remove(&mut self, chunk: ChunkPos, batch: Entity) {
+    pub(super) fn remove(&mut self, chunk: ChunkPos, batch: Entity) {
         match self.0.entry(chunk) {
             Entry::Occupied(mut entry) => {
                 let batched = entry.get_mut();
@@ -87,6 +87,12 @@ impl BatchMembership {
 
     pub fn get(&self, chunk: ChunkPos) -> Option<&EntityHashSet> {
         self.0.get(chunk).map(|batched| &batched.in_batches)
+    }
+
+    pub fn has_flags(&self, chunk: ChunkPos, flags: BatchFlags) -> bool {
+        self.0
+            .get(chunk)
+            .is_some_and(|batched| batched.cached_flags.unwrap().contains(flags))
     }
 
     fn set_cached_flags(&mut self, chunk: ChunkPos, flags: BatchFlags) {
@@ -122,6 +128,7 @@ pub fn update_cached_chunk_flags(
 /// A batch of chunks
 #[derive(Clone, ExtractComponent)]
 pub struct ChunkBatch {
+    // TODO: a lot of these fields should be private, and only updated through triggers
     pub owner: Entity,
     pub flags: BatchFlags,
     pub chunks: ChunkSet,

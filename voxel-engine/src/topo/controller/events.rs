@@ -5,11 +5,6 @@ use crate::util::ChunkSet;
 
 use super::{error::EventPosMismatch, BatchFlags, LoadReasons, LoadshareId};
 
-pub(super) trait MergeEvent: Sized {
-    fn pos(&self) -> ChunkPos;
-    fn merge(&mut self, other: Self) -> Result<(), EventPosMismatch>;
-}
-
 #[derive(Clone, Event, Debug)]
 pub struct CrossChunkBorder {
     /// Indicates if this observer entity was just inserted.
@@ -67,11 +62,11 @@ pub struct AddBatchFlags(pub BatchFlags);
 #[derive(Clone, Event, Debug)]
 pub struct RemoveBatchFlags(pub BatchFlags);
 
-/// Triggered after a permit lost some flags across all loadshares.
+///
 #[derive(Clone, Event, Debug)]
-pub struct PermitLostFlagsEvent {
-    pub chunk_pos: ChunkPos,
-    pub lost_flags: BatchFlags,
+pub struct RemovedBatchChunks {
+    pub chunks: ChunkSet,
+    pub batch: Entity,
 }
 
 // TODO: loadshare remove event

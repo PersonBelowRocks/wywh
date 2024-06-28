@@ -51,8 +51,6 @@ pub fn update_spatial_debug_text(
         .ok()
         .map(|cref| cref.flags());
 
-    let mesh = meshes.active.get(chunk_pos);
-
     for mut text in &mut q {
         text.sections = [
             format!("x: {:.5}\n", pos.x),
@@ -62,7 +60,6 @@ pub fn update_spatial_debug_text(
             format!("load reasons: {load_reasons:?}\n"),
             format!("chunk flags: {chunk_flags:?}\n"),
             format!("\n"),
-            format!("mesh: {mesh:?}"),
         ]
         .map(text_section)
         .to_vec();

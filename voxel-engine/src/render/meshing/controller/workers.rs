@@ -102,7 +102,7 @@ impl Worker {
                         params.finished.send(FinishedChunkData {
                             data: output,
                             pos: cmd.pos,
-                            generation: cmd.generation
+                            tick: cmd.generation
                         }).unwrap();
                     }
                     Err(ChunkMeshingError::ChunkManagerError(error)) => {
@@ -138,7 +138,7 @@ impl Worker {
 pub struct FinishedChunkData {
     pub pos: ChunkPos,
     pub data: ChunkMeshData,
-    pub generation: u64,
+    pub tick: u64,
 }
 
 #[derive(Copy, Clone)]

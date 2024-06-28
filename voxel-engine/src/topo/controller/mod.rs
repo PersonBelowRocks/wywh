@@ -302,7 +302,7 @@ impl Plugin for WorldController {
             .add_event::<UnloadedChunkEvent>()
             .add_event::<AddBatchFlags>()
             .add_event::<RemoveBatchFlags>()
-            .add_event::<PermitLostFlagsEvent>();
+            .add_event::<RemovedBatchChunks>();
 
         app.observe(update_observer_batches)
             .observe(add_batch_flags)

@@ -9,8 +9,7 @@ use crate::topo::world::{
 
 use super::{
     AddBatchFlags, LoadChunksEvent, LoadedChunkEvent, LoadshareMap, LoadshareProvider,
-    PermitLostFlagsEvent, RemoveBatchFlags, UnloadChunksEvent, UnloadedChunkEvent,
-    WorldControllerSettings,
+    RemoveBatchFlags, UnloadChunksEvent, UnloadedChunkEvent, WorldControllerSettings,
 };
 
 #[derive(Bundle)]
