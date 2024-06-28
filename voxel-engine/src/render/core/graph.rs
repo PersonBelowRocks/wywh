@@ -20,7 +20,7 @@ use bevy::{
     },
 };
 
-use crate::render::{ChunkBatch, VisibleBatches};
+use crate::topo::controller::{ChunkBatch, VisibleBatches};
 
 use super::{
     chunk_batches::{

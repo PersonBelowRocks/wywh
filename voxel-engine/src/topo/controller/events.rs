@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::topo::world::ChunkPos;
 use crate::util::ChunkSet;
 
-use super::{error::EventPosMismatch, LoadReasons, LoadshareId, PermitFlags};
+use super::{error::EventPosMismatch, BatchFlags, LoadReasons, LoadshareId};
 
 pub(super) trait MergeEvent: Sized {
     fn pos(&self) -> ChunkPos;
@@ -62,24 +62,16 @@ pub struct UnloadedChunkEvent {
 }
 
 #[derive(Clone, Event, Debug)]
-pub struct AddPermitFlagsEvent {
-    pub loadshare: LoadshareId,
-    pub add_flags: PermitFlags,
-    pub chunks: ChunkSet,
-}
+pub struct AddBatchFlags(pub BatchFlags);
 
 #[derive(Clone, Event, Debug)]
-pub struct RemovePermitFlagsEvent {
-    pub loadshare: LoadshareId,
-    pub remove_flags: PermitFlags,
-    pub chunks: ChunkSet,
-}
+pub struct RemoveBatchFlags(pub BatchFlags);
 
 /// Triggered after a permit lost some flags across all loadshares.
 #[derive(Clone, Event, Debug)]
 pub struct PermitLostFlagsEvent {
     pub chunk_pos: ChunkPos,
-    pub lost_flags: PermitFlags,
+    pub lost_flags: BatchFlags,
 }
 
 // TODO: loadshare remove event

@@ -6,7 +6,7 @@ use bevy::{
     render::{render_resource::Buffer, Extract},
 };
 
-use crate::render::{ChunkBatch, VisibleBatches};
+use crate::topo::controller::{ChunkBatch, VisibleBatches};
 
 use super::phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
 

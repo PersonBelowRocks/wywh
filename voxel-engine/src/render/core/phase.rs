@@ -11,7 +11,7 @@ use bevy::{
     },
 };
 
-use crate::render::LevelOfDetail;
+use crate::render::lod::LevelOfDetail;
 
 #[derive(Clone)]
 pub struct PrepassChunkPhaseItem {

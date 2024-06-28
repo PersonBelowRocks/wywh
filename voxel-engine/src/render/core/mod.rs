@@ -55,6 +55,7 @@ use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     texture::GpuFaceTexture,
 };
+use crate::topo::controller::ChunkBatch;
 
 use self::{
     gpu_chunk::{extract_chunk_mesh_data, AddChunkMeshes},
@@ -65,7 +66,6 @@ use self::{
 };
 
 use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
-use super::{ChunkBatch, ObserverBatches, VisibleBatches};
 
 pub struct RenderCore;
 

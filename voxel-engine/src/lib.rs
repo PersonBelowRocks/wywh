@@ -21,9 +21,7 @@ use mip_texture_array::MippedArrayTexturePlugin;
 
 use topo::{
     block::FullBlock,
-    controller::{
-        ChunkEcsPermits, WorldController, WorldControllerSettings, WorldControllerSystems,
-    },
+    controller::{WorldController, WorldControllerSettings, WorldControllerSystems},
     world::{realm::ChunkManagerResource, ChunkManager},
 };
 
@@ -119,6 +117,5 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
 
     let chunk_manager = ChunkManager::new(void);
 
-    cmds.init_resource::<ChunkEcsPermits>();
     cmds.insert_resource(ChunkManagerResource(Arc::new(chunk_manager)));
 }

@@ -15,7 +15,7 @@ use bevy::{
 use bytemuck::cast_slice;
 
 use crate::{
-    render::{ChunkBatch, LevelOfDetail, VisibleBatches},
+    topo::controller::{ChunkBatch, VisibleBatches},
     util::ChunkSet,
 };
 

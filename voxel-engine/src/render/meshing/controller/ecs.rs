@@ -12,7 +12,7 @@ use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
     topo::{
-        controller::{PermitFlags, PermitLostFlagsEvent},
+        controller::{BatchFlags, PermitLostFlagsEvent},
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ObserverSettings,
     },
@@ -132,7 +132,7 @@ pub fn remove_chunks(
 ) {
     let mut remove = ChunkSet::with_capacity(events.len());
     for event in events.read() {
-        if event.lost_flags.contains(PermitFlags::RENDER) {
+        if event.lost_flags.contains(BatchFlags::RENDER) {
             remove.set(event.chunk_pos);
         }
     }

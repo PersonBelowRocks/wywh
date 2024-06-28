@@ -4,11 +4,7 @@ use bevy::{
 };
 use ve::{
     render::meshing::controller::ExtractableChunkMeshData,
-    topo::{
-        controller::{ChunkPermitKey, LastPosition},
-        world::VoxelRealm,
-        ObserverSettings,
-    },
+    topo::{controller::LastPosition, world::VoxelRealm, ObserverSettings},
     util::ws_to_chunk_pos,
 };
 use voxel_engine::{data::tile::Face, topo::world::Chunk};
@@ -43,11 +39,6 @@ pub fn update_spatial_debug_text(
     let pos = player_q.single().translation;
     let chunk_pos = ws_to_chunk_pos(pos.floor().as_ivec3());
 
-    let permit_flags = realm
-        .permits()
-        .get(ChunkPermitKey::Chunk(chunk_pos))
-        .map(|permit| permit.cached_flags);
-
     let load_reasons = realm
         .cm()
         .get_loaded_chunk(chunk_pos, true)
@@ -70,7 +61,6 @@ pub fn update_spatial_debug_text(
             format!("chunk: {}\n", chunk_pos),
             format!("load reasons: {load_reasons:?}\n"),
             format!("chunk flags: {chunk_flags:?}\n"),
-            format!("permit flags: {permit_flags:?}\n"),
             format!("\n"),
             format!("mesh: {mesh:?}"),
         ]

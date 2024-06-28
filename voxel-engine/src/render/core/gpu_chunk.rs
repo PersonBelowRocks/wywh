@@ -16,8 +16,8 @@ use bevy::{
 
 use crate::{
     render::{
+        lod::{LODs, LevelOfDetail, LodMap},
         meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
-        LODs, LevelOfDetail, LodMap,
     },
     util::{ChunkMap, ChunkSet},
 };

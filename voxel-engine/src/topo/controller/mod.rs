@@ -9,12 +9,9 @@ use bitflags::bitflags;
 use enum_map::EnumMap;
 use hb::HashSet;
 
-use handle_events::{
-    handle_chunk_loads_and_unloads, handle_permit_flag_additions, handle_permit_flag_removals,
-};
+use handle_events::handle_chunk_loads_and_unloads;
 use observer_events::{dispatch_move_events, generate_chunks_with_priority};
 
-use crate::render::VisibleBatches;
 use crate::EngineState;
 
 use super::bounding_box::BoundingBox;
@@ -24,10 +21,10 @@ mod error;
 mod events;
 mod handle_events;
 mod observer_events;
-mod permits;
 pub use events::*;
 
-pub use permits::*;
+mod batch;
+pub use batch::*;
 
 // TODO: use ints not floats!
 #[derive(Clone, Component, Debug)]
@@ -286,21 +283,15 @@ impl Plugin for WorldController {
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()
             .add_event::<UnloadedChunkEvent>()
-            .add_event::<AddPermitFlagsEvent>()
-            .add_event::<RemovePermitFlagsEvent>()
+            .add_event::<AddBatchFlags>()
+            .add_event::<RemoveBatchFlags>()
             .add_event::<PermitLostFlagsEvent>();
 
         app.add_systems(
             FixedPostUpdate,
             (
                 dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
-                (
-                    handle_chunk_loads_and_unloads,
-                    handle_permit_flag_additions,
-                    handle_permit_flag_removals,
-                )
-                    .chain()
-                    .in_set(WorldControllerSystems::CoreEvents),
+                handle_chunk_loads_and_unloads.in_set(WorldControllerSystems::CoreEvents),
                 generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),
             ),
         );

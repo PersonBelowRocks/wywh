@@ -20,7 +20,7 @@ use crate::render::core::observers::ObserverBatchBuffersStore;
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
-use crate::render::ChunkBatch;
+use crate::topo::controller::ChunkBatch;
 
 pub struct SetIndirectChunkQuads<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I> {

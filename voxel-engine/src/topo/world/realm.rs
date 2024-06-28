@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use bevy::{
     ecs::system::{Res, SystemParam},
-    prelude::Resource,
+    prelude::{Query, Resource},
 };
 
 use crate::topo::controller::{
-    ChunkEcsPermits, ChunkPermitKey, LoadshareId, LoadshareProvider, PermitFlags,
+    BatchFlags, BatchMembership, ChunkBatch, LoadshareId, LoadshareProvider,
 };
 
 use super::{chunk_manager::ChunkManager, ChunkPos};
@@ -15,13 +15,14 @@ use super::{chunk_manager::ChunkManager, ChunkPos};
 pub struct ChunkManagerResource(pub(crate) Arc<ChunkManager>);
 
 #[derive(SystemParam)]
-pub struct VoxelRealm<'w> {
+pub struct VoxelRealm<'w, 's> {
     chunk_manager: Res<'w, ChunkManagerResource>,
-    permits: Res<'w, ChunkEcsPermits>,
+    membership: Res<'w, BatchMembership>,
     loadshares: Res<'w, LoadshareProvider>,
+    q_batches: Query<'w, 's, &'static ChunkBatch>,
 }
 
-impl<'w> VoxelRealm<'w> {
+impl<'w, 's> VoxelRealm<'w, 's> {
     pub fn cm(&self) -> &ChunkManager {
         self.chunk_manager.0.as_ref()
     }
@@ -30,14 +31,20 @@ impl<'w> VoxelRealm<'w> {
         self.chunk_manager.0.clone()
     }
 
-    pub fn permits(&self) -> &ChunkEcsPermits {
-        &self.permits
-    }
-
     pub fn has_render_permit(&self, pos: ChunkPos) -> bool {
-        self.permits()
-            .get(ChunkPermitKey::Chunk(pos))
-            .is_some_and(|permit| permit.cached_flags.contains(PermitFlags::RENDER))
+        let Some(membership) = self.membership.get(pos) else {
+            return false;
+        };
+
+        for &batch_entity in membership.iter() {
+            let batch = self.q_batches.get(batch_entity).unwrap();
+
+            if batch.flags.contains(BatchFlags::RENDER) {
+                return true;
+            }
+        }
+
+        false
     }
 
     pub fn has_loadshare(&self, loadshare: LoadshareId) -> bool {

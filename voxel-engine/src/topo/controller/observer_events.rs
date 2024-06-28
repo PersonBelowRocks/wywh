@@ -3,7 +3,6 @@ use std::sync::atomic::Ordering;
 use bevy::{ecs::entity::EntityHashMap, math::ivec3, prelude::*};
 
 use crate::{
-    render::{ChunkBatch, ObserverBatches, VisibleBatches},
     topo::{
         bounding_box::BoundingBox,
         world::{Chunk, ChunkPos, VoxelRealm},
@@ -13,9 +12,10 @@ use crate::{
 };
 
 use super::{
-    AddPermitFlagsEvent, ChunkPermitKey, CrossChunkBorder, LastPosition, LoadChunksEvent,
-    LoadReasons, LoadedChunkEvent, LoadshareProvider, ObserverLoadshare, ObserverLoadshareType,
-    ObserverSettings, PermitFlags, RemovePermitFlagsEvent, UnloadChunksEvent,
+    AddBatchFlags, BatchFlags, BatchMembership, ChunkBatch, CrossChunkBorder, LastPosition,
+    LoadChunksEvent, LoadReasons, LoadedChunkEvent, LoadshareProvider, ObserverBatches,
+    ObserverLoadshare, ObserverLoadshareType, ObserverSettings, RemoveBatchFlags,
+    UnloadChunksEvent, UpdateCachedChunkFlags,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -88,22 +88,34 @@ pub fn update_observer_batches(
     trigger: Trigger<CrossChunkBorder>,
     q_observers: Query<(&ObserverBatches, &ObserverSettings)>,
     mut q_batches: Query<&mut ChunkBatch>,
+    mut membership: ResMut<BatchMembership>,
+    mut cmds: Commands,
 ) {
     let observer_entity = trigger.entity();
     let event = trigger.event();
     let (observer_batches, settings) = q_observers.get(observer_entity).unwrap();
+
+    let mut update_cached_flags = ChunkSet::default();
 
     for &batch_entity in observer_batches.owned.iter() {
         let mut batch = q_batches
             .get_mut(batch_entity)
             .expect("Batches should automatically track their own ownership with lifecycle hooks, so if this observer owns this batch, it should exist in the world");
 
-        batch
-            .chunks
-            .retain(|cpos| settings.within_range(event.new_chunk, *cpos));
+        // Remove out of range chunks
+        batch.chunks.retain(|cpos| {
+            let in_range = settings.within_range(event.new_chunk, *cpos);
 
+            if !in_range {
+                membership.remove(*cpos, batch_entity);
+                update_cached_flags.set(*cpos);
+            }
+
+            in_range
+        });
+
+        // Add in-range chunks
         let bb = settings.bounding_box();
-
         for chunk_pos in bb.cartesian_iter() {
             let chunk_pos = ChunkPos::from(chunk_pos + event.new_chunk.as_ivec3());
 
@@ -111,9 +123,40 @@ pub fn update_observer_batches(
                 continue;
             }
 
+            membership.add(chunk_pos, batch_entity);
+            update_cached_flags.set(chunk_pos);
             batch.chunks.set(chunk_pos);
         }
     }
+
+    if !update_cached_flags.is_empty() {
+        cmds.trigger(UpdateCachedChunkFlags(update_cached_flags));
+    }
+}
+
+pub fn add_batch_flags(trigger: Trigger<AddBatchFlags>, mut q_batches: Query<&mut ChunkBatch>) {
+    let entity = trigger.entity();
+    let event = trigger.event();
+
+    let Ok(mut batch) = q_batches.get_mut(entity) else {
+        return;
+    };
+
+    batch.flags.insert(event.0);
+}
+
+pub fn remove_batch_flags(
+    trigger: Trigger<RemoveBatchFlags>,
+    mut q_batches: Query<&mut ChunkBatch>,
+) {
+    let entity = trigger.entity();
+    let event = trigger.event();
+
+    let Ok(mut batch) = q_batches.get_mut(entity) else {
+        return;
+    };
+
+    batch.flags.remove(event.0);
 }
 
 fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> GenerationPriority {
