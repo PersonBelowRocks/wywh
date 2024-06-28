@@ -1,7 +1,10 @@
 use std::any::type_name;
+use std::ops;
 
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
+
+use crate::util::CartesianIterator3d;
 
 use super::world::Chunk;
 
@@ -12,9 +15,9 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
-    /// Panics if any component in `min` is greater than that component in `max`
+    /// Panics if any component in `min` is greater than or equal to that component in `max`
     pub fn from_min_max(min: IVec3, max: IVec3) -> Self {
-        if min.cmpgt(max).any() {
+        if min.cmpge(max).any() {
             panic!(
                 "Tried to create {} invalid min/max vectors",
                 type_name::<Self>()
@@ -62,6 +65,10 @@ impl BoundingBox {
     pub fn volume(self) -> u32 {
         let [x, y, z] = self.span().max.to_array();
         (x * y * z).unsigned_abs()
+    }
+
+    pub fn cartesian_iter(self) -> CartesianIterator3d {
+        CartesianIterator3d::new(self.min, self.max).unwrap()
     }
 }
 

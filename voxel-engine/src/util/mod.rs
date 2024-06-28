@@ -10,6 +10,9 @@ pub use chunks::*;
 pub mod keyed_ord;
 pub use keyed_ord::*;
 
+pub mod iteration;
+pub use iteration::*;
+
 use bevy::prelude::*;
 use dashmap::DashMap;
 use ordered_float::NotNan;

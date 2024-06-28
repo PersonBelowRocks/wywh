@@ -84,7 +84,7 @@ fn chunk_pos_center_vec3(pos: ChunkPos) -> Vec3 {
     pos.as_vec3() + Vec3::splat(0.5)
 }
 
-pub fn unload_out_of_range_chunks(
+pub fn update_observer_batches(
     trigger: Trigger<CrossChunkBorder>,
     q_observers: Query<(&ObserverBatches, &ObserverSettings)>,
     mut q_batches: Query<&mut ChunkBatch>,
@@ -101,10 +101,20 @@ pub fn unload_out_of_range_chunks(
         batch
             .chunks
             .retain(|cpos| settings.within_range(event.new_chunk, *cpos));
+
+        let bb = settings.bounding_box();
+
+        for chunk_pos in bb.cartesian_iter() {
+            let chunk_pos = ChunkPos::from(chunk_pos + event.new_chunk.as_ivec3());
+
+            if batch.chunks.contains(chunk_pos) {
+                continue;
+            }
+
+            batch.chunks.set(chunk_pos);
+        }
     }
 }
-
-pub fn load_in_range_chunks() {}
 
 fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> GenerationPriority {
     const CHUNK_SIZE_F32: f32 = Chunk::SIZE as f32;

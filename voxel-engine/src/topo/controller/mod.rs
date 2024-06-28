@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::{fmt, time::Duration};
 
 use bevy::ecs::component::{ComponentHooks, StorageType};
+use bevy::math::ivec3;
 use bevy::prelude::*;
 use bitflags::bitflags;
 use enum_map::EnumMap;
@@ -11,14 +12,12 @@ use hb::HashSet;
 use handle_events::{
     handle_chunk_loads_and_unloads, handle_permit_flag_additions, handle_permit_flag_removals,
 };
-use observer_events::{
-    dispatch_move_events, generate_chunks_with_priority, load_in_range_chunks,
-    unload_out_of_range_chunks,
-};
+use observer_events::{dispatch_move_events, generate_chunks_with_priority};
 
 use crate::render::VisibleBatches;
 use crate::EngineState;
 
+use super::bounding_box::BoundingBox;
 use super::world::ChunkPos;
 
 mod error;
@@ -59,6 +58,21 @@ impl ObserverSettings {
         max_hor_diff <= self.horizontal_range
             && height_diff <= (self.view_distance_above as i32)
             && height_diff >= -(self.view_distance_below as i32)
+    }
+
+    pub fn bounding_box(&self) -> BoundingBox {
+        let min = -ivec3(
+            self.horizontal_range as i32,
+            self.view_distance_below as i32,
+            self.horizontal_range as i32,
+        );
+        let max = ivec3(
+            self.horizontal_range as i32,
+            self.view_distance_above as i32,
+            self.horizontal_range as i32,
+        );
+
+        BoundingBox::new(min, max)
     }
 }
 

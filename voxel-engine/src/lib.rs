@@ -3,6 +3,7 @@ extern crate crossbeam as cb;
 extern crate derive_more as dm;
 extern crate derive_new as dn;
 extern crate hashbrown as hb;
+extern crate overload;
 extern crate static_assertions as sa;
 extern crate thiserror as te;
 
