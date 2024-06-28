@@ -18,6 +18,8 @@ use crate::{
     util::{ChunkMap, ChunkSet},
 };
 
+use super::VoxelWorldTick;
+
 bitflags! {
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BatchFlags: u16 {
@@ -128,19 +130,26 @@ pub fn update_cached_chunk_flags(
 /// A batch of chunks
 #[derive(Clone, ExtractComponent)]
 pub struct ChunkBatch {
-    // TODO: a lot of these fields should be private, and only updated through triggers
-    pub owner: Entity,
-    pub flags: BatchFlags,
-    pub chunks: ChunkSet,
-    pub tick: u64,
-
-    // TODO: should be its own component tbh
-    pub lod: LevelOfDetail,
+    owner: Entity,
+    flags: BatchFlags,
+    chunks: ChunkSet,
+    tick: u64,
 }
+
+// TODO: batch LOD component
 
 impl ChunkBatch {
     pub fn num_chunks(&self) -> u32 {
         self.chunks.len() as _
+    }
+
+    pub fn new(owner: Entity) -> Self {
+        Self {
+            owner,
+            flags: BatchFlags::empty(),
+            chunks: ChunkSet::default(),
+            tick: 0,
+        }
     }
 }
 
@@ -150,7 +159,14 @@ impl Component for ChunkBatch {
     fn register_component_hooks(hooks: &mut ComponentHooks) {
         // Add this batch entity to its owner when the component is added
         hooks.on_insert(|mut world, batch_entity, _id| {
-            let owner = world.get::<Self>(batch_entity).unwrap().owner;
+            let tick = world.resource::<VoxelWorldTick>().get();
+
+            // Set the tick to the current tick upon insertion. The default value in this field is
+            // just a placeholder and must be replaced!
+            let mut this = world.get_mut::<Self>(batch_entity).unwrap();
+            this.tick = tick;
+
+            let owner = this.owner;
 
             let Some(mut observer_batches) = world.get_mut::<ObserverBatches>(owner) else {
                 error!("Chunk batch for entity {batch_entity:?} wants to be owned by {owner:?}, 
@@ -174,6 +190,8 @@ impl Component for ChunkBatch {
         });
     }
 }
+
+// TODO: chunk batch update events
 
 /// The batches that an observer can render and update
 #[derive(Clone, Component)]
