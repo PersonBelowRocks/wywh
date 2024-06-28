@@ -10,7 +10,10 @@ use enum_map::EnumMap;
 use hb::HashSet;
 
 use handle_events::handle_chunk_loads_and_unloads;
-use observer_events::{dispatch_move_events, generate_chunks_with_priority};
+use observer_events::{
+    add_batch_flags, dispatch_move_events, generate_chunks_with_priority, remove_batch_flags,
+    update_observer_batches,
+};
 
 use crate::EngineState;
 
@@ -25,6 +28,19 @@ pub use events::*;
 
 mod batch;
 pub use batch::*;
+
+#[derive(Resource, Default)]
+pub struct VoxelWorldTick(u64);
+
+impl VoxelWorldTick {
+    pub fn get(&self) -> u64 {
+        self.0
+    }
+}
+
+fn increase_voxel_world_tick(mut tick: ResMut<VoxelWorldTick>) {
+    tick.0 += 1;
+}
 
 // TODO: use ints not floats!
 #[derive(Clone, Component, Debug)]
@@ -279,6 +295,7 @@ impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings)
             .init_resource::<LoadshareProvider>()
+            .init_resource::<VoxelWorldTick>()
             .add_event::<LoadChunksEvent>()
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()
@@ -286,6 +303,10 @@ impl Plugin for WorldController {
             .add_event::<AddBatchFlags>()
             .add_event::<RemoveBatchFlags>()
             .add_event::<PermitLostFlagsEvent>();
+
+        app.observe(update_observer_batches)
+            .observe(add_batch_flags)
+            .observe(remove_batch_flags);
 
         app.add_systems(
             FixedPostUpdate,
@@ -295,6 +316,8 @@ impl Plugin for WorldController {
                 generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),
             ),
         );
+
+        app.add_systems(FixedLast, increase_voxel_world_tick);
 
         app.configure_sets(
             FixedPostUpdate,

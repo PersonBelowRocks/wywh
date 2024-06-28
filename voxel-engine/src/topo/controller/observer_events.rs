@@ -12,10 +12,8 @@ use crate::{
 };
 
 use super::{
-    AddBatchFlags, BatchFlags, BatchMembership, ChunkBatch, CrossChunkBorder, LastPosition,
-    LoadChunksEvent, LoadReasons, LoadedChunkEvent, LoadshareProvider, ObserverBatches,
-    ObserverLoadshare, ObserverLoadshareType, ObserverSettings, RemoveBatchFlags,
-    UnloadChunksEvent, UpdateCachedChunkFlags,
+    AddBatchFlags, BatchMembership, ChunkBatch, CrossChunkBorder, LastPosition, LoadedChunkEvent,
+    ObserverBatches, ObserverSettings, RemoveBatchFlags, UpdateCachedChunkFlags, VoxelWorldTick,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -24,7 +22,6 @@ fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
 
 pub fn dispatch_move_events(
     mut observers: Query<(Entity, &Transform, Option<&mut LastPosition>), With<ObserverSettings>>,
-    mut chunk_border_events: EventWriter<CrossChunkBorder>,
     mut cmds: Commands,
 ) {
     for (entity, transform, last_pos) in &mut observers {
@@ -87,6 +84,7 @@ fn chunk_pos_center_vec3(pos: ChunkPos) -> Vec3 {
 pub fn update_observer_batches(
     trigger: Trigger<CrossChunkBorder>,
     q_observers: Query<(&ObserverBatches, &ObserverSettings)>,
+    tick: Res<VoxelWorldTick>,
     mut q_batches: Query<&mut ChunkBatch>,
     mut membership: ResMut<BatchMembership>,
     mut cmds: Commands,
@@ -102,6 +100,8 @@ pub fn update_observer_batches(
             .get_mut(batch_entity)
             .expect("Batches should automatically track their own ownership with lifecycle hooks, so if this observer owns this batch, it should exist in the world");
 
+        let mut updated_batch = false;
+
         // Remove out of range chunks
         batch.chunks.retain(|cpos| {
             let in_range = settings.within_range(event.new_chunk, *cpos);
@@ -109,6 +109,7 @@ pub fn update_observer_batches(
             if !in_range {
                 membership.remove(*cpos, batch_entity);
                 update_cached_flags.set(*cpos);
+                updated_batch = true;
             }
 
             in_range
@@ -125,7 +126,13 @@ pub fn update_observer_batches(
 
             membership.add(chunk_pos, batch_entity);
             update_cached_flags.set(chunk_pos);
+            updated_batch = true;
+
             batch.chunks.set(chunk_pos);
+        }
+
+        if updated_batch {
+            batch.tick = tick.get();
         }
     }
 
@@ -134,19 +141,9 @@ pub fn update_observer_batches(
     }
 }
 
-pub fn add_batch_flags(trigger: Trigger<AddBatchFlags>, mut q_batches: Query<&mut ChunkBatch>) {
-    let entity = trigger.entity();
-    let event = trigger.event();
-
-    let Ok(mut batch) = q_batches.get_mut(entity) else {
-        return;
-    };
-
-    batch.flags.insert(event.0);
-}
-
-pub fn remove_batch_flags(
-    trigger: Trigger<RemoveBatchFlags>,
+pub fn add_batch_flags(
+    trigger: Trigger<AddBatchFlags>,
+    tick: Res<VoxelWorldTick>,
     mut q_batches: Query<&mut ChunkBatch>,
 ) {
     let entity = trigger.entity();
@@ -156,6 +153,23 @@ pub fn remove_batch_flags(
         return;
     };
 
+    batch.tick = tick.get();
+    batch.flags.insert(event.0);
+}
+
+pub fn remove_batch_flags(
+    trigger: Trigger<RemoveBatchFlags>,
+    tick: Res<VoxelWorldTick>,
+    mut q_batches: Query<&mut ChunkBatch>,
+) {
+    let entity = trigger.entity();
+    let event = trigger.event();
+
+    let Ok(mut batch) = q_batches.get_mut(entity) else {
+        return;
+    };
+
+    batch.tick = tick.get();
     batch.flags.remove(event.0);
 }
 

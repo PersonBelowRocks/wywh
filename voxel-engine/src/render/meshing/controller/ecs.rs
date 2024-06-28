@@ -12,7 +12,7 @@ use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
     topo::{
-        controller::{BatchFlags, PermitLostFlagsEvent},
+        controller::{BatchFlags, PermitLostFlagsEvent, VoxelWorldTick},
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ObserverSettings,
     },
@@ -27,25 +27,20 @@ use super::{
 #[derive(Resource, Deref)]
 pub struct MeshWorkerTaskPool(TaskPool);
 
-#[derive(Resource, Default, Deref, DerefMut)]
-pub struct MeshGeneration(pub u64);
-
 #[derive(Event, Clone)]
 pub struct RemeshChunk {
     pub pos: ChunkPos,
     pub remesh_type: RemeshType,
     pub priority: RemeshPriority,
-    pub generation: u64,
+    pub tick: u64,
 }
 
 /// This system queues meshing jobs in the mesh builder from `RemeshChunk` events.
 pub fn queue_chunk_mesh_jobs(
     mut builder: ResMut<MeshBuilder>,
     mut events: EventReader<RemeshChunk>,
-    mut current_generation: ResMut<MeshGeneration>,
 ) {
     if events.len() > 0 {
-        current_generation.0 += 1;
         debug!("Queuing {} chunks for remeshing from events", events.len());
     }
 
@@ -56,7 +51,7 @@ pub fn queue_chunk_mesh_jobs(
         let cmd = MeshBuilderCommand {
             pos: event.pos,
             priority: event.priority,
-            generation: event.generation,
+            generation: event.tick,
         };
 
         match event.remesh_type {
@@ -301,7 +296,7 @@ fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> RemeshPriority 
 /// This system dispatches remesh jobs for chunks discovered by `voxel_realm_remesh_updated_chunks`
 pub fn dispatch_updated_chunk_remeshings(
     In(detected): In<UpdateDetectionRemeshResults>,
-    current_generation: Res<MeshGeneration>,
+    tick: Res<VoxelWorldTick>,
     observers: Query<&Transform, With<ObserverSettings>>,
     mut writer: EventWriter<RemeshChunk>,
 ) {
@@ -322,7 +317,7 @@ pub fn dispatch_updated_chunk_remeshings(
                     pos: chunk_pos,
                     remesh_type: RemeshType::Delayed,
                     priority,
-                    generation: current_generation.0,
+                    tick: tick.get(),
                 }
             }),
     );

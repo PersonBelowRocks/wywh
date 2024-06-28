@@ -17,7 +17,7 @@ use self::ecs::{
     voxel_realm_remesh_updated_chunks,
 };
 
-pub use self::ecs::{MeshGeneration, RemeshChunk};
+pub use self::ecs::RemeshChunk;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RemeshType {
@@ -113,7 +113,6 @@ impl Plugin for MeshController {
         info!("Setting up mesh controller");
 
         app.init_resource::<ExtractableChunkMeshData>()
-            .init_resource::<MeshGeneration>()
             .add_event::<RemeshChunk>();
 
         app.add_systems(
