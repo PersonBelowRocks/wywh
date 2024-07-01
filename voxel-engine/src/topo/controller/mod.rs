@@ -11,8 +11,7 @@ use hb::HashSet;
 
 use handle_events::handle_chunk_loads_and_unloads;
 use observer_events::{
-    add_batch_flags, dispatch_move_events, generate_chunks_with_priority, remove_batch_flags,
-    update_observer_batches,
+    dispatch_move_events, generate_chunks_with_priority, update_observer_batches,
 };
 
 use crate::EngineState;
@@ -300,13 +299,13 @@ impl Plugin for WorldController {
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()
             .add_event::<UnloadedChunkEvent>()
-            .add_event::<AddBatchFlags>()
-            .add_event::<RemoveBatchFlags>()
+            .add_event::<AddBatchChunks>()
+            .add_event::<RemoveBatchChunks>()
             .add_event::<RemovedBatchChunks>();
 
         app.observe(update_observer_batches)
-            .observe(add_batch_flags)
-            .observe(remove_batch_flags);
+            .observe(add_batch_chunks)
+            .observe(remove_batch_chunks);
 
         app.add_systems(
             FixedPostUpdate,

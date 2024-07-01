@@ -12,8 +12,9 @@ use crate::{
 };
 
 use super::{
-    AddBatchFlags, BatchMembership, ChunkBatch, CrossChunkBorder, LastPosition, LoadedChunkEvent,
-    ObserverBatches, ObserverSettings, RemoveBatchFlags, UpdateCachedChunkFlags, VoxelWorldTick,
+    AddBatchChunks, CachedBatchMembership, ChunkBatch, CrossChunkBorder, LastPosition,
+    LoadedChunkEvent, ObserverBatches, ObserverSettings, RemoveBatchChunks, UpdateCachedChunkFlags,
+    VoxelWorldTick,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -86,7 +87,7 @@ pub fn update_observer_batches(
     q_observers: Query<(&ObserverBatches, &ObserverSettings)>,
     tick: Res<VoxelWorldTick>,
     mut q_batches: Query<&mut ChunkBatch>,
-    mut membership: ResMut<BatchMembership>,
+    mut membership: ResMut<CachedBatchMembership>,
     mut cmds: Commands,
 ) {
     let observer_entity = trigger.entity();
@@ -96,81 +97,50 @@ pub fn update_observer_batches(
     let mut update_cached_flags = ChunkSet::default();
 
     for &batch_entity in observer_batches.owned.iter() {
-        let mut batch = q_batches
-            .get_mut(batch_entity)
+        let batch = q_batches
+            .get(batch_entity)
             .expect("Batches should automatically track their own ownership with lifecycle hooks, so if this observer owns this batch, it should exist in the world");
 
-        let mut updated_batch = false;
+        let mut out_of_range = ChunkSet::with_capacity(10);
 
         // Remove out of range chunks
-        batch.chunks.retain(|cpos| {
-            let in_range = settings.within_range(event.new_chunk, *cpos);
+        out_of_range.extend(
+            batch
+                .chunks()
+                .iter()
+                .filter(|&c| settings.within_range(event.new_chunk, c))
+                .inspect(|&c| {
+                    update_cached_flags.set(c);
+                }),
+        );
 
-            if !in_range {
-                membership.remove(*cpos, batch_entity);
-                update_cached_flags.set(*cpos);
-                updated_batch = true;
-            }
-
-            in_range
-        });
-
-        // Add in-range chunks
-        let bb = settings.bounding_box();
-        for chunk_pos in bb.cartesian_iter() {
-            let chunk_pos = ChunkPos::from(chunk_pos + event.new_chunk.as_ivec3());
-
-            if batch.chunks.contains(chunk_pos) {
-                continue;
-            }
-
-            membership.add(chunk_pos, batch_entity);
-            update_cached_flags.set(chunk_pos);
-            updated_batch = true;
-
-            batch.chunks.set(chunk_pos);
+        if !out_of_range.is_empty() {
+            cmds.trigger_targets(RemoveBatchChunks(out_of_range), batch_entity);
         }
 
-        if updated_batch {
-            batch.tick = tick.get();
+        // Add in-range chunks
+        let mut in_range = ChunkSet::with_capacity(10);
+
+        in_range.extend(
+            settings
+                .bounding_box()
+                .cartesian_iter()
+                .map(|pos| pos + event.new_chunk.as_ivec3())
+                .map(ChunkPos::from)
+                .filter(|&cpos| !batch.chunks().contains(cpos))
+                .inspect(|&c| {
+                    update_cached_flags.set(c);
+                }),
+        );
+
+        if !in_range.is_empty() {
+            cmds.trigger_targets(AddBatchChunks(in_range), batch_entity);
         }
     }
 
     if !update_cached_flags.is_empty() {
         cmds.trigger(UpdateCachedChunkFlags(update_cached_flags));
     }
-}
-
-pub fn add_batch_flags(
-    trigger: Trigger<AddBatchFlags>,
-    tick: Res<VoxelWorldTick>,
-    mut q_batches: Query<&mut ChunkBatch>,
-) {
-    let entity = trigger.entity();
-    let event = trigger.event();
-
-    let Ok(mut batch) = q_batches.get_mut(entity) else {
-        return;
-    };
-
-    batch.tick = tick.get();
-    batch.flags.insert(event.0);
-}
-
-pub fn remove_batch_flags(
-    trigger: Trigger<RemoveBatchFlags>,
-    tick: Res<VoxelWorldTick>,
-    mut q_batches: Query<&mut ChunkBatch>,
-) {
-    let entity = trigger.entity();
-    let event = trigger.event();
-
-    let Ok(mut batch) = q_batches.get_mut(entity) else {
-        return;
-    };
-
-    batch.tick = tick.get();
-    batch.flags.remove(event.0);
 }
 
 fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> GenerationPriority {

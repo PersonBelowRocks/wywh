@@ -18,7 +18,7 @@ use crate::{
     util::{ChunkMap, ChunkSet},
 };
 
-use super::VoxelWorldTick;
+use super::{AddBatchChunks, RemoveBatchChunks, VoxelWorldTick};
 
 bitflags! {
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -45,39 +45,43 @@ impl fmt::Debug for BatchFlags {
 }
 
 #[derive(Resource, Default)]
-pub struct BatchMembership(ChunkMap<BatchedChunk>);
+pub struct CachedBatchMembership(ChunkMap<BatchedChunk>);
 
 struct BatchedChunk {
     in_batches: EntityHashSet,
-    cached_flags: Option<BatchFlags>,
+    cached_flags: BatchFlags,
 }
 
 impl BatchedChunk {
-    pub fn new(batches: &[Entity]) -> Self {
+    pub fn new(batches: &[Entity], flags: BatchFlags) -> Self {
         Self {
             in_batches: EntityHashSet::from_iter(batches.iter().cloned()),
-            cached_flags: None,
+            cached_flags: flags,
         }
     }
 }
 
-impl BatchMembership {
+impl CachedBatchMembership {
+    /// Cache the membership of the given chunk in the given batch. This will clear the cached flags
+    /// and they must be rebuilt manually!
     pub(super) fn add(&mut self, chunk: ChunkPos, batch: Entity) {
         self.0
             .entry(chunk)
             .and_modify(|batched| {
                 batched.in_batches.insert(batch);
-                batched.cached_flags = None;
+                batched.cached_flags = BatchFlags::empty();
             })
-            .or_insert_with(|| BatchedChunk::new(&[batch]));
+            .or_insert_with(|| BatchedChunk::new(&[batch], BatchFlags::empty()));
     }
 
+    /// Remove the given chunk from the given batch. This will clear the cached flags
+    /// and they must be rebuilt manually!
     pub(super) fn remove(&mut self, chunk: ChunkPos, batch: Entity) {
         match self.0.entry(chunk) {
             Entry::Occupied(mut entry) => {
                 let batched = entry.get_mut();
                 batched.in_batches.remove(&batch);
-                batched.cached_flags = None;
+                batched.cached_flags = BatchFlags::empty();
 
                 if batched.in_batches.is_empty() {
                     entry.remove_entry();
@@ -94,11 +98,11 @@ impl BatchMembership {
     pub fn has_flags(&self, chunk: ChunkPos, flags: BatchFlags) -> bool {
         self.0
             .get(chunk)
-            .is_some_and(|batched| batched.cached_flags.unwrap().contains(flags))
+            .is_some_and(|batched| batched.cached_flags.contains(flags))
     }
 
     fn set_cached_flags(&mut self, chunk: ChunkPos, flags: BatchFlags) {
-        self.0.get_mut(chunk).map(|b| b.cached_flags = Some(flags));
+        self.0.get_mut(chunk).map(|b| b.cached_flags = flags);
     }
 }
 
@@ -108,7 +112,7 @@ pub struct UpdateCachedChunkFlags(pub ChunkSet);
 pub fn update_cached_chunk_flags(
     trigger: Trigger<UpdateCachedChunkFlags>,
     q_batches: Query<&ChunkBatch>,
-    mut membership: ResMut<BatchMembership>,
+    mut membership: ResMut<CachedBatchMembership>,
 ) {
     let event = trigger.event();
 
@@ -141,6 +145,22 @@ pub struct ChunkBatch {
 impl ChunkBatch {
     pub fn num_chunks(&self) -> u32 {
         self.chunks.len() as _
+    }
+
+    pub fn chunks(&self) -> &ChunkSet {
+        &self.chunks
+    }
+
+    pub fn flags(&self) -> BatchFlags {
+        self.flags
+    }
+
+    pub fn tick(&self) -> u64 {
+        self.tick
+    }
+
+    pub fn owner(&self) -> Entity {
+        self.owner
     }
 
     pub fn new(owner: Entity) -> Self {
@@ -191,7 +211,73 @@ impl Component for ChunkBatch {
     }
 }
 
-// TODO: chunk batch update events
+pub fn add_batch_chunks(
+    trigger: Trigger<AddBatchChunks>,
+    tick: Res<VoxelWorldTick>,
+    mut q_batches: Query<&mut ChunkBatch>,
+    mut membership: ResMut<CachedBatchMembership>,
+    mut cmds: Commands,
+) {
+    let batch_entity = trigger.entity();
+    let event = trigger.event();
+
+    if event.0.is_empty() {
+        return;
+    }
+
+    let mut batch = match q_batches.get_mut(batch_entity) {
+        Ok(batch) => batch,
+        Err(error) => {
+            warn!("Could not run trigger `AddBatchChunks` for {batch_entity}: {error}");
+            return;
+        }
+    };
+
+    // Set the update tick to the current tick
+    batch.tick = tick.get();
+    batch.chunks.extend(
+        event
+            .0
+            .iter()
+            .inspect(|&chunk| membership.add(chunk, batch_entity)),
+    );
+
+    // Rebuild the cached flags for the added chunks
+    cmds.trigger(UpdateCachedChunkFlags(event.0.clone()));
+}
+
+pub fn remove_batch_chunks(
+    trigger: Trigger<RemoveBatchChunks>,
+    tick: Res<VoxelWorldTick>,
+    mut q_batches: Query<&mut ChunkBatch>,
+    mut membership: ResMut<CachedBatchMembership>,
+    mut cmds: Commands,
+) {
+    let batch_entity = trigger.entity();
+    let event = trigger.event();
+
+    if event.0.is_empty() {
+        return;
+    }
+
+    let mut batch = match q_batches.get_mut(batch_entity) {
+        Ok(batch) => batch,
+        Err(error) => {
+            warn!("Could not run trigger `RemoveBatchChunks` for {batch_entity}: {error}");
+            return;
+        }
+    };
+
+    // Set the update tick to the current tick
+    batch.tick = tick.get();
+    for chunk in event.0.iter() {
+        batch.chunks.remove(chunk);
+        membership.remove(chunk, batch_entity);
+    }
+
+    // Rebuild the cached flags for the removed chunks
+    cmds.trigger(UpdateCachedChunkFlags(event.0.clone()));
+}
 
 /// The batches that an observer can render and update
 #[derive(Clone, Component)]

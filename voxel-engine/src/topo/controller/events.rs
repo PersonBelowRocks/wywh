@@ -57,10 +57,10 @@ pub struct UnloadedChunkEvent {
 }
 
 #[derive(Clone, Event, Debug)]
-pub struct AddBatchFlags(pub BatchFlags);
+pub struct AddBatchChunks(pub ChunkSet);
 
 #[derive(Clone, Event, Debug)]
-pub struct RemoveBatchFlags(pub BatchFlags);
+pub struct RemoveBatchChunks(pub ChunkSet);
 
 ///
 #[derive(Clone, Event, Debug)]

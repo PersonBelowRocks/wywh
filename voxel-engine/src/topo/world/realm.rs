@@ -6,7 +6,7 @@ use bevy::{
 };
 
 use crate::topo::controller::{
-    BatchFlags, BatchMembership, ChunkBatch, LoadshareId, LoadshareProvider,
+    BatchFlags, CachedBatchMembership, ChunkBatch, LoadshareId, LoadshareProvider,
 };
 
 use super::{chunk_manager::ChunkManager, ChunkPos};
@@ -17,7 +17,7 @@ pub struct ChunkManagerResource(pub(crate) Arc<ChunkManager>);
 #[derive(SystemParam)]
 pub struct VoxelRealm<'w, 's> {
     chunk_manager: Res<'w, ChunkManagerResource>,
-    membership: Res<'w, BatchMembership>,
+    membership: Res<'w, CachedBatchMembership>,
     loadshares: Res<'w, LoadshareProvider>,
     q_batches: Query<'w, 's, &'static ChunkBatch>,
 }
@@ -39,7 +39,7 @@ impl<'w, 's> VoxelRealm<'w, 's> {
         for &batch_entity in membership.iter() {
             let batch = self.q_batches.get(batch_entity).unwrap();
 
-            if batch.flags.contains(BatchFlags::RENDER) {
+            if batch.flags().contains(BatchFlags::RENDER) {
                 return true;
             }
         }

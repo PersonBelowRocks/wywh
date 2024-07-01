@@ -12,7 +12,7 @@ use crate::{
     data::{registries::Registries, tile::Face},
     render::meshing::controller::workers::MeshBuilderSettings,
     topo::{
-        controller::{BatchFlags, BatchMembership, RemovedBatchChunks, VoxelWorldTick},
+        controller::{BatchFlags, CachedBatchMembership, RemovedBatchChunks, VoxelWorldTick},
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ObserverSettings,
     },
@@ -88,7 +88,7 @@ pub fn insert_chunks(
 pub fn remove_chunks(
     mut meshes: ResMut<ExtractableChunkMeshData>,
     mut events: EventReader<RemovedBatchChunks>,
-    members: Res<BatchMembership>,
+    members: Res<CachedBatchMembership>,
     mut builder: ResMut<MeshBuilder>,
 ) {
     let mut remove = ChunkSet::with_capacity(events.len());
