@@ -7,7 +7,11 @@ use bevy::prelude::*;
 use ecs::{batch_chunk_extraction, remove_chunks};
 
 use crate::{
-    render::{meshing::controller::ecs::dispatch_updated_chunk_remeshings, quad::GpuQuad},
+    render::{
+        lod::{LevelOfDetail, LodMap},
+        meshing::controller::ecs::dispatch_updated_chunk_remeshings,
+        quad::GpuQuad,
+    },
     topo::world::ChunkPos,
     util::{ChunkMap, ChunkSet},
     CoreEngineSetup, EngineState,
@@ -44,6 +48,7 @@ impl PartialOrd for RemeshPriority {
     }
 }
 
+// TODO: a ChunkMesh type that contains the mesh data, chunk position, and LOD
 #[derive(Clone)]
 pub struct ChunkMeshData {
     pub index_buffer: Vec<u32>,
@@ -67,13 +72,13 @@ impl fmt::Debug for ChunkMeshData {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct TimedChunkMeshStatus {
     pub tick: u64,
     pub status: ChunkMeshStatus,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ChunkMeshStatus {
     Unfulfilled,
     Empty,
@@ -91,20 +96,32 @@ impl ChunkMeshStatus {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct ExtractableChunkMeshData {
-    statuses: ChunkMap<TimedChunkMeshStatus>,
-    remove: ChunkSet,
-    add: ChunkMap<ChunkMeshData>,
+    statuses: LodMap<ChunkMap<TimedChunkMeshStatus>>,
+    add: LodMap<ChunkMap<ChunkMeshData>>,
+    remove: LodMap<ChunkSet>,
     /// Indicates if we should extract chunks to the render world (or remove chunks from the render world).
     /// Usually used to regulate extraction a bit so that we can extract chunks in bulk instead of extracting them immediately
     /// as they become available. This helps reduce some lag when meshing lots of chunks.
     should_extract: bool,
 }
 
+impl Default for ExtractableChunkMeshData {
+    fn default() -> Self {
+        Self {
+            should_extract: false,
+
+            statuses: LodMap::from_fn(|_| Some(ChunkMap::default())),
+            add: LodMap::from_fn(|_| Some(ChunkMap::default())),
+            remove: LodMap::from_fn(|_| Some(ChunkSet::default())),
+        }
+    }
+}
+
 impl ExtractableChunkMeshData {
-    fn set_status(&mut self, pos: ChunkPos, status: TimedChunkMeshStatus) {
-        self.statuses.set(pos, status);
+    fn set_status(&mut self, pos: ChunkPos, lod: LevelOfDetail, status: TimedChunkMeshStatus) {
+        self.statuses.get_mut(lod).unwrap().set(pos, status);
     }
 
     /// "Flush" the queued mesh data. This marks it as ready for extraction so it will be extracted
@@ -113,42 +130,32 @@ impl ExtractableChunkMeshData {
         self.should_extract = true;
     }
 
-    /// The number of chunks queued for extraction.
-    /// This is the sum of both number of meshes to be removed, and number of meshes to be added.
-    pub fn total_queued(&self) -> usize {
-        self.remove.len() + self.add.len()
+    /// The number of chunks queued for extraction at this LOD.
+    pub fn queued_additions(&self, lod: LevelOfDetail) -> usize {
+        self.add.get(lod).unwrap().len()
+    }
+
+    /// The number of chunks queued for removal from the render world at this LOD.
+    pub fn queued_removals(&self, lod: LevelOfDetail) -> usize {
+        self.remove.get(lod).unwrap().len()
     }
 
     pub fn should_extract(&self) -> bool {
         self.should_extract
     }
 
-    /// Drain all the meshes queued for extraction/addition to render world
-    pub fn drain_add<F>(&mut self, mut f: F)
-    where
-        F: FnMut(ChunkPos, ChunkMeshData),
-    {
-        for (chunk_pos, mesh) in self.add.drain() {
-            f(chunk_pos, mesh)
-        }
-    }
-
-    /// Drain all the chunks queued for removal from the render world
-    pub fn drain_remove<F>(&mut self, mut f: F)
-    where
-        F: FnMut(ChunkPos),
-    {
-        for chunk_pos in self.remove.drain() {
-            f(chunk_pos)
-        }
-    }
-
-    /// Try to queue a chunk mesh of a given age for extraction. Will do nothing if there's
+    /// Try to queue a chunk mesh of a given age and LOD for extraction. Will do nothing if there's
     /// a newer version either already queued or extracted.
-    pub fn add_chunk_mesh(&mut self, pos: ChunkPos, tick: u64, mesh: ChunkMeshData) {
+    pub fn add_chunk_mesh(
+        &mut self,
+        pos: ChunkPos,
+        lod: LevelOfDetail,
+        tick: u64,
+        mesh: ChunkMeshData,
+    ) {
         // If we already have a newer chunk mesh, then we return early since we should never extract an
         // older version of a chunk mesh.
-        if let Some(status) = self.statuses.get(pos) {
+        if let Some(status) = self.statuses.get(lod).unwrap().get(pos) {
             if status.tick > tick {
                 return;
             }
@@ -159,17 +166,28 @@ impl ExtractableChunkMeshData {
 
         // Only queue the mesh for extraction if it's filled.
         if status == ChunkMeshStatus::Filled {
-            self.add.set(pos, mesh);
+            self.add.get_mut(lod).unwrap().set(pos, mesh);
         }
 
         // Even if we don't queue the mesh for extraction we still need to note down its status.
-        self.set_status(pos, TimedChunkMeshStatus { tick, status });
+        self.set_status(pos, lod, TimedChunkMeshStatus { tick, status });
     }
 
-    /// Queue a chunk for removal from the render world.
-    pub fn remove_chunk(&mut self, pos: ChunkPos) {
-        self.statuses.remove(pos);
-        self.remove.set(pos);
+    /// Queue a chunk at a given LOD for removal from the render world.
+    pub fn remove_chunk(&mut self, pos: ChunkPos, lod: LevelOfDetail) {
+        self.statuses.get_mut(lod).unwrap().remove(pos);
+        self.remove.get_mut(lod).unwrap().remove(pos);
+    }
+
+    pub fn additions(
+        &self,
+        lod: LevelOfDetail,
+    ) -> impl Iterator<Item = (ChunkPos, &ChunkMeshData)> + '_ {
+        self.add.get(lod).unwrap().iter()
+    }
+
+    pub fn removals(&self, lod: LevelOfDetail) -> impl Iterator<Item = ChunkPos> + '_ {
+        self.remove.get(lod).unwrap().iter()
     }
 
     pub fn clear(&mut self) {

@@ -80,7 +80,7 @@ pub fn insert_chunks(
             continue;
         }
 
-        meshes.add_chunk_mesh(mesh.pos, mesh.tick, mesh.data);
+        todo!(); // meshes.add_chunk_mesh(mesh.pos, mesh.tick, mesh.data);
     }
 }
 
@@ -102,7 +102,7 @@ pub fn remove_chunks(
 
     builder.remove_pending(&remove);
     for chunk in remove.iter() {
-        meshes.remove_chunk(chunk)
+        todo!(); // meshes.remove_chunk(chunk)
     }
 }
 

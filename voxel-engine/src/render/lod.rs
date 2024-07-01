@@ -39,6 +39,12 @@ impl<T> LodMap<T> {
         Self(EnumMap::default())
     }
 
+    pub fn single(lod: LevelOfDetail, value: T) -> Self {
+        let mut new = Self::new();
+        new.insert(lod, value);
+        new
+    }
+
     pub fn from_fn<F: Fn(LevelOfDetail) -> Option<T>>(f: F) -> Self {
         Self(EnumMap::from_fn(f))
     }
