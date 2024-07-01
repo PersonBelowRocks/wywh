@@ -25,7 +25,7 @@ use crate::topo::controller::{ChunkBatch, VisibleBatches};
 use super::{
     chunk_batches::{
         BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId, PopulateBatchBuffers,
-        RenderChunkBatches,
+        PreparedChunkBatches,
     },
     indirect::IndexedIndirectArgs,
     observers::ObserverBatchBuffersStore,
@@ -221,7 +221,7 @@ impl Node for BuildBatchBuffersNode {
     ) -> Result<(), NodeRunError> {
         let pipeline_id = world.resource::<BuildBatchBuffersPipelineId>();
         let pipeline_cache = world.resource::<PipelineCache>();
-        let render_chunk_batches = world.resource::<RenderChunkBatches>();
+        let render_chunk_batches = world.resource::<PreparedChunkBatches>();
         let populate_batches = world.resource::<PopulateBatchBuffers>();
         let observer_batch_buf_store = world.resource::<ObserverBatchBuffersStore>();
 
@@ -257,7 +257,7 @@ impl Node for BuildBatchBuffersNode {
             };
 
             // Skip if there's no chunks
-            if batch.chunks.is_empty() {
+            if batch.chunks().is_empty() {
                 continue;
             }
 
@@ -336,6 +336,12 @@ impl ViewNode for GpuFrustumCullBatchesNode {
         let Some(observer_batches) = store.get(&view_entity) else {
             return Ok(());
         };
+
+        // Clear all the count buffers (sets them to 0).
+        for (_, gpu_data) in observer_batches.iter() {
+            ctx.command_encoder()
+                .clear_buffer(&gpu_data.count, 0, Some(u32::SHADER_SIZE.into()))
+        }
 
         let mut pass = ctx
             .command_encoder()

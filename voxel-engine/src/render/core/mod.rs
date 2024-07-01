@@ -34,7 +34,7 @@ use bevy::{
     },
 };
 use chunk_batches::{
-    BuildBatchBuffersPipeline, ObserverBatchFrustumCullPipeline, RenderChunkBatches,
+    BuildBatchBuffersPipeline, ObserverBatchFrustumCullPipeline, PreparedChunkBatches,
 };
 use gpu_chunk::{
     remove_chunk_meshes, update_indirect_chunk_data_dependants, upload_chunk_meshes,
@@ -55,7 +55,7 @@ use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     texture::GpuFaceTexture,
 };
-use crate::topo::controller::ChunkBatch;
+use crate::topo::controller::{ChunkBatch, ChunkBatchLod};
 
 use self::{
     gpu_chunk::{extract_chunk_mesh_data, AddChunkMeshes},
@@ -76,7 +76,6 @@ impl Plugin for RenderCore {
         app.add_plugins((
             ExtractResourcePlugin::<VoxelColorArrayTexture>::default(),
             ExtractResourcePlugin::<VoxelNormalArrayTexture>::default(),
-            ExtractComponentPlugin::<ChunkBatch>::default(),
         ));
 
         // Render app logic
@@ -97,7 +96,7 @@ impl Plugin for RenderCore {
             // Misc
             .init_resource::<UpdateIndirectLODs>()
             .init_resource::<RemoveChunkMeshes>()
-            .init_resource::<RenderChunkBatches>()
+            .init_resource::<PreparedChunkBatches>()
             .init_resource::<AddChunkMeshes>();
 
         render_app

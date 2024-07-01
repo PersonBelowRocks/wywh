@@ -15,12 +15,12 @@ use bevy::{
     },
 };
 
-use crate::render::core::chunk_batches::RenderChunkBatches;
+use crate::render::core::chunk_batches::PreparedChunkBatches;
 use crate::render::core::observers::ObserverBatchBuffersStore;
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
-use crate::topo::controller::ChunkBatch;
+use crate::topo::controller::{ChunkBatch, ChunkBatchLod};
 
 pub struct SetIndirectChunkQuads<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I> {
@@ -28,7 +28,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I>
 
     type ViewQuery = ();
 
-    type ItemQuery = Read<ChunkBatch>;
+    type ItemQuery = Read<ChunkBatchLod>;
 
     fn render<'w>(
         item: &P,
@@ -38,26 +38,26 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I>
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let store = param.into_inner();
+        let batch_entity = item.entity();
 
-        let Some(batch) = entity else {
-            error!(
-                "Couldn't get chunk batch component for entity {}",
-                item.entity()
-            );
+        let Some(batch_lod) = entity else {
+            error!("Couldn't get 'ChunkBatchLod' component for entity {batch_entity}");
             return RenderCommandResult::Failure;
         };
 
-        let lod_data = store.lod(batch.lod);
+        let batch_lod = batch_lod.0;
+
+        let lod_data = store.lod(batch_lod);
         if !lod_data.is_ready() {
             error!(
                 "Indirect chunk data for LOD {:?} is not ready for rendering",
-                batch.lod
+                batch_lod
             );
             return RenderCommandResult::Failure;
         }
 
         let bind_group = store
-            .lod(batch.lod)
+            .lod(batch_lod)
             .quad_bind_group()
             .expect("Bind group must be present if the LOD data is ready, which we just checked");
 
@@ -75,7 +75,7 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
     );
 
     type ViewQuery = Entity;
-    type ItemQuery = Read<ChunkBatch>;
+    type ItemQuery = Read<ChunkBatchLod>;
 
     fn render<'w>(
         item: &P,
@@ -89,14 +89,16 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
         let view_entity = view;
         let batch_entity = item.entity();
 
-        let Some(batch) = entity else {
-            error!("Couldn't get chunk batch component for entity {batch_entity}");
+        let Some(batch_lod) = entity else {
+            error!("Couldn't get 'ChunkBatchLod' component for entity {batch_entity}");
             return RenderCommandResult::Failure;
         };
 
-        let lod_data = store.lod(batch.lod);
+        let batch_lod = batch_lod.0;
+
+        let lod_data = store.lod(batch_lod);
         if !lod_data.is_ready() {
-            let lod = batch.lod;
+            let lod = batch_lod;
             error!("Indirect chunk data for LOD {lod:?} is not ready for rendering");
             return RenderCommandResult::Failure;
         }

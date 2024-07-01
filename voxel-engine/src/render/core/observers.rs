@@ -6,7 +6,7 @@ use bevy::{
     render::{render_resource::Buffer, Extract},
 };
 
-use crate::topo::controller::{ChunkBatch, VisibleBatches};
+use crate::topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches};
 
 use super::phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
 
@@ -40,7 +40,7 @@ pub type ObserverBatches = EntityHashMap<ObserverBatchGpuData>;
 
 pub fn extract_observer_visible_batches(
     query: Extract<Query<(Entity, &VisibleBatches)>>,
-    batch_query: Query<&ChunkBatch>,
+    batch_query: Query<(&ChunkBatch, &ChunkBatchLod)>,
     mut cmds: Commands,
 ) {
     for (entity, visible) in &query {

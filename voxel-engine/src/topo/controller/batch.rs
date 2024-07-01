@@ -132,7 +132,7 @@ pub fn update_cached_chunk_flags(
 }
 
 /// A batch of chunks
-#[derive(Clone, ExtractComponent)]
+#[derive(Clone)]
 pub struct ChunkBatch {
     owner: Entity,
     flags: BatchFlags,
@@ -140,7 +140,8 @@ pub struct ChunkBatch {
     tick: u64,
 }
 
-// TODO: batch LOD component
+#[derive(Copy, Clone, Component, PartialEq, Eq, Deref, DerefMut)]
+pub struct ChunkBatchLod(pub LevelOfDetail);
 
 impl ChunkBatch {
     pub fn num_chunks(&self) -> u32 {

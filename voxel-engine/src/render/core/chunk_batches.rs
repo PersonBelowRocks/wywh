@@ -15,7 +15,7 @@ use bevy::{
 use bytemuck::cast_slice;
 
 use crate::{
-    topo::controller::{ChunkBatch, VisibleBatches},
+    topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches},
     util::ChunkSet,
 };
 
@@ -29,25 +29,25 @@ use super::{
 };
 
 #[derive(Resource, Clone, Default)]
-pub struct RenderChunkBatches(EntityHashMap<RenderChunkBatch>);
+pub struct PreparedChunkBatches(EntityHashMap<PreparedChunkBatch>);
 
-impl RenderChunkBatches {
+impl PreparedChunkBatches {
     /// Tries to insert the given batch entity and initialize its indirect buffer. Will only insert if the
     /// batch doesn't exist from before or if the existing batch is older (had a smaller `tick`).
     /// Returns true if the batch was inserted (in which case the batch should be queued for
     /// buffer building).
     pub fn try_insert(&mut self, entity: Entity, batch: &ChunkBatch, gpu: &RenderDevice) -> bool {
-        let num_chunks = batch.chunks.len() as u32;
+        let num_chunks = batch.num_chunks();
         let mut did_insert = false;
 
         self.0
             .entry(entity)
             .and_modify(|render_batch| {
-                if render_batch.tick < batch.tick {
-                    *render_batch = RenderChunkBatch {
+                if render_batch.tick < batch.tick() {
+                    *render_batch = PreparedChunkBatch {
                         indirect: create_primary_indirect_buffer(gpu, num_chunks),
                         num_chunks,
-                        tick: batch.tick,
+                        tick: batch.tick(),
                     };
 
                     did_insert = true;
@@ -56,10 +56,10 @@ impl RenderChunkBatches {
             .or_insert_with(|| {
                 did_insert = true;
 
-                RenderChunkBatch {
+                PreparedChunkBatch {
                     indirect: create_primary_indirect_buffer(gpu, num_chunks),
                     num_chunks,
-                    tick: batch.tick,
+                    tick: batch.tick(),
                 }
             });
 
@@ -70,7 +70,7 @@ impl RenderChunkBatches {
         self.0.clear();
     }
 
-    pub fn get(&self, entity: Entity) -> Option<&RenderChunkBatch> {
+    pub fn get(&self, entity: Entity) -> Option<&PreparedChunkBatch> {
         self.0.get(&entity)
     }
 
@@ -80,7 +80,7 @@ impl RenderChunkBatches {
 }
 
 #[derive(Clone)]
-pub struct RenderChunkBatch {
+pub struct PreparedChunkBatch {
     pub indirect: Buffer,
     pub num_chunks: u32,
     pub tick: u64,
@@ -123,9 +123,9 @@ impl ChunkBatch {
     /// If the metadata didn't exist in the provided indirect chunk data, then its index is not part of the returned vector.
     /// The caller must handle this (or do what this function does manually) if it's an issue.
     pub fn get_metadata_indices(&self, indirect_data: &IndirectChunkData) -> Vec<u32> {
-        let mut chunk_metadata_indices = Vec::<u32>::with_capacity(self.chunks.len());
+        let mut chunk_metadata_indices = Vec::<u32>::with_capacity(self.chunks().len());
 
-        for chunk_pos in self.chunks.iter() {
+        for chunk_pos in self.chunks().iter() {
             let Some(metadata_index) = indirect_data.get_chunk_metadata_index(chunk_pos) else {
                 continue;
             };
@@ -172,17 +172,34 @@ fn create_count_buffer(gpu: &RenderDevice) -> Buffer {
     })
 }
 
+/// Extracts all entites with both a `ChunkBatch` and `ChunkBatchLod` component. These entities are
+/// "renderable" chunk batches, they have all the data required to be rendered. Other batches are ignored.
+pub fn extract_batches_with_lods(
+    batches: Extract<Query<(Entity, &ChunkBatch, &ChunkBatchLod)>>,
+    mut cmds: Commands,
+    mut previous_size: Local<usize>,
+) {
+    let mut extract = Vec::with_capacity(*previous_size);
+
+    for (entity, batch, batch_lod) in &batches {
+        extract.push((entity, (batch.clone(), batch_lod.clone())));
+    }
+
+    *previous_size = extract.len();
+    cmds.insert_or_spawn_batch(extract.into_iter());
+}
+
 /// This system initializes the GPU buffers for chunk batches (instance buffer, indirect buffer, etc.) and queues
 /// them for population by the buffer builder in the render graph.
 pub fn initialize_and_queue_batch_buffers(
     mut populate_buffers: ResMut<PopulateBatchBuffers>,
-    mut render_batches: ResMut<RenderChunkBatches>,
+    mut render_batches: ResMut<PreparedChunkBatches>,
     mut all_observer_batch_buffers: ResMut<ObserverBatchBuffersStore>,
     store: Res<IndirectRenderDataStore>,
     view_uniforms: Res<ViewUniforms>,
     default_layouts: Res<DefaultBindGroupLayouts>,
-    observer_batch_query: Query<(Entity, &VisibleBatches)>,
-    all_batches: Query<&ChunkBatch>,
+    q_observer_batches: Query<(Entity, &VisibleBatches)>,
+    q_batches: Query<(&ChunkBatch, &ChunkBatchLod)>,
     gpu: Res<RenderDevice>,
 ) {
     // Clear out the previous queued population buffers
@@ -194,7 +211,7 @@ pub fn initialize_and_queue_batch_buffers(
         return;
     };
 
-    for (observer_entity, visible_batches) in &observer_batch_query {
+    for (observer_entity, visible_batches) in &q_observer_batches {
         // All the per-observer batch buffers for this observer.
         let observer_batch_buffers = all_observer_batch_buffers
             .entry(observer_entity)
@@ -202,18 +219,28 @@ pub fn initialize_and_queue_batch_buffers(
 
         for &batch_entity in visible_batches.iter() {
             // We need to initialize the buffers at the appropriate size.
-            let batch = all_batches
+            let (batch, batch_lod) = q_batches
                 .get(batch_entity)
                 .expect("Earlier in the extract phase we ensured that all visible batches are also actually present in the ECS world");
 
             let did_insert = render_batches.try_insert(batch_entity, batch, &gpu);
+            let batch_lod = batch_lod.0;
 
+            // If we inserted this batch entity for this view, then we need to build 2 bind groups:
+            // The frustum cull bind bind group, which binds the indirect buffers (count, args),
+            // chunk instances (basically their position), and the view (for the frustum). This
+            // bind group is used in a compute shader to edit the indirect args so that the
+            // chunks that are outside the frustum are not rendered.
+            //
+            // The buffer building bind group, which is basically a glorified copy. It takes in an
+            // array of the indices to chunk metadata in the metadata array buffer, and builds indirect args
+            // based on what it finds.
             if did_insert {
                 let observer_indirect_buf =
                     create_observer_indirect_buffer(&gpu, batch.num_chunks());
                 let observer_count_buf = create_count_buffer(&gpu);
 
-                let lod_data = &store.lod(batch.lod);
+                let lod_data = &store.lod(batch_lod);
 
                 let cull_bind_group = gpu.create_bind_group(
                     Some("observer_batch_frustum_cull_bind_group"),

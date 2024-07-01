@@ -23,7 +23,7 @@ use crate::{
 };
 
 use super::{
-    chunk_batches::RenderChunkBatches, indirect::IndirectChunkData,
+    chunk_batches::PreparedChunkBatches, indirect::IndirectChunkData,
     observers::ObserverBatchBuffersStore, DefaultBindGroupLayouts,
 };
 
@@ -90,7 +90,7 @@ pub fn upload_chunk_meshes(
 
 pub fn update_indirect_chunk_data_dependants(
     mut update: ResMut<UpdateIndirectLODs>,
-    mut batches: ResMut<RenderChunkBatches>,
+    mut batches: ResMut<PreparedChunkBatches>,
     mut observer_batches: ResMut<ObserverBatchBuffersStore>,
 ) {
     for lod in update.contained_lods() {
