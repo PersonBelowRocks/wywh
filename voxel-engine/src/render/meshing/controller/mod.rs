@@ -8,7 +8,7 @@ use ecs::{batch_chunk_extraction, remove_chunks};
 
 use crate::{
     render::{
-        lod::{LevelOfDetail, LodMap},
+        lod::{LODs, LevelOfDetail, LodMap},
         meshing::controller::ecs::dispatch_updated_chunk_remeshings,
         quad::GpuQuad,
     },
@@ -104,6 +104,7 @@ pub struct ExtractableChunkMeshData {
     /// Indicates if we should extract chunks to the render world (or remove chunks from the render world).
     /// Usually used to regulate extraction a bit so that we can extract chunks in bulk instead of extracting them immediately
     /// as they become available. This helps reduce some lag when meshing lots of chunks.
+    // TODO: maybe we should split this up into a per-lod thing.
     should_extract: bool,
 }
 
@@ -121,7 +122,7 @@ impl Default for ExtractableChunkMeshData {
 
 impl ExtractableChunkMeshData {
     fn set_status(&mut self, pos: ChunkPos, lod: LevelOfDetail, status: TimedChunkMeshStatus) {
-        self.statuses.get_mut(lod).unwrap().set(pos, status);
+        self.statuses[lod].set(pos, status);
     }
 
     /// "Flush" the queued mesh data. This marks it as ready for extraction so it will be extracted
@@ -132,12 +133,12 @@ impl ExtractableChunkMeshData {
 
     /// The number of chunks queued for extraction at this LOD.
     pub fn queued_additions(&self, lod: LevelOfDetail) -> usize {
-        self.add.get(lod).unwrap().len()
+        self.add[lod].len()
     }
 
     /// The number of chunks queued for removal from the render world at this LOD.
     pub fn queued_removals(&self, lod: LevelOfDetail) -> usize {
-        self.remove.get(lod).unwrap().len()
+        self.remove[lod].len()
     }
 
     pub fn should_extract(&self) -> bool {
@@ -155,7 +156,7 @@ impl ExtractableChunkMeshData {
     ) {
         // If we already have a newer chunk mesh, then we return early since we should never extract an
         // older version of a chunk mesh.
-        if let Some(status) = self.statuses.get(lod).unwrap().get(pos) {
+        if let Some(status) = self.statuses[lod].get(pos) {
             if status.tick > tick {
                 return;
             }
@@ -166,7 +167,7 @@ impl ExtractableChunkMeshData {
 
         // Only queue the mesh for extraction if it's filled.
         if status == ChunkMeshStatus::Filled {
-            self.add.get_mut(lod).unwrap().set(pos, mesh);
+            self.add[lod].set(pos, mesh);
         }
 
         // Even if we don't queue the mesh for extraction we still need to note down its status.
@@ -175,25 +176,40 @@ impl ExtractableChunkMeshData {
 
     /// Queue a chunk at a given LOD for removal from the render world.
     pub fn remove_chunk(&mut self, pos: ChunkPos, lod: LevelOfDetail) {
-        self.statuses.get_mut(lod).unwrap().remove(pos);
-        self.remove.get_mut(lod).unwrap().remove(pos);
+        self.statuses[lod].remove(pos);
+        self.add[lod].remove(pos);
+        self.remove[lod].remove(pos);
     }
 
     pub fn additions(
         &self,
         lod: LevelOfDetail,
     ) -> impl Iterator<Item = (ChunkPos, &ChunkMeshData)> + '_ {
-        self.add.get(lod).unwrap().iter()
+        self.add[lod].iter()
     }
 
     pub fn removals(&self, lod: LevelOfDetail) -> impl Iterator<Item = ChunkPos> + '_ {
-        self.remove.get(lod).unwrap().iter()
+        self.remove[lod].iter()
     }
 
-    pub fn clear(&mut self) {
+    /// Clear the removal and addition queues and mark the added chunks in the queue as being extracted.
+    /// Also resets the 'Self::should_extract()' status.
+    /// Should be called in the extract stage in the render world after copying data to communicate the
+    /// status of the meshes to the main world.
+    pub fn mark_as_extracted(&mut self, lods: LODs) {
         self.should_extract = false;
-        self.remove.clear();
-        self.add.clear();
+
+        for lod in lods.contained_lods() {
+            self.remove[lod].clear();
+
+            let additions = &mut self.add[lod];
+            for (chunk, _) in additions.drain() {
+                self.statuses[lod]
+                    .get_mut(chunk)
+                    .expect("All chunk positions queued for addition should have a status")
+                    .status = ChunkMeshStatus::Extracted;
+            }
+        }
     }
 }
 

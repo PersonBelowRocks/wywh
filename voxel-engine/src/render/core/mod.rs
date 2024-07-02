@@ -71,6 +71,8 @@ pub struct RenderCore;
 
 impl Plugin for RenderCore {
     fn build(&self, app: &mut App) {
+        info!("Building render core plugin");
+
         load_internal_shaders(app);
 
         app.add_plugins((
@@ -100,11 +102,6 @@ impl Plugin for RenderCore {
             .init_resource::<AddChunkMeshes>();
 
         render_app
-            .add_render_command::<Opaque3dPrepass, IndirectChunksPrepass>()
-            .add_render_command::<Opaque3d, IndirectChunksRender>()
-            .add_render_command::<Shadow, IndirectChunksPrepass>();
-
-        render_app
             .add_render_graph_node::<ViewNodeRunner<ChunkPrepassNode>>(Core3d, Nodes::Prepass)
             .add_render_graph_node::<ViewNodeRunner<ChunkRenderNode>>(Core3d, Nodes::Render)
             .add_render_graph_node::<ViewNodeRunner<GpuFrustumCullBatchesNode>>(
@@ -117,11 +114,7 @@ impl Plugin for RenderCore {
             ExtractSchedule,
             (
                 extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
-                (
-                    extract_chunk_mesh_data
-                        .run_if(main_world_res_exists::<ExtractableChunkMeshData>),
-                )
-                    .chain(),
+                extract_chunk_mesh_data.run_if(main_world_res_exists::<ExtractableChunkMeshData>),
             ),
         );
         render_app.add_systems(

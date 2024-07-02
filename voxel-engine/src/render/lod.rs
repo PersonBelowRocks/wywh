@@ -24,6 +24,29 @@ pub enum LevelOfDetail {
     X16Subdiv = 5,
 }
 
+#[derive(Clone, Default)]
+pub struct FilledLodMap<T>(EnumMap<LevelOfDetail, T>);
+
+impl<T> FilledLodMap<T> {
+    pub fn from_fn(f: impl FnMut(LevelOfDetail) -> T) -> Self {
+        Self(EnumMap::from_fn(f))
+    }
+}
+
+impl<T> std::ops::Index<LevelOfDetail> for FilledLodMap<T> {
+    type Output = T;
+
+    fn index(&self, index: LevelOfDetail) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+impl<T> std::ops::IndexMut<LevelOfDetail> for FilledLodMap<T> {
+    fn index_mut(&mut self, index: LevelOfDetail) -> &mut Self::Output {
+        &mut self.0[index]
+    }
+}
+
 /// Maps levels of detail to values of a type.
 #[derive(Clone)]
 pub struct LodMap<T>(EnumMap<LevelOfDetail, Option<T>>);
@@ -31,6 +54,20 @@ pub struct LodMap<T>(EnumMap<LevelOfDetail, Option<T>>);
 impl<T> Default for LodMap<T> {
     fn default() -> Self {
         Self(EnumMap::from_fn(|_| None))
+    }
+}
+
+impl<T> std::ops::Index<LevelOfDetail> for LodMap<T> {
+    type Output = T;
+
+    fn index(&self, index: LevelOfDetail) -> &Self::Output {
+        self.get(index).unwrap()
+    }
+}
+
+impl<T> std::ops::IndexMut<LevelOfDetail> for LodMap<T> {
+    fn index_mut(&mut self, index: LevelOfDetail) -> &mut Self::Output {
+        self.get_mut(index).unwrap()
     }
 }
 

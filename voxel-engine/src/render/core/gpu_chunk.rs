@@ -16,7 +16,7 @@ use bevy::{
 
 use crate::{
     render::{
-        lod::{LODs, LevelOfDetail, LodMap},
+        lod::{FilledLodMap, LODs, LevelOfDetail, LodMap},
         meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
     },
     util::{ChunkMap, ChunkSet},
@@ -27,13 +27,28 @@ use super::{
     observers::ObserverBatchBuffersStore, DefaultBindGroupLayouts,
 };
 
+// FIXME: this system freezes for some reason
 pub fn extract_chunk_mesh_data(
-    mut unprepared: ResMut<AddChunkMeshes>,
+    mut add_meshes: ResMut<AddChunkMeshes>,
     mut remove_meshes: ResMut<RemoveChunkMeshes>,
     mut main_world: ResMut<MainWorld>,
 ) {
-    // TODO: new extract logic that considers mesh LODs
-    todo!()
+    main_world.resource_scope::<ExtractableChunkMeshData, _>(|_, mut meshes| {
+        for lod in LevelOfDetail::LODS {
+            let lod_meshes = &mut add_meshes[lod];
+            let lod_removals = &mut remove_meshes[lod];
+
+            for (chunk, mesh) in meshes.additions(lod) {
+                lod_meshes.set(chunk, mesh.clone());
+            }
+
+            for chunk in meshes.removals(lod) {
+                lod_removals.set(chunk);
+            }
+        }
+
+        meshes.mark_as_extracted(LODs::all());
+    });
 }
 
 /// Untrack chunk meshes in the render world and remove their data on the GPU
@@ -47,18 +62,20 @@ pub fn remove_chunk_meshes(
     let gpu = gpu.as_ref();
     let queue = queue.as_ref();
 
-    let remove = mem::replace(&mut remove.0, LodMap::default());
+    for lod in LevelOfDetail::LODS {
+        let icd = indirect_data.lod_mut(lod);
 
-    for (lod, chunks) in remove.into_iter() {
         // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
         // is quite sensitive to running with empty vectors and maps.
-        if chunks.is_empty() {
+        if icd.is_empty() {
             return;
         }
 
-        indirect_data.lod_mut(lod).remove_chunks(gpu, queue, chunks);
+        icd.remove_chunks(gpu, queue, &remove[lod]);
         // This LOD had its indirect data updated so we note it down to update the dependants of it later
         rebuild.insert_lod(lod);
+        // Clear the removal queue
+        remove[lod].clear();
     }
 }
 
@@ -73,18 +90,22 @@ pub fn upload_chunk_meshes(
     let gpu = gpu.as_ref();
     let queue = queue.as_ref();
 
-    let add = mem::replace(&mut add.0, LodMap::default());
+    for lod in LevelOfDetail::LODS {
+        let meshes = &mut add[lod];
 
-    for (lod, meshes) in add.into_iter() {
         // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
         // is quite sensitive to running with empty vectors and maps.
         if meshes.is_empty() {
             continue;
         }
 
-        indirect_data.lod_mut(lod).upload_chunks(gpu, queue, meshes);
+        indirect_data
+            .lod_mut(lod)
+            .upload_chunks(gpu, queue, meshes.clone());
         // This LOD had its indirect data updated so we note it down to update the dependants of it later
         update.insert_lod(lod);
+        // Clear the addition queue
+        meshes.clear();
     }
 }
 
@@ -105,18 +126,18 @@ pub fn update_indirect_chunk_data_dependants(
 
 /// A store of unprepared chunk meshes
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct AddChunkMeshes(pub LodMap<ChunkMap<ChunkMeshData>>);
+pub struct AddChunkMeshes(pub FilledLodMap<ChunkMap<ChunkMeshData>>);
 
 /// A store of chunks that should be removed from the render world
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct RemoveChunkMeshes(pub LodMap<ChunkSet>);
+pub struct RemoveChunkMeshes(pub FilledLodMap<ChunkSet>);
 
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct UpdateIndirectLODs(pub LODs);
 
 #[derive(Resource)]
 pub struct IndirectRenderDataStore {
-    lods: LodMap<IndirectChunkData>,
+    lods: FilledLodMap<IndirectChunkData>,
 }
 
 impl FromWorld for IndirectRenderDataStore {
@@ -125,11 +146,8 @@ impl FromWorld for IndirectRenderDataStore {
         let default_bg_layouts = world.resource::<DefaultBindGroupLayouts>();
 
         Self {
-            lods: LodMap::from_fn(|_lod| {
-                Some(IndirectChunkData::new(
-                    gpu,
-                    default_bg_layouts.icd_quad_bg_layout.clone(),
-                ))
+            lods: FilledLodMap::from_fn(|_lod| {
+                IndirectChunkData::new(gpu, default_bg_layouts.icd_quad_bg_layout.clone())
             }),
         }
     }
@@ -137,14 +155,10 @@ impl FromWorld for IndirectRenderDataStore {
 
 impl IndirectRenderDataStore {
     pub fn lod(&self, lod: LevelOfDetail) -> &IndirectChunkData {
-        self.lods
-            .get(lod)
-            .expect("This LOD map should not have any empty values")
+        &self.lods[lod]
     }
 
     pub fn lod_mut(&mut self, lod: LevelOfDetail) -> &mut IndirectChunkData {
-        self.lods
-            .get_mut(lod)
-            .expect("This LOD map should not have any empty values")
+        &mut self.lods[lod]
     }
 }

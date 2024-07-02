@@ -245,6 +245,10 @@ impl IndirectChunkData {
         self.quad_bind_group.is_some() && !self.metadata.is_empty()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.metadata.is_empty()
+    }
+
     pub fn quad_bind_group(&self) -> Option<&BindGroup> {
         self.quad_bind_group.as_ref()
     }
@@ -468,7 +472,7 @@ impl IndirectChunkData {
         self.update_quad_bind_group(gpu);
     }
 
-    pub fn remove_chunks(&mut self, gpu: &RenderDevice, queue: &RenderQueue, chunks: ChunkSet) {
+    pub fn remove_chunks(&mut self, gpu: &RenderDevice, queue: &RenderQueue, chunks: &ChunkSet) {
         if chunks.is_empty() {
             return;
         }
