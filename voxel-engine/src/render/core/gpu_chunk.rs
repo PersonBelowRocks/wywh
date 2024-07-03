@@ -108,7 +108,7 @@ pub fn upload_chunk_meshes(
     }
 }
 
-pub fn update_indirect_chunk_data_dependants(
+pub fn update_indirect_mesh_data_dependants(
     mut update: ResMut<UpdateIndirectLODs>,
     mut batches: ResMut<PreparedChunkBatches>,
     mut observer_batches: ResMut<ObserverBatchBuffersStore>,

@@ -19,7 +19,7 @@ struct ChunkQuadBitfields {
 }
 
 struct GpuChunkMetadata {
-    position: vec3f,
+    instance: u32,
     start_index: u32,
     end_index: u32,
     start_quad: u32,
@@ -65,11 +65,4 @@ fn empty_instance_data() -> ChunkInstanceData {
     data.position = vec3f(0.0);
     data.base_quad = 0u;
     return data;
-}
-
-fn instance_data_from_metadata(metadata: GpuChunkMetadata) -> ChunkInstanceData {
-    var chunk_instance_data: ChunkInstanceData;
-    chunk_instance_data.position = metadata.position;
-    chunk_instance_data.base_quad = metadata.start_quad;
-    return chunk_instance_data;
 }

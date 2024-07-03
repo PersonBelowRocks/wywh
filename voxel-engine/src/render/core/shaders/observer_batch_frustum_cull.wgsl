@@ -12,12 +12,11 @@ fn view_frustum_intersects_chunk_sphere(
 ) -> bool {
 
     for (var i = 0; i < 5; i += 1) {
-        // Calculate relative radius of the sphere associated with this plane.
         let plane_normal = view.frustum[i];
 
         // Check the frustum plane.
         if (!maths::sphere_intersects_plane_half_space(
-                plane_normal, chunk_pos, CHUNK_HALF_SIZE)) {
+                plane_normal, vec4(chunk_pos, 1.0), CHUNK_HALF_SIZE)) {
             return false;
         }
     }

@@ -86,7 +86,7 @@ pub struct PreparedChunkBatch {
     pub tick: u64,
 }
 
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, Default)]
 pub struct PopulateBatchBuffers {
     pub observers: EntityHashMap<EntityHashSet>,
     pub batches: EntityHashMap<BindGroup>,
