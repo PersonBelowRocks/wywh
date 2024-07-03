@@ -5,6 +5,7 @@ use std::{cmp, fmt};
 
 use bevy::prelude::*;
 use ecs::{batch_chunk_extraction, remove_chunks};
+use workers::FinishedChunkMeshData;
 
 use crate::{
     render::{
@@ -147,31 +148,32 @@ impl ExtractableChunkMeshData {
 
     /// Try to queue a chunk mesh of a given age and LOD for extraction. Will do nothing if there's
     /// a newer version either already queued or extracted.
-    pub fn add_chunk_mesh(
-        &mut self,
-        pos: ChunkPos,
-        lod: LevelOfDetail,
-        tick: u64,
-        mesh: ChunkMeshData,
-    ) {
+    pub fn add_chunk_mesh(&mut self, mesh: FinishedChunkMeshData) {
         // If we already have a newer chunk mesh, then we return early since we should never extract an
         // older version of a chunk mesh.
-        if let Some(status) = self.statuses[lod].get(pos) {
-            if status.tick > tick {
+        if let Some(status) = self.statuses[mesh.lod].get(mesh.pos) {
+            if status.tick > mesh.tick {
                 return;
             }
         }
 
         // Will have an empty status if the mesh is empty
-        let status = ChunkMeshStatus::from_mesh_data(&mesh);
+        let status = ChunkMeshStatus::from_mesh_data(&mesh.data);
 
         // Only queue the mesh for extraction if it's filled.
         if status == ChunkMeshStatus::Filled {
-            self.add[lod].set(pos, mesh);
+            self.add[mesh.lod].set(mesh.pos, mesh.data);
         }
 
         // Even if we don't queue the mesh for extraction we still need to note down its status.
-        self.set_status(pos, lod, TimedChunkMeshStatus { tick, status });
+        self.set_status(
+            mesh.pos,
+            mesh.lod,
+            TimedChunkMeshStatus {
+                tick: mesh.tick,
+                status,
+            },
+        );
     }
 
     /// Queue a chunk at a given LOD for removal from the render world.

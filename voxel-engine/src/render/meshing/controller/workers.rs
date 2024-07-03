@@ -16,7 +16,10 @@ use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TrySendError}
 
 use crate::{
     data::registries::Registries,
-    render::meshing::{error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context},
+    render::{
+        lod::LevelOfDetail,
+        meshing::{error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context},
+    },
     topo::world::{ChunkManager, ChunkPos},
     util::{result::ResultFlattening, ChunkIndexMap, ChunkSet, Keyed},
 };
@@ -35,13 +38,14 @@ pub struct WorkerParams {
     pub chunk_manager: Arc<ChunkManager>,
     pub mesher: GreedyMesher,
 
-    pub finished: Sender<FinishedChunkData>,
+    pub finished: Sender<FinishedChunkMeshData>,
     pub cmds: Receiver<MeshBuilderCommand>,
 }
 
 #[derive(Clone)]
 pub struct MeshBuilderCommand {
     pub pos: ChunkPos,
+    pub lod: LevelOfDetail,
     pub priority: RemeshPriority,
     pub generation: u64,
 }
@@ -87,6 +91,7 @@ impl Worker {
 
                 let result = cm.with_neighbors::<_, Result<ChunkMeshData, ChunkMeshingError>>(cmd.pos, |neighbors| {
                     let context = Context {
+                        lod: cmd.lod,
                         neighbors,
                         registries: &params.registries,
                     };
@@ -99,8 +104,9 @@ impl Worker {
 
                 match result {
                     Ok(output) => {
-                        params.finished.send(FinishedChunkData {
+                        params.finished.send(FinishedChunkMeshData {
                             data: output,
+                            lod: cmd.lod,
                             pos: cmd.pos,
                             tick: cmd.generation
                         }).unwrap();
@@ -135,8 +141,9 @@ impl Worker {
     }
 }
 
-pub struct FinishedChunkData {
+pub struct FinishedChunkMeshData {
     pub pos: ChunkPos,
+    pub lod: LevelOfDetail,
     pub data: ChunkMeshData,
     pub tick: u64,
 }
@@ -154,7 +161,7 @@ pub struct MeshBuilder {
     workers: Vec<Worker>,
     cmds: Sender<MeshBuilderCommand>,
     pending: ChunkIndexMap<MeshBuilderCommand>,
-    finished: Receiver<FinishedChunkData>,
+    finished: Receiver<FinishedChunkMeshData>,
 }
 
 impl MeshBuilder {
@@ -166,7 +173,7 @@ impl MeshBuilder {
     ) -> Self {
         let (cmd_sender, cmd_recver) =
             channel::bounded::<MeshBuilderCommand>(settings.job_channel_capacity);
-        let (mesh_sender, mesh_recver) = channel::unbounded::<FinishedChunkData>();
+        let (mesh_sender, mesh_recver) = channel::unbounded::<FinishedChunkMeshData>();
         let mut workers = Vec::<Worker>::with_capacity(settings.workers);
 
         let default_channel_timeout_duration = Duration::from_millis(50);
@@ -243,7 +250,7 @@ impl MeshBuilder {
         }
     }
 
-    pub fn get_finished_meshes(&self) -> Vec<FinishedChunkData> {
+    pub fn get_finished_meshes(&self) -> Vec<FinishedChunkMeshData> {
         let mut vec = Vec::with_capacity(self.finished.len());
 
         while let Ok(finished) = self.finished.try_recv() {

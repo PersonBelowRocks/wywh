@@ -10,7 +10,7 @@ use bevy::{
 
 use crate::{
     data::{registries::Registries, tile::Face},
-    render::meshing::controller::workers::MeshBuilderSettings,
+    render::{lod::LevelOfDetail, meshing::controller::workers::MeshBuilderSettings},
     topo::{
         controller::{BatchFlags, CachedBatchMembership, RemovedBatchChunks, VoxelWorldTick},
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
@@ -30,6 +30,7 @@ pub struct MeshWorkerTaskPool(TaskPool);
 #[derive(Event, Clone)]
 pub struct RemeshChunk {
     pub pos: ChunkPos,
+    pub lod: LevelOfDetail,
     pub remesh_type: RemeshType,
     pub priority: RemeshPriority,
     pub tick: u64,
@@ -50,6 +51,7 @@ pub fn queue_chunk_mesh_jobs(
     for event in events.read() {
         let cmd = MeshBuilderCommand {
             pos: event.pos,
+            lod: event.lod,
             priority: event.priority,
             generation: event.tick,
         };
@@ -80,7 +82,7 @@ pub fn insert_chunks(
             continue;
         }
 
-        todo!(); // meshes.add_chunk_mesh(mesh.pos, mesh.tick, mesh.data);
+        meshes.add_chunk_mesh(mesh);
     }
 }
 
@@ -102,7 +104,8 @@ pub fn remove_chunks(
 
     builder.remove_pending(&remove);
     for chunk in remove.iter() {
-        todo!(); // meshes.remove_chunk(chunk)
+        // TODO: remove meshes at LODs when theyre no longer needed at that LOD
+        // meshes.remove_chunk(chunk)
     }
 }
 
@@ -282,6 +285,8 @@ pub fn dispatch_updated_chunk_remeshings(
 
                 RemeshChunk {
                     pos: chunk_pos,
+                    // TODO: calculate LOD!!
+                    lod: LevelOfDetail::X16Subdiv,
                     remesh_type: RemeshType::Delayed,
                     priority,
                     tick: tick.get(),
