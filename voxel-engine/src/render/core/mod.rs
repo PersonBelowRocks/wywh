@@ -9,7 +9,7 @@ mod phase;
 mod shaders;
 mod utils;
 
-use bevy::core_pipeline::core_3d::graph::Core3d;
+use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::render::extract_component::ExtractComponentPlugin;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
@@ -139,7 +139,17 @@ impl Plugin for RenderCore {
                 Core3d,
                 Nodes::BatchFrustumCulling,
             )
-            .add_render_graph_node::<BuildBatchBuffersNode>(Core3d, Nodes::BuildBatchBuffers);
+            .add_render_graph_node::<BuildBatchBuffersNode>(Core3d, Nodes::BuildBatchBuffers)
+            .add_render_graph_edges(
+                Core3d,
+                (
+                    Nodes::BuildBatchBuffers,
+                    Nodes::BatchFrustumCulling,
+                    Node3d::Prepass,
+                    Nodes::Prepass,
+                    Node3d::MainOpaquePass,
+                ),
+            );
 
         render_app.add_systems(
             ExtractSchedule,
