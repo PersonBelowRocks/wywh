@@ -84,15 +84,18 @@ fn chunk_pos_center_vec3(pos: ChunkPos) -> Vec3 {
 
 pub fn update_observer_batches(
     trigger: Trigger<CrossChunkBorder>,
-    q_observers: Query<(&ObserverBatches, &ObserverSettings)>,
-    tick: Res<VoxelWorldTick>,
-    mut q_batches: Query<&mut ChunkBatch>,
-    mut membership: ResMut<CachedBatchMembership>,
+    q_observers: Query<(Option<&ObserverBatches>, &ObserverSettings)>,
+    q_batches: Query<&mut ChunkBatch>,
     mut cmds: Commands,
 ) {
     let observer_entity = trigger.entity();
     let event = trigger.event();
     let (observer_batches, settings) = q_observers.get(observer_entity).unwrap();
+
+    let Some(observer_batches) = observer_batches else {
+        // This observer doesn't have any batches
+        return;
+    };
 
     let mut update_cached_flags = ChunkSet::default();
 

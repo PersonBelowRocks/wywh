@@ -295,6 +295,7 @@ impl Plugin for WorldController {
         app.insert_resource(self.settings)
             .init_resource::<LoadshareProvider>()
             .init_resource::<VoxelWorldTick>()
+            .init_resource::<CachedBatchMembership>()
             .add_event::<LoadChunksEvent>()
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunksEvent>()
