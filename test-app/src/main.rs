@@ -9,6 +9,7 @@ use std::f32::consts::PI;
 use bevy::core_pipeline::experimental::taa::{TemporalAntiAliasBundle, TemporalAntiAliasPlugin};
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 
+use bevy::ecs::entity::EntityHashSet;
 use bevy::log::{self, LogPlugin};
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::pbr::ScreenSpaceAmbientOcclusionBundle;
@@ -18,7 +19,7 @@ use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, FpsText, SpatialDebugText};
 use ve::render::lod::LevelOfDetail;
-use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle};
+use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle, VisibleBatches};
 use ve::{CoreEngineSetup, EngineState};
 
 fn main() {
@@ -221,8 +222,14 @@ fn setup(
         })
         .id();
 
-    commands.spawn((
-        ChunkBatch::new(observer_entity, BatchFlags::RENDER),
-        ChunkBatchLod(LevelOfDetail::X16Subdiv),
-    ));
+    let batch_entity = commands
+        .spawn((
+            ChunkBatch::new(observer_entity, BatchFlags::RENDER),
+            ChunkBatchLod(LevelOfDetail::X16Subdiv),
+        ))
+        .id();
+
+    commands
+        .get_or_spawn(observer_entity)
+        .insert(VisibleBatches(EntityHashSet::from_iter([batch_entity])));
 }

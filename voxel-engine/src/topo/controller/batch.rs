@@ -284,5 +284,6 @@ pub struct ObserverBatches {
     pub owned: EntityHashSet,
 }
 
+// TODO: trigger for adding this component to an observer
 #[derive(Component, Clone, Debug, Deref, DerefMut, dm::Constructor, Default)]
-pub struct VisibleBatches(EntityHashSet);
+pub struct VisibleBatches(pub EntityHashSet);

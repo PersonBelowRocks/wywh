@@ -211,7 +211,6 @@ impl LoadshareProvider {
 #[derive(Bundle, Default)]
 pub struct ObserverBundle {
     pub settings: ObserverSettings,
-    pub visible: VisibleBatches,
     pub batches: ObserverBatches,
     pub loadshare: ObserverLoadshare,
 }

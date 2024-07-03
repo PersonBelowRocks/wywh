@@ -42,6 +42,7 @@ use chunk_batches::{
     BuildBatchBuffersPipeline, ObserverBatchFrustumCullPipeline, PopulateBatchBuffers,
     PreparedChunkBatches,
 };
+use commands::{IndirectChunksPrepass, IndirectChunksRender};
 use gpu_chunk::{
     remove_chunk_meshes, update_indirect_mesh_data_dependants, upload_chunk_meshes,
     IndirectRenderDataStore, RemoveChunkMeshes, UpdateIndirectLODs,
@@ -136,6 +137,8 @@ impl Plugin for RenderCore {
             .init_resource::<AddChunkMeshes>();
 
         render_app
+            .add_render_command::<RenderChunkPhaseItem, IndirectChunksRender>()
+            .add_render_command::<PrepassChunkPhaseItem, IndirectChunksPrepass>()
             .add_render_graph_node::<ViewNodeRunner<ChunkPrepassNode>>(Core3d, Nodes::Prepass)
             .add_render_graph_node::<ViewNodeRunner<ChunkRenderNode>>(Core3d, Nodes::Render)
             .add_render_graph_node::<ViewNodeRunner<GpuFrustumCullBatchesNode>>(
@@ -157,7 +160,13 @@ impl Plugin for RenderCore {
         render_app.add_systems(
             ExtractSchedule,
             (
-                (extract_batches_with_lods, extract_observer_visible_batches).chain(),
+                (
+                    extract_batches_with_lods,
+                    // We have to insert apply_deferred here manually, not sure why bevy doesn't do it automatically.
+                    apply_deferred,
+                    extract_observer_visible_batches,
+                )
+                    .chain(),
                 extract_chunk_camera_phases,
                 extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
                 extract_chunk_mesh_data.run_if(main_world_res_exists::<ExtractableChunkMeshData>),
