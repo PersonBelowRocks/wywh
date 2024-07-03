@@ -1,4 +1,5 @@
 mod chunk_batches;
+mod commands;
 mod gpu_chunk;
 mod gpu_registries;
 mod graph;
@@ -6,6 +7,9 @@ mod impls;
 mod indirect;
 mod observers;
 mod phase;
+mod prepass_pipeline;
+mod queue;
+mod render_pipeline;
 mod shaders;
 mod utils;
 
@@ -45,15 +49,14 @@ use gpu_chunk::{
 use graph::{
     BuildBatchBuffersNode, ChunkPrepassNode, ChunkRenderNode, GpuFrustumCullBatchesNode, Nodes,
 };
-use indirect::{
-    prepass_queue_indirect_chunks, render_queue_indirect_chunks, ChunkInstanceData,
-    GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkPrepassPipeline,
-    IndirectChunkRenderPipeline, IndirectChunksPrepass, IndirectChunksRender,
-};
+use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs};
 use observers::{
     extract_chunk_camera_phases, extract_observer_visible_batches, ObserverBatchBuffersStore,
 };
 use phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
+use prepass_pipeline::IndirectChunkPrepassPipeline;
+use queue::{prepass_queue_chunks, render_queue_chunks};
+use render_pipeline::IndirectChunkRenderPipeline;
 use shaders::load_internal_shaders;
 
 use crate::data::{
@@ -182,8 +185,8 @@ impl Plugin for RenderCore {
                 // Prepare the indirect buffers.
                 initialize_and_queue_batch_buffers.in_set(CoreSet::PrepareIndirectBuffers),
                 (
-                    render_queue_indirect_chunks,
-                    prepass_queue_indirect_chunks,
+                    render_queue_chunks,
+                    prepass_queue_chunks,
                     // TODO: fix up light view entities to use GPU frustum culling like normal cameras
                     // shadow_queue_indirect_chunks,
                 )

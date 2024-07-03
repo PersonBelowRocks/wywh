@@ -22,7 +22,7 @@ use crate::render::core::{
     shaders::SHADER_PATHS, utils::add_shader_constants, DefaultBindGroupLayouts,
 };
 
-use super::{
+use super::render_pipeline::{
     chunk_indirect_instance_buffer_layout, IndirectChunkPipelineKey,
     INDIRECT_CHUNKS_PRIMITIVE_STATE,
 };
