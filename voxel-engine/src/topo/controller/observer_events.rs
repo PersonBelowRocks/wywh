@@ -12,9 +12,9 @@ use crate::{
 };
 
 use super::{
-    AddBatchChunks, CachedBatchMembership, ChunkBatch, CrossChunkBorder, LastPosition,
-    LoadedChunkEvent, ObserverBatches, ObserverSettings, RemoveBatchChunks, UpdateCachedChunkFlags,
-    VoxelWorldTick,
+    AddBatchChunks, CachedBatchMembership, ChunkBatch, CrossChunkBorder, LastPosition, LoadChunks,
+    LoadReasons, LoadedChunkEvent, ObserverBatches, ObserverLoadshare, ObserverSettings,
+    RemoveBatchChunks, UnloadChunks, UpdateCachedChunkFlags, VoxelWorldTick,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -84,18 +84,32 @@ fn chunk_pos_center_vec3(pos: ChunkPos) -> Vec3 {
 
 pub fn update_observer_batches(
     trigger: Trigger<CrossChunkBorder>,
-    q_observers: Query<(Option<&ObserverBatches>, &ObserverSettings)>,
+    q_observers: Query<(
+        Option<&ObserverBatches>,
+        Option<&ObserverLoadshare>,
+        &ObserverSettings,
+    )>,
     q_batches: Query<&mut ChunkBatch>,
+    mut load_chunks: EventWriter<LoadChunks>,
+    mut unload_chunks: EventWriter<UnloadChunks>,
     mut cmds: Commands,
 ) {
     let observer_entity = trigger.entity();
     let event = trigger.event();
-    let (observer_batches, settings) = q_observers.get(observer_entity).unwrap();
+    let (observer_batches, loadshare, settings) = q_observers.get(observer_entity).unwrap();
 
     let Some(observer_batches) = observer_batches else {
         // This observer doesn't have any batches
         return;
     };
+
+    let Some(loadshare) = loadshare else {
+        return;
+    };
+
+    let loadshare_id = loadshare.get()
+        .expect("We shouldn't be able to produce an observer loadshare component that doesn't have an ID yet 
+            since we're using component hooks to set it immediately");
 
     let mut update_cached_flags = ChunkSet::default();
 
@@ -118,6 +132,12 @@ pub fn update_observer_batches(
         );
 
         if !out_of_range.is_empty() {
+            unload_chunks.send(UnloadChunks {
+                loadshare: loadshare_id,
+                reasons: LoadReasons::RENDER,
+                chunks: out_of_range.clone(),
+            });
+
             cmds.trigger_targets(RemoveBatchChunks(out_of_range), batch_entity);
         }
 
@@ -137,6 +157,13 @@ pub fn update_observer_batches(
         );
 
         if !in_range.is_empty() {
+            load_chunks.send(LoadChunks {
+                loadshare: loadshare_id,
+                reasons: LoadReasons::RENDER,
+                auto_generate: true,
+                chunks: in_range.clone(),
+            });
+
             cmds.trigger_targets(AddBatchChunks(in_range), batch_entity);
         }
     }

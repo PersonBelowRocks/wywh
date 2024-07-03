@@ -8,7 +8,7 @@ use crate::topo::world::{
 };
 
 use super::{
-    LoadChunksEvent, LoadedChunkEvent, LoadshareMap, LoadshareProvider, UnloadChunksEvent,
+    LoadChunks, LoadedChunkEvent, LoadshareMap, LoadshareProvider, UnloadChunks,
     UnloadedChunkEvent, WorldControllerSettings,
 };
 
@@ -47,13 +47,13 @@ pub fn handle_chunk_loads_and_unloads(
     time: Res<Time<Real>>,
     mut latest_cycle: Local<Option<Instant>>,
     // Events
-    mut load_events: EventReader<LoadChunksEvent>,
+    mut load_events: EventReader<LoadChunks>,
     mut loaded_chunks: EventWriter<LoadedChunkEvent>,
-    mut unload_events: EventReader<UnloadChunksEvent>,
+    mut unload_events: EventReader<UnloadChunks>,
     mut unloaded_chunks: EventWriter<UnloadedChunkEvent>,
     // Backlogs
-    mut unload_backlog: Local<Vec<UnloadChunksEvent>>,
-    mut load_backlog: Local<Vec<LoadChunksEvent>>,
+    mut unload_backlog: Local<Vec<UnloadChunks>>,
+    mut load_backlog: Local<Vec<LoadChunks>>,
 ) {
     let threshold = settings.chunk_loading_handler_backlog_threshold;
     let timeout = settings.chunk_loading_handler_timeout;

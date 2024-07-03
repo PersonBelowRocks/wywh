@@ -20,7 +20,7 @@ pub struct CrossChunkBorder {
 /// Chunks will be loaded under the provided reasons if they aren't already loaded, or they will
 /// receive the given load reasons in addition to their existing ones.
 #[derive(Clone, Event, Debug)]
-pub struct LoadChunksEvent {
+pub struct LoadChunks {
     pub loadshare: LoadshareId,
     pub reasons: LoadReasons,
     pub auto_generate: bool,
@@ -41,7 +41,7 @@ pub struct LoadedChunkEvent {
 /// Will remove the provided reasons from an already loaded chunk, and if that chunk ends up having
 /// no load reasons left it will be unloaded.
 #[derive(Clone, Event, Debug)]
-pub struct UnloadChunksEvent {
+pub struct UnloadChunks {
     pub loadshare: LoadshareId,
     pub reasons: LoadReasons,
     pub chunks: ChunkSet,
