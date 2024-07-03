@@ -27,7 +27,6 @@ use super::{
     observers::ObserverBatchBuffersStore, DefaultBindGroupLayouts,
 };
 
-// FIXME: this system freezes for some reason
 pub fn extract_chunk_mesh_data(
     mut add_meshes: ResMut<AddChunkMeshes>,
     mut remove_meshes: ResMut<RemoveChunkMeshes>,
@@ -35,15 +34,15 @@ pub fn extract_chunk_mesh_data(
 ) {
     main_world.resource_scope::<ExtractableChunkMeshData, _>(|_, mut meshes| {
         for lod in LevelOfDetail::LODS {
-            let lod_meshes = &mut add_meshes[lod];
-            let lod_removals = &mut remove_meshes[lod];
+            let add = &mut add_meshes[lod];
+            let remove = &mut remove_meshes[lod];
 
             for (chunk, mesh) in meshes.additions(lod) {
-                lod_meshes.set(chunk, mesh.clone());
+                add.set(chunk, mesh.clone());
             }
 
             for chunk in meshes.removals(lod) {
-                lod_removals.set(chunk);
+                remove.set(chunk);
             }
         }
 

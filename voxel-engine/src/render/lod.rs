@@ -246,11 +246,17 @@ impl Iterator for LodIterator {
     fn next(&mut self) -> Option<Self::Item> {
         let get = |idx: usize| LevelOfDetail::LODS.get(idx).copied();
 
+        // Skip the LODs we don't contain
         while !self.lods.contains_lod(get(self.current)?) {
             self.current += 1;
         }
 
-        Some(LevelOfDetail::LODS[self.current])
+        // We contain this LOD, so note it down and increase out current index by 1 so that on the
+        // next run we'll get the LOD after this one.
+        let out = LevelOfDetail::LODS[self.current];
+        self.current += 1;
+
+        Some(out)
     }
 }
 
