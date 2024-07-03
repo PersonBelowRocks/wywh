@@ -132,7 +132,7 @@ pub fn update_cached_chunk_flags(
 }
 
 /// A batch of chunks
-#[derive(Clone)]
+#[derive(Clone, Component)]
 pub struct ChunkBatch {
     owner: Entity,
     flags: BatchFlags,
@@ -144,6 +144,49 @@ pub struct ChunkBatch {
 pub struct ChunkBatchLod(pub LevelOfDetail);
 
 impl ChunkBatch {
+    pub fn new(owner: Entity, flags: BatchFlags) -> Self {
+        Self {
+            owner,
+            flags,
+            chunks: Default::default(),
+            tick: 0,
+        }
+    }
+
+    pub fn manually_register_hooks(hooks: &mut ComponentHooks) {
+        // Add this batch entity to its owner when the component is added
+        hooks.on_insert(|mut world, batch_entity, _id| {
+        let tick = world.resource::<VoxelWorldTick>().get();
+
+        // Set the tick to the current tick upon insertion. The default value in this field is
+        // just a placeholder and must be replaced!
+        let mut this = world.get_mut::<Self>(batch_entity).unwrap();
+        this.tick = tick;
+
+        let owner = this.owner;
+
+        let Some(mut observer_batches) = world.get_mut::<ObserverBatches>(owner) else {
+            error!("Chunk batch for entity {batch_entity:?} wants to be owned by {owner:?}, 
+                but that entity either doesn't exist or doesn't have an 'ObserverBatches' component.");
+            panic!();
+        };
+
+        observer_batches.owned.insert(batch_entity);
+    });
+
+        // Remove this batch entity from its owner when the component is removed
+        hooks.on_remove(|mut world, batch_entity, _id| {
+            let owner = world.get::<Self>(batch_entity).unwrap().owner;
+
+            let Some(mut observer_batches) = world.get_mut::<ObserverBatches>(owner) else {
+                // This batch is being removed, so if it doesn't have a valid owner entity it's not a big deal
+                return;
+            };
+
+            observer_batches.owned.remove(&batch_entity);
+        });
+    }
+
     pub fn num_chunks(&self) -> u32 {
         self.chunks.len() as _
     }
@@ -162,53 +205,6 @@ impl ChunkBatch {
 
     pub fn owner(&self) -> Entity {
         self.owner
-    }
-
-    pub fn new(owner: Entity) -> Self {
-        Self {
-            owner,
-            flags: BatchFlags::empty(),
-            chunks: ChunkSet::default(),
-            tick: 0,
-        }
-    }
-}
-
-impl Component for ChunkBatch {
-    const STORAGE_TYPE: StorageType = StorageType::Table;
-
-    fn register_component_hooks(hooks: &mut ComponentHooks) {
-        // Add this batch entity to its owner when the component is added
-        hooks.on_insert(|mut world, batch_entity, _id| {
-            let tick = world.resource::<VoxelWorldTick>().get();
-
-            // Set the tick to the current tick upon insertion. The default value in this field is
-            // just a placeholder and must be replaced!
-            let mut this = world.get_mut::<Self>(batch_entity).unwrap();
-            this.tick = tick;
-
-            let owner = this.owner;
-
-            let Some(mut observer_batches) = world.get_mut::<ObserverBatches>(owner) else {
-                error!("Chunk batch for entity {batch_entity:?} wants to be owned by {owner:?}, 
-                    but that entity either doesn't exist or doesn't have an 'ObserverBatches' component.");
-                panic!();
-            };
-
-            observer_batches.owned.insert(batch_entity);
-        });
-
-        // Remove this batch entity from its owner when the component is removed
-        hooks.on_remove(|mut world, batch_entity, _id| {
-            let owner = world.get::<Self>(batch_entity).unwrap().owner;
-
-            let Some(mut observer_batches) = world.get_mut::<ObserverBatches>(owner) else {
-                // This batch is being removed, so if it doesn't have a valid owner entity it's not a big deal
-                return;
-            };
-
-            observer_batches.owned.remove(&batch_entity);
-        });
     }
 }
 
@@ -281,7 +277,7 @@ pub fn remove_batch_chunks(
 }
 
 /// The batches that an observer can render and update
-#[derive(Clone, Component)]
+#[derive(Default, Clone, Component)]
 pub struct ObserverBatches {
     /// The batches this observer owns. Should never be manually updated, rather you should spawn batches and
     /// specify this entity as their owner. The engine will automatically update the owner's batches accordingly.

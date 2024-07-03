@@ -14,7 +14,7 @@ use observer_events::{
     dispatch_move_events, generate_chunks_with_priority, update_observer_batches,
 };
 
-use crate::EngineState;
+use crate::{CoreEngineSetup, EngineState};
 
 use super::bounding_box::BoundingBox;
 use super::world::ChunkPos;
@@ -208,20 +208,17 @@ impl LoadshareProvider {
     }
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Default)]
 pub struct ObserverBundle {
     pub settings: ObserverSettings,
     pub visible: VisibleBatches,
+    pub batches: ObserverBatches,
     pub loadshare: ObserverLoadshare,
 }
 
 impl ObserverBundle {
     pub fn new() -> Self {
-        Self {
-            settings: Default::default(),
-            visible: Default::default(),
-            loadshare: Default::default(),
-        }
+        Self::default()
     }
 }
 
@@ -292,6 +289,8 @@ pub struct WorldController {
 
 impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
+        info!("Initializing world controller");
+
         app.insert_resource(self.settings)
             .init_resource::<LoadshareProvider>()
             .init_resource::<VoxelWorldTick>()
@@ -307,6 +306,8 @@ impl Plugin for WorldController {
         app.observe(update_observer_batches)
             .observe(add_batch_chunks)
             .observe(remove_batch_chunks);
+
+        app.add_systems(Startup, setup_world_controller.in_set(CoreEngineSetup));
 
         app.add_systems(
             FixedPostUpdate,
@@ -330,6 +331,14 @@ impl Plugin for WorldController {
                 .run_if(in_state(EngineState::Finished)),
         );
     }
+}
+
+fn setup_world_controller(world: &mut World) {
+    // We need to manually register the hooks in this world only. Otherwise the hooks will run in the render
+    // world which 1. doesn't make any sense and 2. is impossible because the resources needed for the hooks to run
+    // aren't there.
+    let chunk_batch_hooks = world.register_component_hooks::<ChunkBatch>();
+    ChunkBatch::manually_register_hooks(chunk_batch_hooks);
 }
 
 #[cfg(test)]

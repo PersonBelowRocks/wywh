@@ -69,7 +69,7 @@ pub struct CoreEngineSetup;
 
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
-        info!("Building voxel plugin");
+        info!("Initializing voxel engine");
 
         app.add_plugins(WorldController {
             settings: WorldControllerSettings {

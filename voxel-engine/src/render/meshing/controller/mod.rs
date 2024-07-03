@@ -217,7 +217,7 @@ pub struct MeshController;
 
 impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
-        info!("Setting up mesh controller");
+        info!("Initializing mesh controller");
 
         app.init_resource::<ExtractableChunkMeshData>()
             .add_event::<RemeshChunk>();

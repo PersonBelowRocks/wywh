@@ -17,8 +17,9 @@ use bevy::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use debug_info::{DirectionText, FpsText, SpatialDebugText};
-use ve::topo::controller::ObserverBundle;
-use ve::EngineState;
+use ve::render::lod::LevelOfDetail;
+use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle};
+use ve::{CoreEngineSetup, EngineState};
 
 fn main() {
     println!(
@@ -53,7 +54,7 @@ fn main() {
             ve::VoxelPlugin::new(vec!["test-app\\assets\\variants".into()]),
             FrameTimeDiagnosticsPlugin,
         ))
-        .add_systems(Startup, setup)
+        .add_systems(Startup, setup.after(CoreEngineSetup))
         .add_systems(
             Update,
             (
@@ -183,7 +184,7 @@ fn setup(
     });
 
     // camera
-    commands
+    let observer_entity = commands
         .spawn((
             Camera3dBundle {
                 transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -217,5 +218,11 @@ fn setup(
                 },
                 camera::PlayerHeadlight,
             ));
-        });
+        })
+        .id();
+
+    commands.spawn((
+        ChunkBatch::new(observer_entity, BatchFlags::RENDER),
+        ChunkBatchLod(LevelOfDetail::X16Subdiv),
+    ));
 }

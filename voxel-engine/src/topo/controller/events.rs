@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use crate::topo::world::ChunkPos;
 use crate::util::ChunkSet;
+use crate::{render::lod::LevelOfDetail, topo::world::ChunkPos};
 
 use super::{error::EventPosMismatch, BatchFlags, LoadReasons, LoadshareId};
 
@@ -69,4 +69,6 @@ pub struct RemovedBatchChunks {
     pub batch: Entity,
 }
 
+#[derive(Clone, Event, Debug)]
+pub struct AddBatch(pub Option<LevelOfDetail>);
 // TODO: loadshare remove event

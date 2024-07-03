@@ -85,7 +85,7 @@ pub struct RenderCore;
 
 impl Plugin for RenderCore {
     fn build(&self, app: &mut App) {
-        info!("Building render core plugin");
+        info!("Initializing render core");
 
         load_internal_shaders(app);
 
