@@ -22,19 +22,17 @@ pub fn to_formatted_bytes<T: ShaderType + ShaderSize + WriteInto>(slice: &[T]) -
 }
 
 pub fn instance_bytes_from_metadata(metadata: &ChunkIndexMap<GpuChunkMetadata>) -> Vec<u8> {
-    let capacity = metadata.len() * u64::from(ChunkInstanceData::SHADER_SIZE) as usize;
-    let mut scratch = FormattedBuffer::<Vec<u8>>::new(Vec::with_capacity(capacity));
+    let capacity = metadata.len();
+    let mut scratch = Vec::<ChunkInstanceData>::with_capacity(capacity);
 
     for (chunk, data) in metadata {
-        scratch
-            .write(&ChunkInstanceData {
-                pos: chunk.worldspace_min().as_vec3(),
-                first_quad: data.start_quad,
-            })
-            .unwrap();
+        scratch.push(ChunkInstanceData {
+            pos: chunk.worldspace_min().as_vec3(),
+            first_quad: data.start_quad,
+        });
     }
 
-    scratch.into_inner()
+    to_formatted_bytes::<ChunkInstanceData>(&scratch)
 }
 
 /// Resizable array living entirely on the GPU. Unlike bevy's buffer helper types this type has no data in main memory.
