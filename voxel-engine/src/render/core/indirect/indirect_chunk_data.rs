@@ -240,11 +240,14 @@ impl IndirectChunkData {
         }
     }
 
-    /// Whether or not this indirect chunk data is in a state where it can be used for rendering
+    /// Whether or not this indirect chunk data is in a state where it can be used for rendering.
+    /// In order to be ready the quad bind group must be created, and there must be some chunk metadata present.
     pub fn is_ready(&self) -> bool {
-        self.quad_bind_group.is_some() && !self.metadata.is_empty()
+        self.quad_bind_group.is_some() && !self.is_empty()
     }
 
+    /// Whether or not this data is empty, i.e., contains no chunks. If the data is empty then the instance buffer and metadata buffer are also
+    /// empty and thus can't be used in bind groups.
     pub fn is_empty(&self) -> bool {
         self.metadata.is_empty()
     }

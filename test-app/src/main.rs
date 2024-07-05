@@ -17,6 +17,7 @@ use bevy::prelude::*;
 
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
+use bevy_renderdoc::RenderDocPlugin;
 use debug_info::{DirectionText, FpsText, SpatialDebugText};
 use ve::render::lod::LevelOfDetail;
 use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle, VisibleBatches};
@@ -31,6 +32,7 @@ fn main() {
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.4, 0.75, 0.9)))
         .add_plugins((
+            RenderDocPlugin,
             DefaultPlugins
                 .set(RenderPlugin {
                     render_creation: WgpuSettings {

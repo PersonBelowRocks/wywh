@@ -168,7 +168,7 @@ fn create_count_buffer(gpu: &RenderDevice) -> Buffer {
     gpu.create_buffer_with_data(&BufferInitDescriptor {
         label: Some("observer_batch_chunk_count_buffer"),
         contents: &[0; 4],
-        usage: BufferUsages::STORAGE,
+        usage: BufferUsages::STORAGE | BufferUsages::INDIRECT | BufferUsages::COPY_DST,
     })
 }
 
@@ -223,8 +223,16 @@ pub fn initialize_and_queue_batch_buffers(
                 .get(batch_entity)
                 .expect("Earlier in the extract phase we ensured that all visible batches are also actually present in the ECS world");
 
-            let did_insert = render_batches.try_insert(batch_entity, batch, &gpu);
             let batch_lod = batch_lod.0;
+            let lod_data = &store.lod(batch_lod);
+
+            // We can't have empty buffers in our bind group, so if the indirect data for this LOD
+            // is empty we skip and get back to it later once it's ready.
+            if lod_data.is_empty() {
+                continue;
+            }
+
+            let did_insert = render_batches.try_insert(batch_entity, batch, &gpu);
 
             // If we inserted this batch entity for this view, then we need to build 2 bind groups:
             // The frustum cull bind bind group, which binds the indirect buffers (count, args),
@@ -239,8 +247,6 @@ pub fn initialize_and_queue_batch_buffers(
                 let observer_indirect_buf =
                     create_observer_indirect_buffer(&gpu, batch.num_chunks());
                 let observer_count_buf = create_count_buffer(&gpu);
-
-                let lod_data = &store.lod(batch_lod);
 
                 let cull_bind_group = gpu.create_bind_group(
                     Some("observer_batch_frustum_cull_bind_group"),

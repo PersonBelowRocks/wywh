@@ -21,6 +21,7 @@ use crate::topo::controller::{ChunkBatchLod, VisibleBatches};
 
 use super::{
     commands::{IndirectChunksPrepass, IndirectChunksRender},
+    gpu_chunk::IndirectRenderDataStore,
     gpu_registries::RegistryBindGroup,
     phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem},
     prepass_pipeline::IndirectChunkPrepassPipeline,
@@ -57,6 +58,7 @@ pub fn render_queue_chunks(
     mut pipelines: ResMut<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>,
     //////////////////////////////////////////////////////////////////////////
     registry_bg: Option<Res<RegistryBindGroup>>,
+    mesh_data: Res<IndirectRenderDataStore>,
 ) {
     // While we don't use the registry bind group in this system, we do use it in our draw function.
     // It's also possible for this system to run before the registry bind group is prepared, leading to
@@ -163,11 +165,18 @@ pub fn render_queue_chunks(
                 continue;
             };
 
+            let lod = lod.0;
+
+            // Don't queue if the mesh data for this LOD isn't ready.
+            if !mesh_data.lod(lod).is_ready() {
+                continue;
+            }
+
             let phase_item = RenderChunkPhaseItem {
                 pipeline: pipeline_id,
                 draw_function: function,
                 entity: batch_entity,
-                lod: lod.0,
+                lod,
                 batch_range: 0..1,
                 extra_index: PhaseItemExtraIndex(0),
             };
@@ -197,6 +206,7 @@ pub fn prepass_queue_chunks(
     mut pipelines: ResMut<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>,
     //////////////////////////////////////////////////////////////////////////
     registry_bg: Option<Res<RegistryBindGroup>>,
+    mesh_data: Res<IndirectRenderDataStore>,
 ) {
     // While we don't use the registry bind group in this system, we do use it in our draw function.
     // It's also possible for this system to run before the registry bind group is prepared, leading to
@@ -252,11 +262,18 @@ pub fn prepass_queue_chunks(
                 continue;
             };
 
+            let lod = lod.0;
+
+            // Don't queue if the mesh data for this LOD isn't ready.
+            if !mesh_data.lod(lod).is_ready() {
+                continue;
+            }
+
             let phase_item = PrepassChunkPhaseItem {
                 pipeline: pipeline_id,
                 draw_function: function,
                 entity: batch_entity,
-                lod: lod.0,
+                lod,
                 batch_range: 0..1,
                 extra_index: PhaseItemExtraIndex(0),
             };

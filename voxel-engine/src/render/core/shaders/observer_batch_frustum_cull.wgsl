@@ -2,6 +2,7 @@
     IndexedIndirectArgs,
     ChunkInstanceData,
 }
+#import vxl::utils::is_valid_indirect_args
 #import bevy_render::view::View
 #import bevy_render::maths
 
@@ -33,22 +34,33 @@ fn view_frustum_intersects_chunk_sphere(
 fn batch_frustum_cull(
     @builtin(global_invocation_id) id: vec3<u32>
 ) {
+    atomicAdd(&count, 1u);
+
     let index = id.z;
     // Return early if the index is out of bounds
     if index >= arrayLength(&indirect_args) {
         return;
     }
 
-    // Reset the instance count
-    indirect_args[index].instance_count = 0u;
-    let instance = indirect_args[index].first_instance;
+    var args = indirect_args[index];
+    args.instance_count = 0u;
 
-    if instance >= arrayLength(&instances) {
+    // Reset the instance count
+    indirect_args[index] = args;
+    let instance_index = args.first_instance;
+
+    if instance_index >= arrayLength(&instances) || !is_valid_indirect_args(args) {
         return;
     }
 
-    if view_frustum_intersects_chunk_sphere(instances[instance].position + vec3f(CHUNK_HALF_SIZE)) {
-        indirect_args[index].instance_count = 1u;
-        atomicAdd(&count, 1u);
-    }
+    args.instance_count = 1u;
+    indirect_args[index] = args;
+
+    atomicAdd(&count, 1u);
+
+    // let chunk_pos = instances[instance_index].position;
+    // if view_frustum_intersects_chunk_sphere(chunk_pos + vec3f(CHUNK_HALF_SIZE)) {
+    //     indirect_args[index].instance_count = 1u;
+    //     atomicAdd(&count, 1u);
+    // }
 }

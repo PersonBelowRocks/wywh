@@ -1,0 +1,18 @@
+[package]
+name = "bevy_renderdoc"
+version = "0.2.0"
+edition = "2021"
+authors = ["Viktor Pramberg <hi@viktorpramberg.com>"]
+description = "RenderDoc plugin for bevy"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/pramberg/bevy_renderdoc"
+repository = "https://github.com/pramberg/bevy_renderdoc"
+
+[dependencies]
+bevy = {workspace = true}
+renderdoc = "0.12.1"
+sysinfo = "0.30.12"
+
+[dev-dependencies]
+bevy = {workspace = true}

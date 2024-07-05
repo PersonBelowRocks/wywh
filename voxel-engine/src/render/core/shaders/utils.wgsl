@@ -1,6 +1,9 @@
 #define_import_path vxl::utils
 
-#import vxl::types::ChunkQuad
+#import vxl::types::{
+    ChunkQuad,
+    IndexedIndirectArgs,
+}
 
 #import vxl::constants::{
     ROTATION_MASK,
@@ -9,6 +12,10 @@
     FACE_SHIFT,
     FLIP_UV_X_BIT,
     FLIP_UV_Y_BIT,
+}
+
+fn is_valid_indirect_args(args: IndexedIndirectArgs) -> bool {
+    return args.index_count != 0;
 }
 
 // from https://community.khronos.org/t/mipmap-level-calculation-using-dfdx-dfdy/67480/2
