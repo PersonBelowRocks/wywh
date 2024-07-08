@@ -154,6 +154,7 @@ impl Plugin for RenderCore {
                     Node3d::Prepass,
                     Nodes::Prepass,
                     Node3d::MainOpaquePass,
+                    Nodes::Render,
                 ),
             );
 

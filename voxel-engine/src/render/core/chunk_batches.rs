@@ -141,7 +141,7 @@ fn create_primary_indirect_buffer(gpu: &RenderDevice, chunks: u32) -> Buffer {
     gpu.create_buffer(&BufferDescriptor {
         label: Some("chunk_batch_indirect_buffer"),
         size: (chunks as u64) * u64::from(IndexedIndirectArgs::SHADER_SIZE),
-        usage: BufferUsages::STORAGE,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     })
 }
@@ -244,6 +244,13 @@ pub fn initialize_and_queue_batch_buffers(
             // array of the indices to chunk metadata in the metadata array buffer, and builds indirect args
             // based on what it finds.
             if did_insert {
+                let chunk_metadata_indices = batch.get_metadata_indices(&lod_data);
+
+                // This batch didn't have any metadata for this LOD so we skip it.
+                if chunk_metadata_indices.is_empty() {
+                    continue;
+                }
+
                 let observer_indirect_buf =
                     create_observer_indirect_buffer(&gpu, batch.num_chunks());
                 let observer_count_buf = create_count_buffer(&gpu);
@@ -271,7 +278,6 @@ pub fn initialize_and_queue_batch_buffers(
 
                 let factory = || {
                     // An array of the indices to the chunk metadata on the GPU.
-                    let chunk_metadata_indices = batch.get_metadata_indices(&lod_data);
                     let metadata_index_buffer =
                         gpu.create_buffer_with_data(&BufferInitDescriptor {
                             label: Some("BBB_chunk_metadata_indices_buffer"),

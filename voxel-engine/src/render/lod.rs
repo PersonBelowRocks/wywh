@@ -162,7 +162,7 @@ impl LevelOfDetail {
     /// Returns the bitflag for this LOD
     #[inline]
     pub fn bitflag(self) -> LODs {
-        LODs::from_bits(self.as_byte()).expect(
+        LODs::from_bits(1 << self.as_byte()).expect(
             "The LODs bitflags should contain all possible variants of the LevelOfDetail enum",
         )
     }
@@ -226,44 +226,20 @@ impl LODs {
         }
     }
 
-    pub fn contained_lods(&self) -> LodIterator {
-        LodIterator {
-            lods: *self,
-            current: 0,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct LodIterator {
-    lods: LODs,
-    current: usize,
-}
-
-impl Iterator for LodIterator {
-    type Item = LevelOfDetail;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let get = |idx: usize| LevelOfDetail::LODS.get(idx).copied();
-
-        // Skip the LODs we don't contain
-        while !self.lods.contains_lod(get(self.current)?) {
-            self.current += 1;
-        }
-
-        // We contain this LOD, so note it down and increase out current index by 1 so that on the
-        // next run we'll get the LOD after this one.
-        let out = LevelOfDetail::LODS[self.current];
-        self.current += 1;
-
-        Some(out)
+    pub fn contained_lods(&self) -> impl Iterator<Item = LevelOfDetail> + '_ {
+        LevelOfDetail::LODS
+            .iter()
+            .filter(|&lod| self.contains_lod(*lod))
+            .copied()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn test_lod_iterator() {
-        todo!()
+    fn test_lod_flags() {
+        assert!(!LODs::empty().contains_lod(LevelOfDetail::X1));
     }
 }

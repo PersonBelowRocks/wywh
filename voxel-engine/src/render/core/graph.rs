@@ -12,13 +12,14 @@ use bevy::{
         render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_phase::{TrackedRenderPass, ViewSortedRenderPhases},
         render_resource::{
-            CommandEncoderDescriptor, ComputePassDescriptor, PipelineCache,
+            CommandEncoderDescriptor, ComputePassDescriptor, MapMode, PipelineCache,
             RenderPassColorAttachment, RenderPassDescriptor, ShaderSize, StoreOp,
         },
         renderer::RenderContext,
         view::{ViewDepthTexture, ViewTarget, ViewUniformOffset},
     },
 };
+use itertools::Itertools;
 
 use crate::topo::controller::{ChunkBatch, VisibleBatches};
 
@@ -252,15 +253,6 @@ impl Node for BuildBatchBuffersNode {
 
         // Build all the initial batch buffers
         for (&batch_entity, bbb_bind_group) in populate_batches.batches.iter() {
-            let Ok(batch) = self.batch_query.get_manual(world, batch_entity) else {
-                continue;
-            };
-
-            // Skip if there's no chunks
-            if batch.chunks().is_empty() {
-                continue;
-            }
-
             // Skip all batches that don't have initialized buffers. We are not allowed to initialize the buffers here due to mutability
             // rules so we are forced to just do whatever the previous render stages tell us.
             let Some(render_batch) = render_chunk_batches.get(batch_entity) else {
@@ -268,8 +260,13 @@ impl Node for BuildBatchBuffersNode {
                 continue;
             };
 
+            // Skip if there's no chunks
+            if render_batch.num_chunks == 0 {
+                continue;
+            }
+
             pass.set_bind_group(0, bbb_bind_group, &[]);
-            pass.dispatch_workgroups(1, 1, render_batch.num_chunks);
+            pass.dispatch_workgroups(1, 1, render_batch.num_chunks / 64);
 
             built.insert(batch_entity);
         }
@@ -358,7 +355,7 @@ impl ViewNode for GpuFrustumCullBatchesNode {
             }
 
             pass.set_bind_group(0, &gpu_data.cull_bind_group, &[view_uniform_offset.offset]);
-            pass.dispatch_workgroups(0, 0, gpu_data.num_chunks)
+            pass.dispatch_workgroups(1, 1, gpu_data.num_chunks / 64)
         }
 
         Ok(())

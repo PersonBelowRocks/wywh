@@ -60,7 +60,7 @@ pub fn extract_chunk_mesh_data(
 pub fn remove_chunk_meshes(
     mut remove: ResMut<RemoveChunkMeshes>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
-    mut rebuild: ResMut<UpdateIndirectLODs>,
+    mut update: ResMut<UpdateIndirectLODs>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
@@ -69,18 +69,24 @@ pub fn remove_chunk_meshes(
 
     for lod in LevelOfDetail::LODS {
         let icd = indirect_data.lod_mut(lod);
+        let remove_lod = &mut remove[lod];
 
         // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
         // is quite sensitive to running with empty vectors and maps.
         if icd.is_empty() {
-            return;
+            continue;
         }
 
-        icd.remove_chunks(gpu, queue, &remove[lod]);
+        // Nothing to remove so we skip.
+        if remove_lod.is_empty() {
+            continue;
+        }
+
+        icd.remove_chunks(gpu, queue, &remove_lod);
         // This LOD had its indirect data updated so we note it down to update the dependants of it later
-        rebuild.insert_lod(lod);
+        update.insert_lod(lod);
         // Clear the removal queue
-        remove[lod].clear();
+        remove_lod.clear();
     }
 }
 

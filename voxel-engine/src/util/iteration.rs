@@ -58,9 +58,9 @@ impl Iterator for CartesianIterator3d {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let bx = self.x.end - self.x.start;
-        let by = self.y.end - self.y.start;
-        let bz = self.z.end - self.z.start;
+        let bx = (self.x.end + 1) - self.x.start;
+        let by = (self.y.end + 1) - self.y.start;
+        let bz = (self.z.end + 1) - self.z.start;
 
         let vol = bx * by * bz;
 

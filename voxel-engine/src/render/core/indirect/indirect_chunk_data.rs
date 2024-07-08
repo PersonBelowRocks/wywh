@@ -11,7 +11,6 @@ use bevy::{
     },
 };
 use itertools::Itertools;
-use once_cell::unsync::Lazy;
 use rangemap::RangeSet;
 
 use crate::{
@@ -26,6 +25,7 @@ use crate::{
 use super::buffer_utils::{to_formatted_bytes, VramArray};
 
 #[derive(Copy, Clone, ShaderType)]
+#[repr(C)]
 pub struct ChunkInstanceData {
     pub pos: Vec3,
     pub first_quad: u32,
@@ -35,6 +35,7 @@ pub struct ChunkInstanceData {
 /// Identical to wgpu's `DrawIndexedIndirectArgs` but this type implements
 /// the traits required to use it in a `VramArray`.
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
+#[repr(C)]
 pub struct IndexedIndirectArgs {
     /// The number of indices to draw.
     pub index_count: u32,
@@ -53,6 +54,7 @@ pub struct IndexedIndirectArgs {
 /// Metadata for the mesh representation of a chunk. Describes the chunk's position, and its share of the
 /// indirect index and quad buffers.
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
+#[repr(C)]
 pub struct GpuChunkMetadata {
     // TODO: thorough testing of the logic here, not sure if I managed to get the order of stuff correctly
     pub instance: u32,
