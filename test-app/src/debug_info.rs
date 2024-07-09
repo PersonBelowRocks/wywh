@@ -58,10 +58,10 @@ pub fn update_debug_text(
         format!("x: {:.5}\n", pos.x),
         format!("y: {:.5}\n", pos.y),
         format!("z: {:.5}\n", pos.z),
-        format!("chunk: {}\n", chunk_pos),
     ]);
 
     sections.push("\n".to_string());
+    sections.push(format!("chunk: {}\n", chunk_pos));
 
     let hr_load_reasons = realm
         .cm()
@@ -95,6 +95,7 @@ pub fn update_debug_text(
         sections.push("No LODs where this chunk has a mesh status\n".to_string())
     }
 
+    sections.push("\n".to_string());
     sections.push(format!("Tick: {}\n", realm.tick()));
 
     for mut text in &mut q {

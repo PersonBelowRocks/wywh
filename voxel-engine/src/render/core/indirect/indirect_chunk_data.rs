@@ -15,8 +15,10 @@ use rangemap::RangeSet;
 
 use crate::{
     render::{
-        core::indirect::buffer_utils::instance_bytes_from_metadata,
-        meshing::controller::ChunkMeshData, quad::GpuQuad,
+        core::{indirect::buffer_utils::instance_bytes_from_metadata, utils::InspectChunks},
+        lod::LevelOfDetail,
+        meshing::controller::ChunkMeshData,
+        quad::GpuQuad,
     },
     topo::world::ChunkPos,
     util::{ChunkIndexMap, ChunkMap, ChunkSet},
@@ -140,6 +142,37 @@ impl RawIndirectChunkData {
     }
 }
 
+pub struct IcdCommit<'a> {
+    add: ChunkMap<ChunkMeshData>,
+    remove: ChunkSet,
+    inspect: Option<&'a ChunkSet>,
+}
+
+impl<'a> IcdCommit<'a> {
+    pub fn new() -> Self {
+        Self {
+            add: Default::default(),
+            remove: Default::default(),
+            inspect: None,
+        }
+    }
+
+    pub fn set_inspections(&mut self, inspect: &'a InspectChunks) -> &mut Self {
+        self.inspect = Some(inspect);
+        self
+    }
+
+    pub fn add(&mut self, meshes: ChunkMap<ChunkMeshData>) -> &mut Self {
+        self.add.extend(meshes.into_iter());
+        self
+    }
+
+    pub fn remove(&mut self, remove: ChunkSet) -> &mut Self {
+        self.remove.extend(remove.into_iter());
+        self
+    }
+}
+
 /// Stores chunk rendering data in contiguous buffers on the GPU and associated chunk positions with shares of these buffers.
 /// Meant to be used to set up data correctly for indirect multidraw rendering.
 ///
@@ -226,6 +259,7 @@ impl RawIndirectChunkData {
 /// overwrite. After everything has been removed, we just tack on the extra data for our uploaded chunks on the end of our existing data.
 #[derive(Clone)]
 pub struct IndirectChunkData {
+    lod: LevelOfDetail,
     raw: RawIndirectChunkData,
     quad_bind_group: Option<BindGroup>,
     quad_bg_layout: BindGroupLayout,
@@ -233,8 +267,9 @@ pub struct IndirectChunkData {
 }
 
 impl IndirectChunkData {
-    pub fn new(gpu: &RenderDevice, quad_bg_layout: BindGroupLayout) -> Self {
+    pub fn new(lod: LevelOfDetail, gpu: &RenderDevice, quad_bg_layout: BindGroupLayout) -> Self {
         Self {
+            lod,
             raw: RawIndirectChunkData::new(gpu),
             quad_bind_group: None,
             quad_bg_layout,
@@ -327,11 +362,18 @@ impl IndirectChunkData {
         }
     }
 
+    pub fn commit(&mut self, gpu: &RenderDevice, queue: &RenderQueue, commit: IcdCommit) {
+        // TODO: merge these two operations into one so that we don't duplicate work
+        self.remove_chunks(gpu, queue, &commit.remove, commit.inspect);
+        self.upload_chunks(gpu, queue, commit.add, commit.inspect);
+    }
+
     pub fn upload_chunks(
         &mut self,
         gpu: &RenderDevice,
         queue: &RenderQueue,
         chunks_to_upload: ChunkMap<ChunkMeshData>,
+        inspections: Option<&ChunkSet>,
     ) {
         if chunks_to_upload.is_empty() {
             return;
@@ -351,7 +393,21 @@ impl IndirectChunkData {
         let mut upload_quads = Vec::<GpuQuad>::new();
 
         for (i, (chunk, mesh)) in chunks_to_upload.iter().enumerate() {
+            let inspect = inspections.is_some_and(|insp| insp.contains(chunk));
+
+            if inspect {
+                info!(
+                    "Uploading chunk mesh for {chunk} to the GPU at LOD {:?}.",
+                    self.lod
+                );
+                info!("Index: {i}");
+            }
+
             if self.metadata.contains_key(&chunk) {
+                if inspect {
+                    info!("Chunk {chunk} has pre-existing metadata so we will remove it before we upload it.");
+                }
+
                 updated_chunks.set(chunk);
             }
 
@@ -365,6 +421,10 @@ impl IndirectChunkData {
                 indices_len..(indices_len + mesh.index_buffer.len() as u32),
                 quads_len..(quads_len + mesh.quad_buffer.len() as u32),
             );
+
+            if inspect {
+                info!("Metadata for chunk {chunk}: {metadata:#?}");
+            }
 
             debug_assert!(metadata.start_index < metadata.end_index);
             debug_assert!(metadata.start_quad < metadata.end_quad);
@@ -388,9 +448,16 @@ impl IndirectChunkData {
         let mut remove_quads = RangeSet::<u32>::new();
 
         for chunk in updated_chunks.iter() {
+            let inspect = inspections.is_some_and(|insp| insp.contains(chunk));
+
             let metadata = self.metadata.get(&chunk).expect(
                 "we already checked that this chunk was present in our metadata in the earlier loop",
             );
+
+            if inspect {
+                info!("Old metadata for chunk {chunk}: {metadata:#?}");
+                info!("Removing indices and quads for chunk {chunk}.")
+            }
 
             remove_indices.insert(metadata.index_range());
             remove_quads.insert(metadata.quad_range());
@@ -411,6 +478,8 @@ impl IndirectChunkData {
         let mut current_quad: u32 = 0;
 
         for (i, (chunk, metadata)) in ordered_retained_chunks.enumerate() {
+            let inspect = inspections.is_some_and(|insp| insp.contains(*chunk));
+
             #[cfg(debug_assertions)]
             {
                 let contains_indices = remove_indices.overlaps(&metadata.index_range());
@@ -432,14 +501,19 @@ impl IndirectChunkData {
             let num_indices = metadata.indices();
             let num_quads = metadata.quads();
 
-            retained_bounds.insert(
-                *chunk,
-                GpuChunkMetadata::new(
-                    i as u32,
-                    current_index..(num_indices + current_index),
-                    current_quad..(num_quads + current_quad),
-                ),
+            let new_metadata = GpuChunkMetadata::new(
+                i as u32,
+                current_index..(num_indices + current_index),
+                current_quad..(num_quads + current_quad),
             );
+
+            if inspect {
+                info!(
+                    "Retaining chunk {chunk} with new metadata as part of uploading: {metadata:#?}"
+                );
+            }
+
+            retained_bounds.insert(*chunk, new_metadata);
 
             current_index += num_indices;
             current_quad += num_quads;
@@ -456,6 +530,12 @@ impl IndirectChunkData {
         let max_instance = retained_bounds.len() as u32;
 
         retained_bounds.extend(upload_metadata.into_iter().map(|(cpos, mut metadata)| {
+            let inspect = inspections.is_some_and(|insp| insp.contains(cpos));
+
+            if inspect {
+                info!("OLD retained bounds for chunk {cpos}: {metadata:#?}");
+            }
+
             metadata.start_index += max_retained_index;
             metadata.end_index += max_retained_index;
 
@@ -463,6 +543,10 @@ impl IndirectChunkData {
             metadata.end_quad += max_retained_quad;
 
             metadata.instance += max_instance;
+
+            if inspect {
+                info!("NEW retained bounds for chunk {cpos}: {metadata:#?}");
+            }
 
             (cpos, metadata)
         }));
@@ -479,7 +563,13 @@ impl IndirectChunkData {
         self.update_quad_bind_group(gpu);
     }
 
-    pub fn remove_chunks(&mut self, gpu: &RenderDevice, queue: &RenderQueue, chunks: &ChunkSet) {
+    pub fn remove_chunks(
+        &mut self,
+        gpu: &RenderDevice,
+        queue: &RenderQueue,
+        chunks: &ChunkSet,
+        inspections: Option<&ChunkSet>,
+    ) {
         if chunks.is_empty() {
             return;
         }
@@ -496,7 +586,13 @@ impl IndirectChunkData {
         let mut current_instance: u32 = 0;
 
         for (chunk_pos, metadata) in self.metadata.iter() {
+            let inspect = inspections.is_some_and(|insp| insp.contains(*chunk_pos));
+
             if chunks.contains(*chunk_pos) {
+                if inspect {
+                    info!("Removing chunk {chunk_pos} at LOD {:?}", self.lod);
+                }
+
                 remove_indices.insert(metadata.index_range());
                 remove_quads.insert(metadata.quad_range());
             } else {
@@ -505,6 +601,10 @@ impl IndirectChunkData {
                     current_index..(current_index + metadata.indices()),
                     current_quad..(current_quad + metadata.quads()),
                 );
+
+                if inspect {
+                    info!("Retaining chunk {chunk_pos} at LOD {:?} with updated metadata as part of removal: {new_metadata:#?}", self.lod);
+                }
 
                 // Plenty of sanity checks here to make sure that the start of a range is always smaller than the end.
                 debug_assert!(metadata.start_index < metadata.end_index);

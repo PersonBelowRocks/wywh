@@ -56,7 +56,6 @@ pub fn extract_chunk_mesh_data(
     });
 }
 
-// FIXME: we're not removing chunks from the render world, why??
 /// Untrack chunk meshes in the render world and remove their data on the GPU
 pub fn remove_chunk_meshes(
     mut remove: ResMut<RemoveChunkMeshes>,
@@ -95,7 +94,7 @@ pub fn remove_chunk_meshes(
             continue;
         }
 
-        icd.remove_chunks(gpu, queue, &remove_lod);
+        icd.remove_chunks(gpu, queue, &remove_lod, Some(inspections.as_ref()));
         // This LOD had its indirect data updated so we note it down to update the dependants of it later
         update.insert_lod(lod);
         // Clear the removal queue
@@ -136,7 +135,7 @@ pub fn upload_chunk_meshes(
             }
         }
 
-        icd.upload_chunks(gpu, queue, meshes.clone());
+        icd.upload_chunks(gpu, queue, meshes.clone(), Some(inspections.as_ref()));
         // This LOD had its indirect data updated so we note it down to update the dependants of it later
         update.insert_lod(lod);
         // Clear the addition queue
@@ -181,8 +180,8 @@ impl FromWorld for IndirectRenderDataStore {
         let default_bg_layouts = world.resource::<DefaultBindGroupLayouts>();
 
         Self {
-            lods: FilledLodMap::from_fn(|_lod| {
-                IndirectChunkData::new(gpu, default_bg_layouts.icd_quad_bg_layout.clone())
+            lods: FilledLodMap::from_fn(|lod| {
+                IndirectChunkData::new(lod, gpu, default_bg_layouts.icd_quad_bg_layout.clone())
             }),
         }
     }
