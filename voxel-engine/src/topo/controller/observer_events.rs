@@ -125,7 +125,7 @@ pub fn update_observer_batches(
             batch
                 .chunks()
                 .iter()
-                .filter(|&c| settings.within_range(event.new_chunk, c))
+                .filter(|&c| !settings.within_range(event.new_chunk, c))
                 .inspect(|&c| {
                     update_cached_flags.set(c);
                 }),
