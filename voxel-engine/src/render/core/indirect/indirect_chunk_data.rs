@@ -301,6 +301,8 @@ impl IndirectChunkData {
         });
 
         self.metadata = new_metadata;
+
+        debug!("Updated chunk metadata.")
     }
 
     fn update_quad_bind_group(&mut self, gpu: &RenderDevice) {
@@ -518,8 +520,11 @@ impl IndirectChunkData {
             }
         }
 
+        debug!("Removing indices from the GPU.");
         self.raw.index.remove(gpu, queue, &remove_indices);
+        debug!("Removing quads from the GPU.");
         self.raw.quad.remove(gpu, queue, &remove_quads);
+        debug!("Successfully removed indices and quads from the GPU.");
 
         self.update_metadata(gpu, chunks_to_retain);
         self.update_quad_bind_group(gpu);

@@ -5,7 +5,7 @@ use bevy::{
         system::{Res, ResMut, Resource},
         world::Mut,
     },
-    log::{debug, warn},
+    log::{debug, info, warn},
     prelude::{Deref, DerefMut, FromWorld, World},
     render::{
         render_resource::{BindGroup, BindGroupEntries},
@@ -24,7 +24,7 @@ use crate::{
 
 use super::{
     chunk_batches::PreparedChunkBatches, indirect::IndirectChunkData,
-    observers::ObserverBatchBuffersStore, DefaultBindGroupLayouts,
+    observers::ObserverBatchBuffersStore, utils::InspectChunks, DefaultBindGroupLayouts,
 };
 
 pub fn extract_chunk_mesh_data(
@@ -56,11 +56,13 @@ pub fn extract_chunk_mesh_data(
     });
 }
 
+// FIXME: we're not removing chunks from the render world, why??
 /// Untrack chunk meshes in the render world and remove their data on the GPU
 pub fn remove_chunk_meshes(
     mut remove: ResMut<RemoveChunkMeshes>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
     mut update: ResMut<UpdateIndirectLODs>,
+    inspections: Res<InspectChunks>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
@@ -71,14 +73,25 @@ pub fn remove_chunk_meshes(
         let icd = indirect_data.lod_mut(lod);
         let remove_lod = &mut remove[lod];
 
-        // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
-        // is quite sensitive to running with empty vectors and maps.
-        if icd.is_empty() {
+        // Nothing to remove so we skip.
+        if remove_lod.is_empty() {
             continue;
         }
 
-        // Nothing to remove so we skip.
-        if remove_lod.is_empty() {
+        for chunk in inspections.iter().filter(|&c| remove_lod.contains(c)) {
+            match icd.get_chunk_metadata(chunk) {
+                None => {
+                    info!("REMOVING chunk {chunk} from LOD {lod:?}, it doesn't have any metadata.")
+                }
+                Some(metadata) => {
+                    info!("REMOVING chunk {chunk} from LOD {lod:?} with metadata: {metadata:#?}")
+                }
+            }
+        }
+
+        // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
+        // is quite sensitive to running with empty vectors and maps.
+        if icd.is_empty() {
             continue;
         }
 
@@ -95,6 +108,7 @@ pub fn upload_chunk_meshes(
     mut add: ResMut<AddChunkMeshes>,
     mut indirect_data: ResMut<IndirectRenderDataStore>,
     mut update: ResMut<UpdateIndirectLODs>,
+    inspections: Res<InspectChunks>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
@@ -102,6 +116,7 @@ pub fn upload_chunk_meshes(
     let queue = queue.as_ref();
 
     for lod in LevelOfDetail::LODS {
+        let icd = indirect_data.lod_mut(lod);
         let meshes = &mut add[lod];
 
         // We want to avoid running GPU upload/updating logic with zero chunks and whatnot because a lot of the code
@@ -110,9 +125,18 @@ pub fn upload_chunk_meshes(
             continue;
         }
 
-        indirect_data
-            .lod_mut(lod)
-            .upload_chunks(gpu, queue, meshes.clone());
+        for chunk in inspections.iter().filter(|&c| meshes.contains(c)) {
+            match icd.get_chunk_metadata(chunk) {
+                None => info!(
+                    "ADDING chunk {chunk} at LOD {lod:?}, it doesn't have any existing metadata."
+                ),
+                Some(metadata) => info!(
+                    "ADDING chunk {chunk} at LOD {lod:?} with existing metadata: {metadata:#?}"
+                ),
+            }
+        }
+
+        icd.upload_chunks(gpu, queue, meshes.clone());
         // This LOD had its indirect data updated so we note it down to update the dependants of it later
         update.insert_lod(lod);
         // Clear the addition queue
