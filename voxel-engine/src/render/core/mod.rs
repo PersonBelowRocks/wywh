@@ -66,6 +66,7 @@ use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     texture::GpuFaceTexture,
 };
+use crate::render::lod::LevelOfDetail;
 use crate::topo::controller::{ChunkBatch, ChunkBatchLod};
 use crate::topo::world::ChunkPos;
 
@@ -89,7 +90,7 @@ pub enum CoreSet {
     Queue,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub struct RenderCoreDebug {
     pub clear_inpsection: Receiver<()>,
     pub inspect_chunks: Receiver<ChunkPos>,
@@ -173,23 +174,8 @@ impl Plugin for RenderCore {
             );
 
         if let Some(debug) = self.debug.clone() {
-            let set_inspection = move |mut chunks: ResMut<InspectChunks>| {
-                let mut clear = false;
-                while let Ok(_) = debug.clear_inpsection.try_recv() {
-                    clear = true;
-                }
-
-                if clear {
-                    chunks.clear();
-                    info!("Cleared all current inspections");
-                }
-
-                while let Ok(chunk_pos) = debug.inspect_chunks.try_recv() {
-                    info!("Inspecting chunk {chunk_pos}");
-                    chunks.set(chunk_pos);
-                }
-            };
-
+            info!("Setting up render core inspection");
+            render_app.insert_resource(debug);
             render_app.add_systems(ExtractSchedule, set_inspection.before(CoreSet::Extract));
         }
 
@@ -251,6 +237,35 @@ impl Plugin for RenderCore {
             .init_resource::<IndirectChunkPrepassPipeline>()
             .init_resource::<BuildBatchBuffersPipeline>()
             .init_resource::<ObserverBatchFrustumCullPipeline>();
+    }
+}
+
+fn set_inspection(
+    debug: Res<RenderCoreDebug>,
+    mut inspections: ResMut<InspectChunks>,
+    icd_store: Res<IndirectRenderDataStore>,
+) {
+    let mut clear = false;
+    while let Ok(_) = debug.clear_inpsection.try_recv() {
+        clear = true;
+    }
+
+    if clear {
+        inspections.clear();
+        info!("Cleared all current inspections");
+    }
+
+    while let Ok(chunk_pos) = debug.inspect_chunks.try_recv() {
+        info!("Inspecting chunk {chunk_pos}");
+        inspections.set(chunk_pos);
+
+        for lod in LevelOfDetail::LODS {
+            let Some(metadata) = icd_store.lod(lod).get_chunk_metadata(chunk_pos) else {
+                continue;
+            };
+
+            info!("Metadata for {chunk_pos} at LOD {lod:?}: {metadata:#?}");
+        }
     }
 }
 

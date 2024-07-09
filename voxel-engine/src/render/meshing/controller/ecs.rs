@@ -12,7 +12,10 @@ use crate::{
     data::{registries::Registries, tile::Face},
     render::{lod::LevelOfDetail, meshing::controller::workers::MeshBuilderSettings},
     topo::{
-        controller::{BatchFlags, CachedBatchMembership, RemovedBatchChunks, VoxelWorldTick},
+        controller::{
+            BatchFlags, CachedBatchMembership, ChunkBatch, ChunkBatchLod, RemovedBatchChunks,
+            VoxelWorldTick,
+        },
         world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ObserverSettings,
     },
@@ -91,22 +94,25 @@ pub fn remove_chunks(
     mut meshes: ResMut<ExtractableChunkMeshData>,
     mut events: EventReader<RemovedBatchChunks>,
     members: Res<CachedBatchMembership>,
+    q_batches: Query<&ChunkBatchLod, With<ChunkBatch>>,
     mut builder: ResMut<MeshBuilder>,
 ) {
     let mut remove = ChunkSet::with_capacity(events.len());
     for event in events.read() {
+        // Skip if this isn't a renderable batch
+        let Some(lod) = q_batches.get(event.batch).ok() else {
+            continue;
+        };
+
         for chunk in event.chunks.iter() {
             if !members.has_flags(chunk, BatchFlags::RENDER) {
+                meshes.remove_chunk(chunk, lod.0);
                 remove.set(chunk);
             }
         }
     }
 
     builder.remove_pending(&remove);
-    for chunk in remove.iter() {
-        // TODO: remove meshes at LODs when theyre no longer needed at that LOD
-        // meshes.remove_chunk(chunk)
-    }
 }
 
 /// Batches chunks for extraction. Will allow extraction every 500ms (by default).

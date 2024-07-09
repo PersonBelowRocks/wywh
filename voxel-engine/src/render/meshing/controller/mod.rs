@@ -188,7 +188,7 @@ impl ExtractableChunkMeshData {
     pub fn remove_chunk(&mut self, pos: ChunkPos, lod: LevelOfDetail) {
         self.statuses[lod].remove(pos);
         self.add[lod].remove(pos);
-        self.remove[lod].remove(pos);
+        self.remove[lod].set(pos);
     }
 
     pub fn additions(

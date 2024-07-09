@@ -18,7 +18,7 @@ use crate::{
     util::{ChunkMap, ChunkSet},
 };
 
-use super::{AddBatchChunks, RemoveBatchChunks, VoxelWorldTick};
+use super::{AddBatchChunks, RemoveBatchChunks, RemovedBatchChunks, VoxelWorldTick};
 
 bitflags! {
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -248,6 +248,7 @@ pub fn remove_batch_chunks(
     tick: Res<VoxelWorldTick>,
     mut q_batches: Query<&mut ChunkBatch>,
     mut membership: ResMut<CachedBatchMembership>,
+    mut writer: EventWriter<RemovedBatchChunks>,
     mut cmds: Commands,
 ) {
     let batch_entity = trigger.entity();
@@ -271,6 +272,11 @@ pub fn remove_batch_chunks(
         batch.chunks.remove(chunk);
         membership.remove(chunk, batch_entity);
     }
+
+    writer.send(RemovedBatchChunks {
+        chunks: event.0.clone(),
+        batch: batch_entity,
+    });
 
     // Rebuild the cached flags for the removed chunks
     cmds.trigger(UpdateCachedChunkFlags(event.0.clone()));
