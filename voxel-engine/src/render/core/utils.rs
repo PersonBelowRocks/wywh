@@ -5,6 +5,10 @@ use bevy::render::Extract;
 
 use crate::data::texture::GpuFaceTexture;
 use crate::render::quad::GpuQuadBitfields;
+use crate::util::ChunkSet;
+
+#[derive(Resource, Default, Clone, Debug, Deref, DerefMut)]
+pub struct InspectChunks(pub ChunkSet);
 
 pub fn main_world_res_exists<T: Resource>(res: Extract<Option<Res<T>>>) -> bool {
     res.is_some()

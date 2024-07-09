@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 bevy = {workspace = true}
+crossbeam = {workspace = true}
 voxel-engine = {path = "../voxel-engine"}
 bevy_renderdoc = {path = "../bevy_renderdoc"}

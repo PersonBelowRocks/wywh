@@ -19,6 +19,7 @@ use data::{
 };
 use mip_texture_array::MippedArrayTexturePlugin;
 
+use render::core::RenderCoreDebug;
 use topo::{
     block::FullBlock,
     controller::{WorldController, WorldControllerSettings, WorldControllerSystems},
@@ -42,16 +43,10 @@ use crate::{
     },
 };
 
+#[derive(Default)]
 pub struct VoxelPlugin {
-    variant_folders: Arc<Vec<PathBuf>>,
-}
-
-impl VoxelPlugin {
-    pub fn new(variant_folders: Vec<PathBuf>) -> Self {
-        VoxelPlugin {
-            variant_folders: Arc::new(variant_folders),
-        }
-    }
+    pub variant_folders: Arc<Vec<PathBuf>>,
+    pub render_core_debug: Option<RenderCoreDebug>,
 }
 
 #[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
@@ -79,7 +74,9 @@ impl Plugin for VoxelPlugin {
             },
         });
         app.add_plugins(MeshController);
-        app.add_plugins(RenderCore);
+        app.add_plugins(RenderCore {
+            debug: self.render_core_debug.clone(),
+        });
         app.add_plugins(MippedArrayTexturePlugin::default());
 
         app.add_event::<GenerateChunk>();

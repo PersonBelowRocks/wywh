@@ -37,6 +37,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
+use cb::channel::Receiver;
 use chunk_batches::{
     create_pipelines, extract_batches_with_lods, initialize_and_queue_batch_buffers,
     BuildBatchBuffersPipeline, ObserverBatchFrustumCullPipeline, PopulateBatchBuffers,
@@ -59,12 +60,14 @@ use prepass_pipeline::IndirectChunkPrepassPipeline;
 use queue::{prepass_queue_chunks, render_queue_chunks};
 use render_pipeline::IndirectChunkRenderPipeline;
 use shaders::load_internal_shaders;
+use utils::InspectChunks;
 
 use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     texture::GpuFaceTexture,
 };
 use crate::topo::controller::{ChunkBatch, ChunkBatchLod};
+use crate::topo::world::ChunkPos;
 
 use self::{
     gpu_chunk::{extract_chunk_mesh_data, AddChunkMeshes},
@@ -78,6 +81,7 @@ use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, SystemSet)]
 pub enum CoreSet {
+    Extract,
     PrepareRegistryData,
     PrepareIndirectMeshData,
     UpdateIndirectMeshDataDependants,
@@ -85,7 +89,16 @@ pub enum CoreSet {
     Queue,
 }
 
-pub struct RenderCore;
+#[derive(Clone)]
+pub struct RenderCoreDebug {
+    pub clear_inpsection: Receiver<()>,
+    pub inspect_chunks: Receiver<ChunkPos>,
+}
+
+#[derive(Default)]
+pub struct RenderCore {
+    pub debug: Option<RenderCoreDebug>,
+}
 
 impl Plugin for RenderCore {
     fn build(&self, app: &mut App) {
@@ -129,6 +142,7 @@ impl Plugin for RenderCore {
             .init_resource::<SpecializedComputePipelines<BuildBatchBuffersPipeline>>()
             .init_resource::<SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>>()
             // Misc
+            .init_resource::<InspectChunks>()
             .init_resource::<ObserverBatchBuffersStore>()
             .init_resource::<PopulateBatchBuffers>()
             .init_resource::<UpdateIndirectLODs>()
@@ -158,6 +172,27 @@ impl Plugin for RenderCore {
                 ),
             );
 
+        if let Some(debug) = self.debug.clone() {
+            let set_inspection = move |mut chunks: ResMut<InspectChunks>| {
+                let mut clear = false;
+                while let Ok(_) = debug.clear_inpsection.try_recv() {
+                    clear = true;
+                }
+
+                if clear {
+                    chunks.clear();
+                    info!("Cleared all current inspections");
+                }
+
+                while let Ok(chunk_pos) = debug.inspect_chunks.try_recv() {
+                    info!("Inspecting chunk {chunk_pos}");
+                    chunks.set(chunk_pos);
+                }
+            };
+
+            render_app.add_systems(ExtractSchedule, set_inspection.before(CoreSet::Extract));
+        }
+
         render_app.add_systems(
             ExtractSchedule,
             (
@@ -171,7 +206,8 @@ impl Plugin for RenderCore {
                 extract_chunk_camera_phases,
                 extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
                 extract_chunk_mesh_data.run_if(main_world_res_exists::<ExtractableChunkMeshData>),
-            ),
+            )
+                .in_set(CoreSet::Extract),
         );
 
         render_app.add_systems(

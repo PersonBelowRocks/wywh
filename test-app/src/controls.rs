@@ -4,6 +4,9 @@ use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 
 use bevy::window::CursorGrabMode;
+use ve::util::ws_to_chunk_pos;
+
+use crate::RenderCoreDebugSender;
 
 #[derive(Component, Default, Copy, Clone)]
 pub struct PlayerCamController {
@@ -128,5 +131,22 @@ pub fn cursor_grab(
         window.cursor.grab_mode = CursorGrabMode::None;
         window.cursor.visible = true;
         controller.controlled = false;
+    }
+}
+
+pub fn inspect(
+    q: Query<&Transform, With<PlayerCamController>>,
+    debug: Res<RenderCoreDebugSender>,
+    key: Res<ButtonInput<KeyCode>>,
+) {
+    let pos = q.single().translation;
+    let chunk_pos = ws_to_chunk_pos(pos.floor().as_ivec3());
+
+    if key.just_pressed(KeyCode::Tab) {
+        debug.clear_inspections.try_send(()).unwrap();
+    }
+
+    if key.just_pressed(KeyCode::KeyQ) {
+        debug.inspect.try_send(chunk_pos).unwrap();
     }
 }

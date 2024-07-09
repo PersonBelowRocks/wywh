@@ -9,7 +9,7 @@ use ve::{
 };
 use voxel_engine::{data::tile::Face, topo::world::Chunk};
 
-use crate::camera::PlayerCamController;
+use crate::controls::PlayerCamController;
 
 #[derive(Component)]
 pub struct DebugText;

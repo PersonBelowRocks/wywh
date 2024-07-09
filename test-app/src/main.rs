@@ -1,10 +1,11 @@
 extern crate voxel_engine as ve;
 
-mod camera;
+mod controls;
 mod debug_info;
 
 use std::env;
 use std::f32::consts::PI;
+use std::sync::Arc;
 
 use bevy::core_pipeline::experimental::taa::{TemporalAntiAliasBundle, TemporalAntiAliasPlugin};
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
@@ -18,10 +19,19 @@ use bevy::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use bevy_renderdoc::RenderDocPlugin;
+use crossbeam::channel::{self, Sender};
 use debug_info::{DebugText, DirectionText, FpsText};
+use ve::render::core::RenderCoreDebug;
 use ve::render::lod::LevelOfDetail;
 use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle, VisibleBatches};
+use ve::topo::world::ChunkPos;
 use ve::{CoreEngineSetup, EngineState};
+
+#[derive(Resource)]
+pub struct RenderCoreDebugSender {
+    pub clear_inspections: Sender<()>,
+    pub inspect: Sender<ChunkPos>,
+}
 
 fn main() {
     println!(
@@ -29,7 +39,14 @@ fn main() {
         env::current_dir().unwrap().to_string_lossy()
     );
 
+    let (ci_tx, ci_rx) = channel::unbounded::<()>();
+    let (insp_tx, insp_rx) = channel::unbounded::<ChunkPos>();
+
     App::new()
+        .insert_resource(RenderCoreDebugSender {
+            clear_inspections: ci_tx,
+            inspect: insp_tx,
+        })
         .insert_resource(ClearColor(Color::srgb(0.4, 0.75, 0.9)))
         .add_plugins((
             RenderDocPlugin,
@@ -54,16 +71,23 @@ fn main() {
                 }),
             WireframePlugin,
             TemporalAntiAliasPlugin,
-            ve::VoxelPlugin::new(vec!["test-app\\assets\\variants".into()]),
+            ve::VoxelPlugin {
+                variant_folders: Arc::new(vec!["test-app/assets/variants".into()]),
+                render_core_debug: Some(RenderCoreDebug {
+                    clear_inpsection: ci_rx,
+                    inspect_chunks: insp_rx,
+                }),
+            },
             FrameTimeDiagnosticsPlugin,
         ))
         .add_systems(Startup, setup.after(CoreEngineSetup))
         .add_systems(
             Update,
             (
-                camera::kb_controls,
-                camera::mouse_controls,
-                camera::cursor_grab,
+                controls::inspect,
+                controls::kb_controls,
+                controls::mouse_controls,
+                controls::cursor_grab,
             ),
         )
         .add_systems(
@@ -161,7 +185,7 @@ fn setup(
                 }),
                 ..default()
             },
-            camera::PlayerCamController::default(),
+            controls::PlayerCamController::default(),
             ObserverBundle::new(),
             VisibilityBundle::default(),
             ScreenSpaceAmbientOcclusionBundle::default(),
@@ -183,7 +207,7 @@ fn setup(
 
                     ..default()
                 },
-                camera::PlayerHeadlight,
+                controls::PlayerHeadlight,
             ));
         })
         .id();

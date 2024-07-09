@@ -16,7 +16,7 @@ bimap = "0.6.3"
 bitflags = "2.4.1"
 bracket-noise = "0.8.7"
 crevice = { version = "0.14.0", features = ["glam"] }
-crossbeam = "0.8.2"
+crossbeam = {workspace = true}
 dashmap = "5.5.3"
 derive_more = "0.99.17"
 deser-hjson = "2.2.4"
