@@ -126,6 +126,14 @@ impl ExtractableChunkMeshData {
         self.statuses[lod].set(pos, status);
     }
 
+    /// Get the status of this chunk at different LODs.
+    pub fn get_statuses(&self, pos: ChunkPos) -> LodMap<TimedChunkMeshStatus> {
+        self.statuses
+            .iter()
+            .filter_map(|(lod, chunks)| chunks.get(pos).cloned().map(|status| (lod, status)))
+            .collect::<LodMap<_>>()
+    }
+
     /// "Flush" the queued mesh data. This marks it as ready for extraction so it will be extracted
     /// next time the extract schedule runs.
     pub fn flush(&mut self) {

@@ -18,7 +18,7 @@ use bevy::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use bevy_renderdoc::RenderDocPlugin;
-use debug_info::{DirectionText, FpsText, SpatialDebugText};
+use debug_info::{DebugText, DirectionText, FpsText};
 use ve::render::lod::LevelOfDetail;
 use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle, VisibleBatches};
 use ve::{CoreEngineSetup, EngineState};
@@ -69,9 +69,8 @@ fn main() {
         .add_systems(
             Update,
             (
-                debug_info::update_spatial_debug_text.run_if(in_state(EngineState::Finished)),
+                debug_info::update_debug_text.run_if(in_state(EngineState::Finished)),
                 debug_info::chunk_borders,
-                debug_info::update_direction_text,
                 debug_info::fps_text_update_system,
             ),
         )
@@ -93,59 +92,24 @@ fn setup(
             .with_text_justify(JustifyText::Left)
             .with_style(Style {
                 position_type: PositionType::Absolute,
-                top: Val::Percent(2.0),
-                right: Val::Percent(2.0),
+                bottom: Val::Percent(2.0),
+                left: Val::Percent(2.0),
                 flex_direction: FlexDirection::Row,
                 ..default()
             }),
-        SpatialDebugText,
+        DebugText,
     ));
 
     commands.spawn((
-        TextBundle::from_section(
-            "facing",
-            TextStyle {
-                color: Color::WHITE,
-                font_size: 35.0,
+        TextBundle::default()
+            .with_text_justify(JustifyText::Left)
+            .with_style(Style {
+                position_type: PositionType::Absolute,
+                top: Val::Percent(2.0),
+                left: Val::Percent(2.0),
+                flex_direction: FlexDirection::Row,
                 ..default()
-            },
-        )
-        .with_text_justify(JustifyText::Left)
-        .with_style(Style {
-            position_type: PositionType::Absolute,
-            bottom: Val::Percent(85.0),
-            right: Val::Percent(90.0),
-            ..default()
-        }),
-        DirectionText,
-    ));
-
-    commands.spawn((
-        TextBundle::from_sections([
-            TextSection {
-                value: "FPS: ".into(),
-                style: TextStyle {
-                    color: Color::WHITE,
-                    font_size: 35.0,
-                    ..default()
-                },
-            },
-            TextSection {
-                value: "N/A".into(),
-                style: TextStyle {
-                    color: Color::WHITE,
-                    font_size: 35.0,
-                    ..default()
-                },
-            },
-        ])
-        .with_text_justify(JustifyText::Left)
-        .with_style(Style {
-            position_type: PositionType::Absolute,
-            bottom: Val::Percent(80.0),
-            right: Val::Percent(90.0),
-            ..default()
-        }),
+            }),
         FpsText,
     ));
 

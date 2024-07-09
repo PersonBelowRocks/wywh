@@ -12,7 +12,7 @@ use voxel_engine::{data::tile::Face, topo::world::Chunk};
 use crate::camera::PlayerCamController;
 
 #[derive(Component)]
-pub struct SpatialDebugText;
+pub struct DebugText;
 
 #[derive(Component)]
 pub struct DirectionText;
@@ -30,65 +30,19 @@ pub fn text_section(string: impl Into<String>) -> TextSection {
     TextSection::new(string, default_style)
 }
 
-pub fn update_spatial_debug_text(
+pub fn update_debug_text(
     realm: VoxelRealm,
     meshes: Res<ExtractableChunkMeshData>,
-    mut q: Query<&mut Text, With<SpatialDebugText>>,
+    mut q: Query<&mut Text, With<DebugText>>,
     player_q: Query<&Transform, With<PlayerCamController>>,
 ) {
-    let pos = player_q.single().translation;
+    let player = player_q.single();
+    let pos = player.translation;
     let chunk_pos = ws_to_chunk_pos(pos.floor().as_ivec3());
 
-    let load_reasons = realm
-        .cm()
-        .get_loaded_chunk(chunk_pos, true)
-        .ok()
-        .map(|cref| cref.cached_load_reasons());
+    let mut sections = Vec::<String>::new();
 
-    let chunk_flags = realm
-        .cm()
-        .get_loaded_chunk(chunk_pos, true)
-        .ok()
-        .map(|cref| cref.flags());
-
-    for mut text in &mut q {
-        text.sections = [
-            format!("x: {:.5}\n", pos.x),
-            format!("y: {:.5}\n", pos.y),
-            format!("z: {:.5}\n", pos.z),
-            format!("chunk: {}\n", chunk_pos),
-            format!("load reasons: {load_reasons:?}\n"),
-            format!("chunk flags: {chunk_flags:?}\n"),
-            format!("\n"),
-        ]
-        .map(text_section)
-        .to_vec();
-    }
-}
-
-pub fn update_direction_text(
-    mut q: Query<&mut Text, With<DirectionText>>,
-    player_q: Query<&Transform, With<PlayerCamController>>,
-) {
-    let tfm = player_q.single();
-    let mut text = q.single_mut();
-
-    let cardinal: Face = {
-        let fwd_xz = tfm.forward().xz();
-
-        if fwd_xz.x.abs() > fwd_xz.y.abs() {
-            if fwd_xz.x >= 0.0 {
-                Face::North
-            } else {
-                Face::South
-            }
-        } else if fwd_xz.y >= 0.0 {
-            Face::East
-        } else {
-            Face::West
-        }
-    };
-
+    let cardinal = get_cardinal_direction(player.forward());
     let direction_letter = match cardinal {
         Face::North => "N",
         Face::East => "E",
@@ -98,7 +52,70 @@ pub fn update_direction_text(
         _ => panic!("Unexpected cardinal direction"),
     };
 
-    text.sections[0].value = format!("Facing: {0}", direction_letter)
+    sections.push(format!("Facing: {direction_letter}\n"));
+
+    sections.extend_from_slice(&[
+        format!("x: {:.5}\n", pos.x),
+        format!("y: {:.5}\n", pos.y),
+        format!("z: {:.5}\n", pos.z),
+        format!("chunk: {}\n", chunk_pos),
+    ]);
+
+    sections.push("\n".to_string());
+
+    let hr_load_reasons = realm
+        .cm()
+        .get_loaded_chunk(chunk_pos, true)
+        .ok()
+        .map(|cref| cref.cached_load_reasons())
+        .map(|reasons| format!("{reasons:?}"))
+        .unwrap_or_else(|| "NONE".to_string());
+
+    sections.push(format!("Load reasons: {hr_load_reasons}\n"));
+
+    let hr_chunk_flags = realm
+        .cm()
+        .get_loaded_chunk(chunk_pos, true)
+        .ok()
+        .map(|cref| cref.flags())
+        .map(|flags| format!("{flags:?}"))
+        .unwrap_or_else(|| "NONE".to_string());
+
+    sections.push(format!("Chunk flags: {hr_chunk_flags}\n"));
+
+    let statuses = meshes.get_statuses(chunk_pos);
+
+    if !statuses.is_empty() {
+        sections.push("Chunk mesh statuses:\n".to_string());
+
+        for (lod, status) in statuses.iter() {
+            sections.push(format!(" - {lod:?} : {:?}\n", status.status));
+        }
+    } else {
+        sections.push("No LODs where this chunk has a mesh status\n".to_string())
+    }
+
+    sections.push(format!("Tick: {}\n", realm.tick()));
+
+    for mut text in &mut q {
+        text.sections = sections.clone().into_iter().map(text_section).collect();
+    }
+}
+
+pub fn get_cardinal_direction(dir: Dir3) -> Face {
+    let fwd_xz = dir.xz();
+
+    if fwd_xz.x.abs() > fwd_xz.y.abs() {
+        if fwd_xz.x >= 0.0 {
+            Face::North
+        } else {
+            Face::South
+        }
+    } else if fwd_xz.y >= 0.0 {
+        Face::East
+    } else {
+        Face::West
+    }
 }
 
 pub fn chunk_borders(mut giz: Gizmos, observers: Query<&LastPosition, With<ObserverSettings>>) {
@@ -123,12 +140,10 @@ pub fn fps_text_update_system(
             // Format the number as to leave space for 4 digits, just in case,
             // right-aligned and rounded. This helps readability when the
             // number changes rapidly.
-            text.sections[1].value = format!("{value:>4.0}");
+            text.sections = [format!("FPS: {value:>4.0}")].map(text_section).to_vec();
         } else {
             // display "N/A" if we can't get a FPS measurement
-            // add an extra space to preserve alignment
-            text.sections[1].value = " N/A".into();
-            text.sections[1].style.color = Color::WHITE;
+            text.sections = [format!("N/A")].map(text_section).to_vec();
         }
     }
 }

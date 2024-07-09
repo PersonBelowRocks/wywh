@@ -57,6 +57,18 @@ impl<T> Default for LodMap<T> {
     }
 }
 
+impl<T> FromIterator<(LevelOfDetail, T)> for LodMap<T> {
+    fn from_iter<I: IntoIterator<Item = (LevelOfDetail, T)>>(iter: I) -> Self {
+        let mut new = Self::default();
+
+        for (lod, item) in iter {
+            new.insert(lod, item);
+        }
+
+        new
+    }
+}
+
 impl<T> std::ops::Index<LevelOfDetail> for LodMap<T> {
     type Output = T;
 
@@ -84,6 +96,14 @@ impl<T> LodMap<T> {
 
     pub fn from_fn<F: Fn(LevelOfDetail) -> Option<T>>(f: F) -> Self {
         Self(EnumMap::from_fn(f))
+    }
+
+    pub fn len(&self) -> usize {
+        self.iter().count()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn get(&self, lod: LevelOfDetail) -> Option<&T> {

@@ -6,7 +6,7 @@ use bevy::{
 };
 
 use crate::topo::controller::{
-    BatchFlags, CachedBatchMembership, ChunkBatch, LoadshareId, LoadshareProvider,
+    BatchFlags, CachedBatchMembership, ChunkBatch, LoadshareId, LoadshareProvider, VoxelWorldTick,
 };
 
 use super::{chunk_manager::ChunkManager, ChunkPos};
@@ -19,10 +19,15 @@ pub struct VoxelRealm<'w, 's> {
     chunk_manager: Res<'w, ChunkManagerResource>,
     membership: Res<'w, CachedBatchMembership>,
     loadshares: Res<'w, LoadshareProvider>,
+    tick: Res<'w, VoxelWorldTick>,
     q_batches: Query<'w, 's, &'static ChunkBatch>,
 }
 
 impl<'w, 's> VoxelRealm<'w, 's> {
+    pub fn tick(&self) -> u64 {
+        self.tick.get()
+    }
+
     pub fn cm(&self) -> &ChunkManager {
         self.chunk_manager.0.as_ref()
     }
