@@ -209,7 +209,9 @@ impl Plugin for RenderCore {
                     .run_if(not(resource_exists::<RegistryBindGroup>))
                     .in_set(CoreSet::PrepareRegistryData),
                 // Here we prepare the index and instance buffers for the chunks.
-                (remove_chunk_meshes, upload_chunk_meshes).in_set(CoreSet::PrepareIndirectMeshData),
+                (remove_chunk_meshes, upload_chunk_meshes)
+                    .chain()
+                    .in_set(CoreSet::PrepareIndirectMeshData),
                 // This updates all the data that depends on the state of the index and instance buffers,
                 // which is mainly the indirect buffers
                 update_indirect_mesh_data_dependants

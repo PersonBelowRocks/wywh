@@ -30,7 +30,7 @@ fn view_frustum_intersects_chunk_sphere(
 @group(0) @binding(2) var<storage, read_write> indirect_args: array<IndexedIndirectArgs>;
 @group(0) @binding(3) var<storage, read_write> count: atomic<u32>;
 
-@compute @workgroup_size(1, 1, 64)
+@compute @workgroup_size(1, 1, #{WORKGROUP_SIZE})
 fn batch_frustum_cull(
     @builtin(global_invocation_id) id: vec3<u32>
 ) {

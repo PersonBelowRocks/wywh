@@ -26,7 +26,7 @@ use crate::topo::controller::{ChunkBatch, VisibleBatches};
 use super::{
     chunk_batches::{
         BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId, PopulateBatchBuffers,
-        PreparedChunkBatches,
+        PreparedChunkBatches, BUILD_BATCH_BUFFERS_WORKGROUP_SIZE, FRUSTUM_CULL_WORKGROUP_SIZE,
     },
     indirect::IndexedIndirectArgs,
     observers::ObserverBatchBuffersStore,
@@ -266,7 +266,12 @@ impl Node for BuildBatchBuffersNode {
             }
 
             pass.set_bind_group(0, bbb_bind_group, &[]);
-            pass.dispatch_workgroups(1, 1, render_batch.num_chunks / 64);
+            // Divide by ceiling here, otherwise we might miss out on some chunks
+            let workgroups = render_batch
+                .num_chunks
+                .div_ceil(BUILD_BATCH_BUFFERS_WORKGROUP_SIZE);
+
+            pass.dispatch_workgroups(1, 1, workgroups);
 
             built.insert(batch_entity);
         }
@@ -355,7 +360,9 @@ impl ViewNode for GpuFrustumCullBatchesNode {
             }
 
             pass.set_bind_group(0, &gpu_data.cull_bind_group, &[view_uniform_offset.offset]);
-            pass.dispatch_workgroups(1, 1, gpu_data.num_chunks / 64)
+            // Divide by ceiling here, otherwise we might miss out on some chunks
+            let workgroups = gpu_data.num_chunks.div_ceil(FRUSTUM_CULL_WORKGROUP_SIZE);
+            pass.dispatch_workgroups(1, 1, workgroups);
         }
 
         Ok(())

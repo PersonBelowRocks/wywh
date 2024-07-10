@@ -5,7 +5,8 @@ use bevy::{
         render_resource::{
             BindGroup, BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor,
             BufferInitDescriptor, BufferUsages, CachedComputePipelineId, ComputePipelineDescriptor,
-            PipelineCache, ShaderSize, SpecializedComputePipeline, SpecializedComputePipelines,
+            PipelineCache, ShaderDefVal, ShaderSize, SpecializedComputePipeline,
+            SpecializedComputePipelines,
         },
         renderer::RenderDevice,
         view::ViewUniforms,
@@ -24,7 +25,7 @@ use super::{
     indirect::{ChunkInstanceData, IndexedIndirectArgs, IndirectChunkData},
     observers::{ObserverBatchBuffersStore, ObserverBatchGpuData},
     shaders::{BUILD_BATCH_BUFFERS_HANDLE, OBSERVER_BATCH_FRUSTUM_CULL_HANDLE},
-    utils::add_shader_constants,
+    utils::{add_shader_constants, u32_shader_def},
     DefaultBindGroupLayouts,
 };
 
@@ -312,6 +313,8 @@ pub fn initialize_and_queue_batch_buffers(
 #[derive(Resource, Clone, Debug)]
 pub struct BuildBatchBuffersPipelineId(pub CachedComputePipelineId);
 
+pub const BUILD_BATCH_BUFFERS_WORKGROUP_SIZE: u32 = 64;
+
 #[derive(Resource)]
 pub struct BuildBatchBuffersPipeline {
     pub shader: Handle<Shader>,
@@ -335,6 +338,10 @@ impl SpecializedComputePipeline for BuildBatchBuffersPipeline {
     fn specialize(&self, _key: Self::Key) -> ComputePipelineDescriptor {
         let mut shader_defs = vec![];
         add_shader_constants(&mut shader_defs);
+        shader_defs.push(u32_shader_def(
+            "WORKGROUP_SIZE",
+            BUILD_BATCH_BUFFERS_WORKGROUP_SIZE,
+        ));
 
         ComputePipelineDescriptor {
             label: Some("build_batch_buffers_pipeline".into()),
@@ -349,6 +356,8 @@ impl SpecializedComputePipeline for BuildBatchBuffersPipeline {
 
 #[derive(Resource, Clone, Debug)]
 pub struct ObserverBatchFrustumCullPipelineId(pub CachedComputePipelineId);
+
+pub const FRUSTUM_CULL_WORKGROUP_SIZE: u32 = 64;
 
 #[derive(Resource)]
 pub struct ObserverBatchFrustumCullPipeline {
@@ -373,6 +382,10 @@ impl SpecializedComputePipeline for ObserverBatchFrustumCullPipeline {
     fn specialize(&self, _key: Self::Key) -> ComputePipelineDescriptor {
         let mut shader_defs = vec![];
         add_shader_constants(&mut shader_defs);
+        shader_defs.push(u32_shader_def(
+            "WORKGROUP_SIZE",
+            FRUSTUM_CULL_WORKGROUP_SIZE,
+        ));
 
         ComputePipelineDescriptor {
             label: Some("observer_batch_frustum_cull_pipeline".into()),
