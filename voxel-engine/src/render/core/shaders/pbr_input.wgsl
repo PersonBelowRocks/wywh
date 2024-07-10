@@ -29,7 +29,7 @@
     calculate_mip_level,
 }
 
-#import vxl::chunk_io::VertexOutput
+#import vxl::chunk_io::PrepassOutput
 #import vxl::types::{
     FaceTexture,
     ChunkQuad,
@@ -92,7 +92,7 @@ fn calculate_view(
 }
 
 fn create_pbr_input(
-    in: VertexOutput,
+    in: PrepassOutput,
     quad: ChunkQuad,
 ) -> pbr_types::PbrInput {
     var pbr_input: pbr_types::PbrInput = pbr_types::pbr_input_new();
@@ -126,11 +126,7 @@ fn create_pbr_input(
 
     pbr_input.world_normal = raw_normal;
 
-#ifdef LOAD_PREPASS_NORMALS
-    pbr_input.N = prepass_utils::prepass_normal(in.position, 0u);
-#else
     pbr_input.N = normalize(pbr_input.world_normal);
-#endif
 
     let face_texture = faces[quad.texture_id];
     // TODO: investigate if we can mipmapping working properly

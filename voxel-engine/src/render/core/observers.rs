@@ -8,7 +8,7 @@ use bevy::{
 
 use crate::topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches};
 
-use super::phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
+use super::phase::DeferredBatchPrepass;
 
 /// Copies of the indirect, instance, and count buffers for each observer so they can cull individually.
 #[derive(Resource, Clone, Default, Deref, DerefMut)]
@@ -58,8 +58,7 @@ pub fn extract_observer_visible_batches(
 /// Sets up chunk render phases for camera entities
 pub fn extract_chunk_camera_phases(
     cameras: Extract<Query<(Entity, &Camera), With<Camera3d>>>,
-    mut prepass_phases: ResMut<ViewSortedRenderPhases<PrepassChunkPhaseItem>>,
-    mut render_phases: ResMut<ViewSortedRenderPhases<RenderChunkPhaseItem>>,
+    mut prepass_phases: ResMut<ViewSortedRenderPhases<DeferredBatchPrepass>>,
     mut live_entities: Local<EntityHashSet>,
 ) {
     live_entities.clear();
@@ -70,11 +69,9 @@ pub fn extract_chunk_camera_phases(
         }
 
         prepass_phases.insert_or_clear(entity);
-        render_phases.insert_or_clear(entity);
 
         live_entities.insert(entity);
     }
 
     prepass_phases.retain(|entity, _| live_entities.contains(entity));
-    render_phases.retain(|entity, _| live_entities.contains(entity));
 }

@@ -68,8 +68,8 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I>
     }
 }
 
-pub struct IndirectChunkDraw;
-impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
+pub struct IndirectBatchDraw;
+impl<P: PhaseItem> RenderCommand<P> for IndirectBatchDraw {
     type Param = (
         SRes<IndirectRenderDataStore>,
         SRes<ObserverBatchBuffersStore>,
@@ -125,18 +125,10 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectChunkDraw {
     }
 }
 
-pub type IndirectChunksRender = (
-    SetItemPipeline,
-    SetMeshViewBindGroup<0>,
-    SetRegistryBindGroup<1>,
-    SetIndirectChunkQuads<2>,
-    IndirectChunkDraw,
-);
-
-pub type IndirectChunksPrepass = (
+pub type DrawDeferredBatch = (
     SetItemPipeline,
     SetPrepassViewBindGroup<0>,
     SetRegistryBindGroup<1>,
     SetIndirectChunkQuads<2>,
-    IndirectChunkDraw,
+    IndirectBatchDraw,
 );

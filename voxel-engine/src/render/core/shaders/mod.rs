@@ -1,24 +1,7 @@
 use bevy::{
     app::App,
-    asset::{embedded_asset, load_internal_asset, Handle},
+    asset::{load_internal_asset, Handle},
     render::render_resource::Shader,
-};
-
-#[derive(Copy, Clone, Debug)]
-pub struct ShaderPaths<'a> {
-    pub indirect_vert: &'a str,
-    pub indirect_frag: &'a str,
-    pub indirect_prepass_vert: &'a str,
-    pub indirect_prepass_frag: &'a str,
-}
-
-pub static SHADER_PATHS: ShaderPaths<'static> = ShaderPaths {
-    indirect_vert: "embedded://voxel_engine/render/core/shaders/multidraw_chunk_vert.wgsl",
-    indirect_frag: "embedded://voxel_engine/render/core/shaders/multidraw_chunk_frag.wgsl",
-    indirect_prepass_vert:
-        "embedded://voxel_engine/render/core/shaders/multidraw_chunk_prepass_vert.wgsl",
-    indirect_prepass_frag:
-        "embedded://voxel_engine/render/core/shaders/multidraw_chunk_prepass_frag.wgsl",
 };
 
 pub const CHUNK_IO_HANDLE: Handle<Shader> = Handle::weak_from_u128(2653624191855805);
@@ -32,6 +15,7 @@ pub const UTILS_HANDLE: Handle<Shader> = Handle::weak_from_u128(4464360603291233
 pub const BUILD_BATCH_BUFFERS_HANDLE: Handle<Shader> = Handle::weak_from_u128(2398076348923761);
 pub const OBSERVER_BATCH_FRUSTUM_CULL_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(6547967980067631);
+pub const DEFERRED_INDIRECT_CHUNK_HANDLE: Handle<Shader> = Handle::weak_from_u128(1209756888212873);
 
 /// Loads the built-in voxel engine shaders.
 pub fn load_internal_shaders(app: &mut App) {
@@ -65,10 +49,10 @@ pub fn load_internal_shaders(app: &mut App) {
         "observer_batch_frustum_cull.wgsl",
         Shader::from_wgsl
     );
-
-    // Shader stages
-    embedded_asset!(app, "multidraw_chunk_vert.wgsl");
-    embedded_asset!(app, "multidraw_chunk_frag.wgsl");
-    embedded_asset!(app, "multidraw_chunk_prepass_vert.wgsl");
-    embedded_asset!(app, "multidraw_chunk_prepass_frag.wgsl");
+    load_internal_asset!(
+        app,
+        DEFERRED_INDIRECT_CHUNK_HANDLE,
+        "deferred_indirect_chunk.wgsl",
+        Shader::from_wgsl
+    );
 }

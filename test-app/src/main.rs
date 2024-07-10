@@ -8,6 +8,7 @@ use std::f32::consts::PI;
 use std::sync::Arc;
 
 use bevy::core_pipeline::experimental::taa::{TemporalAntiAliasBundle, TemporalAntiAliasPlugin};
+use bevy::core_pipeline::prepass::DeferredPrepass;
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 
 use bevy::ecs::entity::EntityHashSet;
@@ -189,6 +190,7 @@ fn setup(
             ObserverBundle::new(),
             VisibilityBundle::default(),
             ScreenSpaceAmbientOcclusionBundle::default(),
+            DeferredPrepass,
         ))
         .insert(TemporalAntiAliasBundle { ..default() })
         .with_children(|builder| {

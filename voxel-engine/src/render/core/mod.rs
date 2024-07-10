@@ -7,9 +7,8 @@ mod impls;
 mod indirect;
 mod observers;
 mod phase;
-mod prepass_pipeline;
+mod pipelines;
 mod queue;
-mod render_pipeline;
 mod shaders;
 mod utils;
 
@@ -43,22 +42,19 @@ use chunk_batches::{
     BuildBatchBuffersPipeline, ObserverBatchFrustumCullPipeline, PopulateBatchBuffers,
     PreparedChunkBatches,
 };
-use commands::{IndirectChunksPrepass, IndirectChunksRender};
+use commands::DrawDeferredBatch;
 use gpu_chunk::{
     remove_chunk_meshes, update_indirect_mesh_data_dependants, upload_chunk_meshes,
     IndirectRenderDataStore, RemoveChunkMeshes, UpdateIndirectLODs,
 };
-use graph::{
-    BuildBatchBuffersNode, ChunkPrepassNode, ChunkRenderNode, GpuFrustumCullBatchesNode, Nodes,
-};
+use graph::{BuildBatchBuffersNode, DeferredChunkNode, GpuFrustumCullBatchesNode, Nodes};
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs};
 use observers::{
     extract_chunk_camera_phases, extract_observer_visible_batches, ObserverBatchBuffersStore,
 };
-use phase::{PrepassChunkPhaseItem, RenderChunkPhaseItem};
-use prepass_pipeline::IndirectChunkPrepassPipeline;
-use queue::{prepass_queue_chunks, render_queue_chunks};
-use render_pipeline::IndirectChunkRenderPipeline;
+use phase::DeferredBatchPrepass;
+use pipelines::DeferredIndirectChunkPipeline;
+use queue::queue_deferred_chunks;
 use shaders::load_internal_shaders;
 use utils::InspectChunks;
 
@@ -132,14 +128,11 @@ impl Plugin for RenderCore {
 
         render_app
             // Draw functions
-            .init_resource::<DrawFunctions<PrepassChunkPhaseItem>>()
-            .init_resource::<DrawFunctions<RenderChunkPhaseItem>>()
+            .init_resource::<DrawFunctions<DeferredBatchPrepass>>()
             // Render phases
-            .init_resource::<ViewSortedRenderPhases<PrepassChunkPhaseItem>>()
-            .init_resource::<ViewSortedRenderPhases<RenderChunkPhaseItem>>()
+            .init_resource::<ViewSortedRenderPhases<DeferredBatchPrepass>>()
             // Pipeline stores
-            .init_resource::<SpecializedRenderPipelines<IndirectChunkRenderPipeline>>()
-            .init_resource::<SpecializedRenderPipelines<IndirectChunkPrepassPipeline>>()
+            .init_resource::<SpecializedRenderPipelines<DeferredIndirectChunkPipeline>>()
             .init_resource::<SpecializedComputePipelines<BuildBatchBuffersPipeline>>()
             .init_resource::<SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>>()
             // Misc
@@ -152,10 +145,8 @@ impl Plugin for RenderCore {
             .init_resource::<AddChunkMeshes>();
 
         render_app
-            .add_render_command::<RenderChunkPhaseItem, IndirectChunksRender>()
-            .add_render_command::<PrepassChunkPhaseItem, IndirectChunksPrepass>()
-            .add_render_graph_node::<ViewNodeRunner<ChunkPrepassNode>>(Core3d, Nodes::Prepass)
-            .add_render_graph_node::<ViewNodeRunner<ChunkRenderNode>>(Core3d, Nodes::Render)
+            .add_render_command::<DeferredBatchPrepass, DrawDeferredBatch>()
+            .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, Nodes::Prepass)
             .add_render_graph_node::<ViewNodeRunner<GpuFrustumCullBatchesNode>>(
                 Core3d,
                 Nodes::BatchFrustumCulling,
@@ -168,8 +159,6 @@ impl Plugin for RenderCore {
                     Nodes::BatchFrustumCulling,
                     Node3d::Prepass,
                     Nodes::Prepass,
-                    Node3d::MainOpaquePass,
-                    Nodes::Render,
                 ),
             );
 
@@ -218,13 +207,8 @@ impl Plugin for RenderCore {
                     .in_set(CoreSet::UpdateIndirectMeshDataDependants),
                 // Prepare the indirect buffers.
                 initialize_and_queue_batch_buffers.in_set(CoreSet::PrepareIndirectBuffers),
-                (
-                    render_queue_chunks,
-                    prepass_queue_chunks,
-                    // TODO: fix up light view entities to use GPU frustum culling like normal cameras
-                    // shadow_queue_indirect_chunks,
-                )
-                    .in_set(CoreSet::Queue),
+                // Queue the chunks
+                queue_deferred_chunks.in_set(CoreSet::Queue),
             ),
         );
     }
@@ -235,8 +219,7 @@ impl Plugin for RenderCore {
         render_app
             .init_resource::<DefaultBindGroupLayouts>()
             .init_resource::<IndirectRenderDataStore>()
-            .init_resource::<IndirectChunkRenderPipeline>()
-            .init_resource::<IndirectChunkPrepassPipeline>()
+            .init_resource::<DeferredIndirectChunkPipeline>()
             .init_resource::<BuildBatchBuffersPipeline>()
             .init_resource::<ObserverBatchFrustumCullPipeline>();
     }

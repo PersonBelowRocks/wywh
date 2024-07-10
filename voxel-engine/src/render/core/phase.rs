@@ -14,7 +14,7 @@ use bevy::{
 use crate::render::lod::LevelOfDetail;
 
 #[derive(Clone)]
-pub struct PrepassChunkPhaseItem {
+pub struct DeferredBatchPrepass {
     pub pipeline: CachedRenderPipelineId,
     pub draw_function: DrawFunctionId,
     pub entity: Entity,
@@ -23,7 +23,7 @@ pub struct PrepassChunkPhaseItem {
     pub extra_index: PhaseItemExtraIndex,
 }
 
-impl PhaseItem for PrepassChunkPhaseItem {
+impl PhaseItem for DeferredBatchPrepass {
     const AUTOMATIC_BATCHING: bool = false;
 
     fn batch_range(&self) -> &Range<u32> {
@@ -51,7 +51,7 @@ impl PhaseItem for PrepassChunkPhaseItem {
     }
 }
 
-impl SortedPhaseItem for PrepassChunkPhaseItem {
+impl SortedPhaseItem for DeferredBatchPrepass {
     type SortKey = LevelOfDetail;
 
     fn sort_key(&self) -> Self::SortKey {
@@ -59,58 +59,7 @@ impl SortedPhaseItem for PrepassChunkPhaseItem {
     }
 }
 
-impl CachedRenderPipelinePhaseItem for PrepassChunkPhaseItem {
-    fn cached_pipeline(&self) -> CachedRenderPipelineId {
-        self.pipeline
-    }
-}
-
-pub struct RenderChunkPhaseItem {
-    pub pipeline: CachedRenderPipelineId,
-    pub draw_function: DrawFunctionId,
-    pub entity: Entity,
-    pub lod: LevelOfDetail,
-    pub batch_range: Range<u32>,
-    pub extra_index: PhaseItemExtraIndex,
-}
-
-impl PhaseItem for RenderChunkPhaseItem {
-    const AUTOMATIC_BATCHING: bool = false;
-
-    fn batch_range(&self) -> &Range<u32> {
-        &self.batch_range
-    }
-
-    fn batch_range_mut(&mut self) -> &mut Range<u32> {
-        &mut self.batch_range
-    }
-
-    fn draw_function(&self) -> DrawFunctionId {
-        self.draw_function
-    }
-
-    fn entity(&self) -> Entity {
-        self.entity
-    }
-
-    fn extra_index(&self) -> PhaseItemExtraIndex {
-        self.extra_index
-    }
-
-    fn batch_range_and_extra_index_mut(&mut self) -> (&mut Range<u32>, &mut PhaseItemExtraIndex) {
-        (&mut self.batch_range, &mut self.extra_index)
-    }
-}
-
-impl SortedPhaseItem for RenderChunkPhaseItem {
-    type SortKey = LevelOfDetail;
-
-    fn sort_key(&self) -> Self::SortKey {
-        self.lod
-    }
-}
-
-impl CachedRenderPipelinePhaseItem for RenderChunkPhaseItem {
+impl CachedRenderPipelinePhaseItem for DeferredBatchPrepass {
     fn cached_pipeline(&self) -> CachedRenderPipelineId {
         self.pipeline
     }
