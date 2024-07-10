@@ -1,7 +1,3 @@
-use bevy::{
-    ecs::component::{ComponentHooks, StorageType},
-    prelude::Component,
-};
 use bitflags::bitflags;
 use enum_map::{Enum, EnumMap};
 

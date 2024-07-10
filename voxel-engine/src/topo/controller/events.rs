@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::util::ChunkSet;
 use crate::{render::lod::LevelOfDetail, topo::world::ChunkPos};
 
-use super::{error::EventPosMismatch, BatchFlags, LoadReasons, LoadshareId};
+use super::{LoadReasons, LoadshareId};
 
 #[derive(Clone, Event, Debug)]
 pub struct CrossChunkBorder {

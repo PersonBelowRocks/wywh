@@ -1,20 +1,15 @@
 use std::fmt;
 
 use bevy::{
-    ecs::{
-        component::{ComponentHooks, StorageType},
-        entity::{EntityHashMap, EntityHashSet},
-        system::SystemId,
-    },
+    ecs::{component::ComponentHooks, entity::EntityHashSet},
     prelude::*,
-    render::extract_component::ExtractComponent,
 };
 use bitflags::bitflags;
 use hb::hash_map::Entry;
 
 use crate::{
     render::lod::LevelOfDetail,
-    topo::{controller::LoadshareId, world::ChunkPos},
+    topo::world::ChunkPos,
     util::{ChunkMap, ChunkSet},
 };
 

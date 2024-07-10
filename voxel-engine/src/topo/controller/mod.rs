@@ -1,12 +1,9 @@
-use std::convert::identity;
-use std::sync::atomic::AtomicBool;
 use std::{fmt, time::Duration};
 
 use bevy::ecs::component::{ComponentHooks, StorageType};
 use bevy::math::ivec3;
 use bevy::prelude::*;
 use bitflags::bitflags;
-use enum_map::EnumMap;
 use hb::HashSet;
 
 use handle_events::handle_chunk_loads_and_unloads;

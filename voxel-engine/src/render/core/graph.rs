@@ -12,17 +12,16 @@ use bevy::{
         render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_phase::{TrackedRenderPass, ViewSortedRenderPhases},
         render_resource::{
-            CommandEncoderDescriptor, ComputePassDescriptor, MapMode, PipelineCache,
-            RenderPassColorAttachment, RenderPassDescriptor, ShaderSize, StoreOp,
+            CommandEncoderDescriptor, ComputePassDescriptor, PipelineCache, RenderPassDescriptor,
+            ShaderSize, StoreOp,
         },
         renderer::RenderContext,
         texture::ColorAttachment,
-        view::{ViewDepthTexture, ViewTarget, ViewUniformOffset},
+        view::{ViewDepthTexture, ViewUniformOffset},
     },
 };
-use itertools::Itertools;
 
-use crate::topo::controller::{ChunkBatch, VisibleBatches};
+use crate::topo::controller::VisibleBatches;
 
 use super::{
     chunk_batches::{
@@ -34,39 +33,11 @@ use super::{
     phase::DeferredBatchPrepass,
 };
 
-pub struct CoreGraphPlugin;
-
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, RenderLabel)]
 pub enum Nodes {
     BuildBatchBuffers,
     BatchFrustumCulling,
     Prepass,
-    Render,
-}
-
-fn color_attachments(
-    prepass_textures: &ViewPrepassTextures,
-) -> Vec<Option<RenderPassColorAttachment>> {
-    let mut color_attachments = vec![
-        prepass_textures
-            .normal
-            .as_ref()
-            .map(|normals_texture| normals_texture.get_attachment()),
-        prepass_textures
-            .motion_vectors
-            .as_ref()
-            .map(|motion_vectors_texture| motion_vectors_texture.get_attachment()),
-        // Use None in place of deferred attachments
-        None,
-        None,
-    ];
-
-    // If all color attachments are none: clear the color attachment list so that no fragment shader is required
-    if color_attachments.iter().all(Option::is_none) {
-        color_attachments.clear();
-    }
-
-    color_attachments
 }
 
 #[derive(Default)]
@@ -170,78 +141,8 @@ impl ViewNode for DeferredChunkNode {
     }
 }
 
-// #[derive(Default)]
-// pub struct ChunkRenderNode;
-
-// impl ViewNode for ChunkRenderNode {
-//     type ViewQuery = (
-//         Entity,
-//         Read<ExtractedCamera>,
-//         Read<ViewTarget>,
-//         Read<ViewDepthTexture>,
-//     );
-
-//     fn run<'w>(
-//         &self,
-//         graph: &mut RenderGraphContext,
-//         render_context: &mut RenderContext<'w>,
-//         (view_entity, camera, view_target, view_depth_texture): QueryItem<'w, Self::ViewQuery>,
-//         world: &'w World,
-//     ) -> Result<(), NodeRunError> {
-//         let phases = world.resource::<ViewSortedRenderPhases<DeferredBatchRender>>();
-
-//         let Some(phase) = phases.get(&view_entity) else {
-//             return Ok(());
-//         };
-
-//         let diagnostics = render_context.diagnostic_recorder();
-
-//         let color_attachments = [Some(view_target.get_color_attachment())];
-//         let depth_stencil_attachment = Some(view_depth_texture.get_attachment(StoreOp::Store));
-
-//         let view_entity = graph.view_entity();
-//         render_context.add_command_buffer_generation_task(move |gpu| {
-//             let mut encoder = gpu.create_command_encoder(&CommandEncoderDescriptor {
-//                 label: Some("chunk_render_cmd_encoder"),
-//             });
-
-//             let pass = encoder.begin_render_pass(&RenderPassDescriptor {
-//                 label: Some("chunk_render"),
-//                 color_attachments: &color_attachments,
-//                 depth_stencil_attachment,
-//                 timestamp_writes: None,
-//                 occlusion_query_set: None,
-//             });
-
-//             let mut pass = TrackedRenderPass::new(&gpu, pass);
-//             let pass_span = diagnostics.pass_span(&mut pass, "chunk_render");
-
-//             if let Some(viewport) = camera.viewport.as_ref() {
-//                 pass.set_camera_viewport(viewport);
-//             }
-
-//             phase.render(&mut pass, world, view_entity);
-
-//             pass_span.end(&mut pass);
-//             drop(pass);
-//             encoder.finish()
-//         });
-
-//         Ok(())
-//     }
-// }
-
-pub struct BuildBatchBuffersNode {
-    batch_query: QueryState<Read<ChunkBatch>>,
-}
-
-impl FromWorld for BuildBatchBuffersNode {
-    fn from_world(world: &mut World) -> Self {
-        Self {
-            batch_query: QueryState::from_world(world),
-        }
-    }
-}
+#[derive(Default)]
+pub struct BuildBatchBuffersNode;
 
 impl Node for BuildBatchBuffersNode {
     fn run<'w>(

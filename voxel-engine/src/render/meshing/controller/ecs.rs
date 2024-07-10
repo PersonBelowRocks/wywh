@@ -24,7 +24,7 @@ use crate::{
 
 use super::{
     workers::{MeshBuilder, MeshBuilderCommand},
-    ChunkMeshStatus, ExtractableChunkMeshData, RemeshPriority, RemeshType, TimedChunkMeshStatus,
+    ExtractableChunkMeshData, RemeshPriority, RemeshType,
 };
 
 #[derive(Resource, Deref)]

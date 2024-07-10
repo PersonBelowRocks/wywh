@@ -5,8 +5,7 @@ use bevy::{
         render_resource::{
             BindGroup, BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor,
             BufferInitDescriptor, BufferUsages, CachedComputePipelineId, ComputePipelineDescriptor,
-            PipelineCache, ShaderDefVal, ShaderSize, SpecializedComputePipeline,
-            SpecializedComputePipelines,
+            PipelineCache, ShaderSize, SpecializedComputePipeline, SpecializedComputePipelines,
         },
         renderer::RenderDevice,
         view::ViewUniforms,
@@ -15,10 +14,7 @@ use bevy::{
 };
 use bytemuck::cast_slice;
 
-use crate::{
-    topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches},
-    util::ChunkSet,
-};
+use crate::topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches};
 
 use super::{
     gpu_chunk::IndirectRenderDataStore,

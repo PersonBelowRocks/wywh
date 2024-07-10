@@ -1,5 +1,4 @@
 use bevy::ecs::system::lifetimeless::Read;
-use bevy::log::debug;
 use bevy::prelude::Entity;
 use bevy::{
     ecs::{
@@ -7,7 +6,7 @@ use bevy::{
         system::{lifetimeless::SRes, SystemParamItem},
     },
     log::error,
-    pbr::{SetMeshViewBindGroup, SetPrepassViewBindGroup},
+    pbr::SetPrepassViewBindGroup,
     render::{
         render_phase::{
             PhaseItem, RenderCommand, RenderCommandResult, SetItemPipeline, TrackedRenderPass,
@@ -16,12 +15,11 @@ use bevy::{
     },
 };
 
-use crate::render::core::chunk_batches::PreparedChunkBatches;
 use crate::render::core::observers::ObserverBatchBuffersStore;
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
-use crate::topo::controller::{ChunkBatch, ChunkBatchLod};
+use crate::topo::controller::ChunkBatchLod;
 
 pub struct SetIndirectChunkQuads<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I> {

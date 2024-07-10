@@ -21,7 +21,7 @@ use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use bevy_renderdoc::RenderDocPlugin;
 use crossbeam::channel::{self, Sender};
-use debug_info::{DebugText, DirectionText, FpsText};
+use debug_info::{DebugText, FpsText};
 use ve::render::core::RenderCoreDebug;
 use ve::render::lod::LevelOfDetail;
 use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle, VisibleBatches};

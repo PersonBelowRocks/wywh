@@ -1,14 +1,8 @@
-use std::mem;
-
 use bevy::{
-    ecs::{
-        system::{Res, ResMut, Resource},
-        world::Mut,
-    },
-    log::{debug, info, warn},
+    ecs::system::{Res, ResMut, Resource},
+    log::info,
     prelude::{Deref, DerefMut, FromWorld, World},
     render::{
-        render_resource::{BindGroup, BindGroupEntries},
         renderer::{RenderDevice, RenderQueue},
         MainWorld,
     },
@@ -16,8 +10,8 @@ use bevy::{
 
 use crate::{
     render::{
-        lod::{FilledLodMap, LODs, LevelOfDetail, LodMap},
-        meshing::controller::{ChunkMeshData, ChunkMeshStatus, ExtractableChunkMeshData},
+        lod::{FilledLodMap, LODs, LevelOfDetail},
+        meshing::controller::{ChunkMeshData, ExtractableChunkMeshData},
     },
     util::{ChunkMap, ChunkSet},
 };
@@ -148,7 +142,7 @@ pub fn update_indirect_mesh_data_dependants(
     mut batches: ResMut<PreparedChunkBatches>,
     mut observer_batches: ResMut<ObserverBatchBuffersStore>,
 ) {
-    for lod in update.contained_lods() {
+    for _lod in update.contained_lods() {
         // TODO: need to split this up into per-LOD stuff as well
         batches.clear();
         observer_batches.clear();

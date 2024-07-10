@@ -3,30 +3,23 @@ use std::mem::size_of;
 use bevy::{
     core_pipeline::{
         core_3d::CORE_3D_DEPTH_FORMAT,
-        prepass::{
-            prepass_target_descriptors, PreviousViewData, MOTION_VECTOR_PREPASS_FORMAT,
-            NORMAL_PREPASS_FORMAT,
-        },
+        prepass::{prepass_target_descriptors, PreviousViewData},
     },
-    pbr::{
-        generate_view_layouts, MeshPipelineKey, MeshPipelineViewLayout, MeshPipelineViewLayoutKey,
-        CLUSTERED_FORWARD_STORAGE_BUFFER_COUNT,
-    },
+    pbr::MeshPipelineKey,
     prelude::*,
     render::{
         globals::GlobalsUniform,
         mesh::PrimitiveTopology,
         render_resource::{
             binding_types::uniform_buffer, BindGroupLayout, BindGroupLayoutEntries, BufferAddress,
-            ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-            Face, FragmentState, FrontFace, MultisampleState, PolygonMode, PrimitiveState,
-            PushConstantRange, RenderPipelineDescriptor, ShaderDefVal, ShaderSize, ShaderStages,
-            SpecializedRenderPipeline, StencilState, TextureFormat, VertexAttribute,
-            VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+            CompareFunction, DepthBiasState, DepthStencilState, Face, FragmentState, FrontFace,
+            MultisampleState, PolygonMode, PrimitiveState, PushConstantRange,
+            RenderPipelineDescriptor, ShaderDefVal, ShaderSize, ShaderStages,
+            SpecializedRenderPipeline, StencilState, VertexAttribute, VertexBufferLayout,
+            VertexFormat, VertexState, VertexStepMode,
         },
         renderer::RenderDevice,
-        texture::BevyDefault,
-        view::{ViewTarget, ViewUniform, VISIBILITY_RANGES_STORAGE_BUFFER_COUNT},
+        view::ViewUniform,
     },
 };
 

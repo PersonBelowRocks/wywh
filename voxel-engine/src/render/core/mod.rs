@@ -13,16 +13,13 @@ mod shaders;
 mod utils;
 
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
-use bevy::render::extract_component::ExtractComponentPlugin;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
 use bevy::render::render_resource::ShaderSize;
 use bevy::render::view::ViewUniform;
 use bevy::{
     app::{App, Plugin},
-    core_pipeline::{core_3d::Opaque3d, prepass::Opaque3dPrepass},
     ecs::system::Resource,
-    pbr::Shadow,
     prelude::*,
     render::{
         extract_resource::ExtractResourcePlugin,
@@ -63,7 +60,6 @@ use crate::data::{
     texture::GpuFaceTexture,
 };
 use crate::render::lod::LevelOfDetail;
-use crate::topo::controller::{ChunkBatch, ChunkBatchLod};
 use crate::topo::world::ChunkPos;
 
 use self::{

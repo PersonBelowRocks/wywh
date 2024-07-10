@@ -1,20 +1,17 @@
-use std::sync::atomic::Ordering;
-
-use bevy::{ecs::entity::EntityHashMap, math::ivec3, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     topo::{
-        bounding_box::BoundingBox,
-        world::{Chunk, ChunkPos, VoxelRealm},
+        world::{Chunk, ChunkPos},
         worldgen::{generator::GenerateChunk, GenerationPriority},
     },
     util::{ws_to_chunk_pos, ChunkSet},
 };
 
 use super::{
-    AddBatchChunks, CachedBatchMembership, ChunkBatch, CrossChunkBorder, LastPosition, LoadChunks,
-    LoadReasons, LoadedChunkEvent, ObserverBatches, ObserverLoadshare, ObserverSettings,
-    RemoveBatchChunks, UnloadChunks, UpdateCachedChunkFlags, VoxelWorldTick,
+    AddBatchChunks, ChunkBatch, CrossChunkBorder, LastPosition, LoadChunks, LoadReasons,
+    LoadedChunkEvent, ObserverBatches, ObserverLoadshare, ObserverSettings, RemoveBatchChunks,
+    UnloadChunks, UpdateCachedChunkFlags,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
