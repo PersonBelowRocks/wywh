@@ -30,7 +30,7 @@ use super::{
         BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId,
         BUILD_BATCH_BUFFERS_WORKGROUP_SIZE, FRUSTUM_CULL_WORKGROUP_SIZE,
     },
-    views::ObserverBatchBuffersStore,
+    views::ViewBatchBuffersStore,
 };
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, RenderLabel)]
@@ -205,10 +205,10 @@ impl ViewNode for GpuFrustumCullBatchesNode {
     ) -> Result<(), NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipeline_id = world.resource::<ObserverBatchFrustumCullPipelineId>();
-        let store = world.resource::<ObserverBatchBuffersStore>();
+        let store = world.resource::<ViewBatchBuffersStore>();
 
         let Some(pipeline) = pipeline_cache.get_compute_pipeline(pipeline_id.0) else {
-            error!("Couldn't get observer batch frustum cull compute pipeline");
+            error!("Couldn't get view batch frustum cull compute pipeline");
             return Ok(());
         };
 
@@ -218,8 +218,12 @@ impl ViewNode for GpuFrustumCullBatchesNode {
 
         // Clear all the count buffers (sets them to 0).
         for (_, gpu_data) in observer_batches.iter() {
+            let Some(count) = gpu_data.count_buffer() else {
+                continue;
+            };
+
             ctx.command_encoder()
-                .clear_buffer(&gpu_data.count, 0, Some(u32::SHADER_SIZE.into()))
+                .clear_buffer(count, 0, Some(u32::SHADER_SIZE.into()))
         }
 
         let mut pass = ctx
@@ -232,11 +236,15 @@ impl ViewNode for GpuFrustumCullBatchesNode {
         pass.set_pipeline(pipeline);
 
         for (batch_entity, gpu_data) in observer_batches.iter() {
+            let Some(cull_bind_group) = gpu_data.cull_bind_group() else {
+                continue;
+            };
+
             if !visible_batches.contains(batch_entity) {
                 continue;
             }
 
-            pass.set_bind_group(0, &gpu_data.cull_bind_group, &[view_uniform_offset.offset]);
+            pass.set_bind_group(0, cull_bind_group, &[view_uniform_offset.offset]);
             // Divide by ceiling here, otherwise we might miss out on some chunks
             let workgroups = gpu_data.num_chunks.div_ceil(FRUSTUM_CULL_WORKGROUP_SIZE);
             pass.dispatch_workgroups(1, 1, workgroups);

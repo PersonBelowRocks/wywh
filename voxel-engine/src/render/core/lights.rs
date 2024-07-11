@@ -1,44 +1,38 @@
-use bevy::{
-    ecs::entity::EntityHashMap,
-    pbr::{
-        CascadesVisibleEntities, CubemapVisibleEntities, ExtractedClusterConfig,
-        ExtractedDirectionalLight, ExtractedPointLight,
-    },
-    prelude::*,
-    render::{
-        primitives::{CubemapFrusta, Frustum},
-        view::{ExtractedView, RenderLayers, VisibleEntities},
-    },
-};
+use bevy::{pbr::LightEntity, prelude::*};
 
 use crate::topo::controller::VisibleBatches;
 
-use super::views::ViewBatchBuffersStore;
+pub fn get_parent_light(light: &LightEntity) -> Entity {
+    match light {
+        LightEntity::Spot { light_entity } => *light_entity,
+        LightEntity::Directional {
+            light_entity,
+            cascade_index: _,
+        } => *light_entity,
+        LightEntity::Point {
+            light_entity,
+            face_index: _,
+        } => *light_entity,
+    }
+}
 
-#[derive(Default, Resource, Deref, DerefMut)]
-pub struct DirectionalLightBatchBuffers(ViewBatchBuffersStore);
-
-#[derive(Default, Resource, Deref, DerefMut)]
-pub struct CubemapBatchBuffers(ViewBatchBuffersStore);
-
-#[derive(Default, Resource, Deref, DerefMut)]
-pub struct PointLightBatchBuffers(ViewBatchBuffersStore);
-
-pub fn prepare_light_batches(
-    q_views: Query<(
-        Entity,
-        &ExtractedView,
-        &ExtractedClusterConfig,
-        Option<&RenderLayers>,
-    )>,
-    q_directional_lights: Query<(Entity, &VisibleBatches, &ExtractedDirectionalLight)>,
-    q_point_lights: Query<(
-        Entity,
-        &VisibleBatches,
-        &ExtractedPointLight,
-        AnyOf<(&CubemapFrusta, &Frustum)>,
-    )>,
-    mut dirlight_batches: ResMut<DirectionalLightBatchBuffers>,
+pub fn inherit_parent_light_batches(
+    q_light_entities: Query<(Entity, &LightEntity)>,
+    q_visible_batches: Query<&VisibleBatches>,
+    mut last_size: Local<usize>,
+    mut cmds: Commands,
 ) {
-    for (entity, visible, light) in &q_directional_lights {}
+    let mut insert = Vec::with_capacity(*last_size);
+
+    for (entity, light) in &q_light_entities {
+        let parent = get_parent_light(light);
+        let Some(visible_batches) = q_visible_batches.get(parent).cloned().ok() else {
+            continue;
+        };
+
+        insert.push((entity, visible_batches));
+    }
+
+    *last_size = insert.len();
+    cmds.insert_or_spawn_batch(insert.into_iter());
 }

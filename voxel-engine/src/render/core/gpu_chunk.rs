@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    indirect::IndirectChunkData, utils::InspectChunks, views::ObserverBatchBuffersStore,
+    indirect::IndirectChunkData, utils::InspectChunks, views::ViewBatchBuffersStore,
     DefaultBindGroupLayouts,
 };
 
@@ -139,11 +139,11 @@ pub fn upload_chunk_meshes(
 
 pub fn update_indirect_mesh_data_dependants(
     mut update: ResMut<UpdateIndirectLODs>,
-    mut observer_batches: ResMut<ObserverBatchBuffersStore>,
+    mut batches: ResMut<ViewBatchBuffersStore>,
 ) {
     for _lod in update.contained_lods() {
         // TODO: need to split this up into per-LOD stuff as well
-        observer_batches.clear();
+        batches.clear();
     }
 
     // We just processed the updated LODs so we clear the update tracker

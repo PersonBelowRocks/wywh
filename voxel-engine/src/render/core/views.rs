@@ -12,15 +12,31 @@ use super::phase::DeferredBatchPrepass;
 
 #[derive(Clone)]
 pub struct IndirectViewBatch {
-    pub cull_bind_group: BindGroup,
     pub num_chunks: u32,
     pub indirect: Buffer,
+    pub cull_data: Option<IndirectViewBatchCullData>,
+}
+
+impl IndirectViewBatch {
+    pub fn count_buffer(&self) -> Option<&Buffer> {
+        self.cull_data.as_ref().map(|d| &d.count)
+    }
+
+    pub fn cull_bind_group(&self) -> Option<&BindGroup> {
+        self.cull_data.as_ref().map(|d| &d.bind_group)
+    }
+}
+
+#[derive(Clone)]
+pub struct IndirectViewBatchCullData {
+    pub bind_group: BindGroup,
     pub count: Buffer,
 }
 
 pub type ViewBatches = EntityHashMap<IndirectViewBatch>;
 
-#[derive(Default, Clone)]
+/// Copies of the indirect, instance, and count buffers for each view so they can cull individually.
+#[derive(Resource, Default, Clone)]
 pub struct ViewBatchBuffersStore(EntityHashMap<ViewBatches>);
 
 impl ViewBatchBuffersStore {
@@ -45,11 +61,7 @@ impl ViewBatchBuffersStore {
     }
 }
 
-/// Copies of the indirect, instance, and count buffers for each observer so they can cull individually.
-#[derive(Resource, Clone, Default, Deref, DerefMut)]
-pub struct ObserverBatchBuffersStore(ViewBatchBuffersStore);
-
-pub fn extract_observer_visible_batches(
+pub fn extract_visible_batches(
     query: Extract<Query<(Entity, &VisibleBatches)>>,
     batch_query: Query<(&ChunkBatch, &ChunkBatchLod)>,
     mut cmds: Commands,

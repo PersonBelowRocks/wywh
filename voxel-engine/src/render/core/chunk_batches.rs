@@ -28,7 +28,7 @@ use super::{
     },
     shaders::{BUILD_BATCH_BUFFERS_HANDLE, OBSERVER_BATCH_FRUSTUM_CULL_HANDLE},
     utils::{add_shader_constants, u32_shader_def},
-    views::{IndirectViewBatch, ObserverBatchBuffersStore},
+    views::{IndirectViewBatch, IndirectViewBatchCullData, ViewBatchBuffersStore},
     DefaultBindGroupLayouts,
 };
 
@@ -181,7 +181,7 @@ pub fn extract_batches_with_lods(
 /// them for population by the buffer builder in the render graph.
 pub fn initialize_and_queue_batch_buffers(
     mut populate_buffers: ResMut<QueuedBatchBufBuildJobs>,
-    mut all_observer_batch_buffers: ResMut<ObserverBatchBuffersStore>,
+    mut view_batch_buf_store: ResMut<ViewBatchBuffersStore>,
     store: Res<IndirectRenderDataStore>,
     view_uniforms: Res<ViewUniforms>,
     default_layouts: Res<DefaultBindGroupLayouts>,
@@ -200,7 +200,7 @@ pub fn initialize_and_queue_batch_buffers(
 
     for (observer_entity, visible_batches) in &q_observer_batches {
         // All the per-observer batch buffers for this observer.
-        let observer_batch_buffers = all_observer_batch_buffers.get_or_insert(observer_entity);
+        let view_batch_buffers = view_batch_buf_store.get_or_insert(observer_entity);
 
         for &batch_entity in visible_batches.iter() {
             // We need to initialize the buffers at the appropriate size.
@@ -218,7 +218,7 @@ pub fn initialize_and_queue_batch_buffers(
             }
 
             // This observer already has buffers for this batch, so we don't need to build them.
-            if observer_batch_buffers.contains_key(&batch_entity) {
+            if view_batch_buffers.contains_key(&batch_entity) {
                 continue;
             }
 
@@ -231,31 +231,33 @@ pub fn initialize_and_queue_batch_buffers(
                 continue;
             }
 
-            let observer_indirect_buf = create_observer_indirect_buffer(&gpu, batch.num_chunks());
-            let observer_count_buf = create_count_buffer(&gpu);
+            let view_indirect_buf = create_observer_indirect_buffer(&gpu, batch.num_chunks());
+            let view_count_buf = create_count_buffer(&gpu);
 
             let cull_bind_group = gpu.create_bind_group(
-                Some("observer_batch_frustum_cull_bind_group"),
+                Some("view_batch_frustum_cull_bind_group"),
                 &default_layouts.observer_batch_cull_layout,
                 &BindGroupEntries::sequential((
                     lod_data.buffers().instances.as_entire_binding(),
                     view_uniforms_binding.clone(),
-                    observer_indirect_buf.as_entire_binding(),
-                    observer_count_buf.as_entire_binding(),
+                    view_indirect_buf.as_entire_binding(),
+                    view_count_buf.as_entire_binding(),
                 )),
             );
 
-            observer_batch_buffers.insert(
+            view_batch_buffers.insert(
                 batch_entity,
                 IndirectViewBatch {
-                    cull_bind_group,
-                    indirect: observer_indirect_buf.clone(),
-                    count: observer_count_buf,
                     num_chunks: batch.num_chunks(),
+                    indirect: view_indirect_buf.clone(),
+                    cull_data: Some(IndirectViewBatchCullData {
+                        bind_group: cull_bind_group,
+                        count: view_count_buf,
+                    }),
                 },
             );
 
-            populate_buffers.queue(observer_indirect_buf, batch_lod, chunk_metadata_indices);
+            populate_buffers.queue(view_indirect_buf, batch_lod, chunk_metadata_indices);
         }
     }
 }

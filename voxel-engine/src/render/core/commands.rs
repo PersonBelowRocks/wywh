@@ -15,11 +15,12 @@ use bevy::{
     },
 };
 
-use crate::render::core::views::ObserverBatchBuffersStore;
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };
 use crate::topo::controller::ChunkBatchLod;
+
+use super::views::ViewBatchBuffersStore;
 
 pub struct SetIndirectChunkQuads<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I> {
@@ -68,10 +69,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetIndirectChunkQuads<I>
 
 pub struct IndirectBatchDraw;
 impl<P: PhaseItem> RenderCommand<P> for IndirectBatchDraw {
-    type Param = (
-        SRes<IndirectRenderDataStore>,
-        SRes<ObserverBatchBuffersStore>,
-    );
+    type Param = (SRes<IndirectRenderDataStore>, SRes<ViewBatchBuffersStore>);
 
     type ViewQuery = Entity;
     type ItemQuery = Read<ChunkBatchLod>;
@@ -113,7 +111,7 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectBatchDraw {
         pass.multi_draw_indexed_indirect_count(
             &observer_batch.indirect,
             0,
-            &observer_batch.count,
+            &observer_batch.cull_data.as_ref().unwrap().count,
             0,
             observer_batch.num_chunks,
         );

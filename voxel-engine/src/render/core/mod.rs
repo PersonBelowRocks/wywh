@@ -45,6 +45,7 @@ use gpu_chunk::{
 };
 use graph::{BuildBatchBuffersNode, DeferredChunkNode, GpuFrustumCullBatchesNode, Nodes};
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs};
+use lights::inherit_parent_light_batches;
 use phase::DeferredBatchPrepass;
 use pipelines::{
     create_pipelines, BuildBatchBuffersPipeline, DeferredIndirectChunkPipeline,
@@ -53,9 +54,7 @@ use pipelines::{
 use queue::queue_deferred_chunks;
 use shaders::load_internal_shaders;
 use utils::InspectChunks;
-use views::{
-    extract_chunk_camera_phases, extract_observer_visible_batches, ObserverBatchBuffersStore,
-};
+use views::{extract_chunk_camera_phases, extract_visible_batches, ViewBatchBuffersStore};
 
 use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
@@ -135,7 +134,7 @@ impl Plugin for RenderCore {
             .init_resource::<SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>>()
             // Misc
             .init_resource::<InspectChunks>()
-            .init_resource::<ObserverBatchBuffersStore>()
+            .init_resource::<ViewBatchBuffersStore>()
             .init_resource::<QueuedBatchBufBuildJobs>()
             .init_resource::<UpdateIndirectLODs>()
             .init_resource::<RemoveChunkMeshes>()
@@ -172,7 +171,7 @@ impl Plugin for RenderCore {
                     extract_batches_with_lods,
                     // We have to insert apply_deferred here manually, not sure why bevy doesn't do it automatically.
                     apply_deferred,
-                    extract_observer_visible_batches,
+                    extract_visible_batches,
                 )
                     .chain(),
                 extract_chunk_camera_phases,
@@ -204,6 +203,7 @@ impl Plugin for RenderCore {
                     .in_set(CoreSet::UpdateIndirectMeshDataDependants),
                 // Prepare the indirect buffers.
                 (
+                    inherit_parent_light_batches,
                     initialize_and_queue_batch_buffers,
                     prepare_batch_buf_build_jobs,
                 )
