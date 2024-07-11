@@ -17,8 +17,8 @@ use crate::{
 };
 
 use super::{
-    chunk_batches::PreparedChunkBatches, indirect::IndirectChunkData, utils::InspectChunks,
-    views::ObserverBatchBuffersStore, DefaultBindGroupLayouts,
+    indirect::IndirectChunkData, utils::InspectChunks, views::ObserverBatchBuffersStore,
+    DefaultBindGroupLayouts,
 };
 
 pub fn extract_chunk_mesh_data(
@@ -139,12 +139,10 @@ pub fn upload_chunk_meshes(
 
 pub fn update_indirect_mesh_data_dependants(
     mut update: ResMut<UpdateIndirectLODs>,
-    mut batches: ResMut<PreparedChunkBatches>,
     mut observer_batches: ResMut<ObserverBatchBuffersStore>,
 ) {
     for _lod in update.contained_lods() {
         // TODO: need to split this up into per-LOD stuff as well
-        batches.clear();
         observer_batches.clear();
     }
 

@@ -4,6 +4,7 @@ mod gpu_chunk;
 mod gpu_registries;
 mod graph;
 mod indirect;
+mod lights;
 mod phase;
 mod pipelines;
 mod queue;
@@ -34,8 +35,8 @@ use bevy::{
 };
 use cb::channel::Receiver;
 use chunk_batches::{
-    extract_batches_with_lods, initialize_and_queue_batch_buffers, PopulateBatchBuffers,
-    PreparedChunkBatches,
+    extract_batches_with_lods, initialize_and_queue_batch_buffers, prepare_batch_buf_build_jobs,
+    QueuedBatchBufBuildJobs,
 };
 use commands::DrawDeferredBatch;
 use gpu_chunk::{
@@ -135,10 +136,9 @@ impl Plugin for RenderCore {
             // Misc
             .init_resource::<InspectChunks>()
             .init_resource::<ObserverBatchBuffersStore>()
-            .init_resource::<PopulateBatchBuffers>()
+            .init_resource::<QueuedBatchBufBuildJobs>()
             .init_resource::<UpdateIndirectLODs>()
             .init_resource::<RemoveChunkMeshes>()
-            .init_resource::<PreparedChunkBatches>()
             .init_resource::<AddChunkMeshes>();
 
         render_app
@@ -203,7 +203,12 @@ impl Plugin for RenderCore {
                 update_indirect_mesh_data_dependants
                     .in_set(CoreSet::UpdateIndirectMeshDataDependants),
                 // Prepare the indirect buffers.
-                initialize_and_queue_batch_buffers.in_set(CoreSet::PrepareIndirectBuffers),
+                (
+                    initialize_and_queue_batch_buffers,
+                    prepare_batch_buf_build_jobs,
+                )
+                    .chain()
+                    .in_set(CoreSet::PrepareIndirectBuffers),
                 // Queue the chunks
                 queue_deferred_chunks.in_set(CoreSet::Queue),
             ),

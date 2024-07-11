@@ -14,7 +14,10 @@ use bevy::{
 };
 use bytemuck::cast_slice;
 
-use crate::topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches};
+use crate::{
+    render::lod::LevelOfDetail,
+    topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches},
+};
 
 use super::{
     gpu_chunk::IndirectRenderDataStore,
@@ -25,60 +28,9 @@ use super::{
     },
     shaders::{BUILD_BATCH_BUFFERS_HANDLE, OBSERVER_BATCH_FRUSTUM_CULL_HANDLE},
     utils::{add_shader_constants, u32_shader_def},
-    views::{ObserverBatchBuffersStore, ObserverBatchGpuData},
+    views::{IndirectViewBatch, ObserverBatchBuffersStore},
     DefaultBindGroupLayouts,
 };
-
-#[derive(Resource, Clone, Default)]
-pub struct PreparedChunkBatches(EntityHashMap<PreparedChunkBatch>);
-
-impl PreparedChunkBatches {
-    /// Tries to insert the given batch entity and initialize its indirect buffer. Will only insert if the
-    /// batch doesn't exist from before or if the existing batch is older (had a smaller `tick`).
-    /// Returns true if the batch was inserted (in which case the batch should be queued for
-    /// buffer building).
-    pub fn try_insert(&mut self, entity: Entity, batch: &ChunkBatch, gpu: &RenderDevice) -> bool {
-        let num_chunks = batch.num_chunks();
-        let mut did_insert = false;
-
-        self.0
-            .entry(entity)
-            .and_modify(|render_batch| {
-                if render_batch.tick < batch.tick() {
-                    *render_batch = PreparedChunkBatch {
-                        indirect: create_primary_indirect_buffer(gpu, num_chunks),
-                        num_chunks,
-                        tick: batch.tick(),
-                    };
-
-                    did_insert = true;
-                }
-            })
-            .or_insert_with(|| {
-                did_insert = true;
-
-                PreparedChunkBatch {
-                    indirect: create_primary_indirect_buffer(gpu, num_chunks),
-                    num_chunks,
-                    tick: batch.tick(),
-                }
-            });
-
-        did_insert
-    }
-
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    pub fn get(&self, entity: Entity) -> Option<&PreparedChunkBatch> {
-        self.0.get(&entity)
-    }
-
-    pub fn contains(&self, batch_entity: Entity) -> bool {
-        self.0.contains_key(&batch_entity)
-    }
-}
 
 #[derive(Clone)]
 pub struct PreparedChunkBatch {
@@ -87,35 +39,88 @@ pub struct PreparedChunkBatch {
     pub tick: u64,
 }
 
-#[derive(Resource, Clone, Default)]
-pub struct PopulateBatchBuffers {
-    pub observers: EntityHashMap<EntityHashSet>,
-    pub batches: EntityHashMap<BindGroup>,
+#[derive(Clone)]
+pub struct UnpreparedBatchBufBuildJob {
+    pub dest: Buffer,
+    pub lod: LevelOfDetail,
+    pub metadata_indices: Vec<u32>,
 }
 
-impl PopulateBatchBuffers {
+#[derive(Clone)]
+pub struct PreparedBatchBufBuildJob {
+    pub bind_group: BindGroup,
+    pub num_chunks: u32,
+    pub lod: LevelOfDetail,
+}
+
+#[derive(Resource, Clone, Default)]
+pub struct QueuedBatchBufBuildJobs {
+    pub unprepared: Vec<UnpreparedBatchBufBuildJob>,
+    pub prepared: Vec<PreparedBatchBufBuildJob>,
+}
+
+impl QueuedBatchBufBuildJobs {
     pub fn clear(&mut self) {
-        self.observers.clear();
-        self.batches.clear();
+        self.unprepared.clear();
+        self.prepared.clear();
     }
 
     pub fn is_empty(&self) -> bool {
-        self.batches.is_empty() && self.observers.is_empty()
+        self.unprepared.is_empty() && self.prepared.is_empty()
     }
 
-    pub fn queue<F>(&mut self, batch: Entity, observer: Entity, bbb_bg_factory: F)
-    where
-        F: FnOnce() -> BindGroup,
-    {
-        // This dance here is to avoid cloning the bind group unless we really have to, since it's a somewhat expensive operation
-        self.batches.entry(batch).or_insert_with(bbb_bg_factory);
+    pub fn queue(&mut self, dest: Buffer, lod: LevelOfDetail, metadata_indices: Vec<u32>) {
+        self.unprepared.push(UnpreparedBatchBufBuildJob {
+            dest,
+            lod,
+            metadata_indices,
+        });
+    }
+}
 
-        self.observers
-            .entry(observer)
-            .and_modify(|visible| {
-                visible.insert(batch);
-            })
-            .or_insert_with(|| EntityHashSet::from_iter([batch]));
+pub fn prepare_batch_buf_build_jobs(
+    gpu: Res<RenderDevice>,
+    chunk_data: Res<IndirectRenderDataStore>,
+    default_layouts: Res<DefaultBindGroupLayouts>,
+    mut queued: ResMut<QueuedBatchBufBuildJobs>,
+) {
+    let QueuedBatchBufBuildJobs {
+        unprepared,
+        prepared,
+    } = queued.as_mut();
+
+    // Clear the current prepared jobs
+    prepared.clear();
+
+    for job in unprepared.drain(..) {
+        let lod_data = chunk_data.lod(job.lod);
+        let num_chunks = job.metadata_indices.len() as u32;
+
+        // An array of the indices to the chunk metadata on the GPU.
+        let metadata_index_buffer = gpu.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some("BBB_chunk_metadata_indices_buffer"),
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            contents: cast_slice(&job.metadata_indices),
+        });
+
+        let metadata_buffer = &lod_data.buffers().metadata;
+
+        // Build bind group
+        let bind_group = gpu.create_bind_group(
+            Some("BBB_bind_group"),
+            &default_layouts.build_batch_buffers_layout,
+            &BindGroupEntries::sequential((
+                metadata_buffer.as_entire_binding(),
+                metadata_index_buffer.as_entire_binding(),
+                job.dest.as_entire_binding(),
+            )),
+        );
+
+        prepared.push(PreparedBatchBufBuildJob {
+            bind_group,
+            num_chunks,
+            lod: job.lod,
+        });
     }
 }
 
@@ -138,29 +143,11 @@ impl ChunkBatch {
     }
 }
 
-fn create_primary_indirect_buffer(gpu: &RenderDevice, chunks: u32) -> Buffer {
-    gpu.create_buffer(&BufferDescriptor {
-        label: Some("chunk_batch_indirect_buffer"),
-        size: (chunks as u64) * u64::from(IndexedIndirectArgs::SHADER_SIZE),
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    })
-}
-
 fn create_observer_indirect_buffer(gpu: &RenderDevice, chunks: u32) -> Buffer {
     gpu.create_buffer(&BufferDescriptor {
         label: Some("observer_batch_indirect_buffer"),
         size: (chunks as u64) * u64::from(IndexedIndirectArgs::SHADER_SIZE),
         usage: BufferUsages::STORAGE | BufferUsages::INDIRECT | BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    })
-}
-
-fn create_instance_buffer(gpu: &RenderDevice, chunks: u32) -> Buffer {
-    gpu.create_buffer(&BufferDescriptor {
-        label: Some("chunk_batch_instance_buffer"),
-        size: (chunks as u64) * u64::from(ChunkInstanceData::SHADER_SIZE),
-        usage: BufferUsages::STORAGE | BufferUsages::VERTEX,
         mapped_at_creation: false,
     })
 }
@@ -193,8 +180,7 @@ pub fn extract_batches_with_lods(
 /// This system initializes the GPU buffers for chunk batches (instance buffer, indirect buffer, etc.) and queues
 /// them for population by the buffer builder in the render graph.
 pub fn initialize_and_queue_batch_buffers(
-    mut populate_buffers: ResMut<PopulateBatchBuffers>,
-    mut render_batches: ResMut<PreparedChunkBatches>,
+    mut populate_buffers: ResMut<QueuedBatchBufBuildJobs>,
     mut all_observer_batch_buffers: ResMut<ObserverBatchBuffersStore>,
     store: Res<IndirectRenderDataStore>,
     view_uniforms: Res<ViewUniforms>,
@@ -214,9 +200,7 @@ pub fn initialize_and_queue_batch_buffers(
 
     for (observer_entity, visible_batches) in &q_observer_batches {
         // All the per-observer batch buffers for this observer.
-        let observer_batch_buffers = all_observer_batch_buffers
-            .entry(observer_entity)
-            .or_insert(EntityHashMap::default());
+        let observer_batch_buffers = all_observer_batch_buffers.get_or_insert(observer_entity);
 
         for &batch_entity in visible_batches.iter() {
             // We need to initialize the buffers at the appropriate size.
@@ -233,79 +217,45 @@ pub fn initialize_and_queue_batch_buffers(
                 continue;
             }
 
-            let did_insert = render_batches.try_insert(batch_entity, batch, &gpu);
-
-            // If we inserted this batch entity for this view, then we need to build 2 bind groups:
-            // The frustum cull bind bind group, which binds the indirect buffers (count, args),
-            // chunk instances (basically their position), and the view (for the frustum). This
-            // bind group is used in a compute shader to edit the indirect args so that the
-            // chunks that are outside the frustum are not rendered.
-            //
-            // The buffer building bind group, which is basically a glorified copy. It takes in an
-            // array of the indices to chunk metadata in the metadata array buffer, and builds indirect args
-            // based on what it finds.
-            if did_insert {
-                let chunk_metadata_indices = batch.get_metadata_indices(&lod_data);
-
-                // This batch didn't have any metadata for this LOD so we skip it.
-                if chunk_metadata_indices.is_empty() {
-                    continue;
-                }
-
-                let observer_indirect_buf =
-                    create_observer_indirect_buffer(&gpu, batch.num_chunks());
-                let observer_count_buf = create_count_buffer(&gpu);
-
-                let cull_bind_group = gpu.create_bind_group(
-                    Some("observer_batch_frustum_cull_bind_group"),
-                    &default_layouts.observer_batch_cull_layout,
-                    &BindGroupEntries::sequential((
-                        lod_data.buffers().instances.as_entire_binding(),
-                        view_uniforms_binding.clone(),
-                        observer_indirect_buf.as_entire_binding(),
-                        observer_count_buf.as_entire_binding(),
-                    )),
-                );
-
-                observer_batch_buffers.insert(
-                    batch_entity,
-                    ObserverBatchGpuData {
-                        cull_bind_group,
-                        indirect: observer_indirect_buf,
-                        count: observer_count_buf,
-                        num_chunks: batch.num_chunks(),
-                    },
-                );
-
-                let factory = || {
-                    // An array of the indices to the chunk metadata on the GPU.
-                    let metadata_index_buffer =
-                        gpu.create_buffer_with_data(&BufferInitDescriptor {
-                            label: Some("BBB_chunk_metadata_indices_buffer"),
-                            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-                            contents: cast_slice(&chunk_metadata_indices),
-                        });
-
-                    let metadata_buffer = &lod_data.buffers().metadata;
-                    let render_batch_indirect_buf = &render_batches
-                        .get(batch_entity)
-                        .expect("We just inserted the render batch for this entity")
-                        .indirect;
-
-                    // Build bind group
-                    gpu.create_bind_group(
-                        Some("BBB_bind_group"),
-                        &default_layouts.build_batch_buffers_layout,
-                        &BindGroupEntries::sequential((
-                            metadata_buffer.as_entire_binding(),
-                            metadata_index_buffer.as_entire_binding(),
-                            render_batch_indirect_buf.as_entire_binding(),
-                        )),
-                    )
-                };
-
-                populate_buffers.queue(batch_entity, observer_entity, factory);
+            // This observer already has buffers for this batch, so we don't need to build them.
+            if observer_batch_buffers.contains_key(&batch_entity) {
+                continue;
             }
+
+            // At this point we know that the LOD data is not empty, and that this observer needs
+            // buffers for this batch, so we'll (try to) initialize the buffers and queue the build job.
+            let chunk_metadata_indices = batch.get_metadata_indices(&lod_data);
+
+            // This batch didn't have any metadata for this LOD so we skip it.
+            if chunk_metadata_indices.is_empty() {
+                continue;
+            }
+
+            let observer_indirect_buf = create_observer_indirect_buffer(&gpu, batch.num_chunks());
+            let observer_count_buf = create_count_buffer(&gpu);
+
+            let cull_bind_group = gpu.create_bind_group(
+                Some("observer_batch_frustum_cull_bind_group"),
+                &default_layouts.observer_batch_cull_layout,
+                &BindGroupEntries::sequential((
+                    lod_data.buffers().instances.as_entire_binding(),
+                    view_uniforms_binding.clone(),
+                    observer_indirect_buf.as_entire_binding(),
+                    observer_count_buf.as_entire_binding(),
+                )),
+            );
+
+            observer_batch_buffers.insert(
+                batch_entity,
+                IndirectViewBatch {
+                    cull_bind_group,
+                    indirect: observer_indirect_buf.clone(),
+                    count: observer_count_buf,
+                    num_chunks: batch.num_chunks(),
+                },
+            );
+
+            populate_buffers.queue(observer_indirect_buf, batch_lod, chunk_metadata_indices);
         }
     }
 }

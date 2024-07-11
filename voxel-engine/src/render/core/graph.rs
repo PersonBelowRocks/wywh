@@ -24,8 +24,7 @@ use bevy::{
 use crate::topo::controller::VisibleBatches;
 
 use super::{
-    chunk_batches::{PopulateBatchBuffers, PreparedChunkBatches},
-    indirect::IndexedIndirectArgs,
+    chunk_batches::QueuedBatchBufBuildJobs,
     phase::DeferredBatchPrepass,
     pipelines::{
         BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId,
@@ -154,12 +153,10 @@ impl Node for BuildBatchBuffersNode {
     ) -> Result<(), NodeRunError> {
         let pipeline_id = world.resource::<BuildBatchBuffersPipelineId>();
         let pipeline_cache = world.resource::<PipelineCache>();
-        let render_chunk_batches = world.resource::<PreparedChunkBatches>();
-        let populate_batches = world.resource::<PopulateBatchBuffers>();
-        let observer_batch_buf_store = world.resource::<ObserverBatchBuffersStore>();
+        let queued = world.resource::<QueuedBatchBufBuildJobs>();
 
         // Return early if there's no batches whose buffers need populating
-        if populate_batches.is_empty() {
+        if queued.is_empty() {
             return Ok(());
         }
 
@@ -167,11 +164,6 @@ impl Node for BuildBatchBuffersNode {
             error!("Cannot get batch buffer population compute pipeline");
             return Ok(());
         };
-
-        let mut built = EntityHashSet::with_capacity_and_hasher(
-            populate_batches.batches.len(),
-            EntityHash::default(),
-        );
 
         // Encode compute pass
         let mut pass = ctx
@@ -184,62 +176,15 @@ impl Node for BuildBatchBuffersNode {
         pass.set_pipeline(&compute_pipeline);
 
         // Build all the initial batch buffers
-        for (&batch_entity, bbb_bind_group) in populate_batches.batches.iter() {
-            // Skip all batches that don't have initialized buffers. We are not allowed to initialize the buffers here due to mutability
-            // rules so we are forced to just do whatever the previous render stages tell us.
-            let Some(render_batch) = render_chunk_batches.get(batch_entity) else {
-                error!("Batch buffer was queued for building but the buffer was not initialized");
-                continue;
-            };
-
-            // Skip if there's no chunks
-            if render_batch.num_chunks == 0 {
-                continue;
-            }
-
-            pass.set_bind_group(0, bbb_bind_group, &[]);
+        for job in queued.prepared.iter() {
+            pass.set_bind_group(0, &job.bind_group, &[]);
             // Divide by ceiling here, otherwise we might miss out on some chunks
-            let workgroups = render_batch
-                .num_chunks
-                .div_ceil(BUILD_BATCH_BUFFERS_WORKGROUP_SIZE);
+            let workgroups = job.num_chunks.div_ceil(BUILD_BATCH_BUFFERS_WORKGROUP_SIZE);
 
             pass.dispatch_workgroups(1, 1, workgroups);
-
-            built.insert(batch_entity);
         }
 
         drop(pass);
-
-        // Make copies of all the primary batch buffers for each observer that wants to render those batches
-        for (observer, visible) in populate_batches.observers.iter() {
-            let Some(observer_buffers) = observer_batch_buf_store.get(observer) else {
-                error!("Queued observer did not have initialized buffers.");
-                continue;
-            };
-
-            for batch_entity in visible.iter() {
-                if !built.contains(batch_entity) {
-                    continue;
-                }
-
-                let Some(render_batch) = render_chunk_batches.get(*batch_entity) else {
-                    error!("Observer tried to get indirect batch data but the batch didn't have any buffers");
-                    continue;
-                };
-
-                let Some(dst_buffers) = observer_buffers.get(batch_entity) else {
-                    continue;
-                };
-
-                ctx.command_encoder().copy_buffer_to_buffer(
-                    &render_batch.indirect,
-                    0,
-                    &dst_buffers.indirect,
-                    0,
-                    (render_batch.num_chunks as u64) * u64::from(IndexedIndirectArgs::SHADER_SIZE),
-                );
-            }
-        }
 
         Ok(())
     }
@@ -267,7 +212,7 @@ impl ViewNode for GpuFrustumCullBatchesNode {
             return Ok(());
         };
 
-        let Some(observer_batches) = store.get(&view_entity) else {
+        let Some(observer_batches) = store.get_batches(view_entity) else {
             return Ok(());
         };
 

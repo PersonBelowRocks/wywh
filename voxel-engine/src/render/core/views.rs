@@ -10,33 +10,44 @@ use crate::topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches};
 
 use super::phase::DeferredBatchPrepass;
 
-/// Copies of the indirect, instance, and count buffers for each observer so they can cull individually.
-#[derive(Resource, Clone, Default, Deref, DerefMut)]
-pub struct ObserverBatchBuffersStore(EntityHashMap<ObserverBatches>);
-
-impl ObserverBatchBuffersStore {
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    pub fn get_batch_gpu_data(
-        &self,
-        observer_entity: Entity,
-        batch_entity: Entity,
-    ) -> Option<&ObserverBatchGpuData> {
-        self.0.get(&observer_entity)?.get(&batch_entity)
-    }
-}
-
 #[derive(Clone)]
-pub struct ObserverBatchGpuData {
+pub struct IndirectViewBatch {
     pub cull_bind_group: BindGroup,
     pub num_chunks: u32,
     pub indirect: Buffer,
     pub count: Buffer,
 }
 
-pub type ObserverBatches = EntityHashMap<ObserverBatchGpuData>;
+pub type ViewBatches = EntityHashMap<IndirectViewBatch>;
+
+#[derive(Default, Clone)]
+pub struct ViewBatchBuffersStore(EntityHashMap<ViewBatches>);
+
+impl ViewBatchBuffersStore {
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    pub fn get_batch(
+        &self,
+        view_entity: Entity,
+        batch_entity: Entity,
+    ) -> Option<&IndirectViewBatch> {
+        self.0.get(&view_entity)?.get(&batch_entity)
+    }
+
+    pub fn get_batches(&self, view_entity: Entity) -> Option<&ViewBatches> {
+        self.0.get(&view_entity)
+    }
+
+    pub fn get_or_insert(&mut self, view_entity: Entity) -> &mut ViewBatches {
+        self.0.entry(view_entity).or_insert(ViewBatches::default())
+    }
+}
+
+/// Copies of the indirect, instance, and count buffers for each observer so they can cull individually.
+#[derive(Resource, Clone, Default, Deref, DerefMut)]
+pub struct ObserverBatchBuffersStore(ViewBatchBuffersStore);
 
 pub fn extract_observer_visible_batches(
     query: Extract<Query<(Entity, &VisibleBatches)>>,

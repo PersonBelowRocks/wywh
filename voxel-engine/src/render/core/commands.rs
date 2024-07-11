@@ -102,8 +102,7 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectBatchDraw {
             return RenderCommandResult::Failure;
         }
 
-        let Some(observer_batch) = observer_batches.get_batch_gpu_data(view_entity, batch_entity)
-        else {
+        let Some(observer_batch) = observer_batches.get_batch(view_entity, batch_entity) else {
             error!("View {view_entity} did not have any data for batch {batch_entity}");
             return RenderCommandResult::Failure;
         };
