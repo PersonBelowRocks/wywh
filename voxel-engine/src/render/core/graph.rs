@@ -24,13 +24,14 @@ use bevy::{
 use crate::topo::controller::VisibleBatches;
 
 use super::{
-    chunk_batches::{
-        BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId, PopulateBatchBuffers,
-        PreparedChunkBatches, BUILD_BATCH_BUFFERS_WORKGROUP_SIZE, FRUSTUM_CULL_WORKGROUP_SIZE,
-    },
+    chunk_batches::{PopulateBatchBuffers, PreparedChunkBatches},
     indirect::IndexedIndirectArgs,
-    observers::ObserverBatchBuffersStore,
     phase::DeferredBatchPrepass,
+    pipelines::{
+        BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId,
+        BUILD_BATCH_BUFFERS_WORKGROUP_SIZE, FRUSTUM_CULL_WORKGROUP_SIZE,
+    },
+    views::ObserverBatchBuffersStore,
 };
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, RenderLabel)]

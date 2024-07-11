@@ -17,8 +17,8 @@ use crate::{
 };
 
 use super::{
-    chunk_batches::PreparedChunkBatches, indirect::IndirectChunkData,
-    observers::ObserverBatchBuffersStore, utils::InspectChunks, DefaultBindGroupLayouts,
+    chunk_batches::PreparedChunkBatches, indirect::IndirectChunkData, utils::InspectChunks,
+    views::ObserverBatchBuffersStore, DefaultBindGroupLayouts,
 };
 
 pub fn extract_chunk_mesh_data(

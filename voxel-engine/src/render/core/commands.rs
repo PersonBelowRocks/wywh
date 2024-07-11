@@ -15,7 +15,7 @@ use bevy::{
     },
 };
 
-use crate::render::core::observers::ObserverBatchBuffersStore;
+use crate::render::core::views::ObserverBatchBuffersStore;
 use crate::render::core::{
     gpu_chunk::IndirectRenderDataStore, gpu_registries::SetRegistryBindGroup,
 };

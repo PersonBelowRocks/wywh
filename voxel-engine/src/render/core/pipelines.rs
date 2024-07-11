@@ -12,9 +12,10 @@ use bevy::{
         mesh::PrimitiveTopology,
         render_resource::{
             binding_types::uniform_buffer, BindGroupLayout, BindGroupLayoutEntries, BufferAddress,
-            CompareFunction, DepthBiasState, DepthStencilState, Face, FragmentState, FrontFace,
-            MultisampleState, PolygonMode, PrimitiveState, PushConstantRange,
-            RenderPipelineDescriptor, ShaderDefVal, ShaderSize, ShaderStages,
+            CachedComputePipelineId, CompareFunction, ComputePipelineDescriptor, DepthBiasState,
+            DepthStencilState, Face, FragmentState, FrontFace, MultisampleState, PipelineCache,
+            PolygonMode, PrimitiveState, PushConstantRange, RenderPipelineDescriptor, ShaderDefVal,
+            ShaderSize, ShaderStages, SpecializedComputePipeline, SpecializedComputePipelines,
             SpecializedRenderPipeline, StencilState, VertexAttribute, VertexBufferLayout,
             VertexFormat, VertexState, VertexStepMode,
         },
@@ -26,8 +27,12 @@ use bevy::{
 use crate::render::core::{utils::add_shader_constants, DefaultBindGroupLayouts};
 
 use super::{
-    indirect::ChunkInstanceData, shaders::DEFERRED_INDIRECT_CHUNK_HANDLE,
-    utils::add_mesh_pipeline_shader_defs,
+    indirect::ChunkInstanceData,
+    shaders::{
+        BUILD_BATCH_BUFFERS_HANDLE, DEFERRED_INDIRECT_CHUNK_HANDLE,
+        OBSERVER_BATCH_FRUSTUM_CULL_HANDLE,
+    },
+    utils::{add_mesh_pipeline_shader_defs, u32_shader_def},
 };
 
 pub const INDIRECT_CHUNKS_PRIMITIVE_STATE: PrimitiveState = PrimitiveState {
@@ -57,6 +62,110 @@ pub fn chunk_indirect_instance_buffer_layout(start_at: u32) -> VertexBufferLayou
             },
         ],
     }
+}
+
+#[derive(Resource, Clone, Debug)]
+pub struct BuildBatchBuffersPipelineId(pub CachedComputePipelineId);
+
+pub const BUILD_BATCH_BUFFERS_WORKGROUP_SIZE: u32 = 64;
+
+#[derive(Resource)]
+pub struct BuildBatchBuffersPipeline {
+    pub shader: Handle<Shader>,
+    pub bg_layout: BindGroupLayout,
+}
+
+impl FromWorld for BuildBatchBuffersPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let default_layouts = world.resource::<DefaultBindGroupLayouts>();
+
+        Self {
+            shader: BUILD_BATCH_BUFFERS_HANDLE,
+            bg_layout: default_layouts.build_batch_buffers_layout.clone(),
+        }
+    }
+}
+
+impl SpecializedComputePipeline for BuildBatchBuffersPipeline {
+    type Key = ();
+
+    fn specialize(&self, _key: Self::Key) -> ComputePipelineDescriptor {
+        let mut shader_defs = vec![];
+        add_shader_constants(&mut shader_defs);
+        shader_defs.push(u32_shader_def(
+            "WORKGROUP_SIZE",
+            BUILD_BATCH_BUFFERS_WORKGROUP_SIZE,
+        ));
+
+        ComputePipelineDescriptor {
+            label: Some("build_batch_buffers_pipeline".into()),
+            entry_point: "build_buffers".into(),
+            shader: self.shader.clone(),
+            push_constant_ranges: vec![],
+            shader_defs,
+            layout: vec![self.bg_layout.clone()],
+        }
+    }
+}
+
+#[derive(Resource, Clone, Debug)]
+pub struct ObserverBatchFrustumCullPipelineId(pub CachedComputePipelineId);
+
+pub const FRUSTUM_CULL_WORKGROUP_SIZE: u32 = 64;
+
+#[derive(Resource)]
+pub struct ObserverBatchFrustumCullPipeline {
+    pub shader: Handle<Shader>,
+    pub bg_layout: BindGroupLayout,
+}
+
+impl FromWorld for ObserverBatchFrustumCullPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let default_layouts = world.resource::<DefaultBindGroupLayouts>();
+
+        Self {
+            shader: OBSERVER_BATCH_FRUSTUM_CULL_HANDLE,
+            bg_layout: default_layouts.observer_batch_cull_layout.clone(),
+        }
+    }
+}
+
+impl SpecializedComputePipeline for ObserverBatchFrustumCullPipeline {
+    type Key = ();
+
+    fn specialize(&self, _key: Self::Key) -> ComputePipelineDescriptor {
+        let mut shader_defs = vec![];
+        add_shader_constants(&mut shader_defs);
+        shader_defs.push(u32_shader_def(
+            "WORKGROUP_SIZE",
+            FRUSTUM_CULL_WORKGROUP_SIZE,
+        ));
+
+        ComputePipelineDescriptor {
+            label: Some("observer_batch_frustum_cull_pipeline".into()),
+            entry_point: "batch_frustum_cull".into(),
+            shader: self.shader.clone(),
+            shader_defs,
+            layout: vec![self.bg_layout.clone()],
+            push_constant_ranges: vec![],
+        }
+    }
+}
+
+pub fn create_pipelines(
+    cache: Res<PipelineCache>,
+    buffer_build: Res<BuildBatchBuffersPipeline>,
+    batch_cull: Res<ObserverBatchFrustumCullPipeline>,
+    mut buffer_builder_pipelines: ResMut<SpecializedComputePipelines<BuildBatchBuffersPipeline>>,
+    mut cull_observer_batch_pipelines: ResMut<
+        SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>,
+    >,
+    mut cmds: Commands,
+) {
+    let id = buffer_builder_pipelines.specialize(&cache, &buffer_build, ());
+    cmds.insert_resource(BuildBatchBuffersPipelineId(id));
+    let id = cull_observer_batch_pipelines.specialize(&cache, &batch_cull, ());
+    cmds.insert_resource(ObserverBatchFrustumCullPipelineId(id));
 }
 
 /// The render pipeline for chunk multidraw

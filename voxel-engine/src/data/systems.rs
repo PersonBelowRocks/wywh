@@ -1,7 +1,10 @@
 use std::{path::PathBuf, sync::Arc};
 
 use bevy::{
-    asset::LoadedFolder, ecs::system::SystemParam, prelude::*, render::render_asset::RenderAssets,
+    asset::LoadedFolder,
+    ecs::system::SystemParam,
+    prelude::*,
+    render::{extract_resource::ExtractResource, render_asset::RenderAssets},
 };
 use mip_texture_array::asset::{GpuMippedArrayTex, MippedArrayTexture};
 
@@ -38,10 +41,10 @@ pub struct VoxelNormalMapFolder {
     pub loaded: bool,
 }
 
-#[derive(Resource, Default, Clone)]
+#[derive(Resource, Default, Clone, ExtractResource)]
 pub struct VoxelColorArrayTexture(pub Handle<MippedArrayTexture>);
 
-#[derive(Resource, Default, Clone)]
+#[derive(Resource, Default, Clone, ExtractResource)]
 pub struct VoxelNormalArrayTexture(pub Handle<MippedArrayTexture>);
 
 #[derive(SystemParam)]

@@ -3,14 +3,13 @@ mod commands;
 mod gpu_chunk;
 mod gpu_registries;
 mod graph;
-mod impls;
 mod indirect;
-mod observers;
 mod phase;
 mod pipelines;
 mod queue;
 mod shaders;
 mod utils;
+mod views;
 
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
@@ -35,8 +34,7 @@ use bevy::{
 };
 use cb::channel::Receiver;
 use chunk_batches::{
-    create_pipelines, extract_batches_with_lods, initialize_and_queue_batch_buffers,
-    BuildBatchBuffersPipeline, ObserverBatchFrustumCullPipeline, PopulateBatchBuffers,
+    extract_batches_with_lods, initialize_and_queue_batch_buffers, PopulateBatchBuffers,
     PreparedChunkBatches,
 };
 use commands::DrawDeferredBatch;
@@ -46,14 +44,17 @@ use gpu_chunk::{
 };
 use graph::{BuildBatchBuffersNode, DeferredChunkNode, GpuFrustumCullBatchesNode, Nodes};
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs};
-use observers::{
-    extract_chunk_camera_phases, extract_observer_visible_batches, ObserverBatchBuffersStore,
-};
 use phase::DeferredBatchPrepass;
-use pipelines::DeferredIndirectChunkPipeline;
+use pipelines::{
+    create_pipelines, BuildBatchBuffersPipeline, DeferredIndirectChunkPipeline,
+    ObserverBatchFrustumCullPipeline,
+};
 use queue::queue_deferred_chunks;
 use shaders::load_internal_shaders;
 use utils::InspectChunks;
+use views::{
+    extract_chunk_camera_phases, extract_observer_visible_batches, ObserverBatchBuffersStore,
+};
 
 use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
