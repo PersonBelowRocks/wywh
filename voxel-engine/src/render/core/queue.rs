@@ -21,7 +21,7 @@ use super::{
     commands::DrawDeferredBatch,
     gpu_chunk::IndirectRenderDataStore,
     gpu_registries::RegistryBindGroup,
-    phase::DeferredBatchPrepass,
+    phase::DeferredBatch3d,
     pipelines::{ChunkPipelineKey, DeferredIndirectChunkPipeline},
 };
 
@@ -37,10 +37,10 @@ pub fn queue_deferred_chunks(
         Option<&DeferredPrepass>,
     )>,
     q_batches: Query<&ChunkBatchLod>,
-    mut phases: ResMut<ViewSortedRenderPhases<DeferredBatchPrepass>>,
+    mut phases: ResMut<ViewSortedRenderPhases<DeferredBatch3d>>,
 
     //////////////////////////////////////////////////////////////////////////
-    functions: Res<DrawFunctions<DeferredBatchPrepass>>,
+    functions: Res<DrawFunctions<DeferredBatch3d>>,
     pipeline: Res<DeferredIndirectChunkPipeline>,
     pipeline_cache: Res<PipelineCache>,
     mut pipelines: ResMut<SpecializedRenderPipelines<DeferredIndirectChunkPipeline>>,
@@ -119,7 +119,7 @@ pub fn queue_deferred_chunks(
                 continue;
             }
 
-            let phase_item = DeferredBatchPrepass {
+            let phase_item = DeferredBatch3d {
                 pipeline: pipeline_id,
                 draw_function: function,
                 entity: batch_entity,
@@ -131,27 +131,4 @@ pub fn queue_deferred_chunks(
             phase.add(phase_item);
         }
     }
-}
-
-/// Queue shadows for chunks.
-pub fn queue_chunk_shadows(
-    //////////////////////////////////////////////////////////////////////////
-    q_view_lights: Query<(Entity, &ViewLightEntities)>,
-    q_view_light_entities: Query<&LightEntity>,
-    q_point_light_entities: Query<&CubemapVisibleEntities, With<ExtractedPointLight>>,
-    q_directional_light_entities: Query<&CascadesVisibleEntities, With<ExtractedDirectionalLight>>,
-    q_spot_light_entities: Query<&VisibleEntities, With<ExtractedPointLight>>,
-    q_batches: Query<&ChunkBatchLod>,
-    mut phases: ResMut<ViewBinnedRenderPhases<Shadow>>,
-
-    //////////////////////////////////////////////////////////////////////////
-    functions: Res<DrawFunctions<Shadow>>,
-    pipeline: Res<DeferredIndirectChunkPipeline>,
-    pipeline_cache: Res<PipelineCache>,
-    mut pipelines: ResMut<SpecializedRenderPipelines<DeferredIndirectChunkPipeline>>,
-    //////////////////////////////////////////////////////////////////////////
-    registry_bg: Option<Res<RegistryBindGroup>>,
-    mesh_data: Res<IndirectRenderDataStore>,
-    msaa: Res<Msaa>,
-) {
 }

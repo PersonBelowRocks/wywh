@@ -46,6 +46,10 @@ pub fn add_mesh_pipeline_shader_defs(key: MeshPipelineKey, shader_defs: &mut Vec
         shader_defs.push("MULTISAMPLED".into());
     };
 
+    if key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO) {
+        shader_defs.push("DEPTH_CLAMP_ORTHO".into());
+    }
+
     if key.contains(MeshPipelineKey::SCREEN_SPACE_AMBIENT_OCCLUSION) {
         shader_defs.push("SCREEN_SPACE_AMBIENT_OCCLUSION".into());
     }

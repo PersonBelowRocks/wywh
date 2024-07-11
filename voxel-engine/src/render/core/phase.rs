@@ -14,7 +14,7 @@ use bevy::{
 use crate::render::lod::LevelOfDetail;
 
 #[derive(Clone)]
-pub struct DeferredBatchPrepass {
+pub struct DeferredBatch3d {
     pub pipeline: CachedRenderPipelineId,
     pub draw_function: DrawFunctionId,
     pub entity: Entity,
@@ -23,7 +23,7 @@ pub struct DeferredBatchPrepass {
     pub extra_index: PhaseItemExtraIndex,
 }
 
-impl PhaseItem for DeferredBatchPrepass {
+impl PhaseItem for DeferredBatch3d {
     const AUTOMATIC_BATCHING: bool = false;
 
     fn batch_range(&self) -> &Range<u32> {
@@ -51,7 +51,7 @@ impl PhaseItem for DeferredBatchPrepass {
     }
 }
 
-impl SortedPhaseItem for DeferredBatchPrepass {
+impl SortedPhaseItem for DeferredBatch3d {
     type SortKey = LevelOfDetail;
 
     fn sort_key(&self) -> Self::SortKey {
@@ -59,7 +59,7 @@ impl SortedPhaseItem for DeferredBatchPrepass {
     }
 }
 
-impl CachedRenderPipelinePhaseItem for DeferredBatchPrepass {
+impl CachedRenderPipelinePhaseItem for DeferredBatch3d {
     fn cached_pipeline(&self) -> CachedRenderPipelineId {
         self.pipeline
     }

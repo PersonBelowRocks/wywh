@@ -152,22 +152,24 @@ fn setup(
     });
 
     // light
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            color: Color::WHITE,
-            illuminance: 10000.0,
-            shadows_enabled: true,
+    let directional_light = commands
+        .spawn(DirectionalLightBundle {
+            directional_light: DirectionalLight {
+                color: Color::WHITE,
+                illuminance: 10000.0,
+                shadows_enabled: true,
 
+                ..default()
+            },
+            transform: Transform::from_rotation(Quat::from_euler(
+                EulerRot::ZYX,
+                0.0,
+                PI * -0.15,
+                PI * -0.15,
+            )),
             ..default()
-        },
-        transform: Transform::from_rotation(Quat::from_euler(
-            EulerRot::ZYX,
-            0.0,
-            PI * -0.15,
-            PI * -0.15,
-        )),
-        ..default()
-    });
+        })
+        .id();
 
     commands.insert_resource(Msaa::Off);
     commands.insert_resource(AmbientLight {
@@ -223,5 +225,9 @@ fn setup(
 
     commands
         .get_or_spawn(observer_entity)
+        .insert(VisibleBatches(EntityHashSet::from_iter([batch_entity])));
+
+    commands
+        .get_or_spawn(directional_light)
         .insert(VisibleBatches(EntityHashSet::from_iter([batch_entity])));
 }

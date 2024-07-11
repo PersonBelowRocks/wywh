@@ -48,11 +48,13 @@ fn chunk_vertex(in: MultidrawVertex) -> PrepassOutput {
 fn deferred_output(in: PrepassOutput, world_normal: vec3f, pbr_input: PbrInput) -> FragmentOutput {
     var out: FragmentOutput;
 
+#ifdef DEFERRED_PREPASS
     // gbuffer
     out.deferred = deferred_gbuffer_from_pbr_input(pbr_input);
     // lighting pass id (used to determine which lighting shader to run for the fragment)
     out.deferred_lighting_pass_id = pbr_input.material.deferred_lighting_pass_id;
     // normal if required
+#endif
 #ifdef NORMAL_PREPASS
     // TODO: check that normals (and normal mapping) is done correctly
     out.normal = vec4f(world_normal * 0.5 + vec3(0.5), 0.0);

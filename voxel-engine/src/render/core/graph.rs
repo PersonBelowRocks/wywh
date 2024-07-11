@@ -25,7 +25,7 @@ use crate::topo::controller::VisibleBatches;
 
 use super::{
     chunk_batches::QueuedBatchBufBuildJobs,
-    phase::DeferredBatchPrepass,
+    phase::DeferredBatch3d,
     pipelines::{
         BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId,
         BUILD_BATCH_BUFFERS_WORKGROUP_SIZE, FRUSTUM_CULL_WORKGROUP_SIZE,
@@ -61,7 +61,7 @@ impl ViewNode for DeferredChunkNode {
         >,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        let phases = world.resource::<ViewSortedRenderPhases<DeferredBatchPrepass>>();
+        let phases = world.resource::<ViewSortedRenderPhases<DeferredBatch3d>>();
 
         let Some(phase) = phases.get(&view_entity) else {
             return Ok(());

@@ -13,6 +13,7 @@ mod utils;
 mod views;
 
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
+use bevy::pbr::Shadow;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
 use bevy::render::render_resource::ShaderSize;
@@ -45,8 +46,8 @@ use gpu_chunk::{
 };
 use graph::{BuildBatchBuffersNode, DeferredChunkNode, GpuFrustumCullBatchesNode, Nodes};
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs};
-use lights::inherit_parent_light_batches;
-use phase::DeferredBatchPrepass;
+use lights::{inherit_parent_light_batches, queue_chunk_shadows};
+use phase::DeferredBatch3d;
 use pipelines::{
     create_pipelines, BuildBatchBuffersPipeline, DeferredIndirectChunkPipeline,
     ObserverBatchFrustumCullPipeline,
@@ -125,9 +126,9 @@ impl Plugin for RenderCore {
 
         render_app
             // Draw functions
-            .init_resource::<DrawFunctions<DeferredBatchPrepass>>()
+            .init_resource::<DrawFunctions<DeferredBatch3d>>()
             // Render phases
-            .init_resource::<ViewSortedRenderPhases<DeferredBatchPrepass>>()
+            .init_resource::<ViewSortedRenderPhases<DeferredBatch3d>>()
             // Pipeline stores
             .init_resource::<SpecializedRenderPipelines<DeferredIndirectChunkPipeline>>()
             .init_resource::<SpecializedComputePipelines<BuildBatchBuffersPipeline>>()
@@ -141,7 +142,8 @@ impl Plugin for RenderCore {
             .init_resource::<AddChunkMeshes>();
 
         render_app
-            .add_render_command::<DeferredBatchPrepass, DrawDeferredBatch>()
+            .add_render_command::<DeferredBatch3d, DrawDeferredBatch>()
+            .add_render_command::<Shadow, DrawDeferredBatch>()
             .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, Nodes::Prepass)
             .add_render_graph_node::<ViewNodeRunner<GpuFrustumCullBatchesNode>>(
                 Core3d,
@@ -204,13 +206,14 @@ impl Plugin for RenderCore {
                 // Prepare the indirect buffers.
                 (
                     inherit_parent_light_batches,
+                    apply_deferred,
                     initialize_and_queue_batch_buffers,
                     prepare_batch_buf_build_jobs,
                 )
                     .chain()
                     .in_set(CoreSet::PrepareIndirectBuffers),
                 // Queue the chunks
-                queue_deferred_chunks.in_set(CoreSet::Queue),
+                (queue_deferred_chunks, queue_chunk_shadows).in_set(CoreSet::Queue),
             ),
         );
     }

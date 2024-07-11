@@ -258,11 +258,13 @@ impl SpecializedRenderPipeline for DeferredIndirectChunkPipeline {
             key.contains(MeshPipelineKey::DEFERRED_PREPASS),
         );
 
+        let mut frag_required = true;
         // TODO: is this needed for our custom pipeline?
         if targets.iter().all(Option::is_none) {
             // if no targets are required then clear the list, so that no fragment shader is required
             // (though one may still be used for discarding depth buffer writes)
             targets.clear();
+            frag_required = false;
         }
 
         RenderPipelineDescriptor {
@@ -273,7 +275,7 @@ impl SpecializedRenderPipeline for DeferredIndirectChunkPipeline {
                 shader_defs: shader_defs.clone(),
                 buffers: vec![chunk_indirect_instance_buffer_layout(0)],
             },
-            fragment: Some(FragmentState {
+            fragment: frag_required.then(|| FragmentState {
                 shader: self.shader.clone(),
                 entry_point: "chunk_fragment".into(),
                 shader_defs: shader_defs.clone(),

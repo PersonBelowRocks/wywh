@@ -8,7 +8,7 @@ use bevy::{
 
 use crate::topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches};
 
-use super::phase::DeferredBatchPrepass;
+use super::phase::DeferredBatch3d;
 
 #[derive(Clone)]
 pub struct IndirectViewBatch {
@@ -81,7 +81,7 @@ pub fn extract_visible_batches(
 /// Sets up chunk render phases for camera entities
 pub fn extract_chunk_camera_phases(
     cameras: Extract<Query<(Entity, &Camera), With<Camera3d>>>,
-    mut prepass_phases: ResMut<ViewSortedRenderPhases<DeferredBatchPrepass>>,
+    mut prepass_phases: ResMut<ViewSortedRenderPhases<DeferredBatch3d>>,
     mut live_entities: Local<EntityHashSet>,
 ) {
     live_entities.clear();
