@@ -109,7 +109,7 @@ impl SpecializedComputePipeline for BuildBatchBuffersPipeline {
 }
 
 #[derive(Resource, Clone, Debug)]
-pub struct ObserverBatchFrustumCullPipelineId(pub CachedComputePipelineId);
+pub struct ViewBatchFrustumCullPipelineId(pub CachedComputePipelineId);
 
 pub const FRUSTUM_CULL_WORKGROUP_SIZE: u32 = 64;
 
@@ -165,7 +165,7 @@ pub fn create_pipelines(
     let id = buffer_builder_pipelines.specialize(&cache, &buffer_build, ());
     cmds.insert_resource(BuildBatchBuffersPipelineId(id));
     let id = cull_observer_batch_pipelines.specialize(&cache, &batch_cull, ());
-    cmds.insert_resource(ObserverBatchFrustumCullPipelineId(id));
+    cmds.insert_resource(ViewBatchFrustumCullPipelineId(id));
 }
 
 /// The render pipeline for chunk multidraw

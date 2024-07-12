@@ -18,6 +18,10 @@ pub struct IndirectViewBatch {
 }
 
 impl IndirectViewBatch {
+    pub fn cull_data(&self) -> Option<&IndirectViewBatchCullData> {
+        self.cull_data.as_ref()
+    }
+
     pub fn count_buffer(&self) -> Option<&Buffer> {
         self.cull_data.as_ref().map(|d| &d.count)
     }
@@ -29,6 +33,7 @@ impl IndirectViewBatch {
 
 #[derive(Clone)]
 pub struct IndirectViewBatchCullData {
+    pub uniform_offset: u32,
     pub bind_group: BindGroup,
     pub count: Buffer,
 }

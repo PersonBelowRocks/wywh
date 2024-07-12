@@ -5,6 +5,7 @@ use bevy::{
         query::QueryItem,
         system::lifetimeless::Read,
     },
+    pbr::{ViewLightEntities, ViewLightsUniformOffset},
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -12,31 +13,33 @@ use bevy::{
         render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_phase::{TrackedRenderPass, ViewSortedRenderPhases},
         render_resource::{
-            CommandEncoderDescriptor, ComputePassDescriptor, PipelineCache, RenderPassDescriptor,
-            ShaderSize, StoreOp,
+            Buffer, CommandEncoder, CommandEncoderDescriptor, ComputePass, ComputePassDescriptor,
+            ComputePipeline, PipelineCache, RenderPassDescriptor, ShaderSize, StoreOp,
         },
         renderer::RenderContext,
         texture::ColorAttachment,
         view::{ViewDepthTexture, ViewUniformOffset},
     },
 };
+use hb::HashMap;
 
-use crate::topo::controller::VisibleBatches;
+use crate::{render::core::views::IndirectViewBatch, topo::controller::VisibleBatches};
 
 use super::{
     chunk_batches::QueuedBatchBufBuildJobs,
     phase::DeferredBatch3d,
     pipelines::{
-        BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipelineId,
+        BuildBatchBuffersPipelineId, ViewBatchFrustumCullPipelineId,
         BUILD_BATCH_BUFFERS_WORKGROUP_SIZE, FRUSTUM_CULL_WORKGROUP_SIZE,
     },
-    views::ViewBatchBuffersStore,
+    views::{IndirectViewBatchCullData, ViewBatchBuffersStore},
 };
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, RenderLabel)]
 pub enum Nodes {
     BuildBatchBuffers,
     BatchFrustumCulling,
+    LightBatchFrustumCulling,
     Prepass,
 }
 
@@ -190,24 +193,50 @@ impl Node for BuildBatchBuffersNode {
     }
 }
 
-#[derive(Default)]
-pub struct GpuFrustumCullBatchesNode;
+pub fn get_batch_frustum_cull_pipeline(world: &World) -> Option<&ComputePipeline> {
+    let pipeline_cache = world.resource::<PipelineCache>();
+    let pipeline_id = world.resource::<ViewBatchFrustumCullPipelineId>();
 
-impl ViewNode for GpuFrustumCullBatchesNode {
-    type ViewQuery = (Entity, Read<ViewUniformOffset>, Read<VisibleBatches>);
+    pipeline_cache.get_compute_pipeline(pipeline_id.0)
+}
+
+pub fn begin_frustum_cull_compute_pass<'a>(encoder: &'a mut CommandEncoder) -> ComputePass<'a> {
+    encoder.begin_compute_pass(&ComputePassDescriptor {
+        label: Some("chunk_batch_frustum_cull_compute_pass"),
+        timestamp_writes: None,
+    })
+}
+
+pub fn clear_count_buffer(encoder: &mut CommandEncoder, count_buffer: &Buffer) {
+    encoder.clear_buffer(count_buffer, 0, Some(u32::SHADER_SIZE.into()));
+}
+
+pub fn clear_count_buffers<'a>(
+    encoder: &mut CommandEncoder,
+    buffers: impl Iterator<Item = &'a Buffer>,
+) {
+    for buffer in buffers {
+        clear_count_buffer(encoder, buffer);
+    }
+}
+
+#[derive(Default)]
+pub struct FrustumCullBatchesNode;
+
+impl ViewNode for FrustumCullBatchesNode {
+    type ViewQuery = (Entity, Read<VisibleBatches>);
 
     fn run<'w>(
         &self,
         _graph: &mut RenderGraphContext,
         ctx: &mut RenderContext<'w>,
-        (view_entity, view_uniform_offset, visible_batches): QueryItem<'w, Self::ViewQuery>,
+        (view_entity, visible_batches): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        let pipeline_cache = world.resource::<PipelineCache>();
-        let pipeline_id = world.resource::<ObserverBatchFrustumCullPipelineId>();
+        let command_encoder = ctx.command_encoder();
         let store = world.resource::<ViewBatchBuffersStore>();
 
-        let Some(pipeline) = pipeline_cache.get_compute_pipeline(pipeline_id.0) else {
+        let Some(frustum_cull_pipeline) = get_batch_frustum_cull_pipeline(world) else {
             error!("Couldn't get view batch frustum cull compute pipeline");
             return Ok(());
         };
@@ -216,27 +245,17 @@ impl ViewNode for GpuFrustumCullBatchesNode {
             return Ok(());
         };
 
-        // Clear all the count buffers (sets them to 0).
-        for (_, gpu_data) in observer_batches.iter() {
-            let Some(count) = gpu_data.count_buffer() else {
-                continue;
-            };
+        let count_buffers = observer_batches
+            .values()
+            .filter_map(IndirectViewBatch::count_buffer);
 
-            ctx.command_encoder()
-                .clear_buffer(count, 0, Some(u32::SHADER_SIZE.into()))
-        }
+        clear_count_buffers(command_encoder, count_buffers);
+        let mut pass = begin_frustum_cull_compute_pass(command_encoder);
 
-        let mut pass = ctx
-            .command_encoder()
-            .begin_compute_pass(&ComputePassDescriptor {
-                label: Some("observer_batch_frustum_cull_pass"),
-                timestamp_writes: None,
-            });
-
-        pass.set_pipeline(pipeline);
+        pass.set_pipeline(frustum_cull_pipeline);
 
         for (batch_entity, gpu_data) in observer_batches.iter() {
-            let Some(cull_bind_group) = gpu_data.cull_bind_group() else {
+            let Some(cull_data) = gpu_data.cull_data() else {
                 continue;
             };
 
@@ -244,7 +263,69 @@ impl ViewNode for GpuFrustumCullBatchesNode {
                 continue;
             }
 
-            pass.set_bind_group(0, cull_bind_group, &[view_uniform_offset.offset]);
+            pass.set_bind_group(0, &cull_data.bind_group, &[cull_data.uniform_offset]);
+            // Divide by ceiling here, otherwise we might miss out on some chunks
+            let workgroups = gpu_data.num_chunks.div_ceil(FRUSTUM_CULL_WORKGROUP_SIZE);
+            pass.dispatch_workgroups(1, 1, workgroups);
+        }
+
+        Ok(())
+    }
+}
+
+pub fn get_view_lights_gpu_data<'a, 'b: 'a>(
+    view_light_entities: impl IntoIterator<Item = &'a Entity> + 'b,
+    store: &'b ViewBatchBuffersStore,
+) -> impl Iterator<Item = &'b IndirectViewBatch> + 'a {
+    view_light_entities
+        .into_iter()
+        .filter_map(|&light_entity| store.get_batches(light_entity))
+        .flat_map(HashMap::values)
+}
+
+pub fn get_view_lights_cull_data<'a, 'b: 'a>(
+    view_light_entities: impl IntoIterator<Item = &'a Entity> + 'b,
+    store: &'b ViewBatchBuffersStore,
+) -> impl Iterator<Item = &'b IndirectViewBatchCullData> + 'a {
+    get_view_lights_gpu_data(view_light_entities, store)
+        .filter_map(|gpu_data| gpu_data.cull_data.as_ref())
+}
+
+#[derive(Default)]
+pub struct FrustumCullLightBatchesNode;
+
+impl ViewNode for FrustumCullLightBatchesNode {
+    type ViewQuery = Read<ViewLightEntities>;
+
+    fn run<'w>(
+        &self,
+        _graph: &mut RenderGraphContext,
+        ctx: &mut RenderContext<'w>,
+        view_light_entities: QueryItem<'w, Self::ViewQuery>,
+        world: &'w World,
+    ) -> Result<(), NodeRunError> {
+        let command_encoder = ctx.command_encoder();
+        let store = world.resource::<ViewBatchBuffersStore>();
+
+        let Some(frustum_cull_pipeline) = get_batch_frustum_cull_pipeline(world) else {
+            error!("Couldn't get view batch frustum cull compute pipeline");
+            return Ok(());
+        };
+
+        // Need to do this before we make a compute pass due to lifetimes.
+        for cull_data in get_view_lights_cull_data(&view_light_entities.lights, store) {
+            clear_count_buffer(command_encoder, &cull_data.count);
+        }
+
+        let mut pass = begin_frustum_cull_compute_pass(command_encoder);
+        pass.set_pipeline(frustum_cull_pipeline);
+
+        for gpu_data in get_view_lights_gpu_data(&view_light_entities.lights, store) {
+            let Some(cull_data) = gpu_data.cull_data() else {
+                continue;
+            };
+
+            pass.set_bind_group(0, &cull_data.bind_group, &[cull_data.uniform_offset]);
             // Divide by ceiling here, otherwise we might miss out on some chunks
             let workgroups = gpu_data.num_chunks.div_ceil(FRUSTUM_CULL_WORKGROUP_SIZE);
             pass.dispatch_workgroups(1, 1, workgroups);

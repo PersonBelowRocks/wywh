@@ -13,7 +13,8 @@ mod utils;
 mod views;
 
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
-use bevy::pbr::Shadow;
+use bevy::pbr::graph::NodePbr;
+use bevy::pbr::{Shadow, ShadowPassNode};
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
 use bevy::render::render_resource::ShaderSize;
@@ -44,7 +45,10 @@ use gpu_chunk::{
     remove_chunk_meshes, update_indirect_mesh_data_dependants, upload_chunk_meshes,
     IndirectRenderDataStore, RemoveChunkMeshes, UpdateIndirectLODs,
 };
-use graph::{BuildBatchBuffersNode, DeferredChunkNode, GpuFrustumCullBatchesNode, Nodes};
+use graph::{
+    BuildBatchBuffersNode, DeferredChunkNode, FrustumCullBatchesNode, FrustumCullLightBatchesNode,
+    Nodes,
+};
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs};
 use lights::{inherit_parent_light_batches, queue_chunk_shadows};
 use phase::DeferredBatch3d;
@@ -77,6 +81,7 @@ use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, SystemSet)]
 pub enum CoreSet {
     Extract,
+    ManageViews,
     PrepareRegistryData,
     PrepareIndirectMeshData,
     UpdateIndirectMeshDataDependants,
@@ -121,6 +126,9 @@ impl Plugin for RenderCore {
                     .in_set(RenderSet::Prepare),
                 CoreSet::PrepareRegistryData.in_set(RenderSet::Prepare),
                 CoreSet::Queue.in_set(RenderSet::Queue),
+                CoreSet::ManageViews
+                    .after(RenderSet::ManageViews)
+                    .before(RenderSet::Queue),
             ),
         );
 
@@ -145,11 +153,15 @@ impl Plugin for RenderCore {
             .add_render_command::<DeferredBatch3d, DrawDeferredBatch>()
             .add_render_command::<Shadow, DrawDeferredBatch>()
             .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, Nodes::Prepass)
-            .add_render_graph_node::<ViewNodeRunner<GpuFrustumCullBatchesNode>>(
+            .add_render_graph_node::<BuildBatchBuffersNode>(Core3d, Nodes::BuildBatchBuffers)
+            .add_render_graph_node::<ViewNodeRunner<FrustumCullBatchesNode>>(
                 Core3d,
                 Nodes::BatchFrustumCulling,
             )
-            .add_render_graph_node::<BuildBatchBuffersNode>(Core3d, Nodes::BuildBatchBuffers)
+            .add_render_graph_node::<ViewNodeRunner<FrustumCullLightBatchesNode>>(
+                Core3d,
+                Nodes::LightBatchFrustumCulling,
+            )
             .add_render_graph_edges(
                 Core3d,
                 (
@@ -157,6 +169,14 @@ impl Plugin for RenderCore {
                     Nodes::BatchFrustumCulling,
                     Node3d::Prepass,
                     Nodes::Prepass,
+                ),
+            )
+            .add_render_graph_edges(
+                Core3d,
+                (
+                    Nodes::BuildBatchBuffers,
+                    Nodes::LightBatchFrustumCulling,
+                    NodePbr::ShadowPass,
                 ),
             );
 
@@ -186,6 +206,7 @@ impl Plugin for RenderCore {
         render_app.add_systems(
             Render,
             (
+                inherit_parent_light_batches.in_set(CoreSet::ManageViews),
                 // We only need to create the compute pipelines once
                 create_pipelines
                     .run_if(run_once())
@@ -205,8 +226,6 @@ impl Plugin for RenderCore {
                     .in_set(CoreSet::UpdateIndirectMeshDataDependants),
                 // Prepare the indirect buffers.
                 (
-                    inherit_parent_light_batches,
-                    apply_deferred,
                     initialize_and_queue_batch_buffers,
                     prepare_batch_buf_build_jobs,
                 )

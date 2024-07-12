@@ -81,7 +81,7 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectBatchDraw {
         param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (store, observer_batches) = (param.0.into_inner(), param.1.into_inner());
+        let (store, view_batches) = (param.0.into_inner(), param.1.into_inner());
 
         let view_entity = view;
         let batch_entity = item.entity();
@@ -100,7 +100,7 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectBatchDraw {
             return RenderCommandResult::Failure;
         }
 
-        let Some(observer_batch) = observer_batches.get_batch(view_entity, batch_entity) else {
+        let Some(view_batch) = view_batches.get_batch(view_entity, batch_entity) else {
             error!("View {view_entity} did not have any data for batch {batch_entity}");
             return RenderCommandResult::Failure;
         };
@@ -109,11 +109,11 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectBatchDraw {
         pass.set_vertex_buffer(0, lod_data.instance_buffer().slice(..));
 
         pass.multi_draw_indexed_indirect_count(
-            &observer_batch.indirect,
+            &view_batch.indirect,
             0,
-            &observer_batch.cull_data.as_ref().unwrap().count,
+            &view_batch.cull_data.as_ref().unwrap().count,
             0,
-            observer_batch.num_chunks,
+            view_batch.num_chunks,
         );
 
         RenderCommandResult::Success
