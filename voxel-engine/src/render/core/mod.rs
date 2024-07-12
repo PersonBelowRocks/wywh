@@ -37,8 +37,8 @@ use bevy::{
 };
 use cb::channel::Receiver;
 use chunk_batches::{
-    extract_batches_with_lods, initialize_and_queue_batch_buffers, prepare_batch_buf_build_jobs,
-    QueuedBatchBufBuildJobs,
+    clear_queued_build_buffer_jobs, extract_batches_with_lods, initialize_and_queue_batch_buffers,
+    prepare_batch_buf_build_jobs, QueuedBatchBufBuildJobs,
 };
 use commands::DrawDeferredBatch;
 use gpu_chunk::{
@@ -50,7 +50,9 @@ use graph::{
     Nodes,
 };
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs};
-use lights::{inherit_parent_light_batches, queue_chunk_shadows};
+use lights::{
+    inherit_parent_light_batches, initialize_and_queue_light_batch_buffers, queue_chunk_shadows,
+};
 use phase::DeferredBatch3d;
 use pipelines::{
     create_pipelines, BuildBatchBuffersPipeline, DeferredIndirectChunkPipeline,
@@ -226,7 +228,9 @@ impl Plugin for RenderCore {
                     .in_set(CoreSet::UpdateIndirectMeshDataDependants),
                 // Prepare the indirect buffers.
                 (
+                    clear_queued_build_buffer_jobs,
                     initialize_and_queue_batch_buffers,
+                    initialize_and_queue_light_batch_buffers,
                     prepare_batch_buf_build_jobs,
                 )
                     .chain()

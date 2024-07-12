@@ -191,7 +191,7 @@ pub fn initialize_and_queue_batch_buffers(
     store: Res<IndirectRenderDataStore>,
     view_uniforms: Res<ViewUniforms>,
     default_layouts: Res<DefaultBindGroupLayouts>,
-    q_views: Query<(Entity, &VisibleBatches, &ViewUniformOffset)>,
+    q_views: Query<(Entity, &VisibleBatches, &ViewUniformOffset), Without<LightEntity>>,
     q_batches: Query<(&ChunkBatch, &ChunkBatchLod)>,
     gpu: Res<RenderDevice>,
 ) {
