@@ -1,11 +1,7 @@
 use bevy::{
     core_pipeline::prepass::ViewPrepassTextures,
-    ecs::{
-        entity::{EntityHash, EntityHashSet},
-        query::QueryItem,
-        system::lifetimeless::Read,
-    },
-    pbr::{ViewLightEntities, ViewLightsUniformOffset},
+    ecs::{query::QueryItem, system::lifetimeless::Read},
+    pbr::ViewLightEntities,
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -18,7 +14,7 @@ use bevy::{
         },
         renderer::RenderContext,
         texture::ColorAttachment,
-        view::{ViewDepthTexture, ViewUniformOffset},
+        view::ViewDepthTexture,
     },
 };
 use hb::HashMap;

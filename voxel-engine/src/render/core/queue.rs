@@ -1,17 +1,11 @@
 use bevy::{
     core_pipeline::prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass},
-    pbr::{
-        CascadesVisibleEntities, CubemapVisibleEntities, ExtractedDirectionalLight,
-        ExtractedPointLight, LightEntity, MeshPipelineKey, Shadow, ViewLightEntities,
-    },
+    pbr::MeshPipelineKey,
     prelude::*,
     render::{
         mesh::PrimitiveTopology,
-        render_phase::{
-            DrawFunctions, PhaseItemExtraIndex, ViewBinnedRenderPhases, ViewSortedRenderPhases,
-        },
+        render_phase::{DrawFunctions, PhaseItemExtraIndex, ViewSortedRenderPhases},
         render_resource::{PipelineCache, SpecializedRenderPipelines},
-        view::VisibleEntities,
     },
 };
 

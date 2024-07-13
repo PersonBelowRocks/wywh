@@ -1,5 +1,4 @@
 use bevy::{
-    pbr::LightEntity,
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -21,14 +20,7 @@ use crate::{
 
 use super::{
     gpu_chunk::IndirectRenderDataStore,
-    indirect::{ChunkInstanceData, IndexedIndirectArgs, IndirectChunkData},
-    lights::LightParent,
-    pipelines::{
-        BuildBatchBuffersPipeline, BuildBatchBuffersPipelineId, ObserverBatchFrustumCullPipeline,
-        ViewBatchFrustumCullPipelineId,
-    },
-    shaders::{BUILD_BATCH_BUFFERS_HANDLE, OBSERVER_BATCH_FRUSTUM_CULL_HANDLE},
-    utils::{add_shader_constants, u32_shader_def},
+    indirect::{IndexedIndirectArgs, IndirectChunkData},
     views::{IndirectViewBatch, IndirectViewBatchCullData, ViewBatchBuffersStore},
     DefaultBindGroupLayouts,
 };

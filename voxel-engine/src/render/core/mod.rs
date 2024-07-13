@@ -14,7 +14,7 @@ mod views;
 
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::pbr::graph::NodePbr;
-use bevy::pbr::{Shadow, ShadowPassNode};
+use bevy::pbr::Shadow;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
 use bevy::render::render_resource::ShaderSize;
