@@ -26,6 +26,7 @@ use ve::render::core::RenderCoreDebug;
 use ve::render::lod::LevelOfDetail;
 use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle, VisibleBatches};
 use ve::topo::world::ChunkPos;
+use ve::topo::ObserverSettings;
 use ve::{CoreEngineSetup, EngineState};
 
 #[derive(Resource)]
@@ -189,7 +190,14 @@ fn setup(
                 ..default()
             },
             controls::PlayerCamController::default(),
-            ObserverBundle::new(),
+            ObserverBundle {
+                settings: ObserverSettings {
+                    horizontal_range: 10,
+                    view_distance_above: 5,
+                    view_distance_below: 5,
+                },
+                ..default()
+            },
             VisibilityBundle::default(),
             ScreenSpaceAmbientOcclusionBundle::default(),
             DeferredPrepass,

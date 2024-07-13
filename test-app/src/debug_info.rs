@@ -1,8 +1,9 @@
 use bevy::{
-    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
+    diagnostic::{Diagnostic, Diagnostics, DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
 use ve::{
+    diagnostics::ENGINE_DIAGNOSTICS,
     render::meshing::controller::ExtractableChunkMeshData,
     topo::{controller::LastPosition, world::VoxelRealm, ObserverSettings},
     util::ws_to_chunk_pos,
@@ -31,6 +32,7 @@ pub fn text_section(string: impl Into<String>) -> TextSection {
 }
 
 pub fn update_debug_text(
+    diagnostics: Res<DiagnosticsStore>,
     realm: VoxelRealm,
     meshes: Res<ExtractableChunkMeshData>,
     mut q: Query<&mut Text, With<DebugText>>,
@@ -59,6 +61,22 @@ pub fn update_debug_text(
         format!("y: {:.5}\n", pos.y),
         format!("z: {:.5}\n", pos.z),
     ]);
+
+    sections.push("\n".to_string());
+
+    if let Some(gpu_update_time) = diagnostics
+        .get(&ENGINE_DIAGNOSTICS.gpu_update_time)
+        .and_then(Diagnostic::average)
+    {
+        sections.push(format!("gpu update time: {:.5}ms\n", gpu_update_time));
+    }
+
+    if let Some(mesh_extract_time) = diagnostics
+        .get(&ENGINE_DIAGNOSTICS.mesh_extract_time)
+        .and_then(Diagnostic::average)
+    {
+        sections.push(format!("mesh extract time: {:.5}ms\n", mesh_extract_time));
+    }
 
     sections.push("\n".to_string());
     sections.push(format!("chunk: {}\n", chunk_pos));

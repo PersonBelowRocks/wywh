@@ -42,8 +42,8 @@ use chunk_batches::{
 };
 use commands::DrawDeferredBatch;
 use gpu_chunk::{
-    remove_chunk_meshes, update_indirect_mesh_data_dependants, upload_chunk_meshes,
-    IndirectRenderDataStore, RemoveChunkMeshes, UpdateIndirectLODs,
+    update_gpu_mesh_data, update_indirect_mesh_data_dependants, IndirectRenderDataStore,
+    RemoveChunkMeshes, UpdateIndirectLODs,
 };
 use graph::{
     BuildBatchBuffersNode, DeferredChunkNode, FrustumCullBatchesNode, FrustumCullLightBatchesNode,
@@ -69,6 +69,7 @@ use crate::data::{
 };
 use crate::render::lod::LevelOfDetail;
 use crate::topo::world::ChunkPos;
+use crate::VoxelPlugin;
 
 use self::{
     gpu_chunk::{extract_chunk_mesh_data, AddChunkMeshes},
@@ -223,9 +224,7 @@ impl Plugin for RenderCore {
                     .run_if(not(resource_exists::<RegistryBindGroup>))
                     .in_set(CoreSet::PrepareRegistryData),
                 // Here we prepare the index and instance buffers for the chunks.
-                (remove_chunk_meshes, upload_chunk_meshes)
-                    .chain()
-                    .in_set(CoreSet::PrepareIndirectMeshData),
+                update_gpu_mesh_data.in_set(CoreSet::PrepareIndirectMeshData),
                 // This updates all the data that depends on the state of the index and instance buffers,
                 // which is mainly the indirect buffers
                 update_indirect_mesh_data_dependants

@@ -12,11 +12,15 @@ extern crate num_derive;
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use bevy::prelude::*;
+use bevy::{
+    diagnostic::{Diagnostic, DiagnosticPath, RegisterDiagnostic},
+    prelude::*,
+};
 use data::{
     registries::{block::BlockVariantRegistry, Registries, Registry},
     resourcepath::rpath,
 };
+use diagnostics::VoxelEngineDiagnosticsPlugin;
 use mip_texture_array::MippedArrayTexturePlugin;
 
 use render::core::RenderCoreDebug;
@@ -27,6 +31,7 @@ use topo::{
 };
 
 pub mod data;
+pub mod diagnostics;
 pub mod render;
 pub mod topo;
 pub mod util;
@@ -66,13 +71,14 @@ impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
         info!("Initializing voxel engine");
 
-        app.add_plugins(WorldController {
-            settings: WorldControllerSettings {
-                chunk_loading_handler_backlog_threshold: 100,
-                chunk_loading_handler_timeout: Duration::from_micros(20),
-                chunk_loading_max_stalling: Duration::from_millis(200),
-            },
-        });
+        app.add_plugins(VoxelEngineDiagnosticsPlugin)
+            .add_plugins(WorldController {
+                settings: WorldControllerSettings {
+                    chunk_loading_handler_backlog_threshold: 100,
+                    chunk_loading_handler_timeout: Duration::from_micros(20),
+                    chunk_loading_max_stalling: Duration::from_millis(200),
+                },
+            });
         app.add_plugins(MeshController);
         app.add_plugins(RenderCore {
             debug: self.render_core_debug.clone(),

@@ -150,6 +150,10 @@ impl ExtractableChunkMeshData {
         self.remove[lod].len()
     }
 
+    pub fn is_empty(&self, lod: LevelOfDetail) -> bool {
+        self.queued_additions(lod) == 0 || self.queued_removals(lod) == 0
+    }
+
     pub fn should_extract(&self) -> bool {
         self.should_extract
     }
