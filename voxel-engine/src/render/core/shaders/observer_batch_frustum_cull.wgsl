@@ -43,7 +43,6 @@ fn batch_frustum_cull(
     var args = indirect_args[index];
     args.instance_count = 0u;
 
-    // Reset the instance count
     indirect_args[index] = args;
     let instance_index = args.first_instance;
 
@@ -51,15 +50,12 @@ fn batch_frustum_cull(
         return;
     }
 
-    args.instance_count = 1u;
-    indirect_args[index] = args;
-
-    atomicAdd(&count, 1u);
-
     // TODO: enable this again
-    // let chunk_pos = instances[instance_index].position;
-    // if view_frustum_intersects_chunk_sphere(chunk_pos + vec3f(CHUNK_HALF_SIZE)) {
-    //     indirect_args[index].instance_count = 1u;
-    //     atomicAdd(&count, 1u);
-    // }
+    let chunk_pos = instances[instance_index].position;
+    if view_frustum_intersects_chunk_sphere(chunk_pos + vec3f(CHUNK_HALF_SIZE)) {
+        args.instance_count = 1u;
+        atomicAdd(&count, 1u);
+    }
+
+    indirect_args[index] = args;
 }
