@@ -66,7 +66,7 @@ fn main() {
                     ..default()
                 })
                 .set(LogPlugin {
-                    filter: "info,voxel_engine=debug".into(),
+                    filter: "info,voxel_engine=debug,naga=warn".into(),
                     level: log::Level::DEBUG,
                     ..default()
                 }),

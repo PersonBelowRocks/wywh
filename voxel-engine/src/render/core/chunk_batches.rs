@@ -1,12 +1,11 @@
 use bevy::{
-    ecs::entity::{EntityHashMap, EntityHashSet},
-    pbr::{LightEntity, LightMeta, ViewLightEntities, ViewLightsUniformOffset},
+    pbr::LightEntity,
     prelude::*,
     render::{
+        camera::ExtractedCamera,
         render_resource::{
-            BindGroup, BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor,
-            BufferInitDescriptor, BufferUsages, CachedComputePipelineId, ComputePipelineDescriptor,
-            PipelineCache, ShaderSize, SpecializedComputePipeline, SpecializedComputePipelines,
+            BindGroup, BindGroupEntries, Buffer, BufferDescriptor, BufferInitDescriptor,
+            BufferUsages, ShaderSize,
         },
         renderer::RenderDevice,
         view::{ViewUniformOffset, ViewUniforms},
@@ -191,7 +190,7 @@ pub fn initialize_and_queue_batch_buffers(
     store: Res<IndirectRenderDataStore>,
     view_uniforms: Res<ViewUniforms>,
     default_layouts: Res<DefaultBindGroupLayouts>,
-    q_views: Query<(Entity, &VisibleBatches, &ViewUniformOffset), Without<LightEntity>>,
+    q_views: Query<(Entity, &VisibleBatches, &ViewUniformOffset), With<ExtractedCamera>>,
     q_batches: Query<(&ChunkBatch, &ChunkBatchLod)>,
     gpu: Res<RenderDevice>,
 ) {

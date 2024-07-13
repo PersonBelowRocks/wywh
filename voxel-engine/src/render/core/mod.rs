@@ -125,7 +125,11 @@ impl Plugin for RenderCore {
                     CoreSet::PrepareIndirectBuffers,
                 )
                     .chain()
-                    .in_set(RenderSet::Prepare),
+                    .in_set(RenderSet::Prepare)
+                    // Systems in these sets depend on bevy's own internal manipulation of the world. Notable
+                    // bevy adds the "ViewUniformOffset" component to views in the PrepareResources set and we
+                    // need access to that offset when we initialize and build buffers for the visible batches in a view.
+                    .after(RenderSet::PrepareResources),
                 CoreSet::PrepareRegistryData.in_set(RenderSet::Prepare),
                 CoreSet::Queue.in_set(RenderSet::Queue),
                 CoreSet::ManageViews
