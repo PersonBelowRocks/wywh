@@ -29,8 +29,7 @@ use crate::render::core::{utils::add_shader_constants, DefaultBindGroupLayouts};
 use super::{
     indirect::ChunkInstanceData,
     shaders::{
-        BUILD_BATCH_BUFFERS_HANDLE, DEFERRED_INDIRECT_CHUNK_HANDLE,
-        OBSERVER_BATCH_FRUSTUM_CULL_HANDLE,
+        BATCH_FRUSTUM_CULL_HANDLE, DEFERRED_INDIRECT_CHUNK_HANDLE, POPULATE_INDIRECT_BUFFER_HANDLE,
     },
     utils::{add_mesh_pipeline_shader_defs, u32_shader_def},
 };
@@ -80,7 +79,7 @@ impl FromWorld for BuildBatchBuffersPipeline {
         let default_layouts = world.resource::<DefaultBindGroupLayouts>();
 
         Self {
-            shader: BUILD_BATCH_BUFFERS_HANDLE,
+            shader: POPULATE_INDIRECT_BUFFER_HANDLE,
             bg_layout: default_layouts.build_batch_buffers_layout.clone(),
         }
     }
@@ -124,8 +123,8 @@ impl FromWorld for ObserverBatchFrustumCullPipeline {
         let default_layouts = world.resource::<DefaultBindGroupLayouts>();
 
         Self {
-            shader: OBSERVER_BATCH_FRUSTUM_CULL_HANDLE,
-            bg_layout: default_layouts.observer_batch_cull_layout.clone(),
+            shader: BATCH_FRUSTUM_CULL_HANDLE,
+            bg_layout: default_layouts.batch_cull_bind_group_layout.clone(),
         }
     }
 }

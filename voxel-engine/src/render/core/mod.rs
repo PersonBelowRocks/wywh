@@ -290,7 +290,7 @@ pub(crate) struct DefaultBindGroupLayouts {
     pub registry_bg_layout: BindGroupLayout,
     pub icd_quad_bg_layout: BindGroupLayout,
     pub build_batch_buffers_layout: BindGroupLayout,
-    pub observer_batch_cull_layout: BindGroupLayout,
+    pub batch_cull_bind_group_layout: BindGroupLayout,
 }
 
 impl FromWorld for DefaultBindGroupLayouts {
@@ -329,8 +329,8 @@ impl FromWorld for DefaultBindGroupLayouts {
                     ),
                 ),
             ),
-            observer_batch_cull_layout: gpu.create_bind_group_layout(
-                Some("observer_batch_cull_bind_group_layout"),
+            batch_cull_bind_group_layout: gpu.create_bind_group_layout(
+                Some("batch_cull_bind_group_layout"),
                 &BindGroupLayoutEntries::sequential(
                     ShaderStages::COMPUTE,
                     (

@@ -230,7 +230,7 @@ pub fn initialize_and_queue_batch_buffers(
 
             let cull_bind_group = gpu.create_bind_group(
                 Some("view_batch_frustum_cull_bind_group"),
-                &default_layouts.observer_batch_cull_layout,
+                &default_layouts.batch_cull_bind_group_layout,
                 &BindGroupEntries::sequential((
                     lod_data.buffers().instances.as_entire_binding(),
                     view_uniforms_binding.clone(),
