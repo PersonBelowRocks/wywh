@@ -20,7 +20,7 @@ use crate::data::{
     registries::texture::TexregFaces, systems::ArrayTextureHandles, texture::GpuFaceTexture,
 };
 
-use super::DefaultBindGroupLayouts;
+use super::BindGroupProvider;
 
 #[derive(Clone, Resource)]
 pub struct RegistryBindGroup {
@@ -46,7 +46,7 @@ pub fn prepare_gpu_registry_data(
     extracted_faces: Option<Res<ExtractedTexregFaces>>,
     gpu: Res<RenderDevice>,
     queue: Res<RenderQueue>,
-    layouts: Res<DefaultBindGroupLayouts>,
+    layouts: Res<BindGroupProvider>,
     array_textures: Res<RenderAssets<GpuMippedArrayTex>>,
     handles: ArrayTextureHandles,
 ) {

@@ -109,9 +109,9 @@ impl<P: PhaseItem> RenderCommand<P> for IndirectBatchDraw {
         pass.set_vertex_buffer(0, lod_data.instance_buffer().slice(..));
 
         pass.multi_draw_indexed_indirect_count(
-            &view_batch.indirect,
+            &view_batch.indirect_buffer,
             0,
-            &view_batch.cull_data.as_ref().unwrap().count,
+            &view_batch.count_buffer,
             0,
             view_batch.num_chunks,
         );

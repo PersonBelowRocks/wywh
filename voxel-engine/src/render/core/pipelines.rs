@@ -24,7 +24,7 @@ use bevy::{
     },
 };
 
-use crate::render::core::{utils::add_shader_constants, DefaultBindGroupLayouts};
+use crate::render::core::{utils::add_shader_constants, BindGroupProvider};
 
 use super::{
     indirect::ChunkInstanceData,
@@ -64,72 +64,28 @@ pub fn chunk_indirect_instance_buffer_layout(start_at: u32) -> VertexBufferLayou
 }
 
 #[derive(Resource, Clone, Debug)]
-pub struct BuildBatchBuffersPipelineId(pub CachedComputePipelineId);
-
-pub const BUILD_BATCH_BUFFERS_WORKGROUP_SIZE: u32 = 64;
-
-#[derive(Resource)]
-pub struct BuildBatchBuffersPipeline {
-    pub shader: Handle<Shader>,
-    pub bg_layout: BindGroupLayout,
-}
-
-impl FromWorld for BuildBatchBuffersPipeline {
-    fn from_world(world: &mut World) -> Self {
-        let default_layouts = world.resource::<DefaultBindGroupLayouts>();
-
-        Self {
-            shader: POPULATE_INDIRECT_BUFFER_HANDLE,
-            bg_layout: default_layouts.build_batch_buffers_layout.clone(),
-        }
-    }
-}
-
-impl SpecializedComputePipeline for BuildBatchBuffersPipeline {
-    type Key = ();
-
-    fn specialize(&self, _key: Self::Key) -> ComputePipelineDescriptor {
-        let mut shader_defs = vec![];
-        add_shader_constants(&mut shader_defs);
-        shader_defs.push(u32_shader_def(
-            "WORKGROUP_SIZE",
-            BUILD_BATCH_BUFFERS_WORKGROUP_SIZE,
-        ));
-
-        ComputePipelineDescriptor {
-            label: Some("build_batch_buffers_pipeline".into()),
-            entry_point: "build_buffers".into(),
-            shader: self.shader.clone(),
-            push_constant_ranges: vec![],
-            shader_defs,
-            layout: vec![self.bg_layout.clone()],
-        }
-    }
-}
-
-#[derive(Resource, Clone, Debug)]
 pub struct ViewBatchFrustumCullPipelineId(pub CachedComputePipelineId);
 
 pub const FRUSTUM_CULL_WORKGROUP_SIZE: u32 = 64;
 
 #[derive(Resource)]
-pub struct ObserverBatchFrustumCullPipeline {
+pub struct ViewBatchPreprocessPipeline {
     pub shader: Handle<Shader>,
     pub bg_layout: BindGroupLayout,
 }
 
-impl FromWorld for ObserverBatchFrustumCullPipeline {
+impl FromWorld for ViewBatchPreprocessPipeline {
     fn from_world(world: &mut World) -> Self {
-        let default_layouts = world.resource::<DefaultBindGroupLayouts>();
+        let default_layouts = world.resource::<BindGroupProvider>();
 
         Self {
             shader: BATCH_FRUSTUM_CULL_HANDLE,
-            bg_layout: default_layouts.batch_cull_bind_group_layout.clone(),
+            bg_layout: default_layouts.preprocess_batch_data_bg_layout.clone(),
         }
     }
 }
 
-impl SpecializedComputePipeline for ObserverBatchFrustumCullPipeline {
+impl SpecializedComputePipeline for ViewBatchPreprocessPipeline {
     type Key = ();
 
     fn specialize(&self, _key: Self::Key) -> ComputePipelineDescriptor {
@@ -153,16 +109,12 @@ impl SpecializedComputePipeline for ObserverBatchFrustumCullPipeline {
 
 pub fn create_pipelines(
     cache: Res<PipelineCache>,
-    buffer_build: Res<BuildBatchBuffersPipeline>,
-    batch_cull: Res<ObserverBatchFrustumCullPipeline>,
-    mut buffer_builder_pipelines: ResMut<SpecializedComputePipelines<BuildBatchBuffersPipeline>>,
+    batch_cull: Res<ViewBatchPreprocessPipeline>,
     mut cull_observer_batch_pipelines: ResMut<
-        SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>,
+        SpecializedComputePipelines<ViewBatchPreprocessPipeline>,
     >,
     mut cmds: Commands,
 ) {
-    let id = buffer_builder_pipelines.specialize(&cache, &buffer_build, ());
-    cmds.insert_resource(BuildBatchBuffersPipelineId(id));
     let id = cull_observer_batch_pipelines.specialize(&cache, &batch_cull, ());
     cmds.insert_resource(ViewBatchFrustumCullPipelineId(id));
 }
@@ -181,7 +133,7 @@ impl FromWorld for DeferredIndirectChunkPipeline {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
 
-        let layouts = world.resource::<DefaultBindGroupLayouts>();
+        let layouts = world.resource::<BindGroupProvider>();
 
         let view_layout_motion_vectors = gpu.create_bind_group_layout(
             "prepass_view_layout_motion_vectors",

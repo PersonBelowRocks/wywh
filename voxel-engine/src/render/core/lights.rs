@@ -6,23 +6,25 @@ use bevy::{
     prelude::*,
     render::{
         render_phase::{BinnedRenderPhaseType, DrawFunctions, ViewBinnedRenderPhases},
-        render_resource::{BindGroupEntries, PipelineCache, SpecializedRenderPipelines},
+        render_resource::{
+            BindGroupEntries, BufferInitDescriptor, BufferUsages, PipelineCache,
+            SpecializedRenderPipelines,
+        },
         renderer::RenderDevice,
     },
 };
+use bytemuck::cast_slice;
 
 use crate::topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches};
 
 use super::{
-    chunk_batches::{
-        create_batch_count_buffer, create_batch_indirect_buffer, QueuedBatchBufBuildJobs,
-    },
+    chunk_batches::{create_batch_count_buffer, create_batch_indirect_buffer},
     commands::DrawDeferredBatch,
     gpu_chunk::IndirectRenderDataStore,
     gpu_registries::RegistryBindGroup,
     pipelines::{ChunkPipelineKey, DeferredIndirectChunkPipeline},
-    views::{IndirectViewBatch, IndirectViewBatchCullData, ViewBatchBuffersStore},
-    DefaultBindGroupLayouts,
+    views::{IndirectViewBatch, ViewBatchBuffersStore},
+    BindGroupProvider,
 };
 
 #[derive(Component, Copy, Clone, Default, PartialEq, Eq, Hash)]
@@ -83,22 +85,14 @@ pub fn inherit_parent_light_batches(
 }
 
 pub fn initialize_and_queue_light_batch_buffers(
-    mut populate_buffers: ResMut<QueuedBatchBufBuildJobs>,
     mut view_batch_buf_store: ResMut<ViewBatchBuffersStore>,
     store: Res<IndirectRenderDataStore>,
-    light_meta: Res<LightMeta>,
-    default_layouts: Res<DefaultBindGroupLayouts>,
-    q_views: Query<(&ViewLightEntities, &ViewLightsUniformOffset)>,
+    q_views: Query<&ViewLightEntities>,
     q_light_entities: Query<&VisibleBatches, With<LightEntity>>,
     q_batches: Query<(&ChunkBatch, &ChunkBatchLod)>,
     gpu: Res<RenderDevice>,
 ) {
-    let Some(view_light_uniforms_binding) = light_meta.view_gpu_lights.binding() else {
-        warn!("Couldn't initialize and queue batch buffers and observer batch buffers because the view light uniforms binding wasn't present.");
-        return;
-    };
-
-    for (view_light_entities, view_light_offset) in &q_views {
+    for view_light_entities in &q_views {
         for &view_light_entity in &view_light_entities.lights {
             let Some(light_visible_batches) = q_light_entities.get(view_light_entity).ok() else {
                 continue;
@@ -135,34 +129,19 @@ pub fn initialize_and_queue_light_batch_buffers(
                     continue;
                 }
 
-                let view_indirect_buf = create_batch_indirect_buffer(&gpu, batch.num_chunks());
-                let view_count_buf = create_batch_count_buffer(&gpu);
-
-                let cull_bind_group = gpu.create_bind_group(
-                    Some("view_light_batch_frustum_cull_bind_group"),
-                    &default_layouts.batch_cull_bind_group_layout,
-                    &BindGroupEntries::sequential((
-                        lod_data.buffers().instances.as_entire_binding(),
-                        view_light_uniforms_binding.clone(),
-                        view_indirect_buf.as_entire_binding(),
-                        view_count_buf.as_entire_binding(),
-                    )),
-                );
-
                 view_batch_buffers.insert(
                     batch_entity,
                     IndirectViewBatch {
                         num_chunks: batch.num_chunks(),
-                        indirect: view_indirect_buf.clone(),
-                        cull_data: Some(IndirectViewBatchCullData {
-                            bind_group: cull_bind_group,
-                            count: view_count_buf,
-                            uniform_offset: view_light_offset.offset,
+                        metadata_index_buffer: gpu.create_buffer_with_data(&BufferInitDescriptor {
+                            label: Some("view_metadata_index_buffer"),
+                            contents: cast_slice(&chunk_metadata_indices),
+                            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
                         }),
+                        indirect_buffer: create_batch_indirect_buffer(&gpu, batch.num_chunks()),
+                        count_buffer: create_batch_count_buffer(&gpu),
                     },
                 );
-
-                populate_buffers.queue(view_indirect_buf, batch_lod, chunk_metadata_indices);
             }
         }
     }

@@ -17,7 +17,7 @@ use bevy::pbr::graph::NodePbr;
 use bevy::pbr::Shadow;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
-use bevy::render::render_resource::ShaderSize;
+use bevy::render::render_resource::{BindGroup, BindGroupEntries, BindingResource, ShaderSize};
 use bevy::render::view::ViewUniform;
 use bevy::{
     app::{App, Plugin},
@@ -36,32 +36,25 @@ use bevy::{
     },
 };
 use cb::channel::Receiver;
-use chunk_batches::{
-    clear_queued_build_buffer_jobs, extract_batches_with_lods, initialize_and_queue_batch_buffers,
-    prepare_batch_buf_build_jobs, QueuedBatchBufBuildJobs,
-};
+use chunk_batches::{extract_batches_with_lods, initialize_and_queue_batch_buffers};
 use commands::DrawDeferredBatch;
 use gpu_chunk::{
     update_gpu_mesh_data, update_indirect_mesh_data_dependants, IndirectRenderDataStore,
     RemoveChunkMeshes, UpdateIndirectLODs,
 };
-use graph::{
-    BuildBatchBuffersNode, DeferredChunkNode, FrustumCullBatchesNode, FrustumCullLightBatchesNode,
-    Nodes,
-};
-use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs};
+use graph::{DeferredChunkNode, Nodes, PreprocessViewBatchesNode};
+use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkData};
 use lights::{
     inherit_parent_light_batches, initialize_and_queue_light_batch_buffers, queue_chunk_shadows,
 };
 use phase::DeferredBatch3d;
-use pipelines::{
-    create_pipelines, BuildBatchBuffersPipeline, DeferredIndirectChunkPipeline,
-    ObserverBatchFrustumCullPipeline,
-};
+use pipelines::{create_pipelines, DeferredIndirectChunkPipeline, ViewBatchPreprocessPipeline};
 use queue::queue_deferred_chunks;
 use shaders::load_internal_shaders;
 use utils::InspectChunks;
-use views::{extract_chunk_camera_phases, extract_visible_batches, ViewBatchBuffersStore};
+use views::{
+    extract_chunk_camera_phases, extract_visible_batches, IndirectViewBatch, ViewBatchBuffersStore,
+};
 
 use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
@@ -146,12 +139,10 @@ impl Plugin for RenderCore {
             .init_resource::<ViewSortedRenderPhases<DeferredBatch3d>>()
             // Pipeline stores
             .init_resource::<SpecializedRenderPipelines<DeferredIndirectChunkPipeline>>()
-            .init_resource::<SpecializedComputePipelines<BuildBatchBuffersPipeline>>()
-            .init_resource::<SpecializedComputePipelines<ObserverBatchFrustumCullPipeline>>()
+            .init_resource::<SpecializedComputePipelines<ViewBatchPreprocessPipeline>>()
             // Misc
             .init_resource::<InspectChunks>()
             .init_resource::<ViewBatchBuffersStore>()
-            .init_resource::<QueuedBatchBufBuildJobs>()
             .init_resource::<UpdateIndirectLODs>()
             .init_resource::<RemoveChunkMeshes>()
             .init_resource::<AddChunkMeshes>();
@@ -160,14 +151,9 @@ impl Plugin for RenderCore {
             .add_render_command::<DeferredBatch3d, DrawDeferredBatch>()
             .add_render_command::<Shadow, DrawDeferredBatch>()
             .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, Nodes::Prepass)
-            .add_render_graph_node::<BuildBatchBuffersNode>(Core3d, Nodes::BuildBatchBuffers)
-            .add_render_graph_node::<ViewNodeRunner<FrustumCullBatchesNode>>(
+            .add_render_graph_node::<ViewNodeRunner<PreprocessViewBatchesNode>>(
                 Core3d,
                 Nodes::BatchFrustumCulling,
-            )
-            .add_render_graph_node::<ViewNodeRunner<FrustumCullLightBatchesNode>>(
-                Core3d,
-                Nodes::LightBatchFrustumCulling,
             )
             .add_render_graph_edges(
                 Core3d,
@@ -231,10 +217,8 @@ impl Plugin for RenderCore {
                     .in_set(CoreSet::UpdateIndirectMeshDataDependants),
                 // Prepare the indirect buffers.
                 (
-                    clear_queued_build_buffer_jobs,
                     initialize_and_queue_batch_buffers,
                     initialize_and_queue_light_batch_buffers,
-                    prepare_batch_buf_build_jobs,
                 )
                     .chain()
                     .in_set(CoreSet::PrepareIndirectBuffers),
@@ -248,11 +232,10 @@ impl Plugin for RenderCore {
         let render_app = app.sub_app_mut(RenderApp);
 
         render_app
-            .init_resource::<DefaultBindGroupLayouts>()
+            .init_resource::<BindGroupProvider>()
             .init_resource::<IndirectRenderDataStore>()
             .init_resource::<DeferredIndirectChunkPipeline>()
-            .init_resource::<BuildBatchBuffersPipeline>()
-            .init_resource::<ObserverBatchFrustumCullPipeline>();
+            .init_resource::<ViewBatchPreprocessPipeline>();
     }
 }
 
@@ -286,14 +269,15 @@ fn set_inspection(
 }
 
 #[derive(Resource, Clone)]
-pub(crate) struct DefaultBindGroupLayouts {
+pub(crate) struct BindGroupProvider {
     pub registry_bg_layout: BindGroupLayout,
     pub icd_quad_bg_layout: BindGroupLayout,
-    pub build_batch_buffers_layout: BindGroupLayout,
-    pub batch_cull_bind_group_layout: BindGroupLayout,
+    pub preprocess_mesh_metadata_bg_layout: BindGroupLayout,
+    pub preprocess_batch_data_bg_layout: BindGroupLayout,
+    pub preprocess_view_bg_layout: BindGroupLayout,
 }
 
-impl FromWorld for DefaultBindGroupLayouts {
+impl FromWorld for BindGroupProvider {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
 
@@ -318,29 +302,79 @@ impl FromWorld for DefaultBindGroupLayouts {
                     binding_types::storage_buffer_read_only::<GpuQuad>(false),
                 ),
             ),
-            build_batch_buffers_layout: gpu.create_bind_group_layout(
-                Some("build_batch_buffers_bg_layout"),
+            preprocess_mesh_metadata_bg_layout: gpu.create_bind_group_layout(
+                Some("preprocess_mesh_metadata_bg_layout"),
                 &BindGroupLayoutEntries::sequential(
                     ShaderStages::COMPUTE,
                     (
                         binding_types::storage_buffer_read_only::<GpuChunkMetadata>(false),
-                        binding_types::storage_buffer_read_only::<u32>(false),
-                        binding_types::storage_buffer::<IndexedIndirectArgs>(false),
+                        binding_types::storage_buffer_read_only::<ChunkInstanceData>(false),
                     ),
                 ),
             ),
-            batch_cull_bind_group_layout: gpu.create_bind_group_layout(
-                Some("batch_cull_bind_group_layout"),
+            preprocess_batch_data_bg_layout: gpu.create_bind_group_layout(
+                Some("preprocess_batch_data_bg_layout"),
                 &BindGroupLayoutEntries::sequential(
                     ShaderStages::COMPUTE,
                     (
-                        binding_types::storage_buffer_read_only::<ChunkInstanceData>(false),
-                        binding_types::uniform_buffer::<ViewUniform>(true),
+                        binding_types::storage_buffer_read_only::<u32>(false),
                         binding_types::storage_buffer::<IndexedIndirectArgs>(false),
                         binding_types::storage_buffer_sized(false, Some(u32::SHADER_SIZE)),
                     ),
                 ),
             ),
+            preprocess_view_bg_layout: gpu.create_bind_group_layout(
+                Some("preprocess_view_bg_layout"),
+                &BindGroupLayoutEntries::single(
+                    ShaderStages::COMPUTE,
+                    binding_types::uniform_buffer::<ViewUniform>(true),
+                ),
+            ),
         }
+    }
+}
+
+impl BindGroupProvider {
+    pub fn preprocess_view(
+        &self,
+        gpu: &RenderDevice,
+        view_uniforms_binding: BindingResource,
+    ) -> BindGroup {
+        gpu.create_bind_group(
+            Some("preprocess_view_bind_group"),
+            &self.preprocess_view_bg_layout,
+            &BindGroupEntries::single(view_uniforms_binding),
+        )
+    }
+
+    pub fn preprocess_mesh_metadata(
+        &self,
+        gpu: &RenderDevice,
+        icd: &IndirectChunkData,
+    ) -> BindGroup {
+        gpu.create_bind_group(
+            Some("preprocess_mesh_metadata_bind_group"),
+            &self.preprocess_mesh_metadata_bg_layout,
+            &BindGroupEntries::sequential((
+                icd.metadata_buffer().as_entire_binding(),
+                icd.index_buffer().as_entire_binding(),
+            )),
+        )
+    }
+
+    pub fn preprocess_batch_data(
+        &self,
+        gpu: &RenderDevice,
+        gpu_data: &IndirectViewBatch,
+    ) -> BindGroup {
+        gpu.create_bind_group(
+            Some("preprocess_batch_data_bind_group"),
+            &self.preprocess_batch_data_bg_layout,
+            &BindGroupEntries::sequential((
+                gpu_data.metadata_index_buffer.as_entire_binding(),
+                gpu_data.indirect_buffer.as_entire_binding(),
+                gpu_data.count_buffer.as_entire_binding(),
+            )),
+        )
     }
 }

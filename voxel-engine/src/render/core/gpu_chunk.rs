@@ -21,7 +21,7 @@ use super::{
     indirect::{IcdCommit, IndirectChunkData},
     utils::InspectChunks,
     views::ViewBatchBuffersStore,
-    DefaultBindGroupLayouts,
+    BindGroupProvider,
 };
 
 pub fn extract_chunk_mesh_data(
@@ -163,7 +163,7 @@ pub struct IndirectRenderDataStore {
 impl FromWorld for IndirectRenderDataStore {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
-        let default_bg_layouts = world.resource::<DefaultBindGroupLayouts>();
+        let default_bg_layouts = world.resource::<BindGroupProvider>();
 
         Self {
             lods: FilledLodMap::from_fn(|lod| {

@@ -102,6 +102,10 @@ impl<T> LodMap<T> {
         self.len() == 0
     }
 
+    pub fn contains(&self, lod: LevelOfDetail) -> bool {
+        self.get(lod).is_some()
+    }
+
     pub fn get(&self, lod: LevelOfDetail) -> Option<&T> {
         self.0[lod].as_ref()
     }

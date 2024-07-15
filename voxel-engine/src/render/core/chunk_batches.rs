@@ -21,101 +21,9 @@ use crate::{
 use super::{
     gpu_chunk::IndirectRenderDataStore,
     indirect::{IndexedIndirectArgs, IndirectChunkData},
-    views::{IndirectViewBatch, IndirectViewBatchCullData, ViewBatchBuffersStore},
-    DefaultBindGroupLayouts,
+    views::{IndirectViewBatch, ViewBatchBuffersStore},
+    BindGroupProvider,
 };
-
-#[derive(Clone)]
-pub struct PreparedChunkBatch {
-    pub indirect: Buffer,
-    pub num_chunks: u32,
-    pub tick: u64,
-}
-
-#[derive(Clone)]
-pub struct UnpreparedBatchBufBuildJob {
-    pub dest: Buffer,
-    pub lod: LevelOfDetail,
-    pub metadata_indices: Vec<u32>,
-}
-
-#[derive(Clone)]
-pub struct PreparedBatchBufBuildJob {
-    pub bind_group: BindGroup,
-    pub num_chunks: u32,
-    pub lod: LevelOfDetail,
-}
-
-#[derive(Resource, Clone, Default)]
-pub struct QueuedBatchBufBuildJobs {
-    pub unprepared: Vec<UnpreparedBatchBufBuildJob>,
-    pub prepared: Vec<PreparedBatchBufBuildJob>,
-}
-
-impl QueuedBatchBufBuildJobs {
-    pub fn clear(&mut self) {
-        self.unprepared.clear();
-        self.prepared.clear();
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.unprepared.is_empty() && self.prepared.is_empty()
-    }
-
-    pub fn queue(&mut self, dest: Buffer, lod: LevelOfDetail, metadata_indices: Vec<u32>) {
-        self.unprepared.push(UnpreparedBatchBufBuildJob {
-            dest,
-            lod,
-            metadata_indices,
-        });
-    }
-}
-
-pub fn prepare_batch_buf_build_jobs(
-    gpu: Res<RenderDevice>,
-    chunk_data: Res<IndirectRenderDataStore>,
-    default_layouts: Res<DefaultBindGroupLayouts>,
-    mut queued: ResMut<QueuedBatchBufBuildJobs>,
-) {
-    let QueuedBatchBufBuildJobs {
-        unprepared,
-        prepared,
-    } = queued.as_mut();
-
-    // Clear the current prepared jobs
-    prepared.clear();
-
-    for job in unprepared.drain(..) {
-        let lod_data = chunk_data.lod(job.lod);
-        let num_chunks = job.metadata_indices.len() as u32;
-
-        // An array of the indices to the chunk metadata on the GPU.
-        let metadata_index_buffer = gpu.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("BBB_chunk_metadata_indices_buffer"),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            contents: cast_slice(&job.metadata_indices),
-        });
-
-        let metadata_buffer = &lod_data.buffers().metadata;
-
-        // Build bind group
-        let bind_group = gpu.create_bind_group(
-            Some("BBB_bind_group"),
-            &default_layouts.build_batch_buffers_layout,
-            &BindGroupEntries::sequential((
-                metadata_buffer.as_entire_binding(),
-                metadata_index_buffer.as_entire_binding(),
-                job.dest.as_entire_binding(),
-            )),
-        );
-
-        prepared.push(PreparedBatchBufBuildJob {
-            bind_group,
-            num_chunks,
-            lod: job.lod,
-        });
-    }
-}
 
 impl ChunkBatch {
     /// Get the indices for the metadata of this observer's in-range chunks on the GPU as described by the provided indirect chunk data.
@@ -153,10 +61,6 @@ pub fn create_batch_count_buffer(gpu: &RenderDevice) -> Buffer {
     })
 }
 
-pub fn clear_queued_build_buffer_jobs(mut queued: ResMut<QueuedBatchBufBuildJobs>) {
-    queued.clear();
-}
-
 /// Extracts all entites with both a `ChunkBatch` and `ChunkBatchLod` component. These entities are
 /// "renderable" chunk batches, they have all the data required to be rendered. Other batches are ignored.
 pub fn extract_batches_with_lods(
@@ -177,11 +81,10 @@ pub fn extract_batches_with_lods(
 /// This system initializes the GPU buffers for chunk batches (instance buffer, indirect buffer, etc.) and queues
 /// them for population by the buffer builder in the render graph.
 pub fn initialize_and_queue_batch_buffers(
-    mut populate_buffers: ResMut<QueuedBatchBufBuildJobs>,
     mut view_batch_buf_store: ResMut<ViewBatchBuffersStore>,
     store: Res<IndirectRenderDataStore>,
     view_uniforms: Res<ViewUniforms>,
-    default_layouts: Res<DefaultBindGroupLayouts>,
+    default_layouts: Res<BindGroupProvider>,
     q_views: Query<(Entity, &VisibleBatches, &ViewUniformOffset), With<ExtractedCamera>>,
     q_batches: Query<(&ChunkBatch, &ChunkBatchLod)>,
     gpu: Res<RenderDevice>,
@@ -211,12 +114,12 @@ pub fn initialize_and_queue_batch_buffers(
                 continue;
             }
 
-            // This observer already has buffers for this batch, so we don't need to build them.
+            // This view already has buffers for this batch, so we don't need to build them.
             if view_batch_buffers.contains_key(&batch_entity) {
                 continue;
             }
 
-            // At this point we know that the LOD data is not empty, and that this observer needs
+            // At this point we know that the LOD data is not empty, and that this view needs
             // buffers for this batch, so we'll (try to) initialize the buffers and queue the build job.
             let chunk_metadata_indices = batch.get_metadata_indices(&lod_data);
 
@@ -225,34 +128,19 @@ pub fn initialize_and_queue_batch_buffers(
                 continue;
             }
 
-            let view_indirect_buf = create_batch_indirect_buffer(&gpu, batch.num_chunks());
-            let view_count_buf = create_batch_count_buffer(&gpu);
-
-            let cull_bind_group = gpu.create_bind_group(
-                Some("view_batch_frustum_cull_bind_group"),
-                &default_layouts.batch_cull_bind_group_layout,
-                &BindGroupEntries::sequential((
-                    lod_data.buffers().instances.as_entire_binding(),
-                    view_uniforms_binding.clone(),
-                    view_indirect_buf.as_entire_binding(),
-                    view_count_buf.as_entire_binding(),
-                )),
-            );
-
             view_batch_buffers.insert(
                 batch_entity,
                 IndirectViewBatch {
                     num_chunks: batch.num_chunks(),
-                    indirect: view_indirect_buf.clone(),
-                    cull_data: Some(IndirectViewBatchCullData {
-                        bind_group: cull_bind_group,
-                        count: view_count_buf,
-                        uniform_offset: view_offset.offset,
+                    metadata_index_buffer: gpu.create_buffer_with_data(&BufferInitDescriptor {
+                        label: Some("view_metadata_index_buffer"),
+                        contents: cast_slice(&chunk_metadata_indices),
+                        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
                     }),
+                    indirect_buffer: create_batch_indirect_buffer(&gpu, batch.num_chunks()),
+                    count_buffer: create_batch_count_buffer(&gpu),
                 },
             );
-
-            populate_buffers.queue(view_indirect_buf, batch_lod, chunk_metadata_indices);
         }
     }
 }

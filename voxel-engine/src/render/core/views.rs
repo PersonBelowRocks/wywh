@@ -13,29 +13,9 @@ use super::phase::DeferredBatch3d;
 #[derive(Clone)]
 pub struct IndirectViewBatch {
     pub num_chunks: u32,
-    pub indirect: Buffer,
-    pub cull_data: Option<IndirectViewBatchCullData>,
-}
-
-impl IndirectViewBatch {
-    pub fn cull_data(&self) -> Option<&IndirectViewBatchCullData> {
-        self.cull_data.as_ref()
-    }
-
-    pub fn count_buffer(&self) -> Option<&Buffer> {
-        self.cull_data.as_ref().map(|d| &d.count)
-    }
-
-    pub fn cull_bind_group(&self) -> Option<&BindGroup> {
-        self.cull_data.as_ref().map(|d| &d.bind_group)
-    }
-}
-
-#[derive(Clone)]
-pub struct IndirectViewBatchCullData {
-    pub uniform_offset: u32,
-    pub bind_group: BindGroup,
-    pub count: Buffer,
+    pub metadata_index_buffer: Buffer,
+    pub indirect_buffer: Buffer,
+    pub count_buffer: Buffer,
 }
 
 pub type ViewBatches = EntityHashMap<IndirectViewBatch>;
