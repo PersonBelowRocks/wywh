@@ -11,8 +11,6 @@ pub const PBR_INPUT_HANDLE: Handle<Shader> = Handle::weak_from_u128(771684695769
 pub const REGISTRY_BINDINGS_HANDLE: Handle<Shader> = Handle::weak_from_u128(8499327436868843);
 pub const TYPES_HANDLE: Handle<Shader> = Handle::weak_from_u128(1378018199763387);
 pub const UTILS_HANDLE: Handle<Shader> = Handle::weak_from_u128(4464360603291233);
-pub const POPULATE_INDIRECT_BUFFER_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(2398076348923761);
 pub const PREPROCESS_BATCH_HANDLE: Handle<Shader> = Handle::weak_from_u128(6547967980067631);
 pub const PREPROCESS_LIGHT_BATCH_HANDLE: Handle<Shader> = Handle::weak_from_u128(2910271245758926);
 pub const DEFERRED_INDIRECT_CHUNK_HANDLE: Handle<Shader> = Handle::weak_from_u128(1209756888212873);
@@ -37,12 +35,6 @@ pub fn load_internal_shaders(app: &mut App) {
     );
     load_internal_asset!(app, TYPES_HANDLE, "types.wgsl", Shader::from_wgsl);
     load_internal_asset!(app, UTILS_HANDLE, "utils.wgsl", Shader::from_wgsl);
-    load_internal_asset!(
-        app,
-        POPULATE_INDIRECT_BUFFER_HANDLE,
-        "populate_indirect_buffer.wgsl",
-        Shader::from_wgsl
-    );
     load_internal_asset!(
         app,
         PREPROCESS_BATCH_HANDLE,

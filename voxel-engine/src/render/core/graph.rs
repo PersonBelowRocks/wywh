@@ -1,7 +1,7 @@
 use bevy::{
     core_pipeline::prepass::ViewPrepassTextures,
     ecs::{entity::EntityHashMap, query::QueryItem, system::lifetimeless::Read},
-    pbr::{LightEntity, LightMeta, ViewLightEntities, ViewLightsUniformOffset},
+    pbr::{LightEntity, LightMeta, ShadowView, ViewLightEntities, ViewLightsUniformOffset},
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -22,7 +22,7 @@ use hb::HashMap;
 
 use crate::{
     render::{
-        core::views::IndirectViewBatch,
+        core::{pipelines::ViewBatchPreprocessPipeline, views::IndirectViewBatch},
         lod::{LevelOfDetail, LodMap},
     },
     topo::controller::{ChunkBatchLod, VisibleBatches},
@@ -31,7 +31,10 @@ use crate::{
 use super::{
     gpu_chunk::IndirectRenderDataStore,
     phase::DeferredBatch3d,
-    pipelines::{ViewBatchPreprocessPipelineId, PREPROCESS_BATCH_WORKGROUP_SIZE},
+    pipelines::{
+        ViewBatchLightPreprocessPipeline, ViewBatchLightPreprocessPipelineId,
+        ViewBatchPreprocessPipelineId, PREPROCESS_BATCH_WORKGROUP_SIZE,
+    },
     views::ViewBatchBuffersStore,
     BindGroupProvider,
 };
@@ -41,6 +44,9 @@ pub enum Nodes {
     PreprocessBatches,
     Prepass,
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Deferred rendering
 
 #[derive(Default)]
 pub struct DeferredChunkNode;
@@ -150,6 +156,13 @@ pub fn get_batch_preprocess_pipeline(world: &World) -> Option<&ComputePipeline> 
     pipeline_cache.get_compute_pipeline(pipeline_id.0)
 }
 
+pub fn get_light_batch_preprocess_pipeline(world: &World) -> Option<&ComputePipeline> {
+    let pipeline_cache = world.resource::<PipelineCache>();
+    let pipeline_id = world.resource::<ViewBatchLightPreprocessPipelineId>();
+
+    pipeline_cache.get_compute_pipeline(pipeline_id.0)
+}
+
 pub fn begin_batch_preprocess_compute_pass<'a>(encoder: &'a mut CommandEncoder) -> ComputePass<'a> {
     encoder.begin_compute_pass(&ComputePassDescriptor {
         label: Some("chunk_batch_preprocess_compute_pass"),
@@ -185,11 +198,11 @@ pub fn create_batch_data_bind_groups<'a>(
     bind_groups
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// View preprocessing
+
 pub struct PreprocessBatchesNode {
     q_batches: QueryState<Read<ChunkBatchLod>>,
-    // While we don't use the LightEntity in this node, we keep it here in the query so that it only matches
-    // entities that have a LightEntity component, potentially catching a few errors early
-    q_lights: QueryState<(Read<LightEntity>, Read<VisibleBatches>)>,
 }
 
 impl PreprocessBatchesNode {
@@ -202,53 +215,28 @@ impl PreprocessBatchesNode {
             }
         }
     }
-
-    pub fn get_light_visible_batches<'a>(
-        &self,
-        world: &'a World,
-        entity: Entity,
-    ) -> Option<&'a VisibleBatches> {
-        match self.q_lights.get_manual(world, entity) {
-            Ok((_, visible_batches)) => Some(visible_batches),
-            Err(_) => None,
-        }
-    }
 }
 
 impl FromWorld for PreprocessBatchesNode {
     fn from_world(world: &mut World) -> Self {
         Self {
             q_batches: QueryState::from_world(world),
-            q_lights: QueryState::from_world(world),
         }
     }
 }
 
 impl ViewNode for PreprocessBatchesNode {
-    type ViewQuery = (
-        Entity,
-        Read<VisibleBatches>,
-        Read<ViewUniformOffset>,
-        Option<Read<ViewLightsUniformOffset>>,
-        Option<Read<ViewLightEntities>>,
-    );
+    type ViewQuery = (Entity, Read<VisibleBatches>, Read<ViewUniformOffset>);
 
     fn update(&mut self, world: &mut World) {
         self.q_batches.update_archetypes(world);
-        self.q_lights.update_archetypes(world);
     }
 
     fn run<'w>(
         &self,
         _graph: &mut RenderGraphContext,
         ctx: &mut RenderContext<'w>,
-        (
-            view_entity,
-            visible_batches,
-            view_uniform_offset,
-            view_lights_uniform_offset,
-            view_light_entities,
-        ): QueryItem<'w, Self::ViewQuery>,
+        (view_entity, visible_batches, view_uniform_offset): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
         let bg_provider = world.resource::<BindGroupProvider>();
@@ -316,69 +304,131 @@ impl ViewNode for PreprocessBatchesNode {
         // Drop this pass since we need to borrow the encoder again.
         drop(pass);
 
-        // Preprocess lights
-        // TODO: we need an own node for this and also we should do some kind of occlusion culling instead of frustum culling
-        if let (Some(view_light_uniform_offset), Some(view_light_entities)) =
-            (view_lights_uniform_offset, view_light_entities)
-        {
-            let light_meta = world.resource::<LightMeta>();
+        Ok(())
+    }
+}
 
-            let Some(view_light_uniforms_binding) = light_meta.view_gpu_lights.binding() else {
-                return Ok(());
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Light preprocessing
+
+pub struct PreprocessLightBatchesNode {
+    q_batches: QueryState<Read<ChunkBatchLod>>,
+    // While we don't use the LightEntity in this node, we keep it here in the query so that it only matches
+    // entities that have a LightEntity component, potentially catching a few errors early
+    q_lights: QueryState<(Read<LightEntity>, Read<VisibleBatches>, Read<ShadowView>)>,
+}
+
+impl PreprocessLightBatchesNode {
+    pub fn get_batch_lod(&self, world: &World, entity: Entity) -> Option<LevelOfDetail> {
+        match self.q_batches.get_manual(world, entity) {
+            Ok(lod) => Some(lod.0),
+            Err(error) => {
+                error!("Error getting LOD component for batch {entity}: {error}");
+                None
+            }
+        }
+    }
+
+    pub fn get_light_visible_batches<'a>(
+        &self,
+        world: &'a World,
+        entity: Entity,
+    ) -> Option<&'a VisibleBatches> {
+        match self.q_lights.get_manual(world, entity) {
+            Ok((_, visible_batches, _)) => Some(visible_batches),
+            Err(_) => None,
+        }
+    }
+}
+
+impl FromWorld for PreprocessLightBatchesNode {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            q_batches: QueryState::from_world(world),
+            q_lights: QueryState::from_world(world),
+        }
+    }
+}
+
+impl ViewNode for PreprocessLightBatchesNode {
+    type ViewQuery = (Read<ViewLightEntities>, Read<ViewLightsUniformOffset>);
+
+    fn run<'w>(
+        &self,
+        _graph: &mut RenderGraphContext,
+        ctx: &mut RenderContext<'w>,
+        (view_light_entities, view_lights_uniform_offset): QueryItem<'w, Self::ViewQuery>,
+        world: &'w World,
+    ) -> Result<(), NodeRunError> {
+        // Preprocess lights
+        let gpu = world.resource::<RenderDevice>();
+        let bg_provider = world.resource::<BindGroupProvider>();
+        let view_batches_store = world.resource::<ViewBatchBuffersStore>();
+        let chunk_mesh_store = world.resource::<IndirectRenderDataStore>();
+        let light_meta = world.resource::<LightMeta>();
+
+        let Some(preprocess_pipeline) = get_batch_preprocess_pipeline(world) else {
+            error!("Couldn't get light batch preprocessing pipeline");
+            return Ok(());
+        };
+
+        let Some(view_light_uniforms_binding) = light_meta.view_gpu_lights.binding() else {
+            return Ok(());
+        };
+
+        // Bind group for the light's view
+        let view_bind_group = bg_provider.preprocess_view(gpu, view_light_uniforms_binding);
+
+        let command_encoder = ctx.command_encoder();
+
+        for &view_light in &view_light_entities.lights {
+            let Some(view_batches) = view_batches_store.get_batches(view_light) else {
+                continue;
             };
 
-            // Bind group for the light's view
-            let view_bind_group = bg_provider.preprocess_view(gpu, view_light_uniforms_binding);
+            let Some(visible_batches) = self.get_light_visible_batches(world, view_light) else {
+                continue;
+            };
 
-            for &view_light in &view_light_entities.lights {
-                let Some(view_batches) = view_batches_store.get_batches(view_light) else {
+            let light_view_bind_groups =
+                create_batch_data_bind_groups(gpu, bg_provider, view_batches.iter());
+
+            let mut pass = begin_light_batch_preprocess_compute_pass(command_encoder);
+            pass.set_pipeline(preprocess_pipeline);
+
+            for (batch_entity, gpu_data) in view_batches.iter() {
+                if !visible_batches.contains(batch_entity) {
+                    continue;
+                }
+
+                let Some(lod) = self.get_batch_lod(world, *batch_entity) else {
+                    error!("Can't preprocess batch entity without LOD component: {batch_entity}, light view: {view_light}");
                     continue;
                 };
 
-                let Some(visible_batches) = self.get_light_visible_batches(world, view_light)
+                let Some(mesh_metadata_bind_group) =
+                    chunk_mesh_store.lod(lod).preprocess_metadata_bind_group()
                 else {
                     continue;
                 };
 
-                let light_view_bind_groups =
-                    create_batch_data_bind_groups(gpu, bg_provider, view_batches.iter());
+                // Get the bind group for the batch in the light's view this time around
+                let batch_data_bind_group = light_view_bind_groups.get(batch_entity).unwrap();
 
-                let mut pass = begin_light_batch_preprocess_compute_pass(command_encoder);
-                pass.set_pipeline(preprocess_pipeline);
+                pass.set_bind_group(0, &mesh_metadata_bind_group, &[]);
+                // Uniform offset for the lights
+                // TODO: attach the correct bind group here (the one with the depth texture)
+                pass.set_bind_group(1, &view_bind_group, &[view_lights_uniform_offset.offset]);
+                pass.set_bind_group(2, &batch_data_bind_group, &[]);
 
-                for (batch_entity, gpu_data) in view_batches.iter() {
-                    if !visible_batches.contains(batch_entity) {
-                        continue;
-                    }
-
-                    let Some(lod) = self.get_batch_lod(world, *batch_entity) else {
-                        error!("Can't preprocess batch entity without LOD component: {batch_entity}, light view: {view_entity}");
-                        continue;
-                    };
-
-                    let Some(mesh_metadata_bind_group) =
-                        chunk_mesh_store.lod(lod).preprocess_metadata_bind_group()
-                    else {
-                        continue;
-                    };
-
-                    // Get the bind group for the batch in the light's view this time around
-                    let batch_data_bind_group = light_view_bind_groups.get(batch_entity).unwrap();
-
-                    pass.set_bind_group(0, &mesh_metadata_bind_group, &[]);
-                    // Uniform offset for the lights
-                    pass.set_bind_group(1, &view_bind_group, &[view_light_uniform_offset.offset]);
-                    pass.set_bind_group(2, &batch_data_bind_group, &[]);
-
-                    // Divide by ceiling here, otherwise we might miss out on some chunks
-                    let workgroups = gpu_data
-                        .num_chunks
-                        .div_ceil(PREPROCESS_BATCH_WORKGROUP_SIZE);
-                    pass.dispatch_workgroups(1, 1, workgroups);
-                }
+                // Divide by ceiling here, otherwise we might miss out on some chunks
+                let workgroups = gpu_data
+                    .num_chunks
+                    .div_ceil(PREPROCESS_BATCH_WORKGROUP_SIZE);
+                pass.dispatch_workgroups(1, 1, workgroups);
             }
         }
 
-        Ok(())
+        todo!()
     }
 }

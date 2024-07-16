@@ -28,9 +28,7 @@ use crate::render::core::{utils::add_shader_constants, BindGroupProvider};
 
 use super::{
     indirect::ChunkInstanceData,
-    shaders::{
-        DEFERRED_INDIRECT_CHUNK_HANDLE, POPULATE_INDIRECT_BUFFER_HANDLE, PREPROCESS_BATCH_HANDLE,
-    },
+    shaders::{DEFERRED_INDIRECT_CHUNK_HANDLE, PREPROCESS_BATCH_HANDLE},
     utils::{add_mesh_pipeline_shader_defs, u32_shader_def},
 };
 
@@ -68,6 +66,8 @@ pub struct ViewBatchPreprocessPipelineId(pub CachedComputePipelineId);
 
 pub const PREPROCESS_BATCH_WORKGROUP_SIZE: u32 = 64;
 
+/// Pipeline for preprocessing batches visible to a non-light view. Builds the indirect buffers
+/// (count + args) and does frustum culling of chunks.
 #[derive(Resource)]
 pub struct ViewBatchPreprocessPipeline {
     pub shader: Handle<Shader>,
@@ -108,6 +108,57 @@ impl SpecializedComputePipeline for ViewBatchPreprocessPipeline {
             layout: vec![
                 self.mesh_metadata_layout.clone(),
                 self.view_layout.clone(),
+                self.batch_data_layout.clone(),
+            ],
+            push_constant_ranges: vec![],
+        }
+    }
+}
+
+#[derive(Resource, Clone, Debug)]
+pub struct ViewBatchLightPreprocessPipelineId(pub CachedComputePipelineId);
+
+/// Pipeline for preprocessing the batches visible by a light so that it can be rendered.
+/// Builds the indirect buffers (count + args) and does a crude occlusion cull of chunks.
+pub struct ViewBatchLightPreprocessPipeline {
+    shader: Handle<Shader>,
+    pub mesh_metadata_layout: BindGroupLayout,
+    pub light_view_layout: BindGroupLayout,
+    pub batch_data_layout: BindGroupLayout,
+}
+
+impl FromWorld for ViewBatchLightPreprocessPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let provider = world.resource::<BindGroupProvider>();
+
+        Self {
+            shader: PREPROCESS_BATCH_HANDLE,
+            light_view_layout: provider.preprocess_view_bg_layout.clone(),
+            mesh_metadata_layout: provider.preprocess_mesh_metadata_bg_layout.clone(),
+            batch_data_layout: provider.preprocess_batch_data_bg_layout.clone(),
+        }
+    }
+}
+
+impl SpecializedComputePipeline for ViewBatchLightPreprocessPipeline {
+    type Key = ();
+
+    fn specialize(&self, _key: Self::Key) -> ComputePipelineDescriptor {
+        let mut shader_defs = vec![];
+        add_shader_constants(&mut shader_defs);
+        shader_defs.push(u32_shader_def(
+            "WORKGROUP_SIZE",
+            PREPROCESS_BATCH_WORKGROUP_SIZE,
+        ));
+
+        ComputePipelineDescriptor {
+            label: Some("preprocess_light_batch_pipeline".into()),
+            entry_point: "preprocess_light_batch".into(),
+            shader: self.shader.clone(),
+            shader_defs,
+            layout: vec![
+                self.mesh_metadata_layout.clone(),
+                self.light_view_layout.clone(),
                 self.batch_data_layout.clone(),
             ],
             push_constant_ranges: vec![],

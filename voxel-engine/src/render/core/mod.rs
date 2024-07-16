@@ -263,6 +263,7 @@ pub(crate) struct BindGroupProvider {
     pub icd_quad_bg_layout: BindGroupLayout,
     pub preprocess_mesh_metadata_bg_layout: BindGroupLayout,
     pub preprocess_view_bg_layout: BindGroupLayout,
+    pub preprocess_light_view_bg_layout: BindGroupLayout,
     pub preprocess_batch_data_bg_layout: BindGroupLayout,
 }
 
@@ -306,6 +307,16 @@ impl FromWorld for BindGroupProvider {
                 &BindGroupLayoutEntries::single(
                     ShaderStages::COMPUTE,
                     binding_types::uniform_buffer::<ViewUniform>(true),
+                ),
+            ),
+            preprocess_light_view_bg_layout: gpu.create_bind_group_layout(
+                Some("preprocess_light_view_bg_layout"),
+                &BindGroupLayoutEntries::sequential(
+                    ShaderStages::COMPUTE,
+                    (
+                        binding_types::uniform_buffer::<ViewUniform>(true),
+                        binding_types::texture_depth_2d(),
+                    ),
                 ),
             ),
             preprocess_batch_data_bg_layout: gpu.create_bind_group_layout(
