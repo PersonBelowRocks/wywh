@@ -42,7 +42,7 @@ use gpu_chunk::{
     update_gpu_mesh_data, update_indirect_mesh_data_dependants, IndirectRenderDataStore,
     RemoveChunkMeshes, UpdateIndirectLODs,
 };
-use graph::{DeferredChunkNode, Nodes, PreprocessViewBatchesNode};
+use graph::{DeferredChunkNode, Nodes, PreprocessBatchesNode};
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkData};
 use lights::{
     inherit_parent_light_batches, initialize_and_queue_light_batch_buffers, queue_chunk_shadows,
@@ -151,7 +151,7 @@ impl Plugin for RenderCore {
             .add_render_command::<DeferredBatch3d, DrawDeferredBatch>()
             .add_render_command::<Shadow, DrawDeferredBatch>()
             .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, Nodes::Prepass)
-            .add_render_graph_node::<ViewNodeRunner<PreprocessViewBatchesNode>>(
+            .add_render_graph_node::<ViewNodeRunner<PreprocessBatchesNode>>(
                 Core3d,
                 Nodes::PreprocessBatches,
             )

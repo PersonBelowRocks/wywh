@@ -163,12 +163,10 @@ pub struct IndirectRenderDataStore {
 impl FromWorld for IndirectRenderDataStore {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
-        let default_bg_layouts = world.resource::<BindGroupProvider>();
+        let bg_provider = world.resource::<BindGroupProvider>();
 
         Self {
-            lods: FilledLodMap::from_fn(|lod| {
-                IndirectChunkData::new(lod, gpu, default_bg_layouts.icd_quad_bg_layout.clone())
-            }),
+            lods: FilledLodMap::from_fn(|lod| IndirectChunkData::new(gpu, bg_provider, lod)),
         }
     }
 }

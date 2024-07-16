@@ -15,7 +15,10 @@ use rangemap::RangeSet;
 
 use crate::{
     render::{
-        core::{indirect::buffer_utils::instance_bytes_from_metadata, utils::InspectChunks},
+        core::{
+            indirect::buffer_utils::instance_bytes_from_metadata, utils::InspectChunks,
+            BindGroupProvider,
+        },
         lod::LevelOfDetail,
         meshing::controller::ChunkMeshData,
         quad::GpuQuad,
@@ -142,6 +145,14 @@ impl RawIndirectChunkData {
     }
 }
 
+#[derive(Clone)]
+pub struct IcdBindGroups {
+    quad_bg_layout: BindGroupLayout,
+    quad_bg: Option<BindGroup>,
+    preprocess_metadata_bg_layout: BindGroupLayout,
+    preprocess_metadata_bg: Option<BindGroup>,
+}
+
 pub struct IcdCommit<'a> {
     add: ChunkMap<ChunkMeshData>,
     remove: ChunkSet,
@@ -261,18 +272,23 @@ impl<'a> IcdCommit<'a> {
 pub struct IndirectChunkData {
     lod: LevelOfDetail,
     raw: RawIndirectChunkData,
-    quad_bind_group: Option<BindGroup>,
-    quad_bg_layout: BindGroupLayout,
+    bind_groups: IcdBindGroups,
     metadata: ChunkIndexMap<GpuChunkMetadata>,
 }
 
 impl IndirectChunkData {
-    pub fn new(lod: LevelOfDetail, gpu: &RenderDevice, quad_bg_layout: BindGroupLayout) -> Self {
+    pub fn new(gpu: &RenderDevice, bg_provider: &BindGroupProvider, lod: LevelOfDetail) -> Self {
         Self {
             lod,
             raw: RawIndirectChunkData::new(gpu),
-            quad_bind_group: None,
-            quad_bg_layout,
+            bind_groups: IcdBindGroups {
+                quad_bg_layout: bg_provider.icd_quad_bg_layout.clone(),
+                quad_bg: None,
+                preprocess_metadata_bg_layout: bg_provider
+                    .preprocess_mesh_metadata_bg_layout
+                    .clone(),
+                preprocess_metadata_bg: None,
+            },
             metadata: ChunkIndexMap::default(),
         }
     }
@@ -280,7 +296,7 @@ impl IndirectChunkData {
     /// Whether or not this indirect chunk data is in a state where it can be used for rendering.
     /// In order to be ready the quad bind group must be created, and there must be some chunk metadata present.
     pub fn is_ready(&self) -> bool {
-        self.quad_bind_group.is_some() && !self.is_empty()
+        self.quad_bind_group().is_some() && !self.is_empty()
     }
 
     /// Whether or not this data is empty, i.e., contains no chunks. If the data is empty then the instance buffer and metadata buffer are also
@@ -290,7 +306,11 @@ impl IndirectChunkData {
     }
 
     pub fn quad_bind_group(&self) -> Option<&BindGroup> {
-        self.quad_bind_group.as_ref()
+        self.bind_groups.quad_bg.as_ref()
+    }
+
+    pub fn preprocess_metadata_bind_group(&self) -> Option<&BindGroup> {
+        self.bind_groups.preprocess_metadata_bg.as_ref()
     }
 
     pub fn index_buffer(&self) -> &Buffer {
@@ -340,25 +360,44 @@ impl IndirectChunkData {
         debug!("Updated chunk metadata.")
     }
 
-    fn update_quad_bind_group(&mut self, gpu: &RenderDevice) {
-        // Remove our old bind group
-        self.quad_bind_group = None;
+    fn update_bind_groups(&mut self, gpu: &RenderDevice) {
+        // Remove our old bind groups
+        self.bind_groups.quad_bg = None;
+        self.bind_groups.preprocess_metadata_bg = None;
 
+        // We only make a new quad bind group if we have any quads
         let quad_vram_array = &self.buffers().quad;
-
-        // We only make a new bind group if the buffer is long enough to be bound
         if quad_vram_array.vram_bytes() > 0 {
             let quad_buffer = quad_vram_array.buffer();
 
             let bg = gpu.create_bind_group(
                 "ICD_quad_bind_group",
-                &self.quad_bg_layout,
+                &self.bind_groups.quad_bg_layout,
                 &BindGroupEntries::single(quad_buffer.as_entire_buffer_binding()),
             );
 
             debug!("Rebuilt ICD quad bind group");
 
-            self.quad_bind_group = Some(bg);
+            self.bind_groups.quad_bg = Some(bg);
+        }
+
+        // We only make a new preprocess metadata bind group if we have any metadata
+        if !self.metadata.is_empty() {
+            let metadata_buffer = self.metadata_buffer();
+            let instance_buffer = self.instance_buffer();
+
+            let bg = gpu.create_bind_group(
+                "ICD_preprocess_metadata_bind_group",
+                &self.bind_groups.preprocess_metadata_bg_layout,
+                &BindGroupEntries::sequential((
+                    metadata_buffer.as_entire_binding(),
+                    instance_buffer.as_entire_binding(),
+                )),
+            );
+
+            debug!("Rebuilt ICD preprocess metadata bind group");
+
+            self.bind_groups.preprocess_metadata_bg = Some(bg);
         }
     }
 
@@ -560,7 +599,7 @@ impl IndirectChunkData {
         debug!("Successfully uploaded indices and quads to the GPU.");
 
         self.update_metadata(gpu, new_bounds);
-        self.update_quad_bind_group(gpu);
+        self.update_bind_groups(gpu);
     }
 
     pub fn remove_chunks(
@@ -627,7 +666,7 @@ impl IndirectChunkData {
         debug!("Successfully removed indices and quads from the GPU.");
 
         self.update_metadata(gpu, chunks_to_retain);
-        self.update_quad_bind_group(gpu);
+        self.update_bind_groups(gpu);
     }
 
     #[inline]
