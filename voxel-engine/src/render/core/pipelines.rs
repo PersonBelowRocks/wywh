@@ -64,23 +64,27 @@ pub fn chunk_indirect_instance_buffer_layout(start_at: u32) -> VertexBufferLayou
 }
 
 #[derive(Resource, Clone, Debug)]
-pub struct ViewBatchFrustumCullPipelineId(pub CachedComputePipelineId);
+pub struct ViewBatchPreprocessPipelineId(pub CachedComputePipelineId);
 
-pub const FRUSTUM_CULL_WORKGROUP_SIZE: u32 = 64;
+pub const PREPROCESS_BATCH_WORKGROUP_SIZE: u32 = 64;
 
 #[derive(Resource)]
 pub struct ViewBatchPreprocessPipeline {
     pub shader: Handle<Shader>,
-    pub bg_layout: BindGroupLayout,
+    pub mesh_metadata_layout: BindGroupLayout,
+    pub view_layout: BindGroupLayout,
+    pub batch_data_layout: BindGroupLayout,
 }
 
 impl FromWorld for ViewBatchPreprocessPipeline {
     fn from_world(world: &mut World) -> Self {
-        let default_layouts = world.resource::<BindGroupProvider>();
+        let provider = world.resource::<BindGroupProvider>();
 
         Self {
             shader: BATCH_FRUSTUM_CULL_HANDLE,
-            bg_layout: default_layouts.preprocess_batch_data_bg_layout.clone(),
+            view_layout: provider.preprocess_view_bg_layout.clone(),
+            mesh_metadata_layout: provider.preprocess_mesh_metadata_bg_layout.clone(),
+            batch_data_layout: provider.preprocess_batch_data_bg_layout.clone(),
         }
     }
 }
@@ -93,15 +97,19 @@ impl SpecializedComputePipeline for ViewBatchPreprocessPipeline {
         add_shader_constants(&mut shader_defs);
         shader_defs.push(u32_shader_def(
             "WORKGROUP_SIZE",
-            FRUSTUM_CULL_WORKGROUP_SIZE,
+            PREPROCESS_BATCH_WORKGROUP_SIZE,
         ));
 
         ComputePipelineDescriptor {
-            label: Some("observer_batch_frustum_cull_pipeline".into()),
-            entry_point: "batch_frustum_cull".into(),
+            label: Some("preprocess_batch_pipeline".into()),
+            entry_point: "preprocess_batch".into(),
             shader: self.shader.clone(),
             shader_defs,
-            layout: vec![self.bg_layout.clone()],
+            layout: vec![
+                self.mesh_metadata_layout.clone(),
+                self.view_layout.clone(),
+                self.batch_data_layout.clone(),
+            ],
             push_constant_ranges: vec![],
         }
     }
@@ -109,14 +117,12 @@ impl SpecializedComputePipeline for ViewBatchPreprocessPipeline {
 
 pub fn create_pipelines(
     cache: Res<PipelineCache>,
-    batch_cull: Res<ViewBatchPreprocessPipeline>,
-    mut cull_observer_batch_pipelines: ResMut<
-        SpecializedComputePipelines<ViewBatchPreprocessPipeline>,
-    >,
+    preprocess_pipeline: Res<ViewBatchPreprocessPipeline>,
+    mut preprocess_pipelines: ResMut<SpecializedComputePipelines<ViewBatchPreprocessPipeline>>,
     mut cmds: Commands,
 ) {
-    let id = cull_observer_batch_pipelines.specialize(&cache, &batch_cull, ());
-    cmds.insert_resource(ViewBatchFrustumCullPipelineId(id));
+    let id = preprocess_pipelines.specialize(&cache, &preprocess_pipeline, ());
+    cmds.insert_resource(ViewBatchPreprocessPipelineId(id));
 }
 
 /// The render pipeline for chunk multidraw

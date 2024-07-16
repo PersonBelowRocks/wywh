@@ -153,25 +153,13 @@ impl Plugin for RenderCore {
             .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, Nodes::Prepass)
             .add_render_graph_node::<ViewNodeRunner<PreprocessViewBatchesNode>>(
                 Core3d,
-                Nodes::BatchFrustumCulling,
+                Nodes::PreprocessBatches,
             )
             .add_render_graph_edges(
                 Core3d,
-                (
-                    Nodes::BuildBatchBuffers,
-                    Nodes::BatchFrustumCulling,
-                    Node3d::Prepass,
-                    Nodes::Prepass,
-                ),
+                (Nodes::PreprocessBatches, Node3d::Prepass, Nodes::Prepass),
             )
-            .add_render_graph_edges(
-                Core3d,
-                (
-                    Nodes::BuildBatchBuffers,
-                    Nodes::LightBatchFrustumCulling,
-                    NodePbr::ShadowPass,
-                ),
-            );
+            .add_render_graph_edges(Core3d, (Nodes::PreprocessBatches, NodePbr::ShadowPass));
 
         if let Some(debug) = self.debug.clone() {
             info!("Setting up render core inspection");
@@ -273,8 +261,8 @@ pub(crate) struct BindGroupProvider {
     pub registry_bg_layout: BindGroupLayout,
     pub icd_quad_bg_layout: BindGroupLayout,
     pub preprocess_mesh_metadata_bg_layout: BindGroupLayout,
-    pub preprocess_batch_data_bg_layout: BindGroupLayout,
     pub preprocess_view_bg_layout: BindGroupLayout,
+    pub preprocess_batch_data_bg_layout: BindGroupLayout,
 }
 
 impl FromWorld for BindGroupProvider {
@@ -312,6 +300,13 @@ impl FromWorld for BindGroupProvider {
                     ),
                 ),
             ),
+            preprocess_view_bg_layout: gpu.create_bind_group_layout(
+                Some("preprocess_view_bg_layout"),
+                &BindGroupLayoutEntries::single(
+                    ShaderStages::COMPUTE,
+                    binding_types::uniform_buffer::<ViewUniform>(true),
+                ),
+            ),
             preprocess_batch_data_bg_layout: gpu.create_bind_group_layout(
                 Some("preprocess_batch_data_bg_layout"),
                 &BindGroupLayoutEntries::sequential(
@@ -321,13 +316,6 @@ impl FromWorld for BindGroupProvider {
                         binding_types::storage_buffer::<IndexedIndirectArgs>(false),
                         binding_types::storage_buffer_sized(false, Some(u32::SHADER_SIZE)),
                     ),
-                ),
-            ),
-            preprocess_view_bg_layout: gpu.create_bind_group_layout(
-                Some("preprocess_view_bg_layout"),
-                &BindGroupLayoutEntries::single(
-                    ShaderStages::COMPUTE,
-                    binding_types::uniform_buffer::<ViewUniform>(true),
                 ),
             ),
         }
@@ -357,7 +345,7 @@ impl BindGroupProvider {
             &self.preprocess_mesh_metadata_bg_layout,
             &BindGroupEntries::sequential((
                 icd.metadata_buffer().as_entire_binding(),
-                icd.index_buffer().as_entire_binding(),
+                icd.instance_buffer().as_entire_binding(),
             )),
         )
     }

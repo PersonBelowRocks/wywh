@@ -45,7 +45,7 @@ pub fn load_internal_shaders(app: &mut App) {
     load_internal_asset!(
         app,
         BATCH_FRUSTUM_CULL_HANDLE,
-        "batch_frustum_cull.wgsl",
+        "preprocess_batch.wgsl",
         Shader::from_wgsl
     );
     load_internal_asset!(

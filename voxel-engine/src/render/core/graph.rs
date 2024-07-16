@@ -28,16 +28,14 @@ use crate::{
 use super::{
     gpu_chunk::IndirectRenderDataStore,
     phase::DeferredBatch3d,
-    pipelines::{ViewBatchFrustumCullPipelineId, FRUSTUM_CULL_WORKGROUP_SIZE},
+    pipelines::{ViewBatchPreprocessPipelineId, PREPROCESS_BATCH_WORKGROUP_SIZE},
     views::ViewBatchBuffersStore,
     BindGroupProvider,
 };
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, RenderLabel)]
 pub enum Nodes {
-    BuildBatchBuffers,
-    BatchFrustumCulling,
-    LightBatchFrustumCulling,
+    PreprocessBatches,
     Prepass,
 }
 
@@ -144,7 +142,7 @@ impl ViewNode for DeferredChunkNode {
 
 pub fn get_batch_frustum_cull_pipeline(world: &World) -> Option<&ComputePipeline> {
     let pipeline_cache = world.resource::<PipelineCache>();
-    let pipeline_id = world.resource::<ViewBatchFrustumCullPipelineId>();
+    let pipeline_id = world.resource::<ViewBatchPreprocessPipelineId>();
 
     pipeline_cache.get_compute_pipeline(pipeline_id.0)
 }
@@ -263,12 +261,14 @@ impl ViewNode for PreprocessViewBatchesNode {
             let mesh_metadata_bind_group = mesh_metadata_bind_groups.get(lod.0).unwrap();
             let batch_data_bind_group = batch_data_bind_groups.get(batch_entity).unwrap();
 
-            pass.set_bind_group(0, &view_bind_group, &[view_uniform_offset.offset]);
-            pass.set_bind_group(1, &mesh_metadata_bind_group, &[]);
+            pass.set_bind_group(0, &mesh_metadata_bind_group, &[]);
+            pass.set_bind_group(1, &view_bind_group, &[view_uniform_offset.offset]);
             pass.set_bind_group(2, &batch_data_bind_group, &[]);
 
             // Divide by ceiling here, otherwise we might miss out on some chunks
-            let workgroups = gpu_data.num_chunks.div_ceil(FRUSTUM_CULL_WORKGROUP_SIZE);
+            let workgroups = gpu_data
+                .num_chunks
+                .div_ceil(PREPROCESS_BATCH_WORKGROUP_SIZE);
             pass.dispatch_workgroups(1, 1, workgroups);
         }
 
