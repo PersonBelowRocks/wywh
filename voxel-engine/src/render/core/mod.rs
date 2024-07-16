@@ -42,13 +42,16 @@ use gpu_chunk::{
     update_gpu_mesh_data, update_indirect_mesh_data_dependants, IndirectRenderDataStore,
     RemoveChunkMeshes, UpdateIndirectLODs,
 };
-use graph::{DeferredChunkNode, Nodes, PreprocessBatchesNode};
+use graph::{DeferredChunkNode, CoreNode, PreprocessBatchesNode, PreprocessLightBatchesNode};
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkData};
 use lights::{
     inherit_parent_light_batches, initialize_and_queue_light_batch_buffers, queue_chunk_shadows,
 };
 use phase::DeferredBatch3d;
-use pipelines::{create_pipelines, DeferredIndirectChunkPipeline, ViewBatchPreprocessPipeline};
+use pipelines::{
+    create_pipelines, DeferredIndirectChunkPipeline, ViewBatchLightPreprocessPipeline,
+    ViewBatchPreprocessPipeline,
+};
 use queue::queue_deferred_chunks;
 use shaders::load_internal_shaders;
 use utils::InspectChunks;
@@ -140,6 +143,7 @@ impl Plugin for RenderCore {
             // Pipeline stores
             .init_resource::<SpecializedRenderPipelines<DeferredIndirectChunkPipeline>>()
             .init_resource::<SpecializedComputePipelines<ViewBatchPreprocessPipeline>>()
+            .init_resource::<SpecializedComputePipelines<ViewBatchLightPreprocessPipeline>>()
             // Misc
             .init_resource::<InspectChunks>()
             .init_resource::<ViewBatchBuffersStore>()
@@ -150,17 +154,21 @@ impl Plugin for RenderCore {
         render_app
             .add_render_command::<DeferredBatch3d, DrawDeferredBatch>()
             .add_render_command::<Shadow, DrawDeferredBatch>()
-            .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, Nodes::Prepass)
+            .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, CoreNode::Prepass)
             .add_render_graph_node::<ViewNodeRunner<PreprocessBatchesNode>>(
                 Core3d,
-                Nodes::PreprocessBatches,
+                CoreNode::PreprocessBatches,
+            )
+            .add_render_graph_node::<ViewNodeRunner<PreprocessLightBatchesNode>>(
+                Core3d,
+                CoreNode::PreprocessLightBatches
             )
             .add_render_graph_edges(
                 Core3d,
-                (Nodes::PreprocessBatches, Node3d::Prepass, Nodes::Prepass),
+                (CoreNode::PreprocessBatches, Node3d::Prepass, CoreNode::Prepass),
             )
-            .add_render_graph_edges(Core3d, (Nodes::Prepass, Node3d::CopyDeferredLightingId))
-            .add_render_graph_edges(Core3d, (Nodes::PreprocessBatches, NodePbr::ShadowPass));
+            .add_render_graph_edges(Core3d, (CoreNode::Prepass, Node3d::CopyDeferredLightingId))
+            .add_render_graph_edges(Core3d, (CoreNode::PreprocessLightBatches, NodePbr::ShadowPass));
 
         if let Some(debug) = self.debug.clone() {
             info!("Setting up render core inspection");
@@ -224,7 +232,8 @@ impl Plugin for RenderCore {
             .init_resource::<BindGroupProvider>()
             .init_resource::<IndirectRenderDataStore>()
             .init_resource::<DeferredIndirectChunkPipeline>()
-            .init_resource::<ViewBatchPreprocessPipeline>();
+            .init_resource::<ViewBatchPreprocessPipeline>()
+            .init_resource::<ViewBatchLightPreprocessPipeline>();
     }
 }
 
@@ -347,18 +356,16 @@ impl BindGroupProvider {
         )
     }
 
-    pub fn preprocess_mesh_metadata(
+    pub fn preprocess_light_view(
         &self,
         gpu: &RenderDevice,
-        icd: &IndirectChunkData,
+        view_lights_uniforms_binding: BindingResource,
+        depth_texture_binding: BindingResource,
     ) -> BindGroup {
         gpu.create_bind_group(
-            Some("preprocess_mesh_metadata_bind_group"),
-            &self.preprocess_mesh_metadata_bg_layout,
-            &BindGroupEntries::sequential((
-                icd.metadata_buffer().as_entire_binding(),
-                icd.instance_buffer().as_entire_binding(),
-            )),
+            Some("preprocess_light_view_bind_group"),
+            &self.preprocess_light_view_bg_layout,
+            &BindGroupEntries::sequential((view_lights_uniforms_binding, depth_texture_binding)),
         )
     }
 
