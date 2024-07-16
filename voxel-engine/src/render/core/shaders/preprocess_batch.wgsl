@@ -8,7 +8,7 @@
 #import bevy_render::maths
 
 const CHUNK_HALF_SIZE: f32 = 16.0 / 2.0;
-const CHUNK_SPHERE_RADIUS = (16.0 * sqrt(3.0)) * 0.5;
+const CHUNK_SPHERE_RADIUS: f32 = (16.0 * sqrt(3.0)) * 0.5;
 
 fn view_frustum_intersects_chunk_sphere(
     center: vec3f
@@ -54,7 +54,6 @@ fn preprocess_batch(
     @builtin(global_invocation_id) id: vec3<u32>
 ) {
     let index = id.z;
-    // TODO: fix up CPU-side validation so we can eliminate branches like this
     // Need to check before we index into the arrays to avoid weird runtime behaviour
     if arrayLength(&metadata_indices) <= index {
         return;

@@ -29,7 +29,7 @@ use crate::render::core::{utils::add_shader_constants, BindGroupProvider};
 use super::{
     indirect::ChunkInstanceData,
     shaders::{
-        BATCH_FRUSTUM_CULL_HANDLE, DEFERRED_INDIRECT_CHUNK_HANDLE, POPULATE_INDIRECT_BUFFER_HANDLE,
+        DEFERRED_INDIRECT_CHUNK_HANDLE, POPULATE_INDIRECT_BUFFER_HANDLE, PREPROCESS_BATCH_HANDLE,
     },
     utils::{add_mesh_pipeline_shader_defs, u32_shader_def},
 };
@@ -81,7 +81,7 @@ impl FromWorld for ViewBatchPreprocessPipeline {
         let provider = world.resource::<BindGroupProvider>();
 
         Self {
-            shader: BATCH_FRUSTUM_CULL_HANDLE,
+            shader: PREPROCESS_BATCH_HANDLE,
             view_layout: provider.preprocess_view_bg_layout.clone(),
             mesh_metadata_layout: provider.preprocess_mesh_metadata_bg_layout.clone(),
             batch_data_layout: provider.preprocess_batch_data_bg_layout.clone(),
