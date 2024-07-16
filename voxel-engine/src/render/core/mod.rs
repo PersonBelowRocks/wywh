@@ -159,6 +159,7 @@ impl Plugin for RenderCore {
                 Core3d,
                 (Nodes::PreprocessBatches, Node3d::Prepass, Nodes::Prepass),
             )
+            .add_render_graph_edges(Core3d, (Nodes::Prepass, Node3d::CopyDeferredLightingId))
             .add_render_graph_edges(Core3d, (Nodes::PreprocessBatches, NodePbr::ShadowPass));
 
         if let Some(debug) = self.debug.clone() {
