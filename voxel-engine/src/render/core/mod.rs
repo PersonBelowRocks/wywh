@@ -42,7 +42,7 @@ use gpu_chunk::{
     update_gpu_mesh_data, update_indirect_mesh_data_dependants, IndirectRenderDataStore,
     RemoveChunkMeshes, UpdateIndirectLODs,
 };
-use graph::{DeferredChunkNode, CoreNode, PreprocessBatchesNode, PreprocessLightBatchesNode};
+use graph::{CoreNode, DeferredChunkNode, PreprocessBatchesNode, PreprocessLightBatchesNode};
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkData};
 use lights::{
     inherit_parent_light_batches, initialize_and_queue_light_batch_buffers, queue_chunk_shadows,
@@ -161,14 +161,21 @@ impl Plugin for RenderCore {
             )
             .add_render_graph_node::<ViewNodeRunner<PreprocessLightBatchesNode>>(
                 Core3d,
-                CoreNode::PreprocessLightBatches
+                CoreNode::PreprocessLightBatches,
             )
             .add_render_graph_edges(
                 Core3d,
-                (CoreNode::PreprocessBatches, Node3d::Prepass, CoreNode::Prepass),
+                (
+                    CoreNode::PreprocessBatches,
+                    Node3d::Prepass,
+                    CoreNode::Prepass,
+                ),
             )
             .add_render_graph_edges(Core3d, (CoreNode::Prepass, Node3d::CopyDeferredLightingId))
-            .add_render_graph_edges(Core3d, (CoreNode::PreprocessLightBatches, NodePbr::ShadowPass));
+            .add_render_graph_edges(
+                Core3d,
+                (CoreNode::PreprocessLightBatches, NodePbr::ShadowPass),
+            );
 
         if let Some(debug) = self.debug.clone() {
             info!("Setting up render core inspection");

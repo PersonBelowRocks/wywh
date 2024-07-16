@@ -316,7 +316,11 @@ pub struct PreprocessLightBatchesNode {
     q_batches: QueryState<Read<ChunkBatchLod>>,
     // While we don't use the LightEntity in this node, we keep it here in the query so that it only matches
     // entities that have a LightEntity component, potentially catching a few errors early
-    q_lights: QueryState<(Read<LightEntity>, Read<ShadowView>, Option<Read<VisibleBatches>>)>,
+    q_lights: QueryState<(
+        Read<LightEntity>,
+        Read<ShadowView>,
+        Option<Read<VisibleBatches>>,
+    )>,
 }
 
 impl PreprocessLightBatchesNode {
@@ -406,8 +410,13 @@ impl ViewNode for PreprocessLightBatchesNode {
                 continue;
             };
 
-            let light_view_bind_groups =
+            let batch_bind_groups =
                 create_batch_data_bind_groups(gpu, bg_provider, view_batches.iter());
+
+            // Clear the count buffers
+            for buf in view_batches.values().map(|d| &d.count_buffer) {
+                clear_count_buffer(command_encoder, buf);
+            }
 
             let mut pass = begin_light_batch_preprocess_compute_pass(command_encoder);
             pass.set_pipeline(preprocess_pipeline);
@@ -429,7 +438,7 @@ impl ViewNode for PreprocessLightBatchesNode {
                 };
 
                 // Get the bind group for the batch in the light's view this time around
-                let batch_data_bind_group = light_view_bind_groups.get(batch_entity).unwrap();
+                let batch_data_bind_group = batch_bind_groups.get(batch_entity).unwrap();
 
                 pass.set_bind_group(0, &mesh_metadata_bind_group, &[]);
                 // Uniform offset for the lights

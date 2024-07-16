@@ -28,7 +28,9 @@ use crate::render::core::{utils::add_shader_constants, BindGroupProvider};
 
 use super::{
     indirect::ChunkInstanceData,
-    shaders::{DEFERRED_INDIRECT_CHUNK_HANDLE, PREPROCESS_BATCH_HANDLE, PREPROCESS_LIGHT_BATCH_HANDLE},
+    shaders::{
+        DEFERRED_INDIRECT_CHUNK_HANDLE, PREPROCESS_BATCH_HANDLE, PREPROCESS_LIGHT_BATCH_HANDLE,
+    },
     utils::{add_mesh_pipeline_shader_defs, u32_shader_def},
 };
 

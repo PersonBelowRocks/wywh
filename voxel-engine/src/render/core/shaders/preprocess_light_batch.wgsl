@@ -39,6 +39,7 @@ fn perspective_camera_near() -> f32 {
 /// Convert linear view z to ndc depth. 
 /// Note: View z input should be negative for values in front of the camera as -z is forward
 fn view_z_to_depth_ndc(view_z: f32) -> f32 {
+    // TODO: add shader defs to the pipeline so that these blocks are compiled when needed
 #ifdef VIEW_PROJECTION_PERSPECTIVE
     return -perspective_camera_near() / view_z;
 #else ifdef VIEW_PROJECTION_ORTHOGRAPHIC
@@ -55,14 +56,17 @@ fn position_world_to_clip(world_pos: vec3<f32>) -> vec4<f32> {
     return clip_pos;
 }
 
-
 fn is_corner_visible(corner: vec3f) -> bool {
     let clip_pos = position_world_to_clip(corner).xyz;
     let corner_depth = view_z_to_depth_ndc(clip_pos.z);
 
     let prepass_depth = textureLoad(depth_texture, vec2<i32>(clip_pos.xy), 0);
 
-    return corner_depth > prepass_depth;
+    // Just return true for now so that shadows are at least enabled (albeit extremely slow)
+
+    // TODO: do we dare try implement this on our own?
+    //    https://github.com/bevyengine/bevy/pull/12899/commits/93b47fbd6e1c84c15c8db407bcc23931467da44e
+    return true;
 }
 
 // Chunk half extent
@@ -72,16 +76,16 @@ fn any_corners_visible(center: vec3f) -> bool {
     var visible = false;
 
     // Bottom
-    visible &= is_corner_visible(center + vec3f(-C, -C, -C)); // min corner
-    visible &= is_corner_visible(center + vec3f( C, -C, -C));
-    visible &= is_corner_visible(center + vec3f(-C, -C,  C));
-    visible &= is_corner_visible(center + vec3f( C, -C,  C));
+    visible |= is_corner_visible(center + vec3f(-C, -C, -C)); // min corner
+    visible |= is_corner_visible(center + vec3f( C, -C, -C));
+    visible |= is_corner_visible(center + vec3f(-C, -C,  C));
+    visible |= is_corner_visible(center + vec3f( C, -C,  C));
 
     // Top
-    visible &= is_corner_visible(center + vec3f(-C,  C, -C));
-    visible &= is_corner_visible(center + vec3f( C,  C, -C));
-    visible &= is_corner_visible(center + vec3f(-C,  C,  C));
-    visible &= is_corner_visible(center + vec3f( C,  C,  C)); // max corner
+    visible |= is_corner_visible(center + vec3f(-C,  C, -C));
+    visible |= is_corner_visible(center + vec3f( C,  C, -C));
+    visible |= is_corner_visible(center + vec3f(-C,  C,  C));
+    visible |= is_corner_visible(center + vec3f( C,  C,  C)); // max corner
 
     return visible;
 }
