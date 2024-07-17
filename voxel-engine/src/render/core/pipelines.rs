@@ -29,7 +29,8 @@ use crate::render::core::{utils::add_shader_constants, BindGroupProvider};
 use super::{
     indirect::ChunkInstanceData,
     shaders::{
-        DEFERRED_INDIRECT_CHUNK_HANDLE, PREPROCESS_BATCH_HANDLE, PREPROCESS_LIGHT_BATCH_HANDLE,
+        CHUNK_FRAG_HANDLE, CHUNK_VERT_HANDLE, PREPROCESS_BATCH_HANDLE,
+        PREPROCESS_LIGHT_BATCH_HANDLE,
     },
     utils::{add_mesh_pipeline_shader_defs, u32_shader_def},
 };
@@ -192,7 +193,6 @@ pub struct DeferredIndirectChunkPipeline {
     pub view_layout_no_motion_vectors: BindGroupLayout,
     pub registry_layout: BindGroupLayout,
     pub indirect_chunk_bg_layout: BindGroupLayout,
-    pub shader: Handle<Shader>,
 }
 
 impl FromWorld for DeferredIndirectChunkPipeline {
@@ -234,7 +234,6 @@ impl FromWorld for DeferredIndirectChunkPipeline {
             view_layout_no_motion_vectors,
             registry_layout: layouts.registry_bg_layout.clone(),
             indirect_chunk_bg_layout: layouts.icd_quad_bg_layout.clone(),
-            shader: DEFERRED_INDIRECT_CHUNK_HANDLE.clone(),
         }
     }
 }
@@ -276,24 +275,24 @@ impl SpecializedRenderPipeline for DeferredIndirectChunkPipeline {
         );
 
         let mut frag_required = true;
-        // TODO: is this needed for our custom pipeline?
         if targets.iter().all(Option::is_none) {
             // if no targets are required then clear the list, so that no fragment shader is required
             // (though one may still be used for discarding depth buffer writes)
             targets.clear();
             frag_required = false;
+            info!("NO FRAGMENT REQUIRED");
         }
 
         RenderPipelineDescriptor {
             label: Some("indirect_chunk_render_pipeline".into()),
             vertex: VertexState {
-                shader: self.shader.clone(),
+                shader: CHUNK_VERT_HANDLE,
                 entry_point: "chunk_vertex".into(),
                 shader_defs: shader_defs.clone(),
                 buffers: vec![chunk_indirect_instance_buffer_layout(0)],
             },
             fragment: frag_required.then(|| FragmentState {
-                shader: self.shader.clone(),
+                shader: CHUNK_FRAG_HANDLE,
                 entry_point: "chunk_fragment".into(),
                 shader_defs: shader_defs.clone(),
                 targets,

@@ -44,7 +44,7 @@ pub fn add_mesh_pipeline_shader_defs(key: MeshPipelineKey, shader_defs: &mut Vec
 
     if key.msaa_samples() > 1 {
         shader_defs.push("MULTISAMPLED".into());
-    };
+    }
 
     if key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO) {
         shader_defs.push("DEPTH_CLAMP_ORTHO".into());

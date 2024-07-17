@@ -13,7 +13,8 @@ pub const TYPES_HANDLE: Handle<Shader> = Handle::weak_from_u128(1378018199763387
 pub const UTILS_HANDLE: Handle<Shader> = Handle::weak_from_u128(4464360603291233);
 pub const PREPROCESS_BATCH_HANDLE: Handle<Shader> = Handle::weak_from_u128(6547967980067631);
 pub const PREPROCESS_LIGHT_BATCH_HANDLE: Handle<Shader> = Handle::weak_from_u128(2910271245758926);
-pub const DEFERRED_INDIRECT_CHUNK_HANDLE: Handle<Shader> = Handle::weak_from_u128(1209756888212873);
+pub const CHUNK_VERT_HANDLE: Handle<Shader> = Handle::weak_from_u128(1209756888212873);
+pub const CHUNK_FRAG_HANDLE: Handle<Shader> = Handle::weak_from_u128(9210096709100541);
 
 /// Loads the built-in voxel engine shaders.
 pub fn load_internal_shaders(app: &mut App) {
@@ -47,10 +48,6 @@ pub fn load_internal_shaders(app: &mut App) {
         "preprocess_light_batch.wgsl",
         Shader::from_wgsl
     );
-    load_internal_asset!(
-        app,
-        DEFERRED_INDIRECT_CHUNK_HANDLE,
-        "deferred_indirect_chunk.wgsl",
-        Shader::from_wgsl
-    );
+    load_internal_asset!(app, CHUNK_VERT_HANDLE, "chunk_vert.wgsl", Shader::from_wgsl);
+    load_internal_asset!(app, CHUNK_FRAG_HANDLE, "chunk_frag.wgsl", Shader::from_wgsl);
 }
