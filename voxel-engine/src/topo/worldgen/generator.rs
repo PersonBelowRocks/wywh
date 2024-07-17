@@ -1,5 +1,7 @@
+use std::cmp::min;
+
 use bevy::{
-    math::ivec3,
+    math::{ivec2, ivec3, IVec2, Vec3Swizzles},
     prelude::{Event, IVec3},
 };
 use noise::{NoiseFn, Perlin};
@@ -67,12 +69,24 @@ impl Generator {
             palette,
             default_rotation: BlockModelRotation::new(Face::North, Face::Top).unwrap(),
             noise: Perlin::new(seed),
-            scale: 0.1,
+            scale: 0.01,
         }
     }
 
     pub fn noise(&self, pos: IVec3) -> f64 {
         self.noise.get((pos.as_dvec3() * self.scale).to_array())
+    }
+
+    pub fn block_corner_noise_2d(&self, pos_2d: IVec2) -> f64 {
+        let mut total = 0.0;
+
+        for k in [0, 3] {
+            for j in [0, 3] {
+                total += self.noise_mb_2d((pos_2d * SubdividedBlock::SUBDIVISIONS) + ivec2(k, j));
+            }
+        }
+
+        total / 4.0
     }
 
     /// Calculate the average noise from all 8 microblock corners of the given position.
@@ -93,6 +107,11 @@ impl Generator {
     pub fn noise_mb(&self, pos_mb: IVec3) -> f64 {
         self.noise
             .get((pos_mb.as_dvec3() * (self.scale / 4.0)).to_array())
+    }
+
+    pub fn noise_mb_2d(&self, pos_mb_2d: IVec2) -> f64 {
+        self.noise
+            .get((pos_mb_2d.as_dvec2() * (self.scale / 4.0)).to_array())
     }
 
     #[inline]
@@ -118,8 +137,8 @@ impl Generator {
         let stone_block = BlockVoxel::new_full(self.palette.stone);
 
         let ws_min = cs_pos.worldspace_min();
-        let ws_min_sd = ws_min * 4;
-        let _ws_max = cs_pos.worldspace_max();
+        let ws_min_sd = ws_min * SubdividedBlock::SUBDIVISIONS;
+        let ws_max = cs_pos.worldspace_max();
 
         if cs_pos.y() < 0 {
             for x in 0..Chunk::SIZE {
@@ -136,41 +155,60 @@ impl Generator {
             return Ok(());
         }
 
-        sd_access.set(
-            ivec3(0, 0, 0),
-            ChunkAccessInput::new(BlockVoxel::new_full(self.palette.debug)),
-        )?;
-
+        // FIXME: this entire section of code produces broken terrain, fix it
         for x in 0..Chunk::SIZE {
-            for y in 0..Chunk::SIZE {
-                for z in 0..Chunk::SIZE {
-                    let ls_pos = ivec3(x, y, z);
-                    let ws_pos = ls_pos + ws_min;
+            for z in 0..Chunk::SIZE {
+                let ls_pos_2d = ivec2(x, z);
+                let ws_pos_2d = ls_pos_2d + ws_min.xz();
 
-                    let avg_corner_noise = self.block_corner_noise(ws_pos);
+                let avg_noise = self.block_corner_noise_2d(ws_pos_2d);
 
-                    if avg_corner_noise > THRESHOLD {
+                let height = avg_noise * 20.0 + 10.0;
+                let floored_height = height.floor() as i32;
+
+                if floored_height < 0 {
+                    continue;
+                }
+
+                if floored_height >= ws_max.y {
+                    for y in 0..Chunk::SIZE {
+                        let ls_pos = ivec3(x, y, z);
+
                         sd_access.set(ls_pos, ChunkAccessInput::new(stone_block.clone()))?;
-                    // This test here is a decent-ish hueristic check that discards a lot of empty blocks (void) but
-                    // includes enough edges and corners and stuff that it makes the resulting terrain smoother
-                    } else if avg_corner_noise > (THRESHOLD / 2.0) {
-                        for mb_x in 0..SubdividedBlock::SUBDIVISIONS {
-                            for mb_y in 0..SubdividedBlock::SUBDIVISIONS {
-                                for mb_z in 0..SubdividedBlock::SUBDIVISIONS {
-                                    let mb_pos = ivec3(mb_x, mb_y, mb_z);
-                                    let ls_pos_sd =
-                                        mb_pos + (ls_pos * SubdividedBlock::SUBDIVISIONS);
+                    }
+                } else {
+                    let max_y = floored_height - ws_min.y;
 
-                                    let ws_pos_sd = ls_pos_sd + ws_min_sd;
+                    if max_y < 0 {
+                        continue;
+                    }
 
-                                    let noise = self.noise_mb(ws_pos_sd);
-                                    if noise > THRESHOLD {
-                                        sd_access.set_mb(
-                                            ls_pos_sd,
-                                            Microblock::new(self.palette.stone),
-                                        )?;
-                                    }
-                                }
+                    for y in 0..max_y {
+                        let ls_pos = ivec3(x, y, z);
+
+                        sd_access.set(ls_pos, ChunkAccessInput::new(stone_block.clone()))?;
+                    }
+
+                    for mb_x in 0..4 {
+                        for mb_z in 0..4 {
+                            let ls_pos_mb_2d =
+                                ivec2(mb_x, mb_z) + (ls_pos_2d * SubdividedBlock::SUBDIVISIONS);
+                            let ws_pos_mb_2d = ls_pos_mb_2d + ws_min_sd.xz();
+                            let avg_noise = self.noise_mb_2d(ws_pos_mb_2d);
+
+                            let height = avg_noise * 20.0 + 10.0;
+                            let leftovers = (height.fract() * 4.0).floor() as i32;
+
+                            if leftovers < 0 {
+                                continue;
+                            }
+
+                            for mb_y in 0..leftovers {
+                                let y = mb_y + (max_y * SubdividedBlock::SUBDIVISIONS);
+
+                                let ls_pos_mb = ivec3(ls_pos_mb_2d.x, y, ls_pos_mb_2d.y);
+
+                                sd_access.set_mb(ls_pos_mb, Microblock::new(self.palette.stone))?;
                             }
                         }
                     }
