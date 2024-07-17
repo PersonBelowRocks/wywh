@@ -194,7 +194,10 @@ pub fn queue_chunk_shadows(
             let pipeline_id = pipelines.specialize(
                 &pipeline_cache,
                 &pipeline,
-                ChunkPipelineKey { inner: light_key },
+                ChunkPipelineKey {
+                    inner: light_key,
+                    shadow_pass: true,
+                },
             );
 
             for &batch_entity in visible_batches.iter() {

@@ -95,6 +95,7 @@ pub fn queue_deferred_chunks(
             ChunkPipelineKey {
                 inner: view_key
                     | MeshPipelineKey::from_primitive_topology(PrimitiveTopology::TriangleList),
+                shadow_pass: false,
             },
         );
 

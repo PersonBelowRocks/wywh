@@ -38,6 +38,7 @@ fn deferred_output(in: PrepassOutput, world_normal: vec3f, pbr_input: PbrInput) 
 
 @fragment
 fn chunk_fragment(in: PrepassOutput) -> FragmentOutput {
+#ifndef SHADOW_PASS
     let quad = quads[in.quad_idx];
     let face = extract_face(quad);
     let normal = normal_from_face(face);
@@ -45,11 +46,16 @@ fn chunk_fragment(in: PrepassOutput) -> FragmentOutput {
     var pbr_input = create_pbr_input(in, quad);
     pbr_input.material.base_color.a = 1.0;
 
-    let out = deferred_output(in, normal, pbr_input);
+    var out = deferred_output(in, normal, pbr_input);
+#endif
 
-    #ifdef DEPTH_CLAMP_ORTHO
-        out.frag_depth = in.clip_position_unclamped.z;
-    #endif
+#ifdef SHADOW_PASS
+    var out: FragmentOutput;
+
+#ifdef DEPTH_CLAMP_ORTHO
+    out.frag_depth = in.clip_position_unclamped.z;
+#endif // DEPTH_CLAMP_ORTHO
+#endif // SHADOW_PASS
 
     return out;
 }

@@ -238,9 +238,20 @@ impl FromWorld for DeferredIndirectChunkPipeline {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deref)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ChunkPipelineKey {
     pub inner: MeshPipelineKey,
+    pub shadow_pass: bool,
+}
+
+impl ChunkPipelineKey {
+    pub fn msaa_samples(&self) -> u32 {
+        self.inner.msaa_samples()
+    }
+
+    pub fn contains(&self, key: MeshPipelineKey) -> bool {
+        self.inner.contains(key)
+    }
 }
 
 impl SpecializedRenderPipeline for DeferredIndirectChunkPipeline {
@@ -255,6 +266,10 @@ impl SpecializedRenderPipeline for DeferredIndirectChunkPipeline {
 
         add_shader_constants(&mut shader_defs);
         add_mesh_pipeline_shader_defs(key.inner, &mut shader_defs);
+
+        if key.shadow_pass {
+            shader_defs.push("SHADOW_PASS".into());
+        }
 
         let mesh_view_layout = if key.contains(MeshPipelineKey::MOTION_VECTOR_PREPASS) {
             self.view_layout_motion_vectors.clone()
@@ -274,14 +289,15 @@ impl SpecializedRenderPipeline for DeferredIndirectChunkPipeline {
             key.contains(MeshPipelineKey::DEFERRED_PREPASS),
         );
 
-        let mut frag_required = true;
         if targets.iter().all(Option::is_none) {
             // if no targets are required then clear the list, so that no fragment shader is required
             // (though one may still be used for discarding depth buffer writes)
             targets.clear();
-            frag_required = false;
-            info!("NO FRAGMENT REQUIRED");
         }
+
+        let frag_required = !targets.is_empty()
+            || key.contains(MeshPipelineKey::DEPTH_CLAMP_ORTHO)
+            || key.contains(MeshPipelineKey::MAY_DISCARD);
 
         RenderPipelineDescriptor {
             label: Some("indirect_chunk_render_pipeline".into()),
