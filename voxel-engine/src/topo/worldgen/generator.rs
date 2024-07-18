@@ -170,7 +170,7 @@ impl Generator {
                     continue;
                 }
 
-                if floored_height >= ws_max.y {
+                if floored_height > ws_max.y {
                     for y in 0..Chunk::SIZE {
                         let ls_pos = ivec3(x, y, z);
 
@@ -193,17 +193,20 @@ impl Generator {
                         for mb_z in 0..4 {
                             let ls_pos_mb_2d =
                                 ivec2(mb_x, mb_z) + (ls_pos_2d * SubdividedBlock::SUBDIVISIONS);
+
                             let ws_pos_mb_2d = ls_pos_mb_2d + ws_min_sd.xz();
                             let avg_noise = self.noise_mb_2d(ws_pos_mb_2d);
 
                             let height = avg_noise * 20.0 + 10.0;
-                            let leftovers = (height.fract() * 4.0).floor() as i32;
+                            let height_mb = (height * 4.0).floor() as i32;
+                            let leftovers =
+                                height_mb - (floored_height * SubdividedBlock::SUBDIVISIONS);
 
                             if leftovers < 0 {
                                 continue;
                             }
 
-                            for mb_y in 0..leftovers {
+                            for mb_y in 0..min(leftovers, 3) {
                                 let y = mb_y + (max_y * SubdividedBlock::SUBDIVISIONS);
 
                                 let ls_pos_mb = ivec3(ls_pos_mb_2d.x, y, ls_pos_mb_2d.y);
