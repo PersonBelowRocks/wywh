@@ -16,7 +16,7 @@ use super::{
     gpu_chunk::IndirectRenderDataStore,
     gpu_registries::RegistryBindGroup,
     phase::DeferredBatch3d,
-    pipelines::{ChunkPipelineKey, DeferredIndirectChunkPipeline},
+    pipelines::{ChunkPipelineKey, ChunkRenderPipeline},
 };
 
 /// Queue chunks for the render phase
@@ -35,9 +35,9 @@ pub fn queue_deferred_chunks(
 
     //////////////////////////////////////////////////////////////////////////
     functions: Res<DrawFunctions<DeferredBatch3d>>,
-    pipeline: Res<DeferredIndirectChunkPipeline>,
+    pipeline: Res<ChunkRenderPipeline>,
     pipeline_cache: Res<PipelineCache>,
-    mut pipelines: ResMut<SpecializedRenderPipelines<DeferredIndirectChunkPipeline>>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<ChunkRenderPipeline>>,
     //////////////////////////////////////////////////////////////////////////
     registry_bg: Option<Res<RegistryBindGroup>>,
     mesh_data: Res<IndirectRenderDataStore>,

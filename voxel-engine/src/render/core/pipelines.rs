@@ -186,16 +186,16 @@ pub fn create_pipelines(
     cmds.insert_resource(ViewBatchLightPreprocessPipelineId(id));
 }
 
-/// The render pipeline for chunk multidraw
+/// The render pipeline for indirect deferred chunk rendering
 #[derive(Resource, Clone)]
-pub struct DeferredIndirectChunkPipeline {
+pub struct ChunkRenderPipeline {
     pub view_layout_motion_vectors: BindGroupLayout,
     pub view_layout_no_motion_vectors: BindGroupLayout,
     pub registry_layout: BindGroupLayout,
     pub indirect_chunk_bg_layout: BindGroupLayout,
 }
 
-impl FromWorld for DeferredIndirectChunkPipeline {
+impl FromWorld for ChunkRenderPipeline {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
 
@@ -254,7 +254,7 @@ impl ChunkPipelineKey {
     }
 }
 
-impl SpecializedRenderPipeline for DeferredIndirectChunkPipeline {
+impl SpecializedRenderPipeline for ChunkRenderPipeline {
     type Key = ChunkPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {

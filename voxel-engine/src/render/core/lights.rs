@@ -22,7 +22,7 @@ use super::{
     commands::DrawDeferredBatch,
     gpu_chunk::IndirectRenderDataStore,
     gpu_registries::RegistryBindGroup,
-    pipelines::{ChunkPipelineKey, DeferredIndirectChunkPipeline},
+    pipelines::{ChunkPipelineKey, ChunkRenderPipeline},
     views::{IndirectViewBatch, ViewBatchBuffersStore},
     BindGroupProvider,
 };
@@ -157,9 +157,9 @@ pub fn queue_chunk_shadows(
 
     //////////////////////////////////////////////////////////////////////////
     functions: Res<DrawFunctions<Shadow>>,
-    pipeline: Res<DeferredIndirectChunkPipeline>,
+    pipeline: Res<ChunkRenderPipeline>,
     pipeline_cache: Res<PipelineCache>,
-    mut pipelines: ResMut<SpecializedRenderPipelines<DeferredIndirectChunkPipeline>>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<ChunkRenderPipeline>>,
     //////////////////////////////////////////////////////////////////////////
     registry_bg: Option<Res<RegistryBindGroup>>,
     mesh_data: Res<IndirectRenderDataStore>,

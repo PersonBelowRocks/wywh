@@ -3,6 +3,7 @@ mod commands;
 mod gpu_chunk;
 mod gpu_registries;
 mod graph;
+mod hzb;
 mod indirect;
 mod lights;
 mod phase;
@@ -49,7 +50,7 @@ use lights::{
 };
 use phase::DeferredBatch3d;
 use pipelines::{
-    create_pipelines, DeferredIndirectChunkPipeline, ViewBatchLightPreprocessPipeline,
+    create_pipelines, ChunkRenderPipeline, ViewBatchLightPreprocessPipeline,
     ViewBatchPreprocessPipeline,
 };
 use queue::queue_deferred_chunks;
@@ -63,6 +64,7 @@ use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     texture::GpuFaceTexture,
 };
+use crate::render::core::hzb::{DrawDirectionalLightDepth, HzbPhase};
 use crate::render::lod::LevelOfDetail;
 use crate::topo::world::ChunkPos;
 use crate::VoxelPlugin;
@@ -138,10 +140,12 @@ impl Plugin for RenderCore {
         render_app
             // Draw functions
             .init_resource::<DrawFunctions<DeferredBatch3d>>()
+            .init_resource::<DrawFunctions<HzbPhase>>()
             // Render phases
             .init_resource::<ViewSortedRenderPhases<DeferredBatch3d>>()
+            .init_resource::<ViewSortedRenderPhases<HzbPhase>>()
             // Pipeline stores
-            .init_resource::<SpecializedRenderPipelines<DeferredIndirectChunkPipeline>>()
+            .init_resource::<SpecializedRenderPipelines<ChunkRenderPipeline>>()
             .init_resource::<SpecializedComputePipelines<ViewBatchPreprocessPipeline>>()
             .init_resource::<SpecializedComputePipelines<ViewBatchLightPreprocessPipeline>>()
             // Misc
@@ -154,6 +158,7 @@ impl Plugin for RenderCore {
         render_app
             .add_render_command::<DeferredBatch3d, DrawDeferredBatch>()
             .add_render_command::<Shadow, DrawDeferredBatch>()
+            .add_render_command::<HzbPhase, DrawDirectionalLightDepth>()
             .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, CoreNode::Prepass)
             .add_render_graph_node::<ViewNodeRunner<PreprocessBatchesNode>>(
                 Core3d,
@@ -238,7 +243,7 @@ impl Plugin for RenderCore {
         render_app
             .init_resource::<BindGroupProvider>()
             .init_resource::<IndirectRenderDataStore>()
-            .init_resource::<DeferredIndirectChunkPipeline>()
+            .init_resource::<ChunkRenderPipeline>()
             .init_resource::<ViewBatchPreprocessPipeline>()
             .init_resource::<ViewBatchLightPreprocessPipeline>();
     }
