@@ -3,9 +3,9 @@ mod commands;
 mod gpu_chunk;
 mod gpu_registries;
 mod graph;
-mod hzb;
 mod indirect;
 mod lights;
+mod occlusion;
 mod phase;
 mod pipelines;
 mod queue;
@@ -64,7 +64,6 @@ use crate::data::{
     systems::{VoxelColorArrayTexture, VoxelNormalArrayTexture},
     texture::GpuFaceTexture,
 };
-use crate::render::core::hzb::{DrawDirectionalLightDepth, HzbPhase};
 use crate::render::lod::LevelOfDetail;
 use crate::topo::world::ChunkPos;
 use crate::VoxelPlugin;
@@ -140,10 +139,8 @@ impl Plugin for RenderCore {
         render_app
             // Draw functions
             .init_resource::<DrawFunctions<DeferredBatch3d>>()
-            .init_resource::<DrawFunctions<HzbPhase>>()
             // Render phases
             .init_resource::<ViewSortedRenderPhases<DeferredBatch3d>>()
-            .init_resource::<ViewSortedRenderPhases<HzbPhase>>()
             // Pipeline stores
             .init_resource::<SpecializedRenderPipelines<ChunkRenderPipeline>>()
             .init_resource::<SpecializedComputePipelines<ViewBatchPreprocessPipeline>>()
@@ -158,7 +155,6 @@ impl Plugin for RenderCore {
         render_app
             .add_render_command::<DeferredBatch3d, DrawDeferredBatch>()
             .add_render_command::<Shadow, DrawDeferredBatch>()
-            .add_render_command::<HzbPhase, DrawDirectionalLightDepth>()
             .add_render_graph_node::<ViewNodeRunner<DeferredChunkNode>>(Core3d, CoreNode::Prepass)
             .add_render_graph_node::<ViewNodeRunner<PreprocessBatchesNode>>(
                 Core3d,
@@ -286,6 +282,7 @@ pub(crate) struct BindGroupProvider {
     pub preprocess_view_bg_layout: BindGroupLayout,
     pub preprocess_light_view_bg_layout: BindGroupLayout,
     pub preprocess_batch_data_bg_layout: BindGroupLayout,
+    pub construct_hzb_level_bg_layout: BindGroupLayout,
 }
 
 impl FromWorld for BindGroupProvider {
@@ -348,6 +345,16 @@ impl FromWorld for BindGroupProvider {
                         binding_types::storage_buffer_read_only::<u32>(false),
                         binding_types::storage_buffer::<IndexedIndirectArgs>(false),
                         binding_types::storage_buffer_sized(false, Some(u32::SHADER_SIZE)),
+                    ),
+                ),
+            ),
+            construct_hzb_level_bg_layout: gpu.create_bind_group_layout(
+                Some("construct_hzb_level_bg_layout"),
+                &BindGroupLayoutEntries::sequential(
+                    ShaderStages::FRAGMENT,
+                    (
+                        binding_types::texture_depth_2d(),
+                        binding_types::sampler(SamplerBindingType::NonFiltering),
                     ),
                 ),
             ),
