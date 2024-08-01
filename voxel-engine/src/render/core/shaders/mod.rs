@@ -16,6 +16,7 @@ pub const PREPROCESS_LIGHT_BATCH_HANDLE: Handle<Shader> = Handle::weak_from_u128
 pub const CHUNK_VERT_HANDLE: Handle<Shader> = Handle::weak_from_u128(1209756888212873);
 pub const CHUNK_FRAG_HANDLE: Handle<Shader> = Handle::weak_from_u128(9210096709100541);
 pub const CONSTRUCT_HZB_LEVEL_HANDLE: Handle<Shader> = Handle::weak_from_u128(2462168342385241);
+pub const OCCLUDER_DEPTH_HANDLE: Handle<Shader> = Handle::weak_from_u128(1240701701561346);
 
 /// Loads the built-in voxel engine shaders.
 pub fn load_internal_shaders(app: &mut App) {
@@ -55,6 +56,12 @@ pub fn load_internal_shaders(app: &mut App) {
         app,
         CONSTRUCT_HZB_LEVEL_HANDLE,
         "construct_hzb_level.wgsl",
+        Shader::from_wgsl
+    );
+    load_internal_asset!(
+        app,
+        OCCLUDER_DEPTH_HANDLE,
+        "occluder_depth.wgsl",
         Shader::from_wgsl
     );
 }

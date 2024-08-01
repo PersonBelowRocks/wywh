@@ -16,6 +16,7 @@ mod views;
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::pbr::graph::NodePbr;
 use bevy::pbr::Shadow;
+use bevy::render::globals::GlobalsUniform;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
 use bevy::render::render_resource::{BindGroup, BindGroupEntries, BindingResource, ShaderSize};
@@ -283,6 +284,7 @@ pub(crate) struct BindGroupProvider {
     pub preprocess_light_view_bg_layout: BindGroupLayout,
     pub preprocess_batch_data_bg_layout: BindGroupLayout,
     pub construct_hzb_level_bg_layout: BindGroupLayout,
+    pub prepass_view_no_mv_bg_layout: BindGroupLayout,
 }
 
 impl FromWorld for BindGroupProvider {
@@ -355,6 +357,18 @@ impl FromWorld for BindGroupProvider {
                     (
                         binding_types::texture_depth_2d(),
                         binding_types::sampler(SamplerBindingType::NonFiltering),
+                    ),
+                ),
+            ),
+            prepass_view_no_mv_bg_layout: gpu.create_bind_group_layout(
+                Some("prepass_view_no_mv_bg_layout"),
+                &BindGroupLayoutEntries::sequential(
+                    ShaderStages::VERTEX_FRAGMENT,
+                    (
+                        // View
+                        binding_types::uniform_buffer::<ViewUniform>(true),
+                        // Globals
+                        binding_types::uniform_buffer::<GlobalsUniform>(false),
                     ),
                 ),
             ),

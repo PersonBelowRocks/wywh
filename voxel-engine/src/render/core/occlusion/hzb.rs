@@ -1,4 +1,7 @@
 use crate::render::core::commands::{DrawDeferredBatch, IndirectBatchDraw, SetIndirectChunkQuads};
+use crate::render::core::occlusion::occluders::{
+    OccluderBoxes, OccluderDepthPipeline, OccluderModel, OCCLUDER_BOX_INDICES,
+};
 use crate::render::core::pipelines::{ChunkPipelineKey, ChunkRenderPipeline};
 use crate::render::core::shaders::CONSTRUCT_HZB_LEVEL_HANDLE;
 use crate::render::core::utils::u32_shader_def;
@@ -7,24 +10,25 @@ use crate::render::lod::LevelOfDetail;
 use crate::topo::controller::{ChunkBatchLod, VisibleBatches};
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::system::lifetimeless::Read;
-use bevy::pbr::{LightEntity, MeshPipelineKey, SetMeshViewBindGroup};
+use bevy::pbr::{LightEntity, MeshPipelineKey, PrepassViewBindGroup, SetMeshViewBindGroup};
 use bevy::render::camera::Viewport;
+use bevy::render::render_graph::RunSubGraphError;
 use bevy::render::render_phase::{
     CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions, PhaseItem, PhaseItemExtraIndex,
     SetItemPipeline, SortedPhaseItem, ViewSortedRenderPhases,
 };
 use bevy::render::render_resource::{
-    BindGroupLayout, CachedComputePipelineId, CachedRenderPipelineId, CompareFunction,
-    ComputePipelineDescriptor, DepthBiasState, DepthStencilState, Extent3d, FragmentState, LoadOp,
-    MultisampleState, Operations, PipelineCache, PolygonMode, PrimitiveState,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-    SpecializedComputePipeline, SpecializedRenderPipeline, SpecializedRenderPipelines,
-    StencilState, StoreOp, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    BindGroup, BindGroupLayout, Buffer, CachedComputePipelineId, CachedRenderPipelineId,
+    CompareFunction, ComputePipelineDescriptor, DepthBiasState, DepthStencilState, Extent3d,
+    FragmentState, IndexFormat, LoadOp, MultisampleState, Operations, PipelineCache, PolygonMode,
+    PrimitiveState, RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, SpecializedComputePipeline, SpecializedRenderPipeline,
+    SpecializedRenderPipelines, StencilState, StoreOp, TextureAspect, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 use bevy::render::renderer::RenderDevice;
 use bevy::render::texture::DepthAttachment;
-use bevy::render::view::ExtractedView;
+use bevy::render::view::{ExtractedView, ViewUniformOffset};
 use bevy::{
     ecs::entity::EntityHashMap,
     prelude::*,
@@ -104,7 +108,7 @@ pub fn create_hzb_texture_view_desc(label: &str) -> TextureViewDescriptor {
 pub struct HzbCache(EntityHashMap<CachedHzbMipChain>);
 
 impl HzbCache {
-    pub fn try_get_view_hzb(&self, view_entity: Entity) -> Option<&CachedHzbMipChain> {
+    pub fn get_view_hzb(&self, view_entity: Entity) -> Option<&CachedHzbMipChain> {
         self.0.get(&view_entity)
     }
 
@@ -217,5 +221,145 @@ impl FromWorld for HzbLevelPipeline {
             layout,
             pipeline_id,
         }
+    }
+}
+
+pub struct HzbConstructionNode {
+    q_views: QueryState<Read<ViewUniformOffset>>,
+}
+
+impl FromWorld for HzbConstructionNode {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            q_views: QueryState::from_world(world),
+        }
+    }
+}
+
+fn get_occluder_depth_pipeline(world: &World) -> Option<&RenderPipeline> {
+    let pipeline_cache = world.resource::<PipelineCache>();
+    let pipeline_id = world.resource::<OccluderDepthPipeline>().pipeline_id;
+
+    pipeline_cache.get_render_pipeline(pipeline_id)
+}
+
+fn get_hzb_level_pipeline(world: &World) -> Option<&RenderPipeline> {
+    let pipeline_cache = world.resource::<PipelineCache>();
+    let pipeline_id = world.resource::<HzbLevelPipeline>().pipeline_id;
+
+    pipeline_cache.get_render_pipeline(pipeline_id)
+}
+
+fn get_view_bind_group(world: &World) -> Option<&BindGroup> {
+    let view_bind_group = world.resource::<PrepassViewBindGroup>();
+    view_bind_group.no_motion_vectors.as_ref()
+}
+
+fn hzb_depth_pass<'w>(
+    world: &World,
+    ctx: &mut RenderContext<'w>,
+    q_views: &QueryState<Read<ViewUniformOffset>>,
+    occluder_model: &OccluderModel,
+    occluders: &OccluderBoxes,
+    queued_hzbs: &QueuedHzbViews,
+    hzb_cache: &HzbCache,
+    occluder_depth_pipeline: &RenderPipeline,
+    view_bind_group: &BindGroup,
+) -> bool {
+    let Some(occluder_instance_buffer) = occluders.buffer() else {
+        error!("Could not get occluder instance buffer");
+        return false;
+    };
+
+    let num_indices = OCCLUDER_BOX_INDICES.len() as u32;
+    let num_instances = occluders.len() as u32;
+
+    for queued in &queued_hzbs.0 {
+        let Some(view_offset) = q_views.get_manual(world, queued.view_entity).ok() else {
+            error!("Can't get view offset for {}", queued.view_entity);
+            continue;
+        };
+
+        let Some(hzb) = hzb_cache.get_view_hzb(queued.view_entity) else {
+            error!(
+                "View {} was queued for HZB building but didn't have an HZB",
+                queued.view_entity
+            );
+            continue;
+        };
+
+        let depth_attachment = hzb.depth_attachment.get_attachment(StoreOp::Store);
+
+        let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some("hzb_depth_pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(depth_attachment),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        pass.set_render_pipeline(occluder_depth_pipeline);
+
+        // Set the view bind group
+        pass.set_bind_group(0, view_bind_group, &[view_offset.offset]);
+
+        // Set the instance buffer
+        pass.set_vertex_buffer(0, occluder_instance_buffer.slice(..));
+
+        let index_buffer = occluder_model.index_buffer.slice(..);
+        pass.set_index_buffer(index_buffer, 0, IndexFormat::Uint32);
+
+        let vertex_buffer = occluder_model.vertex_buffer.slice(..);
+        pass.set_vertex_buffer(1, vertex_buffer);
+
+        pass.draw_indexed(0..num_indices, 0, 0..num_instances);
+    }
+
+    true
+}
+
+impl Node for HzbConstructionNode {
+    fn update(&mut self, world: &mut World) {
+        self.q_views.update_archetypes(world);
+    }
+
+    fn run<'w>(
+        &self,
+        _graph: &mut RenderGraphContext,
+        ctx: &mut RenderContext<'w>,
+        world: &'w World,
+    ) -> Result<(), NodeRunError> {
+        let Some(occluder_depth_pipeline) = get_occluder_depth_pipeline(world) else {
+            error!("Could not get occluder depth pipeline");
+            return Ok(());
+        };
+
+        let Some(view_bind_group) = get_view_bind_group(world) else {
+            error!("Could not get view bind group");
+            return Ok(());
+        };
+
+        let success = hzb_depth_pass(
+            world,
+            ctx,
+            &self.q_views,
+            world.resource::<OccluderModel>(),
+            world.resource::<OccluderBoxes>(),
+            world.resource::<QueuedHzbViews>(),
+            world.resource::<HzbCache>(),
+            occluder_depth_pipeline,
+            view_bind_group,
+        );
+
+        if !success {
+            return Ok(());
+        }
+
+        let Some(hzb_level_pipeline) = get_hzb_level_pipeline(world) else {
+            error!("Could not get HZB level pipeline");
+            return Ok(());
+        };
+
+        todo!()
     }
 }

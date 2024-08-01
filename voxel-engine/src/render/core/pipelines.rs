@@ -199,8 +199,9 @@ impl FromWorld for ChunkRenderPipeline {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderDevice>();
 
-        let layouts = world.resource::<BindGroupProvider>();
+        let bg_provider = world.resource::<BindGroupProvider>();
 
+        // TODO: create this layout in the bind group provider
         let view_layout_motion_vectors = gpu.create_bind_group_layout(
             "prepass_view_layout_motion_vectors",
             &BindGroupLayoutEntries::sequential(
@@ -216,24 +217,11 @@ impl FromWorld for ChunkRenderPipeline {
             ),
         );
 
-        let view_layout_no_motion_vectors: BindGroupLayout = gpu.create_bind_group_layout(
-            "prepass_view_layout_no_motion_vectors",
-            &BindGroupLayoutEntries::sequential(
-                ShaderStages::VERTEX_FRAGMENT,
-                (
-                    // View
-                    uniform_buffer::<ViewUniform>(true),
-                    // Globals
-                    uniform_buffer::<GlobalsUniform>(false),
-                ),
-            ),
-        );
-
         Self {
             view_layout_motion_vectors,
-            view_layout_no_motion_vectors,
-            registry_layout: layouts.registry_bg_layout.clone(),
-            indirect_chunk_bg_layout: layouts.icd_quad_bg_layout.clone(),
+            view_layout_no_motion_vectors: bg_provider.prepass_view_no_mv_bg_layout.clone(),
+            registry_layout: bg_provider.registry_bg_layout.clone(),
+            indirect_chunk_bg_layout: bg_provider.icd_quad_bg_layout.clone(),
         }
     }
 }
