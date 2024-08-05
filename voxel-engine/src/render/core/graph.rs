@@ -6,25 +6,21 @@ use bevy::{
     render::{
         camera::ExtractedCamera,
         diagnostic::RecordDiagnostics,
-        render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
+        render_graph::{NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_phase::{TrackedRenderPass, ViewSortedRenderPhases},
         render_resource::{
-            BindGroup, BindGroupEntries, BindingResource, Buffer, CommandEncoder,
-            CommandEncoderDescriptor, ComputePass, ComputePassDescriptor, ComputePipeline,
-            PipelineCache, RenderPassDescriptor, ShaderSize, StoreOp,
+            BindGroup, BindingResource, Buffer, CommandEncoder, CommandEncoderDescriptor,
+            ComputePass, ComputePassDescriptor, ComputePipeline, PipelineCache,
+            RenderPassDescriptor, ShaderSize, StoreOp,
         },
         renderer::{RenderContext, RenderDevice},
         texture::ColorAttachment,
         view::{ViewDepthTexture, ViewUniformOffset, ViewUniforms},
     },
 };
-use hb::HashMap;
 
 use crate::{
-    render::{
-        core::{pipelines::ViewBatchPreprocessPipeline, views::IndirectViewBatch},
-        lod::{LevelOfDetail, LodMap},
-    },
+    render::{core::views::IndirectViewBatch, lod::LevelOfDetail},
     topo::controller::{ChunkBatchLod, VisibleBatches},
 };
 
@@ -32,8 +28,8 @@ use super::{
     gpu_chunk::IndirectRenderDataStore,
     phase::DeferredBatch3d,
     pipelines::{
-        ViewBatchLightPreprocessPipeline, ViewBatchLightPreprocessPipelineId,
-        ViewBatchPreprocessPipelineId, PREPROCESS_BATCH_WORKGROUP_SIZE,
+        ViewBatchLightPreprocessPipelineId, ViewBatchPreprocessPipelineId,
+        PREPROCESS_BATCH_WORKGROUP_SIZE,
     },
     views::ViewBatchBuffersStore,
     BindGroupProvider,

@@ -1,33 +1,19 @@
-use crate::render::core::commands::{DrawDeferredBatch, IndirectBatchDraw, SetIndirectChunkQuads};
 use crate::render::core::lights::get_parent_light;
 use crate::render::core::occlusion::occluders::{
     OccluderBoxes, OccluderDepthPipeline, OccluderModel, OCCLUDER_BOX_INDICES,
 };
-use crate::render::core::pipelines::{ChunkPipelineKey, ChunkRenderPipeline};
 use crate::render::core::shaders::CONSTRUCT_HZB_LEVEL_HANDLE;
-use crate::render::core::utils::u32_shader_def;
 use crate::render::core::BindGroupProvider;
-use crate::render::lod::LevelOfDetail;
-use crate::topo::controller::{ChunkBatchLod, VisibleBatches};
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::system::lifetimeless::Read;
-use bevy::pbr::{LightEntity, MeshPipelineKey, PrepassViewBindGroup, SetMeshViewBindGroup};
-use bevy::render::camera::Viewport;
+use bevy::pbr::{LightEntity, PrepassViewBindGroup};
 use bevy::render::extract_component::ExtractComponent;
-use bevy::render::render_graph::RunSubGraphError;
-use bevy::render::render_phase::{
-    CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions, PhaseItem, PhaseItemExtraIndex,
-    SetItemPipeline, SortedPhaseItem, ViewSortedRenderPhases,
-};
 use bevy::render::render_resource::{
-    BindGroup, BindGroupLayout, Buffer, CachedComputePipelineId, CachedRenderPipelineId,
-    CompareFunction, ComputePipelineDescriptor, DepthBiasState, DepthStencilState, Extent3d,
-    FragmentState, ImageSubresourceRange, IndexFormat, LoadOp, MultisampleState, Operations,
-    PipelineCache, PolygonMode, PrimitiveState, RenderPassDepthStencilAttachment,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, SpecializedComputePipeline,
-    SpecializedRenderPipeline, SpecializedRenderPipelines, StencilState, StoreOp, TextureAspect,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension,
+    BindGroup, CachedComputePipelineId, CachedRenderPipelineId, CompareFunction, DepthBiasState,
+    DepthStencilState, Extent3d, FragmentState, ImageSubresourceRange, IndexFormat,
+    MultisampleState, PipelineCache, PrimitiveState, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, StencilState, StoreOp, TextureAspect, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 use bevy::render::renderer::RenderDevice;
 use bevy::render::texture::DepthAttachment;
@@ -37,12 +23,12 @@ use bevy::{
     prelude::*,
     render::{
         render_graph::{Node, NodeRunError, RenderGraphContext},
-        render_resource::{Texture, TextureView},
+        render_resource::Texture,
         renderer::RenderContext,
     },
 };
 use num::Integer;
-use std::cmp::{max, min};
+use std::cmp::min;
 
 pub const HZB_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 

@@ -1,14 +1,10 @@
 use bevy::{
-    pbr::{
-        LightEntity, LightMeta, MeshPipelineKey, Shadow, ShadowBinKey, ViewLightEntities,
-        ViewLightsUniformOffset,
-    },
+    pbr::{LightEntity, MeshPipelineKey, Shadow, ShadowBinKey, ViewLightEntities},
     prelude::*,
     render::{
         render_phase::{BinnedRenderPhaseType, DrawFunctions, ViewBinnedRenderPhases},
         render_resource::{
-            BindGroupEntries, BufferInitDescriptor, BufferUsages, PipelineCache,
-            SpecializedRenderPipelines,
+            BufferInitDescriptor, BufferUsages, PipelineCache, SpecializedRenderPipelines,
         },
         renderer::RenderDevice,
     },
@@ -24,7 +20,6 @@ use super::{
     gpu_registries::RegistryBindGroup,
     pipelines::{ChunkPipelineKey, ChunkRenderPipeline},
     views::{IndirectViewBatch, ViewBatchBuffersStore},
-    BindGroupProvider,
 };
 
 pub fn get_parent_light(light: &LightEntity) -> Entity {

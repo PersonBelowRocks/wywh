@@ -12,10 +12,7 @@ extern crate num_derive;
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use bevy::{
-    diagnostic::{Diagnostic, DiagnosticPath, RegisterDiagnostic},
-    prelude::*,
-};
+use bevy::prelude::*;
 use data::{
     registries::{block::BlockVariantRegistry, Registries, Registry},
     resourcepath::rpath,

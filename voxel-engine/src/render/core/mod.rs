@@ -48,7 +48,7 @@ use gpu_chunk::{
     RemoveChunkMeshes, UpdateIndirectLODs,
 };
 use graph::{CoreNode, DeferredChunkNode, PreprocessBatchesNode, PreprocessLightBatchesNode};
-use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkData};
+use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs};
 use lights::{
     inherit_parent_light_batches, initialize_and_queue_light_batch_buffers, queue_chunk_shadows,
 };
@@ -77,7 +77,6 @@ use crate::data::{
 };
 use crate::render::lod::LevelOfDetail;
 use crate::topo::world::ChunkPos;
-use crate::VoxelPlugin;
 
 use self::{
     gpu_chunk::{extract_chunk_mesh_data, AddChunkMeshes},

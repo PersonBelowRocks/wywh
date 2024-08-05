@@ -5,14 +5,9 @@ use bevy::{
         Diagnostic, DiagnosticMeasurement, DiagnosticPath, DiagnosticsStore, RegisterDiagnostic,
     },
     prelude::*,
-    render::{
-        extract_resource::{ExtractResource, ExtractResourcePlugin},
-        RenderApp,
-    },
+    render::RenderApp,
 };
 use cb::channel::*;
-
-use crate::VoxelPlugin;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum DiagRecStatus {

@@ -1,22 +1,13 @@
-use std::any::type_name;
-
 use bevy::{
-    ecs::{
-        query::ROQueryItem,
-        system::{lifetimeless::SRes, SystemParamItem},
-    },
     math::vec3,
-    pbr::MeshViewBindGroup,
     prelude::*,
     render::{
         mesh::PrimitiveTopology,
-        render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{
-            BindGroupDescriptor, BindGroupLayout, Buffer, BufferInitDescriptor, BufferUsages,
-            CachedRenderPipelineId, CompareFunction, DepthStencilState, Face, FrontFace,
-            MultisampleState, PipelineCache, PrimitiveState, RenderPipelineDescriptor, ShaderSize,
-            ShaderType, StencilState, StorageBuffer, TextureFormat, VertexAttribute,
-            VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+            Buffer, BufferInitDescriptor, BufferUsages, CachedRenderPipelineId, CompareFunction,
+            DepthStencilState, Face, FrontFace, PipelineCache, PrimitiveState,
+            RenderPipelineDescriptor, ShaderSize, ShaderType, StorageBuffer, TextureFormat,
+            VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
         },
         renderer::{RenderDevice, RenderQueue},
     },
@@ -27,7 +18,6 @@ use dn::new;
 use crate::{
     render::core::{shaders::OCCLUDER_DEPTH_HANDLE, BindGroupProvider},
     topo::world::{Chunk, ChunkPos},
-    util::ChunkMap,
 };
 
 pub const OCCLUDER_BOX_SIZE: f32 = Chunk::SIZE as f32;

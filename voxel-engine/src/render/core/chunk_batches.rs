@@ -3,8 +3,7 @@ use bevy::{
     render::{
         camera::ExtractedCamera,
         render_resource::{
-            BindGroup, BindGroupEntries, Buffer, BufferDescriptor, BufferInitDescriptor,
-            BufferUsages, ShaderSize,
+            Buffer, BufferDescriptor, BufferInitDescriptor, BufferUsages, ShaderSize,
         },
         renderer::RenderDevice,
         view::{ViewUniformOffset, ViewUniforms},
@@ -13,10 +12,7 @@ use bevy::{
 };
 use bytemuck::cast_slice;
 
-use crate::{
-    render::lod::LevelOfDetail,
-    topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches},
-};
+use crate::topo::controller::{ChunkBatch, ChunkBatchLod, VisibleBatches};
 
 use super::{
     gpu_chunk::IndirectRenderDataStore,

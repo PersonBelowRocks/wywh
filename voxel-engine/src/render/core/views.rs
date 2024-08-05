@@ -1,6 +1,5 @@
 use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::render::render_phase::ViewSortedRenderPhases;
-use bevy::render::render_resource::BindGroup;
 use bevy::{
     prelude::*,
     render::{render_resource::Buffer, Extract},
