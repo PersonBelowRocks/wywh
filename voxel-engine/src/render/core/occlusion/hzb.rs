@@ -250,9 +250,9 @@ fn get_hzb_level_pipeline(world: &World) -> Option<&RenderPipeline> {
     pipeline_cache.get_render_pipeline(pipeline_id)
 }
 
-fn get_view_bind_group(world: &World) -> Option<&BindGroup> {
-    let view_bind_group = world.resource::<PrepassViewBindGroup>();
-    view_bind_group.no_motion_vectors.as_ref()
+fn get_prepass_view_bind_group(world: &World) -> Option<&BindGroup> {
+    let prepass_view_bind_group = world.resource::<PrepassViewBindGroup>();
+    prepass_view_bind_group.no_motion_vectors.as_ref()
 }
 
 fn hzb_depth_pass<'w>(
@@ -264,7 +264,7 @@ fn hzb_depth_pass<'w>(
     queued_hzbs: &QueuedHzbViews,
     hzb_cache: &HzbCache,
     occluder_depth_pipeline: &RenderPipeline,
-    view_bind_group: &BindGroup,
+    prepass_view_bind_group: &BindGroup,
 ) -> bool {
     let Some(occluder_instance_buffer) = occluders.buffer() else {
         error!("Could not get occluder instance buffer");
@@ -301,7 +301,7 @@ fn hzb_depth_pass<'w>(
         pass.set_render_pipeline(occluder_depth_pipeline);
 
         // Set the view bind group
-        pass.set_bind_group(0, view_bind_group, &[view_offset.offset]);
+        pass.set_bind_group(0, prepass_view_bind_group, &[view_offset.offset]);
 
         // Set the instance buffer
         pass.set_vertex_buffer(0, occluder_instance_buffer.slice(..));
@@ -334,8 +334,8 @@ impl Node for HzbConstructionNode {
             return Ok(());
         };
 
-        let Some(view_bind_group) = get_view_bind_group(world) else {
-            error!("Could not get view bind group");
+        let Some(prepass_view_bind_group) = get_prepass_view_bind_group(world) else {
+            error!("Could not get prepass view bind group");
             return Ok(());
         };
 
@@ -348,7 +348,7 @@ impl Node for HzbConstructionNode {
             world.resource::<QueuedHzbViews>(),
             world.resource::<HzbCache>(),
             occluder_depth_pipeline,
-            view_bind_group,
+            prepass_view_bind_group,
         );
 
         if !success {
