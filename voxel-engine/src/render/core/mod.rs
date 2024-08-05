@@ -13,9 +13,12 @@ mod shaders;
 mod utils;
 mod views;
 
+pub use occlusion::hzb::ChunkHzbOcclusionCulling;
+
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::pbr::graph::NodePbr;
 use bevy::pbr::Shadow;
+use bevy::render::extract_component::ExtractComponentPlugin;
 use bevy::render::globals::GlobalsUniform;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
@@ -48,6 +51,13 @@ use graph::{CoreNode, DeferredChunkNode, PreprocessBatchesNode, PreprocessLightB
 use indirect::{ChunkInstanceData, GpuChunkMetadata, IndexedIndirectArgs, IndirectChunkData};
 use lights::{
     inherit_parent_light_batches, initialize_and_queue_light_batch_buffers, queue_chunk_shadows,
+};
+use occlusion::hzb::{
+    inherit_parent_light_hzb_culling_marker, prepare_view_hzbs, HzbCache, HzbConstructionNode,
+    HzbLevelPipeline, QueuedViewHzbs,
+};
+use occlusion::occluders::{
+    extract_occluders, prepare_occluders, OccluderBoxes, OccluderDepthPipeline, OccluderModel,
 };
 use phase::DeferredBatch3d;
 use pipelines::{
@@ -83,6 +93,8 @@ use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
 pub enum CoreSet {
     Extract,
     ManageViews,
+    PrepareOccluders,
+    PrepareViewHzbs,
     PrepareRegistryData,
     PrepareIndirectMeshData,
     UpdateIndirectMeshDataDependants,
@@ -92,7 +104,7 @@ pub enum CoreSet {
 
 #[derive(Clone, Resource)]
 pub struct RenderCoreDebug {
-    pub clear_inpsection: Receiver<()>,
+    pub clear_inspection: Receiver<()>,
     pub inspect_chunks: Receiver<ChunkPos>,
 }
 
@@ -108,6 +120,7 @@ impl Plugin for RenderCore {
         load_internal_shaders(app);
 
         app.add_plugins((
+            ExtractComponentPlugin::<ChunkHzbOcclusionCulling>::default(),
             ExtractResourcePlugin::<VoxelColorArrayTexture>::default(),
             ExtractResourcePlugin::<VoxelNormalArrayTexture>::default(),
         ));
@@ -129,7 +142,12 @@ impl Plugin for RenderCore {
                     // bevy adds the "ViewUniformOffset" component to views in the PrepareResources set and we
                     // need access to that offset when we initialize and build buffers for the visible batches in a view.
                     .after(RenderSet::PrepareResources),
-                CoreSet::PrepareRegistryData.in_set(RenderSet::Prepare),
+                (
+                    CoreSet::PrepareRegistryData,
+                    CoreSet::PrepareOccluders,
+                    CoreSet::PrepareViewHzbs,
+                )
+                    .in_set(RenderSet::Prepare),
                 CoreSet::Queue.in_set(RenderSet::Queue),
                 CoreSet::ManageViews
                     .after(RenderSet::ManageViews)
@@ -147,6 +165,9 @@ impl Plugin for RenderCore {
             .init_resource::<SpecializedComputePipelines<ViewBatchPreprocessPipeline>>()
             .init_resource::<SpecializedComputePipelines<ViewBatchLightPreprocessPipeline>>()
             // Misc
+            .init_resource::<QueuedViewHzbs>()
+            .init_resource::<HzbCache>()
+            .init_resource::<OccluderBoxes>()
             .init_resource::<InspectChunks>()
             .init_resource::<ViewBatchBuffersStore>()
             .init_resource::<UpdateIndirectLODs>()
@@ -165,6 +186,9 @@ impl Plugin for RenderCore {
                 Core3d,
                 CoreNode::PreprocessLightBatches,
             )
+            .add_render_graph_node::<HzbConstructionNode>(Core3d, CoreNode::HzbPass)
+            .add_render_graph_edge(Core3d, CoreNode::HzbPass, CoreNode::PreprocessBatches)
+            .add_render_graph_edge(Core3d, CoreNode::HzbPass, CoreNode::PreprocessLightBatches)
             .add_render_graph_edges(
                 Core3d,
                 (
@@ -195,6 +219,7 @@ impl Plugin for RenderCore {
                     extract_visible_batches,
                 )
                     .chain(),
+                extract_occluders,
                 extract_chunk_camera_phases,
                 extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
                 extract_chunk_mesh_data.run_if(main_world_res_exists::<ExtractableChunkMeshData>),
@@ -205,11 +230,19 @@ impl Plugin for RenderCore {
         render_app.add_systems(
             Render,
             (
-                inherit_parent_light_batches.in_set(CoreSet::ManageViews),
+                (
+                    inherit_parent_light_batches,
+                    inherit_parent_light_hzb_culling_marker,
+                )
+                    .in_set(CoreSet::ManageViews),
                 // We only need to create the compute pipelines once
                 create_pipelines
                     .run_if(run_once())
                     .in_set(RenderSet::Prepare),
+                // Upload occluder boxes to the GPU
+                prepare_occluders.in_set(CoreSet::PrepareOccluders),
+                // Initialize and queue HZBs for views
+                prepare_view_hzbs.in_set(CoreSet::PrepareViewHzbs),
                 // This system creates the RegistryBindGroup resource if it runs successfully, and if
                 // it runs successfully we don't need to run it again (registry data can't change during runtime).
                 prepare_gpu_registry_data
@@ -238,9 +271,12 @@ impl Plugin for RenderCore {
         let render_app = app.sub_app_mut(RenderApp);
 
         render_app
+            .init_resource::<OccluderModel>()
             .init_resource::<BindGroupProvider>()
             .init_resource::<IndirectRenderDataStore>()
             .init_resource::<ChunkRenderPipeline>()
+            .init_resource::<OccluderDepthPipeline>()
+            .init_resource::<HzbLevelPipeline>()
             .init_resource::<ViewBatchPreprocessPipeline>()
             .init_resource::<ViewBatchLightPreprocessPipeline>();
     }
@@ -252,7 +288,7 @@ fn set_inspection(
     icd_store: Res<IndirectRenderDataStore>,
 ) {
     let mut clear = false;
-    while let Ok(_) = debug.clear_inpsection.try_recv() {
+    while let Ok(_) = debug.clear_inspection.try_recv() {
         clear = true;
     }
 

@@ -27,9 +27,6 @@ use super::{
     BindGroupProvider,
 };
 
-#[derive(Component, Copy, Clone, Default, PartialEq, Eq, Hash)]
-pub struct LightParent;
-
 pub fn get_parent_light(light: &LightEntity) -> Entity {
     match light {
         LightEntity::Spot { light_entity } => *light_entity,
@@ -62,11 +59,9 @@ pub fn inherit_parent_light_batches(
     q_light_entities: Query<(Entity, &LightEntity)>,
     q_visible_batches: Query<&VisibleBatches>,
     mut last_size: Local<usize>,
-    mut last_parents: Local<usize>,
     mut cmds: Commands,
 ) {
     let mut insert = Vec::with_capacity(*last_size);
-    let mut parents = Vec::with_capacity(*last_parents);
 
     for (entity, light) in &q_light_entities {
         let parent = get_parent_light(light);
@@ -75,13 +70,10 @@ pub fn inherit_parent_light_batches(
         };
 
         insert.push((entity, visible_batches));
-        parents.push((parent, LightParent));
     }
 
     *last_size = insert.len();
-    *last_parents = parents.len();
     cmds.insert_or_spawn_batch(insert);
-    cmds.insert_or_spawn_batch(parents);
 }
 
 pub fn initialize_and_queue_light_batch_buffers(

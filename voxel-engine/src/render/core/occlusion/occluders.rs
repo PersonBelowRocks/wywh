@@ -15,13 +15,14 @@ use bevy::{
             BindGroupDescriptor, BindGroupLayout, Buffer, BufferInitDescriptor, BufferUsages,
             CachedRenderPipelineId, CompareFunction, DepthStencilState, Face, FrontFace,
             MultisampleState, PipelineCache, PrimitiveState, RenderPipelineDescriptor, ShaderSize,
-            StencilState, StorageBuffer, TextureFormat, VertexAttribute, VertexBufferLayout,
-            VertexFormat, VertexState, VertexStepMode,
+            ShaderType, StencilState, StorageBuffer, TextureFormat, VertexAttribute,
+            VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
         },
         renderer::{RenderDevice, RenderQueue},
     },
 };
-use bytemuck::cast_slice;
+use bytemuck::{cast_slice, Pod, Zeroable};
+use dn::new;
 
 use crate::{
     render::core::{shaders::OCCLUDER_DEPTH_HANDLE, BindGroupProvider},
@@ -60,9 +61,17 @@ pub static OCCLUDER_BOX_INDICES: &'static [u32] = &[
     4, 0, 7,
 ];
 
+#[derive(new, Clone, Copy, Pod, Zeroable, ShaderType)]
+#[repr(C)]
+pub struct OccluderInstance {
+    pub chunk_pos: IVec3,
+    #[new(default)]
+    _pad: u32,
+}
+
 pub fn occluder_instance_buffer_layout(location: u32) -> VertexBufferLayout {
     VertexBufferLayout {
-        array_stride: IVec3::SHADER_SIZE.into(),
+        array_stride: OccluderInstance::SHADER_SIZE.into(),
         step_mode: VertexStepMode::Instance,
         attributes: vec![VertexAttribute {
             format: VertexFormat::Sint32x3,
@@ -72,9 +81,17 @@ pub fn occluder_instance_buffer_layout(location: u32) -> VertexBufferLayout {
     }
 }
 
+#[derive(new, Clone, Copy, Pod, Zeroable, ShaderType)]
+#[repr(C)]
+pub struct OccluderVertex {
+    pub position: Vec3,
+    #[new(default)]
+    _pad: u32,
+}
+
 pub fn occluder_vertex_buffer_layout(location: u32) -> VertexBufferLayout {
     VertexBufferLayout {
-        array_stride: Vec3::SHADER_SIZE.into(),
+        array_stride: OccluderVertex::SHADER_SIZE.into(),
         step_mode: VertexStepMode::Vertex,
         attributes: vec![VertexAttribute {
             format: VertexFormat::Float32x3,
@@ -84,10 +101,11 @@ pub fn occluder_vertex_buffer_layout(location: u32) -> VertexBufferLayout {
     }
 }
 
-fn scaled_occluder_vertex_positions() -> Vec<Vec3> {
+fn scaled_occluder_vertex_positions() -> Vec<OccluderVertex> {
     OCCLUDER_BOX_VERTICES
         .iter()
         .map(|&pos| pos * OCCLUDER_BOX_SIZE)
+        .map(OccluderVertex::new)
         .collect()
 }
 
@@ -117,9 +135,19 @@ impl FromWorld for OccluderModel {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct OccluderBoxes {
-    data: StorageBuffer<Vec<IVec3>>,
+    data: StorageBuffer<Vec<OccluderInstance>>,
+}
+
+impl Default for OccluderBoxes {
+    fn default() -> Self {
+        let mut buffer = StorageBuffer::default();
+        // Needs to have vertex buffer usages to be used as an instance buffer.
+        buffer.add_usages(BufferUsages::VERTEX);
+
+        Self { data: buffer }
+    }
 }
 
 impl OccluderBoxes {
@@ -132,7 +160,9 @@ impl OccluderBoxes {
     }
 
     pub fn insert(&mut self, chunk: ChunkPos) {
-        self.data.get_mut().push(chunk.as_ivec3());
+        self.data
+            .get_mut()
+            .push(OccluderInstance::new(chunk.as_ivec3()));
     }
 
     pub fn buffer(&self) -> Option<&Buffer> {
@@ -145,8 +175,11 @@ impl OccluderBoxes {
 }
 
 /// Extract occluder boxes
-pub fn extract_occluders() {
-    todo!()
+pub fn extract_occluders(mut occluders: ResMut<OccluderBoxes>) {
+    occluders.clear();
+    occluders.insert(ChunkPos::new(0, 0, 0));
+    occluders.insert(ChunkPos::new(0, 1, 1));
+    // TODO: implement
 }
 
 pub fn prepare_occluders(
@@ -160,7 +193,6 @@ pub fn prepare_occluders(
 #[derive(Resource)]
 pub struct OccluderDepthPipeline {
     pub pipeline_id: CachedRenderPipelineId,
-    pub layout: BindGroupLayout,
 }
 
 impl FromWorld for OccluderDepthPipeline {
@@ -187,6 +219,7 @@ impl FromWorld for OccluderDepthPipeline {
                 topology: PrimitiveTopology::TriangleList,
                 cull_mode: Some(Face::Back),
                 front_face: FrontFace::Ccw,
+                unclipped_depth: true,
 
                 ..default()
             },
@@ -201,9 +234,6 @@ impl FromWorld for OccluderDepthPipeline {
 
         let pipeline_id = pipeline_cache.queue_render_pipeline(descriptor);
 
-        Self {
-            pipeline_id,
-            layout: bg_provider.prepass_view_no_mv_bg_layout.clone(),
-        }
+        Self { pipeline_id }
     }
 }

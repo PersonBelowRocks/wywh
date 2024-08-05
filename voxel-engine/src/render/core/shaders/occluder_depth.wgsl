@@ -1,6 +1,6 @@
 #import bevy_render::view::View
 
-@group(0) @location(0) var<uniform> view: View;
+@group(0) @binding(0) var<uniform> view: View;
 
 /// Convert a world space position to clip space
 fn position_world_to_clip(world_pos: vec3<f32>) -> vec4<f32> {

@@ -41,6 +41,7 @@ use super::{
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, RenderLabel)]
 pub enum CoreNode {
+    HzbPass,
     PreprocessBatches,
     PreprocessLightBatches,
     Prepass,

@@ -1,4 +1,5 @@
 use crate::render::core::commands::{DrawDeferredBatch, IndirectBatchDraw, SetIndirectChunkQuads};
+use crate::render::core::lights::get_parent_light;
 use crate::render::core::occlusion::occluders::{
     OccluderBoxes, OccluderDepthPipeline, OccluderModel, OCCLUDER_BOX_INDICES,
 };
@@ -12,6 +13,7 @@ use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_stat
 use bevy::ecs::system::lifetimeless::Read;
 use bevy::pbr::{LightEntity, MeshPipelineKey, PrepassViewBindGroup, SetMeshViewBindGroup};
 use bevy::render::camera::Viewport;
+use bevy::render::extract_component::ExtractComponent;
 use bevy::render::render_graph::RunSubGraphError;
 use bevy::render::render_phase::{
     CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions, PhaseItem, PhaseItemExtraIndex,
@@ -20,11 +22,12 @@ use bevy::render::render_phase::{
 use bevy::render::render_resource::{
     BindGroup, BindGroupLayout, Buffer, CachedComputePipelineId, CachedRenderPipelineId,
     CompareFunction, ComputePipelineDescriptor, DepthBiasState, DepthStencilState, Extent3d,
-    FragmentState, IndexFormat, LoadOp, MultisampleState, Operations, PipelineCache, PolygonMode,
-    PrimitiveState, RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, SpecializedComputePipeline, SpecializedRenderPipeline,
-    SpecializedRenderPipelines, StencilState, StoreOp, TextureAspect, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    FragmentState, ImageSubresourceRange, IndexFormat, LoadOp, MultisampleState, Operations,
+    PipelineCache, PolygonMode, PrimitiveState, RenderPassDepthStencilAttachment,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, SpecializedComputePipeline,
+    SpecializedRenderPipeline, SpecializedRenderPipelines, StencilState, StoreOp, TextureAspect,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
+    TextureViewDimension,
 };
 use bevy::render::renderer::RenderDevice;
 use bevy::render::texture::DepthAttachment;
@@ -43,8 +46,22 @@ use std::cmp::{max, min};
 
 pub const HZB_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Component, ExtractComponent, Debug, Copy, Clone)]
 pub struct ChunkHzbOcclusionCulling;
+
+pub fn inherit_parent_light_hzb_culling_marker(
+    q_light_entities: Query<(Entity, &LightEntity)>,
+    q_hzb_culling_enabled: Query<(), With<ChunkHzbOcclusionCulling>>,
+    mut cmds: Commands,
+) {
+    for (entity, light) in &q_light_entities {
+        let parent_light = get_parent_light(light);
+
+        if q_hzb_culling_enabled.contains(parent_light) {
+            cmds.get_or_spawn(entity).insert(ChunkHzbOcclusionCulling);
+        }
+    }
+}
 
 pub struct CachedHzbMipChain {
     pub depth_attachment: DepthAttachment,
@@ -82,9 +99,7 @@ pub fn create_hzb_texture_desc(label: &str, dimensions: UVec2) -> TextureDescrip
         sample_count: 1,
         dimension: TextureDimension::D2,
         format: TextureFormat::Depth32Float,
-        usage: TextureUsages::RENDER_ATTACHMENT
-            | TextureUsages::TEXTURE_BINDING
-            | TextureUsages::STORAGE_BINDING,
+        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         view_formats: &[TextureFormat::Depth32Float],
     }
 }
@@ -96,7 +111,7 @@ pub fn create_hzb_texture_view_desc(label: &str) -> TextureViewDescriptor {
         dimension: Some(TextureViewDimension::D2),
         array_layer_count: Some(1),
         format: Some(TextureFormat::Depth32Float),
-        mip_level_count: None,
+        mip_level_count: Some(1),
         aspect: TextureAspect::All,
         base_mip_level: 0,
         base_array_layer: 0,
@@ -144,8 +159,8 @@ impl HzbCache {
     }
 }
 
-#[derive(Resource)]
-pub struct QueuedHzbViews(Vec<QueuedHzb>);
+#[derive(Resource, Default)]
+pub struct QueuedViewHzbs(Vec<QueuedHzb>);
 
 #[derive(Clone, Debug)]
 pub struct QueuedHzb {
@@ -157,9 +172,9 @@ pub fn viewport_mip_levels(viewport: UVec2) -> u32 {
     min(viewport.x, viewport.y).ilog2()
 }
 
-pub fn prepare_hzbs(
+pub fn prepare_view_hzbs(
     mut cache: ResMut<HzbCache>,
-    mut queued: ResMut<QueuedHzbViews>,
+    mut queued: ResMut<QueuedViewHzbs>,
     gpu: Res<RenderDevice>,
     q_views: Query<(Entity, &ExtractedView), With<ChunkHzbOcclusionCulling>>,
 ) {
@@ -182,7 +197,6 @@ pub fn prepare_hzbs(
 
 #[derive(Resource)]
 pub struct HzbLevelPipeline {
-    layout: BindGroupLayout,
     pipeline_id: CachedRenderPipelineId,
 }
 
@@ -196,7 +210,10 @@ impl FromWorld for HzbLevelPipeline {
         let descriptor = RenderPipelineDescriptor {
             label: Some(format!("construct_hzb_mip_level").into()),
             push_constant_ranges: vec![],
-            primitive: PrimitiveState::default(),
+            primitive: PrimitiveState {
+                unclipped_depth: true,
+                ..default()
+            },
             vertex: fullscreen_shader_vertex_state(),
             multisample: MultisampleState::default(),
             layout: vec![layout.clone()],
@@ -217,10 +234,7 @@ impl FromWorld for HzbLevelPipeline {
 
         let pipeline_id = pipeline_cache.queue_render_pipeline(descriptor);
 
-        Self {
-            layout,
-            pipeline_id,
-        }
+        Self { pipeline_id }
     }
 }
 
@@ -261,7 +275,7 @@ fn hzb_depth_pass<'w>(
     q_views: &QueryState<Read<ViewUniformOffset>>,
     occluder_model: &OccluderModel,
     occluders: &OccluderBoxes,
-    queued_hzbs: &QueuedHzbViews,
+    queued_hzbs: &QueuedViewHzbs,
     hzb_cache: &HzbCache,
     occluder_depth_pipeline: &RenderPipeline,
     prepass_view_bind_group: &BindGroup,
@@ -287,6 +301,18 @@ fn hzb_depth_pass<'w>(
             );
             continue;
         };
+
+        // Need to clear the depth buffer
+        ctx.command_encoder().clear_texture(
+            &hzb.texture,
+            &ImageSubresourceRange {
+                base_mip_level: 0,
+                mip_level_count: None,
+                aspect: TextureAspect::All,
+                base_array_layer: 0,
+                array_layer_count: None,
+            },
+        );
 
         let depth_attachment = hzb.depth_attachment.get_attachment(StoreOp::Store);
 
@@ -345,13 +371,14 @@ impl Node for HzbConstructionNode {
             &self.q_views,
             world.resource::<OccluderModel>(),
             world.resource::<OccluderBoxes>(),
-            world.resource::<QueuedHzbViews>(),
+            world.resource::<QueuedViewHzbs>(),
             world.resource::<HzbCache>(),
             occluder_depth_pipeline,
             prepass_view_bind_group,
         );
 
         if !success {
+            error!("Failed to run HZB depth pass");
             return Ok(());
         }
 
@@ -360,6 +387,6 @@ impl Node for HzbConstructionNode {
             return Ok(());
         };
 
-        todo!()
+        Ok(())
     }
 }
