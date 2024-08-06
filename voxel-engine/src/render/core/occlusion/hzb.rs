@@ -7,13 +7,15 @@ use crate::render::core::BindGroupProvider;
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::system::lifetimeless::Read;
 use bevy::pbr::{LightEntity, PrepassViewBindGroup};
+use bevy::render::camera::Viewport;
 use bevy::render::extract_component::ExtractComponent;
 use bevy::render::render_resource::{
     BindGroup, CachedComputePipelineId, CachedRenderPipelineId, CompareFunction, DepthBiasState,
-    DepthStencilState, Extent3d, FragmentState, ImageSubresourceRange, IndexFormat,
-    MultisampleState, PipelineCache, PrimitiveState, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, StencilState, StoreOp, TextureAspect, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
+    DepthStencilState, Extent3d, FragmentState, ImageSubresourceRange, IndexFormat, LoadOp,
+    MultisampleState, Operations, PipelineCache, PrimitiveState, RenderPassDepthStencilAttachment,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, StencilState, StoreOp,
+    TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor, TextureViewDimension,
 };
 use bevy::render::renderer::RenderDevice;
 use bevy::render::texture::DepthAttachment;
@@ -56,8 +58,31 @@ pub struct CachedHzbMipChain {
 }
 
 impl CachedHzbMipChain {
+    pub fn mip_level_dimensions(&self, mip_level: u32) -> UVec2 {
+        self.dims / (2u32.pow(mip_level))
+    }
+
     pub fn mip_levels(&self) -> u32 {
         min(self.dims.x, self.dims.y).ilog2()
+    }
+
+    pub fn mip_level_view(&self, mip_level: u32) -> Option<TextureView> {
+        if mip_level > self.mip_levels() {
+            return None;
+        }
+
+        let view = self.texture.create_view(&TextureViewDescriptor {
+            label: Some(&format!("hzb_mip_view/{mip_level}")),
+            format: Some(TextureFormat::Depth32Float),
+            dimension: Some(TextureViewDimension::D2),
+            aspect: TextureAspect::All,
+            base_array_layer: 0,
+            array_layer_count: None,
+            base_mip_level: mip_level,
+            mip_level_count: Some(1),
+        });
+
+        Some(view)
     }
 }
 
@@ -151,7 +176,6 @@ pub struct QueuedViewHzbs(Vec<QueuedHzb>);
 #[derive(Clone, Debug)]
 pub struct QueuedHzb {
     pub view_entity: Entity,
-    pub mip_level_compute_chain: Vec<CachedComputePipelineId>,
 }
 
 pub fn viewport_mip_levels(viewport: UVec2) -> u32 {
@@ -176,7 +200,6 @@ pub fn prepare_view_hzbs(
 
         queued.0.push(QueuedHzb {
             view_entity: entity,
-            mip_level_compute_chain: vec![],
         });
     }
 }
@@ -255,6 +278,7 @@ fn get_prepass_view_bind_group(world: &World) -> Option<&BindGroup> {
     prepass_view_bind_group.no_motion_vectors.as_ref()
 }
 
+/// Render the initial high detail depth buffer for HZBs
 fn hzb_depth_pass<'w>(
     world: &World,
     ctx: &mut RenderContext<'w>,
@@ -330,6 +354,62 @@ fn hzb_depth_pass<'w>(
     true
 }
 
+/// Downsample HZBs from the lowest (highest detail) mip level.
+fn hzb_downsample<'w>(
+    ctx: &mut RenderContext<'w>,
+    queued_views: &QueuedViewHzbs,
+    hzb_cache: &HzbCache,
+    bg_provider: &BindGroupProvider,
+    downsample_pipeline: &RenderPipeline,
+) {
+    for view in &queued_views.0 {
+        let Some(hzb) = hzb_cache.get_view_hzb(view.view_entity) else {
+            error!("Failed to get cached HZB for queued view");
+            continue;
+        };
+
+        for next_mip_level in 1..hzb.mip_levels() {
+            let previous_mip_level = next_mip_level - 1;
+
+            let previous_mip = hzb.mip_level_view(previous_mip_level).unwrap();
+            let next_mip = hzb.mip_level_view(next_mip_level).unwrap();
+
+            let depth_attachment = RenderPassDepthStencilAttachment {
+                // Render downsampled depth to the next mip level
+                view: &next_mip,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(0.0),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            };
+
+            let previous_depth_bg = bg_provider.hzb_level_bg(ctx.render_device(), &previous_mip);
+
+            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some(&format!(
+                    "hzb_downsample_pass {previous_mip_level}->{next_mip_level}"
+                )),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(depth_attachment),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            pass.set_render_pipeline(downsample_pipeline);
+
+            pass.set_camera_viewport(&Viewport {
+                physical_position: UVec2::ZERO,
+                physical_size: hzb.mip_level_dimensions(next_mip_level),
+                depth: 0.0..1.0,
+            });
+
+            pass.set_bind_group(0, &previous_depth_bg, &[]);
+            pass.draw(0..3, 0..1);
+        }
+    }
+}
+
 impl Node for HzbConstructionNode {
     fn update(&mut self, world: &mut World) {
         self.q_views.update_archetypes(world);
@@ -351,14 +431,17 @@ impl Node for HzbConstructionNode {
             return Ok(());
         };
 
+        let queued_views = world.resource::<QueuedViewHzbs>();
+        let hzb_cache = world.resource::<HzbCache>();
+
         let success = hzb_depth_pass(
             world,
             ctx,
             &self.q_views,
             world.resource::<OccluderModel>(),
             world.resource::<OccluderBoxes>(),
-            world.resource::<QueuedViewHzbs>(),
-            world.resource::<HzbCache>(),
+            queued_views,
+            hzb_cache,
             occluder_depth_pipeline,
             prepass_view_bind_group,
         );
@@ -368,10 +451,18 @@ impl Node for HzbConstructionNode {
             return Ok(());
         }
 
-        let Some(hzb_level_pipeline) = get_hzb_level_pipeline(world) else {
+        let Some(downsample_pipeline) = get_hzb_level_pipeline(world) else {
             error!("Could not get HZB level pipeline");
             return Ok(());
         };
+
+        hzb_downsample(
+            ctx,
+            queued_views,
+            hzb_cache,
+            world.resource::<BindGroupProvider>(),
+            downsample_pipeline,
+        );
 
         Ok(())
     }

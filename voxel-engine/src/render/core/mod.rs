@@ -22,7 +22,10 @@ use bevy::render::extract_component::ExtractComponentPlugin;
 use bevy::render::globals::GlobalsUniform;
 use bevy::render::render_graph::{RenderGraphApp, ViewNodeRunner};
 use bevy::render::render_phase::{DrawFunctions, ViewSortedRenderPhases};
-use bevy::render::render_resource::{BindGroup, BindGroupEntries, BindingResource, ShaderSize};
+use bevy::render::render_resource::{
+    BindGroup, BindGroupEntries, BindingResource, IntoBinding, SamplerDescriptor, ShaderSize,
+    TextureView,
+};
 use bevy::render::view::ViewUniform;
 use bevy::{
     app::{App, Plugin},
@@ -412,6 +415,22 @@ impl FromWorld for BindGroupProvider {
 }
 
 impl BindGroupProvider {
+    pub fn hzb_level_bg(&self, gpu: &RenderDevice, previous_mip_level: &TextureView) -> BindGroup {
+        let sampler = gpu.create_sampler(&SamplerDescriptor {
+            label: Some("hzb_previous_depth_mip_sampler"),
+            ..default()
+        });
+
+        gpu.create_bind_group(
+            Some("hzb_previous_mip_bind_group"),
+            &self.construct_hzb_level_bg_layout,
+            &BindGroupEntries::sequential((
+                previous_mip_level.into_binding(),
+                sampler.into_binding(),
+            )),
+        )
+    }
+
     pub fn preprocess_view(
         &self,
         gpu: &RenderDevice,
