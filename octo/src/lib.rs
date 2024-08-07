@@ -65,15 +65,19 @@ impl ControlByte {
     }
 
     pub const fn is_leaf(&self) -> bool {
-        (self.0 & 0b10000000) == 0
+        (self.0 & 0b10000000) != 0
     }
 
-    pub const unsafe fn leaf_depth(depth: u8) -> Self {
-        Self((depth as u8) & 0b01111111)
+    pub const fn leaf_depth(depth: u8) -> Self {
+        Self((depth as u8) | 0b10000000)
     }
 
     pub fn set_not_leaf(&mut self) {
         self.0 &= 0b01111111;
+    }
+
+    pub fn set_leaf(&mut self) {
+        self.0 |= 0b10000000;
     }
 }
 
@@ -105,16 +109,42 @@ impl<D: MaxDepth, T: Copy> Node<D, T> {
         self.ctrl_byte.is_leaf()
     }
 
-    pub const unsafe fn new_leaf(depth: u8, value: T) -> Self {
+    pub fn value(&self) -> &T {
+        if !self.is_leaf() {
+            panic!("Cannot get value of non-leaf node")
+        }
+
+        unsafe { &self.data.value }
+    }
+
+    pub fn octet(&self) -> OctetIdx {
+        if self.is_leaf() {
+            panic!("Cannot get octet of leaf node");
+        }
+
+        unsafe { self.data.octet }
+    }
+
+    pub fn set_leaf(&mut self, value: T) {
+        self.ctrl_byte.set_leaf();
+        self.data.value = value;
+    }
+
+    pub fn set_octet(&mut self, octet: OctetIdx) {
+        self.ctrl_byte.set_not_leaf();
+        self.data.octet = octet;
+    }
+
+    pub const fn new_leaf(depth: u8, value: T) -> Self {
         Self {
             ctrl_byte: ControlByte::leaf_depth(depth),
-            data: NodeData { value },
+            data: NodeData { value: value },
 
             _d: PhantomData,
         }
     }
 
-    pub const fn value(&self) -> Option<&T> {
+    pub const fn get_value(&self) -> Option<&T> {
         if self.ctrl_byte.is_leaf() {
             Some(unsafe { &self.data.value })
         } else {
@@ -126,7 +156,7 @@ impl<D: MaxDepth, T: Copy> Node<D, T> {
 #[derive(Copy, Clone)]
 pub(crate) union NodeData<T: Copy> {
     value: T,
-    octets: OctetIdx,
+    octet: OctetIdx,
 }
 
 /// A cubic octree
@@ -142,7 +172,7 @@ impl<D: MaxDepth, T: Copy> Octree<D, T> {
 
     pub fn new(value: T) -> Self {
         // SAFETY: depth 0 is a valid depth
-        let root = unsafe { Node::new_leaf(0, value) };
+        let root = Node::new_leaf(0, value);
 
         Self {
             nodes: vec![root],
@@ -154,50 +184,42 @@ impl<D: MaxDepth, T: Copy> Octree<D, T> {
     #[inline]
     pub fn clear(&mut self, value: T) {
         // Sets the root node
-        self.nodes[0] = unsafe { Node::new_leaf(0, value) };
+        self.nodes[0] = Node::new_leaf(0, value);
 
         self.nodes.drain(1..);
         self.octets.clear();
     }
 
     /// Get an octet by its index
-    /// ## SAFETY
-    /// The provided octet index must be valid for this octree
+    /// Panics if the index is out of bounds.
     #[inline]
-    unsafe fn octet(&self, idx: OctetIdx) -> &Octet {
+    fn octet(&self, idx: OctetIdx) -> &Octet {
         let index = idx.to_usize();
-
-        unsafe { self.octets.get_unchecked(index) }
+        &self.octets[index]
     }
 
     /// Get an octet by its index
-    /// ## SAFETY
-    /// The provided octet index must be valid for this octree
+    /// Panics if the index is out of bounds.
     #[inline]
-    unsafe fn octet_mut(&mut self, idx: OctetIdx) -> &mut Octet {
+    fn octet_mut(&mut self, idx: OctetIdx) -> &mut Octet {
         let index = idx.to_usize();
+        &mut self.octets[index]
+    }
 
-        unsafe { self.octets.get_unchecked_mut(index) }
+    /// Get a node by its index.
+    /// Panics if the index is out of bounds.
+    #[inline]
+    fn node(&self, idx: NodeIdx) -> &Node<D, T> {
+        let index = idx.to_usize();
+        &self.nodes[index]
     }
 
     /// Get a node by its index
-    /// ## SAFETY
-    /// The provided node index must be valid for this octree
+    /// Panics if the index is out of bounds.
     #[inline]
-    unsafe fn node(&self, idx: NodeIdx) -> &Node<D, T> {
+    fn node_mut(&mut self, idx: NodeIdx) -> &mut Node<D, T> {
         let index = idx.to_usize();
-
-        unsafe { self.nodes.get_unchecked(index) }
-    }
-
-    /// Get a node by its index
-    /// ## SAFETY
-    /// The provided node index must be valid for this octree
-    #[inline]
-    unsafe fn node_mut(&mut self, idx: NodeIdx) -> &mut Node<D, T> {
-        let index = idx.to_usize();
-
-        unsafe { self.nodes.get_unchecked_mut(index) }
+        &mut self.nodes[index]
     }
 
     fn root(&self) -> &Node<D, T> {
@@ -211,24 +233,28 @@ impl<D: MaxDepth, T: Copy> Octree<D, T> {
     // TODO: docs
     #[inline]
     pub fn root_value(&self) -> Option<&T> {
-        self.root().value()
+        self.root().get_value()
     }
 
-    unsafe fn insert_at_node(&mut self, node_idx: NodeIdx, target: NodePos, value: T) {
+    #[inline]
+    fn insert_at_node(&mut self, node_idx: NodeIdx, node_pos: NodePos, target: NodePos, value: T) {
         let mut node_idx = node_idx;
+        let mut node_pos = node_pos;
 
         {
-            let node = unsafe { self.node(node_idx) };
+            let node = self.node(node_idx);
             debug_assert!(node.is_leaf());
         }
 
-        while target.depth != unsafe { self.node(node_idx) }.ctrl_byte.depth() {
-            let mut_node = unsafe { self.node_mut(node_idx) };
+        while target.depth != self.node(node_idx).ctrl_byte.depth() {
+            let subnode = {
+                let node = self.node(node_idx);
 
-            mut_node.ctrl_byte.set_not_leaf();
+                let subnode_depth = node.ctrl_byte.depth() + 1;
 
-            let subnode =
-                unsafe { Node::new_leaf(mut_node.ctrl_byte.depth() + 1, mut_node.data.value) };
+                // TODO: depth checking or something
+                Node::new_leaf(subnode_depth, *node.value())
+            };
 
             let len = self.nodes.len();
             self.nodes.extend([subnode; 8]);
@@ -237,48 +263,68 @@ impl<D: MaxDepth, T: Copy> Octree<D, T> {
                 .map(|i| i + len)
                 .map(|i| NodeIdx(i as u32));
 
-            let octet_index = OctetIdx(self.octets.len() as u32);
-            self.octets.push(Octet(node_indices));
+            let octet = Octet(node_indices);
 
-            todo!();
+            let octet_index = OctetIdx(self.octets.len() as u32);
+            self.octets.push(octet);
+
+            let node_mut = self.node_mut(node_idx);
+            node_mut.set_octet(octet_index);
+
+            // TODO: safety
+            let octant_index = node_pos.octant_pos(target).to_index();
+            node_pos = node_pos.next_level_position(target);
+
+            node_idx = octet.0[octant_index];
         }
+
+        let node = self.node_mut(node_idx);
+        node.set_leaf(value);
+
+        dbg!(node_pos);
+        dbg!(node_idx);
     }
 
-    unsafe fn deepest_existing_node(&self, target: NodePos) -> NodeIdx {
+    fn deepest_existing_node(&self, target: NodePos) -> (NodePos, NodeIdx) {
         let mut cur_node = self.root();
         let mut cur_node_idx = NodeIdx::root();
         let mut cur_node_pos = NodePos::root();
 
         while !cur_node.is_leaf() && target.depth > cur_node_pos.depth {
-            // SAFETY: We know this node is not a leaf
-            let octet_index = unsafe { cur_node.data.octets };
+            let octet_index = cur_node.octet();
 
-            // TODO: safety guarantees
-            let octet = unsafe { self.octet(octet_index) };
+            let octet = self.octet(octet_index);
 
-            // TODO: safety guarantees
-            let octant_pos = unsafe { cur_node_pos.octant_pos(target) };
+            let octant_pos = cur_node_pos.octant_pos(target);
 
-            // SAFETY: the `octant_pos` function always returns a valid octant position.
-            let node_index = unsafe { *octet.0.get_unchecked(octant_pos.to_index()) };
+            let node_index = octet.0[octant_pos.to_index()];
 
-            // TODO: safety guarantees
-            cur_node = unsafe { self.node(node_index) };
+            cur_node = self.node(node_index);
             cur_node_idx = node_index;
-            cur_node_pos = unsafe { cur_node_pos.next_level_position(target) };
+            // TODO: safety guarantees
+            cur_node_pos = cur_node_pos.next_level_position(target);
         }
 
-        cur_node_idx
+        (cur_node_pos, cur_node_idx)
     }
 
     // TODO: docs
     #[inline]
-    pub unsafe fn insert_unchecked(&mut self, target: NodePos, value: T) {
-        // TODO: safety guaranteees
-        unsafe {
-            let deepest_node = self.deepest_existing_node(target);
-            self.insert_at_node(deepest_node, target, value);
-        }
+    pub fn insert(&mut self, target: NodePos, value: T) {
+        let (deepest_node_pos, deepest_node_idx) = self.deepest_existing_node(target);
+        self.insert_at_node(deepest_node_idx, deepest_node_pos, target, value);
+    }
+
+    // TODO: docs
+    #[inline]
+    pub fn get(&self, target: NodePos) -> &T {
+        let (_, deepest_node_idx) = self.deepest_existing_node(target);
+        let node = self.node(deepest_node_idx);
+
+        // Self::deepest_existing_node() should only fetch leaves
+        debug_assert!(node.is_leaf());
+
+        node.value()
     }
 }
 
@@ -305,7 +351,9 @@ pub(crate) const fn octree_level_dimensions(depth: u8) -> u32 {
 pub struct OctantPos(u8);
 
 impl OctantPos {
-    pub unsafe fn from_raw(raw: u8) -> Self {
+    pub fn from_raw(raw: u8) -> Self {
+        debug_assert!(raw < 8);
+
         Self(raw)
     }
 
@@ -352,10 +400,10 @@ impl NodePos {
     /// - The target depth must be greater than or equal to the current depth.
     /// - The target position must be inside of this node's octet (this function just finds the *octant*)
     #[inline]
-    pub unsafe fn octant_pos(&self, target: Self) -> OctantPos {
+    pub fn octant_pos(&self, target: Self) -> OctantPos {
         debug_assert!(target.depth > self.depth);
 
-        let depth_diff = unsafe { target.depth.unchecked_sub(self.depth) };
+        let depth_diff = target.depth - self.depth;
         let depth_diff_between_target_and_next_layer = depth_diff.saturating_sub(1);
 
         let nxl_dd = depth_diff_between_target_and_next_layer;
@@ -373,10 +421,10 @@ impl NodePos {
 
     // TODO: docs and safety
     #[inline]
-    pub unsafe fn next_level_position(&self, target: Self) -> NodePos {
+    pub fn next_level_position(&self, target: Self) -> NodePos {
         debug_assert!(target.depth > self.depth);
 
-        let depth_diff = unsafe { target.depth.unchecked_sub(self.depth) };
+        let depth_diff = target.depth - self.depth;
         let depth_diff_between_target_and_next_layer = depth_diff.saturating_sub(1);
 
         let nxl_dd = depth_diff_between_target_and_next_layer;
@@ -392,6 +440,60 @@ mod tests {
     use glam::uvec3;
 
     use super::*;
+
+    #[test]
+    fn test_node_insert_and_get() {
+        let mut octree = Octree::<X6, _>::new(42);
+        octree.insert(NodePos::new(1, uvec3(1, 1, 1)), 43);
+
+        let value_at_inserted_pos = *octree.get(NodePos::new(1, uvec3(1, 1, 1)));
+        assert_eq!(43, value_at_inserted_pos);
+
+        let untouched_positions = [
+            uvec3(0, 0, 0),
+            uvec3(1, 0, 0),
+            uvec3(1, 0, 1),
+            uvec3(0, 0, 1),
+            uvec3(0, 1, 0),
+            uvec3(1, 1, 0),
+            // uvec3(1, 1, 1) is the position we wrote to
+            uvec3(0, 1, 1),
+        ];
+
+        for untouched_pos in untouched_positions {
+            let untouched_value = *octree.get(NodePos::new(1, untouched_pos));
+            assert_eq!(42, untouched_value);
+        }
+        // Set this position back to 42
+        octree.insert(NodePos::new(1, uvec3(1, 1, 1)), 42);
+
+        for x in 0..2 {
+            for y in 0..2 {
+                for z in 0..2 {
+                    let pos = uvec3(x, y, z);
+                    assert_eq!(42, *octree.get(NodePos::new(1, pos)));
+                }
+            }
+        }
+
+        octree.insert(NodePos::new(6, uvec3(3, 3, 3)), 44);
+
+        for x in 0..64 {
+            for y in 0..64 {
+                for z in 0..64 {
+                    let pos = uvec3(x, y, z);
+                    // Skip the position we wrote to
+                    if pos == uvec3(3, 3, 3) {
+                        continue;
+                    }
+
+                    assert_eq!(42, *octree.get(NodePos::new(6, pos)));
+                }
+            }
+        }
+
+        assert_eq!(44, *octree.get(NodePos::new(6, uvec3(3, 3, 3))));
+    }
 
     #[test]
     fn test_node_pos_octant_selection() {
@@ -414,13 +516,15 @@ mod tests {
         // ----------
         // the absolute position in the next grid is vec3(14, 15, 14)
 
-        assert_eq!(OctantPos::from_pos_unchecked(uvec3(1, 1, 1)), unsafe {
+        assert_eq!(
+            OctantPos::from_pos_unchecked(uvec3(1, 1, 1)),
             NodePos::new(4, uvec3(0, 0, 0)).octant_pos(NodePos::new(6, uvec3(3, 3, 3)))
-        });
+        );
 
-        assert_eq!(OctantPos::from_pos_unchecked(uvec3(0, 1, 0)), unsafe {
+        assert_eq!(
+            OctantPos::from_pos_unchecked(uvec3(0, 1, 0)),
             NodePos::new(4, uvec3(7, 7, 7)).octant_pos(NodePos::new(6, uvec3(28, 31, 28)))
-        });
+        );
 
         // TODO: more thorough testing here
     }
@@ -444,7 +548,7 @@ mod tests {
     #[test]
     fn test_octant_pos_conversions() {
         let test = |raw: u8, pos: UVec3| -> bool {
-            (unsafe { OctantPos::from_raw(raw) }) == OctantPos::from_pos_unchecked(pos)
+            OctantPos::from_raw(raw) == OctantPos::from_pos_unchecked(pos)
         };
 
         assert!(test(0b00000111, uvec3(1, 1, 1)));
