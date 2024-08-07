@@ -4,7 +4,7 @@
 
 use derive_new::new;
 use glam::UVec3;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Range};
 
 /// The maximum depth allowed for an octree
 pub const MAX_DEPTH: u8 = u8::MAX / 2;
@@ -34,12 +34,21 @@ depth!(X6, 6);
 depth!(X7, 7);
 depth!(X8, 8);
 
-#[derive(new, Copy, Clone, Debug, Eq, PartialEq, PartialOrd)]
-pub(crate) struct OctetIdx(u32);
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd)]
+pub(crate) struct Octet(NodeIdx);
 
-impl OctetIdx {
-    pub fn to_usize(self) -> usize {
-        self.0 as usize
+impl Octet {
+    pub fn from_usize(i: usize) -> Self {
+        Self(NodeIdx(i as _))
+    }
+
+    pub fn indices(&self) -> Range<NodeIdx> {
+        self.0..NodeIdx::new(8 + (self.0 .0))
+    }
+
+    pub fn octant(&self, octant: OctantPos) -> NodeIdx {
+        let idx = octant.to_index() as u32;
+        NodeIdx::new(self.indices().start.0 + idx)
     }
 }
 
@@ -81,9 +90,6 @@ impl ControlByte {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub(crate) struct Octet([NodeIdx; 8]);
-
 pub(crate) struct Node<D: MaxDepth, T: Copy> {
     ctrl_byte: ControlByte,
     data: NodeData<T>,
@@ -111,13 +117,13 @@ impl<D: MaxDepth, T: Copy> Node<D, T> {
 
     pub fn value(&self) -> &T {
         if !self.is_leaf() {
-            panic!("Cannot get value of non-leaf node")
+            panic!("Cannot get value of non-leaf node");
         }
 
         unsafe { &self.data.value }
     }
 
-    pub fn octet(&self) -> OctetIdx {
+    pub fn octet(&self) -> Octet {
         if self.is_leaf() {
             panic!("Cannot get octet of leaf node");
         }
@@ -130,7 +136,7 @@ impl<D: MaxDepth, T: Copy> Node<D, T> {
         self.data.value = value;
     }
 
-    pub fn set_octet(&mut self, octet: OctetIdx) {
+    pub fn set_octet(&mut self, octet: Octet) {
         self.ctrl_byte.set_not_leaf();
         self.data.octet = octet;
     }
@@ -138,7 +144,7 @@ impl<D: MaxDepth, T: Copy> Node<D, T> {
     pub const fn new_leaf(depth: u8, value: T) -> Self {
         Self {
             ctrl_byte: ControlByte::leaf_depth(depth),
-            data: NodeData { value: value },
+            data: NodeData { value },
 
             _d: PhantomData,
         }
@@ -156,16 +162,15 @@ impl<D: MaxDepth, T: Copy> Node<D, T> {
 #[derive(Copy, Clone)]
 pub(crate) union NodeData<T: Copy> {
     value: T,
-    octet: OctetIdx,
+    octet: Octet,
 }
 
 /// A cubic octree
-pub struct Octree<D: MaxDepth, T: Copy> {
+pub struct Octree<D: MaxDepth, T: Copy + Eq> {
     nodes: Vec<Node<D, T>>,
-    octets: Vec<Octet>,
 }
 
-impl<D: MaxDepth, T: Copy> Octree<D, T> {
+impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
     pub const fn dimensions() -> u32 {
         D::SIZE
     }
@@ -174,10 +179,7 @@ impl<D: MaxDepth, T: Copy> Octree<D, T> {
         // SAFETY: depth 0 is a valid depth
         let root = Node::new_leaf(0, value);
 
-        Self {
-            nodes: vec![root],
-            octets: vec![],
-        }
+        Self { nodes: vec![root] }
     }
 
     /// Clear the entire octree to the provided value.
@@ -187,23 +189,6 @@ impl<D: MaxDepth, T: Copy> Octree<D, T> {
         self.nodes[0] = Node::new_leaf(0, value);
 
         self.nodes.drain(1..);
-        self.octets.clear();
-    }
-
-    /// Get an octet by its index
-    /// Panics if the index is out of bounds.
-    #[inline]
-    fn octet(&self, idx: OctetIdx) -> &Octet {
-        let index = idx.to_usize();
-        &self.octets[index]
-    }
-
-    /// Get an octet by its index
-    /// Panics if the index is out of bounds.
-    #[inline]
-    fn octet_mut(&mut self, idx: OctetIdx) -> &mut Octet {
-        let index = idx.to_usize();
-        &mut self.octets[index]
     }
 
     /// Get a node by its index.
@@ -256,26 +241,18 @@ impl<D: MaxDepth, T: Copy> Octree<D, T> {
                 Node::new_leaf(subnode_depth, *node.value())
             };
 
-            let len = self.nodes.len();
+            let subnodes_start = self.nodes.len();
+            let octet = Octet::from_usize(subnodes_start);
             self.nodes.extend([subnode; 8]);
 
-            let node_indices = [0, 1, 2, 3, 4, 5, 6, 7]
-                .map(|i| i + len)
-                .map(|i| NodeIdx(i as u32));
-
-            let octet = Octet(node_indices);
-
-            let octet_index = OctetIdx(self.octets.len() as u32);
-            self.octets.push(octet);
-
             let node_mut = self.node_mut(node_idx);
-            node_mut.set_octet(octet_index);
+            node_mut.set_octet(octet);
 
             // TODO: safety
             let octant_index = node_pos.octant_pos(target).to_index();
             node_pos = node_pos.next_level_position(target);
 
-            node_idx = octet.0[octant_index];
+            node_idx = NodeIdx::new((subnodes_start + octant_index) as u32);
         }
 
         let node = self.node_mut(node_idx);
@@ -291,13 +268,10 @@ impl<D: MaxDepth, T: Copy> Octree<D, T> {
         let mut cur_node_pos = NodePos::root();
 
         while !cur_node.is_leaf() && target.depth > cur_node_pos.depth {
-            let octet_index = cur_node.octet();
-
-            let octet = self.octet(octet_index);
-
+            let octet = cur_node.octet();
             let octant_pos = cur_node_pos.octant_pos(target);
 
-            let node_index = octet.0[octant_pos.to_index()];
+            let node_index = octet.octant(octant_pos);
 
             cur_node = self.node(node_index);
             cur_node_idx = node_index;
