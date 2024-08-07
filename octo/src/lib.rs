@@ -4,6 +4,7 @@
 
 use derive_new::new;
 use glam::UVec3;
+use rangemap::RangeSet;
 use std::{marker::PhantomData, ops::Range};
 
 /// The maximum depth allowed for an octree
@@ -44,6 +45,10 @@ impl Octet {
 
     pub fn indices(&self) -> Range<NodeIdx> {
         self.0..NodeIdx::new(8 + (self.0 .0))
+    }
+
+    pub fn indices_usize(&self) -> Range<usize> {
+        (self.0.to_usize())..(self.0.to_usize() + 8)
     }
 
     pub fn octant(&self, octant: OctantPos) -> NodeIdx {
@@ -157,6 +162,14 @@ impl<D: MaxDepth, T: Copy> Node<D, T> {
             None
         }
     }
+
+    pub const fn get_octet(&self) -> Option<Octet> {
+        if !self.ctrl_byte.is_leaf() {
+            Some(unsafe { self.data.octet })
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -219,6 +232,33 @@ impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
     #[inline]
     pub fn root_value(&self) -> Option<&T> {
         self.root().get_value()
+    }
+
+    #[inline]
+    pub fn remove_orphans(&mut self) {
+        let mut new_nodes = Vec::<Node<D, T>>::with_capacity(self.nodes.len());
+
+        let root = *self.root();
+
+        let mut queued = vec![root];
+        while let Some(mut node) = queued.pop() {
+            let Some(octet) = node.get_octet() else {
+                // If this node doesn't have an octet, then it's a leaf, so we can add it do our
+                // new nodes without worrying about updating any indices
+                new_nodes.push(node);
+                continue;
+            };
+
+            // This node is an octet, so we'll need to handle indices
+            let octet_start = 1 + new_nodes.len();
+            node.set_octet(Octet::from_usize(octet_start));
+            new_nodes.push(node);
+
+            // Queue the octets to be copied over next
+            let octet_nodes = &self.nodes[octet.indices_usize()];
+            // TODO: figure out whats most cache-friendly for the queue/stack
+            queued.extend_from_slice(octet_nodes);
+        }
     }
 
     #[inline]
