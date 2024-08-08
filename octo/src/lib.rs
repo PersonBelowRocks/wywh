@@ -12,7 +12,8 @@ pub const MAX_DEPTH: u8 = u8::MAX / 2;
 
 pub trait MaxDepth: 'static {
     const DEPTH: u8;
-    const SIZE: u32 = 1u32 << Self::DEPTH as u32;
+    const DIMENSIONS: u32 = octree_level_dimensions(Self::DEPTH);
+    const SIZE: u32 = octree_level_size(Self::DEPTH);
 }
 
 macro_rules! depth {
@@ -195,6 +196,7 @@ pub(crate) union NodeData<T: Copy> {
 }
 
 /// A cubic octree
+#[derive(Clone)]
 pub struct Octree<D: MaxDepth, T: Copy + Eq> {
     // This field is visible to the rest of the crate during testing so that we can
     // inspect the internals of the octree.
@@ -206,7 +208,7 @@ pub struct Octree<D: MaxDepth, T: Copy + Eq> {
 
 impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
     pub const fn dimensions() -> u32 {
-        D::SIZE
+        D::DIMENSIONS
     }
 
     pub fn new(value: T) -> Self {
@@ -343,6 +345,8 @@ impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
         node.set_leaf(value);
     }
 
+    // Hinting this as always inlined seems to make stuff a bit faster
+    #[inline(always)]
     fn deepest_existing_node(&self, target: NPos) -> (NPos, NodeIdx) {
         let mut cur_node = self.root();
         let mut cur_node_idx = NodeIdx::root();
