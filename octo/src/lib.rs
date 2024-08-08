@@ -5,7 +5,7 @@
 use derive_new::new;
 use glam::UVec3;
 use rangemap::RangeSet;
-use std::{marker::PhantomData, ops::Range};
+use std::{collections::VecDeque, marker::PhantomData, ops::Range};
 
 /// The maximum depth allowed for an octree
 pub const MAX_DEPTH: u8 = u8::MAX / 2;
@@ -70,7 +70,7 @@ impl NodeIdx {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) struct ControlByte(u8);
 
 impl ControlByte {
@@ -101,6 +101,22 @@ pub(crate) struct Node<D: MaxDepth, T: Copy> {
 
     _d: PhantomData<D>,
 }
+
+impl<D: MaxDepth, T: Copy + Eq> PartialEq for Node<D, T> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.ctrl_byte != other.ctrl_byte {
+            return false;
+        }
+
+        if self.is_leaf() {
+            self.value() == other.value()
+        } else {
+            self.octet() == other.octet()
+        }
+    }
+}
+
+impl<D: MaxDepth, T: Copy + Eq> Eq for Node<D, T> {}
 
 impl<D: MaxDepth, T: Copy> Clone for Node<D, T> {
     fn clone(&self) -> Self {
@@ -180,6 +196,11 @@ pub(crate) union NodeData<T: Copy> {
 
 /// A cubic octree
 pub struct Octree<D: MaxDepth, T: Copy + Eq> {
+    // This field is visible to the rest of the crate during testing so that we can
+    // inspect the internals of the octree.
+    #[cfg(test)]
+    pub(crate) nodes: Vec<Node<D, T>>,
+    #[cfg(not(test))]
     nodes: Vec<Node<D, T>>,
 }
 
@@ -234,35 +255,58 @@ impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
         self.root().get_value()
     }
 
+    /// Remove orphan nodes from the octree. An orphan node is a node that
+    /// is not pointed to by any other node, and is therefore inaccessible.
+    /// The tree doesn't automatically clear these so this function is provided as a
+    /// form of garbage collection.
     #[inline]
     pub fn remove_orphans(&mut self) {
         let mut new_nodes = Vec::<Node<D, T>>::with_capacity(self.nodes.len());
 
         let root = *self.root();
 
-        let mut queued = vec![root];
-        while let Some(mut node) = queued.pop() {
-            let Some(octet) = node.get_octet() else {
-                // If this node doesn't have an octet, then it's a leaf, so we can add it do our
-                // new nodes without worrying about updating any indices
-                new_nodes.push(node);
-                continue;
-            };
+        let Some(root_octet) = root.get_octet() else {
+            // If the root node is a leaf then we can't access any other potential nodes that
+            // might exist in this octree, so we just update ourselves to be a root-only octree.
+            self.nodes = vec![root];
+            return;
+        };
 
-            // This node is an octet, so we'll need to handle indices
-            let octet_start = 1 + new_nodes.len();
-            node.set_octet(Octet::from_usize(octet_start));
-            new_nodes.push(node);
+        // The root node must always be present at index 0.
+        new_nodes.push(root);
 
-            // Queue the octets to be copied over next
-            let octet_nodes = &self.nodes[octet.indices_usize()];
-            // TODO: figure out whats most cache-friendly for the queue/stack
-            queued.extend_from_slice(octet_nodes);
+        // Stores pairs of octets and the index (in the new nodes) they belong to.
+        // The index is an index in the new nodes while the octet is an octet in the old nodes.
+        // We start off with the root node at index 0.
+        let mut queued = VecDeque::from([(0usize, root_octet)]);
+
+        while let Some((node_index, octet)) = queued.pop_front() {
+            // We'll be inserting our 8 new nodes at the end of our buffer, so we update the
+            // parent nodes octet accordingly
+            let new_octet_index = new_nodes.len();
+            new_nodes[node_index].set_octet(Octet::from_usize(new_octet_index));
+
+            // Add this node's octet to the new nodes.
+            let copied_nodes = &self.nodes[octet.indices_usize()];
+            new_nodes.extend_from_slice(copied_nodes);
+
+            // Queue non-leaf nodes in this octet for recursive addition
+            for (i, node) in copied_nodes.iter().enumerate() {
+                let Some(octet) = node.get_octet() else {
+                    continue;
+                };
+
+                // The octet we're traversing from starts at 'new_octet_index'
+                let index = new_octet_index + i;
+                queued.push_back((index, octet));
+            }
         }
+
+        self.nodes = new_nodes;
     }
 
     #[inline]
-    fn insert_at_node(&mut self, node_idx: NodeIdx, node_pos: NodePos, target: NodePos, value: T) {
+    fn insert_at_node(&mut self, node_idx: NodeIdx, node_pos: NPos, target: NPos, value: T) {
         let mut node_idx = node_idx;
         let mut node_pos = node_pos;
 
@@ -297,15 +341,12 @@ impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
 
         let node = self.node_mut(node_idx);
         node.set_leaf(value);
-
-        dbg!(node_pos);
-        dbg!(node_idx);
     }
 
-    fn deepest_existing_node(&self, target: NodePos) -> (NodePos, NodeIdx) {
+    fn deepest_existing_node(&self, target: NPos) -> (NPos, NodeIdx) {
         let mut cur_node = self.root();
         let mut cur_node_idx = NodeIdx::root();
-        let mut cur_node_pos = NodePos::root();
+        let mut cur_node_pos = NPos::root();
 
         while !cur_node.is_leaf() && target.depth > cur_node_pos.depth {
             let octet = cur_node.octet();
@@ -315,7 +356,6 @@ impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
 
             cur_node = self.node(node_index);
             cur_node_idx = node_index;
-            // TODO: safety guarantees
             cur_node_pos = cur_node_pos.next_level_position(target);
         }
 
@@ -324,14 +364,25 @@ impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
 
     // TODO: docs
     #[inline]
-    pub fn insert(&mut self, target: NodePos, value: T) {
+    pub fn insert(&mut self, target: NPos, value: T) {
         let (deepest_node_pos, deepest_node_idx) = self.deepest_existing_node(target);
-        self.insert_at_node(deepest_node_idx, deepest_node_pos, target, value);
+
+        if deepest_node_pos.depth == target.depth {
+            // If we have a node at the target depth, then just set the value here.
+            // This creates orphan nodes if this node was an octet, so we need to clean those
+            // up later.
+            self.node_mut(deepest_node_idx).set_leaf(value);
+        } else if self.node(deepest_node_idx).value() != &value {
+            // This test can technically panic, but won't (or rather shouldn't lol) because
+            // if we reach this point we already know that our target is deeper than the deepest
+            // node, meaning the deepest node must be a leaf.
+            self.insert_at_node(deepest_node_idx, deepest_node_pos, target, value);
+        }
     }
 
     // TODO: docs
     #[inline]
-    pub fn get(&self, target: NodePos) -> &T {
+    pub fn get(&self, target: NPos) -> &T {
         let (_, deepest_node_idx) = self.deepest_existing_node(target);
         let node = self.node(deepest_node_idx);
 
@@ -388,12 +439,12 @@ impl OctantPos {
 
 /// The position of a node within an octree.
 #[derive(Copy, Clone, Debug)]
-pub struct NodePos {
+pub struct NPos {
     depth: u8,
     pos: UVec3,
 }
 
-impl NodePos {
+impl NPos {
     /// Create a new node position. The provided position is the position of the node
     /// in the grid at the provided depth.
     #[inline]
@@ -409,10 +460,6 @@ impl NodePos {
     }
 
     /// Calculates which octant at this node position the target node position is in.
-    ///
-    /// ## SAFETY
-    /// - The target depth must be greater than or equal to the current depth.
-    /// - The target position must be inside of this node's octet (this function just finds the *octant*)
     #[inline]
     pub fn octant_pos(&self, target: Self) -> OctantPos {
         debug_assert!(target.depth > self.depth);
@@ -435,7 +482,7 @@ impl NodePos {
 
     // TODO: docs and safety
     #[inline]
-    pub fn next_level_position(&self, target: Self) -> NodePos {
+    pub fn next_level_position(&self, target: Self) -> NPos {
         debug_assert!(target.depth > self.depth);
 
         let depth_diff = target.depth - self.depth;
@@ -445,7 +492,7 @@ impl NodePos {
 
         let nxl_pos = target.pos >> nxl_dd;
 
-        NodePos::new(self.depth + 1, nxl_pos)
+        NPos::new(self.depth + 1, nxl_pos)
     }
 }
 
@@ -456,11 +503,82 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "todo"]
+    fn test_leaf_merge() {
+        todo!()
+    }
+
+    #[test]
+    fn test_orphan_removal() {
+        let mut octree = Octree::<X6, i32>::new(11);
+
+        for x in 0..2 {
+            for y in 0..2 {
+                for z in 0..2 {
+                    let offset = uvec3(x, y, z);
+                    let depth_2_pos = offset + (uvec3(0, 1, 0) * 2);
+
+                    octree.insert(NPos::new(2, depth_2_pos), 1337);
+                }
+            }
+        }
+
+        for x in 0..2 {
+            for y in 0..2 {
+                for z in 0..2 {
+                    assert_eq!(11, *octree.get(NPos::new(2, uvec3(x, y, z))));
+                    assert_eq!(
+                        1337,
+                        *octree.get(NPos::new(2, uvec3(x, y, z) + (uvec3(0, 1, 0) * 2)))
+                    );
+                }
+            }
+        }
+
+        octree.insert(NPos::new(1, uvec3(0, 1, 0)), 42);
+
+        for x in 0..2 {
+            for y in 0..2 {
+                for z in 0..2 {
+                    assert_eq!(11, *octree.get(NPos::new(2, uvec3(x, y, z))));
+                    // We overwrote this node
+                    assert_eq!(
+                        42,
+                        *octree.get(NPos::new(2, uvec3(x, y, z) + (uvec3(0, 1, 0) * 2)))
+                    );
+                }
+            }
+        }
+
+        let previous_length = octree.nodes.len();
+
+        octree.remove_orphans();
+
+        let current_length = octree.nodes.len();
+
+        // We should have removed something
+        assert!(previous_length > current_length);
+
+        for x in 0..2 {
+            for y in 0..2 {
+                for z in 0..2 {
+                    assert_eq!(11, *octree.get(NPos::new(2, uvec3(x, y, z))));
+                    // We overwrote this node
+                    assert_eq!(
+                        42,
+                        *octree.get(NPos::new(2, uvec3(x, y, z) + (uvec3(0, 1, 0) * 2)))
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_node_insert_and_get() {
         let mut octree = Octree::<X6, _>::new(42);
-        octree.insert(NodePos::new(1, uvec3(1, 1, 1)), 43);
+        octree.insert(NPos::new(1, uvec3(1, 1, 1)), 43);
 
-        let value_at_inserted_pos = *octree.get(NodePos::new(1, uvec3(1, 1, 1)));
+        let value_at_inserted_pos = *octree.get(NPos::new(1, uvec3(1, 1, 1)));
         assert_eq!(43, value_at_inserted_pos);
 
         let untouched_positions = [
@@ -475,22 +593,22 @@ mod tests {
         ];
 
         for untouched_pos in untouched_positions {
-            let untouched_value = *octree.get(NodePos::new(1, untouched_pos));
+            let untouched_value = *octree.get(NPos::new(1, untouched_pos));
             assert_eq!(42, untouched_value);
         }
         // Set this position back to 42
-        octree.insert(NodePos::new(1, uvec3(1, 1, 1)), 42);
+        octree.insert(NPos::new(1, uvec3(1, 1, 1)), 42);
 
         for x in 0..2 {
             for y in 0..2 {
                 for z in 0..2 {
                     let pos = uvec3(x, y, z);
-                    assert_eq!(42, *octree.get(NodePos::new(1, pos)));
+                    assert_eq!(42, *octree.get(NPos::new(1, pos)));
                 }
             }
         }
 
-        octree.insert(NodePos::new(6, uvec3(3, 3, 3)), 44);
+        octree.insert(NPos::new(6, uvec3(3, 3, 3)), 44);
 
         for x in 0..64 {
             for y in 0..64 {
@@ -501,12 +619,12 @@ mod tests {
                         continue;
                     }
 
-                    assert_eq!(42, *octree.get(NodePos::new(6, pos)));
+                    assert_eq!(42, *octree.get(NPos::new(6, pos)));
                 }
             }
         }
 
-        assert_eq!(44, *octree.get(NodePos::new(6, uvec3(3, 3, 3))));
+        assert_eq!(44, *octree.get(NPos::new(6, uvec3(3, 3, 3))));
     }
 
     #[test]
@@ -532,12 +650,12 @@ mod tests {
 
         assert_eq!(
             OctantPos::from_pos_unchecked(uvec3(1, 1, 1)),
-            NodePos::new(4, uvec3(0, 0, 0)).octant_pos(NodePos::new(6, uvec3(3, 3, 3)))
+            NPos::new(4, uvec3(0, 0, 0)).octant_pos(NPos::new(6, uvec3(3, 3, 3)))
         );
 
         assert_eq!(
             OctantPos::from_pos_unchecked(uvec3(0, 1, 0)),
-            NodePos::new(4, uvec3(7, 7, 7)).octant_pos(NodePos::new(6, uvec3(28, 31, 28)))
+            NPos::new(4, uvec3(7, 7, 7)).octant_pos(NPos::new(6, uvec3(28, 31, 28)))
         );
 
         // TODO: more thorough testing here
