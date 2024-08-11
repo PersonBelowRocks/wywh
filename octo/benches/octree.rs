@@ -37,6 +37,19 @@ fn octree_read_0_or_1<D: MaxDepth>(octree: &Octree<D, u64>, npos: NPos) {
     // assert!(out == 0 || out == 1);
 }
 
+fn octree_read_full_cartesian<D: MaxDepth>(octree: &Octree<D, u64>) {
+    for x in 0..D::DIMENSIONS {
+        for y in 0..D::DIMENSIONS {
+            for z in 0..D::DIMENSIONS {
+                let npos = NPos::new(D::DEPTH, uvec3(x, y, z));
+
+                let out = *octree.get(npos);
+                assert!(out == 0 || out == 1);
+            }
+        }
+    }
+}
+
 /// Fluffy octree benchmarking
 fn benchmark_fluffy_octree<D: MaxDepth>(c: &mut Criterion) {
     let group_name = format!("fluffy_octree MAX_DEPTH={} ", D::DEPTH);
@@ -48,6 +61,14 @@ fn benchmark_fluffy_octree<D: MaxDepth>(c: &mut Criterion) {
         b.iter_batched(
             || (fluffy_octree::<D>(), random_node_pos::<D, _>(&mut rng)),
             |(octree, npos)| octree_read_0_or_1(&octree, npos),
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function(" full_octree_read", |b| {
+        b.iter_batched(
+            || fluffy_octree::<D>(),
+            |octree| octree_read_full_cartesian(black_box(&octree)),
             BatchSize::LargeInput,
         );
     });

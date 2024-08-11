@@ -352,7 +352,12 @@ impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
         let mut cur_node_idx = NodeIdx::root();
         let mut cur_node_pos = NPos::root();
 
-        while !cur_node.is_leaf() && target.depth > cur_node_pos.depth {
+        for _ in 0..=D::DEPTH {
+            debug_assert!(cur_node_pos.depth <= target.depth);
+            if cur_node.is_leaf() || cur_node_pos.depth == target.depth {
+                return (cur_node_pos, cur_node_idx);
+            }
+
             let octet = cur_node.octet();
             let octant_pos = cur_node_pos.octant_pos(target);
 
@@ -363,7 +368,19 @@ impl<D: MaxDepth, T: Copy + Eq> Octree<D, T> {
             cur_node_pos = cur_node_pos.next_level_position(target);
         }
 
-        (cur_node_pos, cur_node_idx)
+        unreachable!();
+        // while !cur_node.is_leaf() && target.depth > cur_node_pos.depth {
+        //     let octet = cur_node.octet();
+        //     let octant_pos = cur_node_pos.octant_pos(target);
+
+        //     let node_index = octet.octant(octant_pos);
+
+        //     cur_node = self.node(node_index);
+        //     cur_node_idx = node_index;
+        //     cur_node_pos = cur_node_pos.next_level_position(target);
+        // }
+
+        // (cur_node_pos, cur_node_idx)
     }
 
     // TODO: docs
