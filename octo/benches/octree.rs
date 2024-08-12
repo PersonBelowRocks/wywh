@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use glam::uvec3;
-use octo::{MaxDepth, NPos, Octree, X1, X2, X3, X4, X5, X6};
+use octo::octree::{MaxDepth, NPos, Octree, X1, X2, X3, X4, X5, X6};
 use rand::Rng;
 
 /// Create a "fluffy" octree. An octree can be considered "fluffy" if it has
@@ -58,17 +58,17 @@ fn benchmark_fluffy_octree<D: MaxDepth>(c: &mut Criterion) {
     group.bench_function(" single_read", |b| {
         let mut rng = rand::thread_rng();
 
-        b.iter_batched(
+        b.iter_batched_ref(
             || (fluffy_octree::<D>(), random_node_pos::<D, _>(&mut rng)),
-            |(octree, npos)| octree_read_0_or_1(&octree, npos),
+            |(octree, npos)| octree_read_0_or_1(octree, *npos),
             BatchSize::LargeInput,
         );
     });
 
     group.bench_function(" full_octree_read", |b| {
-        b.iter_batched(
+        b.iter_batched_ref(
             || fluffy_octree::<D>(),
-            |octree| octree_read_full_cartesian(black_box(&octree)),
+            |octree| octree_read_full_cartesian(black_box(octree)),
             BatchSize::LargeInput,
         );
     });

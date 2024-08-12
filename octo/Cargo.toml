@@ -16,18 +16,19 @@ codegen-units = 1
 rpath = false
 
 [dependencies]
-bytemuck = { version = "1.16.3", features = ["derive"] }
 derive-new = "0.6.0"
-get-size = { version = "0.1.4", features = ["derive"] }
 glam = "0.28.0"
-rangemap = "1.5.1"
-simba = { version = "0.9.0", features = ["libm"] }
+ndarray = "0.16.0"
+static_assertions = "1.1.0"
 
 [dev-dependencies]
-cpuprofiler = "0.0.4"
 criterion = "0.5.1"
 rand = "0.8.5"
 
 [[bench]]
 name = "octree"
+harness = false
+
+[[bench]]
+name = "lensed"
 harness = false
