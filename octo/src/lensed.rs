@@ -49,6 +49,17 @@ impl<T: Copy> Lens<T> {
         &self.0[i0][i1][i2]
     }
 
+    /// Get the cell at the given position.
+    ///
+    /// ## SAFETY
+    /// All cell index components must be less than [`LENS_DIMS`]
+    #[inline]
+    #[must_use]
+    pub unsafe fn get_cell_unchecked(&self, cell: [u8; 3]) -> &LensCell<T> {
+        let (i0, i1, i2) = usizes(cell);
+        unsafe { self.0.get_unchecked(i0).get_unchecked(i1).get_unchecked(i2) }
+    }
+
     /// Set the cell at the given position to a shallow value.
     ///
     /// ## Panics
@@ -59,6 +70,23 @@ impl<T: Copy> Lens<T> {
         self.0[i0][i1][i2] = LensCell::Shallow(value);
     }
 
+    /// Set the cell at the given position to a shallow value.
+    ///
+    /// ## SAFETY
+    /// All cell index components must be less than [`LENS_DIMS`]
+    #[inline]
+    pub unsafe fn set_cell_shallow_unchecked(&mut self, cell: [u8; 3], value: T) {
+        let (i0, i1, i2) = usizes(cell);
+        let slot = unsafe {
+            self.0
+                .get_unchecked_mut(i0)
+                .get_unchecked_mut(i1)
+                .get_unchecked_mut(i2)
+        };
+
+        *slot = LensCell::Shallow(value);
+    }
+
     /// Set the cell at the given position to an index
     ///
     /// ## Panics
@@ -67,6 +95,23 @@ impl<T: Copy> Lens<T> {
     pub fn set_cell_deep(&mut self, cell: [u8; 3], index: u16) {
         let (i0, i1, i2) = usizes(cell);
         self.0[i0][i1][i2] = LensCell::Deep(index);
+    }
+
+    /// Set the cell at the given position to an index
+    ///
+    /// ## SAFETY
+    /// All cell index components must be less than [`LENS_DIMS`]
+    #[inline]
+    pub unsafe fn set_cell_deep_unchecked(&mut self, cell: [u8; 3], index: u16) {
+        let (i0, i1, i2) = usizes(cell);
+        let slot = unsafe {
+            self.0
+                .get_unchecked_mut(i0)
+                .get_unchecked_mut(i1)
+                .get_unchecked_mut(i2)
+        };
+
+        *slot = LensCell::Deep(index);
     }
 }
 
@@ -97,10 +142,29 @@ impl<T: Copy> PaletteEntryBuffer<T> {
     }
 
     #[inline]
+    pub unsafe fn get_unchecked(&self, i: [u8; 3]) -> &T {
+        let (i0, i1, i2) = usizes(i);
+
+        unsafe { self.0.get_unchecked(i0).get_unchecked(i1).get_unchecked(i2) }
+    }
+
+    #[inline]
     pub fn get_mut(&mut self, i: [u8; 3]) -> &mut T {
         let (i0, i1, i2) = usizes(i);
 
         &mut self.0[i0][i1][i2]
+    }
+
+    #[inline]
+    pub unsafe fn get_mut_unchecked(&mut self, i: [u8; 3]) -> &mut T {
+        let (i0, i1, i2) = usizes(i);
+
+        unsafe {
+            self.0
+                .get_unchecked_mut(i0)
+                .get_unchecked_mut(i1)
+                .get_unchecked_mut(i2)
+        }
     }
 }
 
@@ -220,9 +284,26 @@ impl<T: Copy> LensedStorage<T> {
     }
 
     #[inline]
+    pub unsafe fn get_peb_unchecked(&self, li: [u8; 3]) -> Option<&PaletteEntryBuffer<T>> {
+        let palette_index = self.get_palette_index(li)?;
+        let entry = unsafe { self.palette.get_unchecked(palette_index) };
+        Some(&entry.buf)
+    }
+
+    #[inline]
     pub fn get_peb_mut(&mut self, li: [u8; 3]) -> Option<&mut PaletteEntryBuffer<T>> {
         let palette_index = self.get_palette_index(li)?;
         Some(&mut self.palette[palette_index].buf)
+    }
+
+    #[inline]
+    pub unsafe fn get_peb_mut_unchecked(
+        &mut self,
+        li: [u8; 3],
+    ) -> Option<&mut PaletteEntryBuffer<T>> {
+        let palette_index = self.get_palette_index(li)?;
+        let entry = unsafe { self.palette.get_unchecked_mut(palette_index) };
+        Some(&mut entry.buf)
     }
 
     #[inline]
