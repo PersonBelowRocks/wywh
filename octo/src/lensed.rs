@@ -28,25 +28,25 @@ impl<T: Copy> LensCell<T> {
 
 /// TODO: docs
 #[derive(Clone)]
-pub struct Lens<T: Copy>(nda::Array3<LensCell<T>>);
+pub struct Lens<T: Copy>([[[LensCell<T>; LENS_DIMS]; LENS_DIMS]; LENS_DIMS]);
 
 impl<T: Copy> Lens<T> {
     /// Create a new shallow-filled lens of the given value.
     #[inline]
     #[must_use]
     pub fn new(value: T) -> Self {
-        Self(nda::Array3::from_elem(LENS_SHAPE, LensCell::Shallow(value)))
+        Self([[[LensCell::Shallow(value); LENS_DIMS]; LENS_DIMS]; LENS_DIMS])
     }
 
     /// Get the cell at the given position.
     ///
     /// ## Panics
-    /// Panics if any of the indices exceed [`LENS_MAX_SIZE`]
+    /// Panics if any of the indices exceed [`LENS_DIMS`]
     #[inline]
     #[must_use]
     pub fn get_cell(&self, cell: [u8; 3]) -> &LensCell<T> {
-        let i = usizes(cell);
-        &self.0[i]
+        let (i0, i1, i2) = usizes(cell);
+        &self.0[i0][i1][i2]
     }
 
     /// Set the cell at the given position to a shallow value.
@@ -55,8 +55,8 @@ impl<T: Copy> Lens<T> {
     /// Panics if any of the indices exceed [`LENS_MAX_SIZE`]
     #[inline]
     pub fn set_cell_shallow(&mut self, cell: [u8; 3], value: T) {
-        let i = usizes(cell);
-        self.0[i] = LensCell::Shallow(value);
+        let (i0, i1, i2) = usizes(cell);
+        self.0[i0][i1][i2] = LensCell::Shallow(value);
     }
 
     /// Set the cell at the given position to an index
@@ -65,8 +65,8 @@ impl<T: Copy> Lens<T> {
     /// Panics if any of the indices exceed [`LENS_MAX_SIZE`]
     #[inline]
     pub fn set_cell_deep(&mut self, cell: [u8; 3], index: u16) {
-        let i = usizes(cell);
-        self.0[i] = LensCell::Deep(index);
+        let (i0, i1, i2) = usizes(cell);
+        self.0[i0][i1][i2] = LensCell::Deep(index);
     }
 }
 
@@ -74,7 +74,6 @@ pub const PEB_DIMS: usize = 8;
 static_assertions::const_assert!(PEB_DIMS <= (u8::MAX as usize));
 
 pub const STORAGE_DIMS: u8 = (PEB_DIMS as u8) * (LENS_DIMS as u8);
-static_assertions::const_assert!(STORAGE_DIMS <= u8::MAX);
 
 #[derive(Clone)]
 pub struct PaletteEntryBuffer<T: Copy>([[[T; PEB_DIMS]; PEB_DIMS]; PEB_DIMS]);

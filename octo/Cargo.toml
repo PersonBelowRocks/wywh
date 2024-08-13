@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [profile.bench]
-opt-level = 3
+opt-level = 2
 debug = "full"
 strip = "none"
 debug-assertions = false
