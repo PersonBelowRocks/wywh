@@ -51,7 +51,7 @@ impl<T: Copy> Lens<T> {
 
     /// Get the cell at the given position.
     ///
-    /// ## SAFETY
+    /// ## Safety
     /// All cell index components must be less than [`LENS_DIMS`]
     #[inline]
     #[must_use]
@@ -72,7 +72,7 @@ impl<T: Copy> Lens<T> {
 
     /// Set the cell at the given position to a shallow value.
     ///
-    /// ## SAFETY
+    /// ## Safety
     /// All cell index components must be less than [`LENS_DIMS`]
     #[inline]
     pub unsafe fn set_cell_shallow_unchecked(&mut self, cell: [u8; 3], value: T) {
@@ -99,7 +99,7 @@ impl<T: Copy> Lens<T> {
 
     /// Set the cell at the given position to an index
     ///
-    /// ## SAFETY
+    /// ## Safety
     /// All cell index components must be less than [`LENS_DIMS`]
     #[inline]
     pub unsafe fn set_cell_deep_unchecked(&mut self, cell: [u8; 3], index: u16) {
@@ -211,6 +211,7 @@ fn is_in_bounds(i: [u8; 3]) -> bool {
     lens_index(i).into_iter().all(|e| e < LENS_DIMS as u8)
 }
 
+#[derive(Clone)]
 pub struct LensedStorage<T: Copy> {
     lens: Lens<T>,
     palette: Vec<PaletteEntry<T>>,

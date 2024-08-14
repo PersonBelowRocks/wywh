@@ -57,10 +57,11 @@ fn seeded_rng() -> StdRng {
     StdRng::seed_from_u64(rng_seed)
 }
 
-fn get_single<T: Copy>(s: &LensedStorage<T>, p: [u8; 3]) -> &T {
-    s.get(p)
+fn get_single<T: Copy>(s: &LensedStorage<T>, p: [u8; 3]) -> T {
+    *s.get(p)
 }
 
+#[allow(clippy::declare_interior_mutable_const)]
 const BOX_OFFSETS: LazyCell<[[i8; 3]; 28]> = LazyCell::new(|| {
     let mut offsets = [[0; 3]; 28];
     let mut i = 0;
@@ -77,7 +78,7 @@ const BOX_OFFSETS: LazyCell<[[i8; 3]; 28]> = LazyCell::new(|| {
     offsets
 });
 
-fn get_3x3x3<T: Copy>(s: &LensedStorage<T>, p: [u8; 3]) -> [&T; 28] {
+fn get_3x3x3<T: Copy>(s: &LensedStorage<T>, p: [u8; 3]) -> [T; 28] {
     array::from_fn(|i| {
         let offset_p = [
             ((p[0] as i8) + BOX_OFFSETS[i][0]) as u8,
@@ -85,7 +86,7 @@ fn get_3x3x3<T: Copy>(s: &LensedStorage<T>, p: [u8; 3]) -> [&T; 28] {
             ((p[2] as i8) + BOX_OFFSETS[i][2]) as u8,
         ];
 
-        s.get(offset_p)
+        *s.get(offset_p)
     })
 }
 
@@ -93,16 +94,11 @@ fn get_single_for_integer<R: Rng, T: Copy + Default>(bencher: &mut Bencher, mut 
 where
     Standard: Distribution<T>,
 {
+    let storage = populated_lensed_storage::<_, T>(rng);
+
     bencher.iter_batched_ref(
-        || {
-            (
-                populated_lensed_storage::<_, T>(&mut rng),
-                random_index(&mut rng),
-            )
-        },
-        |(storage, index)| {
-            black_box(get_single(storage, *index));
-        },
+        || (storage.clone(), random_index(&mut rng)),
+        |(storage, index)| get_single(storage, *index),
         BatchSize::LargeInput,
     );
 }
@@ -111,16 +107,11 @@ fn get_3x3x3_for_integer<R: Rng, T: Copy + Default>(bencher: &mut Bencher, mut r
 where
     Standard: Distribution<T>,
 {
+    let storage = populated_lensed_storage::<_, T>(rng);
+
     bencher.iter_batched_ref(
-        || {
-            (
-                populated_lensed_storage::<_, T>(&mut rng),
-                random_index_not_border(&mut rng),
-            )
-        },
-        |(storage, index)| {
-            black_box(get_3x3x3(storage, *index));
-        },
+        || (storage.clone(), random_index_not_border(&mut rng)),
+        |(storage, index)| get_3x3x3(storage, *index),
         BatchSize::LargeInput,
     );
 }
@@ -157,11 +148,11 @@ where
     Standard: Distribution<T>,
     u128: From<T>,
 {
+    let storage = populated_lensed_storage::<_, T>(rng);
+
     bencher.iter_batched_ref(
-        || (populated_lensed_storage::<_, T>(&mut rng), all_indices()),
-        |(storage, indices)| {
-            black_box(get_entire_sum(storage, indices));
-        },
+        || (storage.clone(), all_indices()),
+        |(storage, indices)| get_entire_sum(storage, indices),
         BatchSize::LargeInput,
     );
 }

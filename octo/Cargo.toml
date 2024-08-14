@@ -20,6 +20,7 @@ derive-new = "0.6.0"
 glam = "0.28.0"
 ndarray = "0.16.0"
 static_assertions = "1.1.0"
+thiserror = "1.0.63"
 
 [dev-dependencies]
 criterion = "0.5.1"
@@ -31,4 +32,8 @@ harness = false
 
 [[bench]]
 name = "lensed"
+harness = false
+
+[[bench]]
+name = "subdiv"
 harness = false
