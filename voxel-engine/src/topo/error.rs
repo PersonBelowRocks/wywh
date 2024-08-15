@@ -1,6 +1,6 @@
 use crate::util::ConversionError;
 
-use super::storage::error::OutOfBounds;
+use super::world::OutOfBounds;
 
 #[derive(te::Error, Debug, PartialEq, Eq, Clone)]
 pub enum ChunkAccessError {

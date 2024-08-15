@@ -12,7 +12,7 @@ use crate::{
     util::cubic::Cubic,
 };
 
-use super::storage::error::OutOfBounds;
+use super::world::OutOfBounds;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum BlockVoxel {

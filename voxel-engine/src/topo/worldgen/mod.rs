@@ -150,24 +150,25 @@ async fn internal_worker_task(
             flags.insert(ChunkFlags::GENERATING);
         });
 
-        let result = cref.with_access(true, |mut access| {
-            match generator.write_to_chunk(cpos, &mut access) {
-                Ok(()) => {
-                    // Optimize the chunk a bit before we flag it as updated. This can make
-                    // building the mesh for this chunk faster.
-                    access.coalesce_microblocks();
-                    access.optimize_internal_storage();
-                }
-                Err(error) => {
-                    error!("Generator raised an error generating chunk at {cpos}: {error}")
-                }
-            }
-        });
+        let result: Result<(), ()> = todo!();
+        // let result = cref.with_access(true, |mut access| {
+        //     match generator.write_to_chunk(cpos, &mut access) {
+        //         Ok(()) => {
+        //             // Optimize the chunk a bit before we flag it as updated. This can make
+        //             // building the mesh for this chunk faster.
+        //             access.coalesce_microblocks();
+        //             access.optimize_internal_storage();
+        //         }
+        //         Err(error) => {
+        //             error!("Generator raised an error generating chunk at {cpos}: {error}")
+        //         }
+        //     }
+        // });
 
-        if let Err(error) = result {
-            error!("Error getting write access to chunk '{cpos}': {error}");
-            return;
-        }
+        // if let Err(error) = result {
+        //     error!("Error getting write access to chunk '{cpos}': {error}");
+        //     return;
+        // }
 
         // At last we remove both the primordial flag and the generating flag, indicating that
         // this chunk is ready to be treated as any other chunk.

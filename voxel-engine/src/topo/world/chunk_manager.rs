@@ -22,10 +22,7 @@ use crate::{
     util::{ivec3_to_1d, ChunkMap},
 };
 
-use super::{
-    chunk::ChunkFlags, Chunk, ChunkContainerError, ChunkManagerError, ChunkPos, ChunkRef,
-    ChunkRefReadAccess,
-};
+use super::{chunk::ChunkFlags, Chunk, ChunkContainerError, ChunkManagerError, ChunkPos, ChunkRef};
 
 #[derive(Default)]
 pub struct LoadedChunkContainer {
@@ -466,9 +463,7 @@ impl ChunkManager {
                 continue;
             };
 
-            accesses[i] = Some(ChunkRefReadAccess {
-                block_variants: cref.chunk.variants.read_access(),
-            });
+            accesses[i] = todo!();
         }
 
         let neighbors = Neighbors::from_raw(accesses, BlockVoxel::Full(self.default_block));

@@ -10,6 +10,7 @@ anymap = "0.12.1"
 ascii = { version = "1.1.0", features = ["serde"] }
 bevy = {workspace = true}
 mip-texture-array = {path = "../mip-texture-array"}
+octo = {path = "../octo"}
 bevy_crevice = "0.7.0"
 bevy_rapier3d = "0.23.0"
 bimap = "0.6.3"
@@ -61,16 +62,3 @@ overload = "0.1.1"
 [dev-dependencies]
 criterion = "0.5.1"
 itertools = "0.11.0"
-
-[[bench]]
-name = "layered_chunk_storage"
-harness = false
-
-
-[[bench]]
-name = "hashmap_chunk_storage"
-harness = false
-
-[[bench]]
-name = "indexed_chunk_storage"
-harness = false

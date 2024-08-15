@@ -42,3 +42,7 @@ pub enum ChunkFlagError {
     #[error("Unknown flag(s) in chunk flags: {0}")]
     UnknownFlags(u32),
 }
+
+#[derive(te::Error, Debug, PartialEq, Eq, Clone)]
+#[error("Index was out of bounds for volume")]
+pub struct OutOfBounds;

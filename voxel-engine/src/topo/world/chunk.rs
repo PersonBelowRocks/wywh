@@ -12,7 +12,6 @@ use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::block::{BlockVoxel, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
-use crate::topo::storage::containers::data_storage::SyncIndexedChunkContainer;
 
 #[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
 pub struct ChunkPos(IVec3);
@@ -134,7 +133,7 @@ impl ChunkLoadReasons {
 pub struct Chunk {
     pub flags: RwLock<ChunkFlags>,
     pub load_reasons: RwLock<ChunkLoadReasons>,
-    pub variants: SyncIndexedChunkContainer<BlockVoxel>,
+    pub variants: (), // TODO:
 }
 
 const CHUNK_SIZE: usize = 16;
@@ -164,7 +163,7 @@ impl Chunk {
         Self {
             flags: RwLock::new(initial_flags),
             load_reasons: RwLock::new(load_reasons),
-            variants: SyncIndexedChunkContainer::filled(filling),
+            variants: todo!(), // SyncIndexedChunkContainer::filled(filling),
         }
     }
 }

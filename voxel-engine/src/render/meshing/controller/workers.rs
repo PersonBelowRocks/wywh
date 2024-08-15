@@ -97,9 +97,7 @@ impl Worker {
                     };
 
                     let chunk = cm.get_loaded_chunk(cmd.pos, false)?;
-                    Ok(chunk.with_read_access(|access| {
-                        params.mesher.build(access, context)
-                    })??)
+                    todo!()
                 }).map_err(ChunkMeshingError::from).custom_flatten();
 
                 match result {

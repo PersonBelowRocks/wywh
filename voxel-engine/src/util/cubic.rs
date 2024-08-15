@@ -3,7 +3,7 @@ use std::array;
 use bevy::math::UVec3;
 use slice_of_array::SliceFlatExt;
 
-use crate::topo::storage::error::OutOfBounds;
+use crate::topo::world::OutOfBounds;
 
 use super::{uvec_to_usize_arr, CubicArray};
 

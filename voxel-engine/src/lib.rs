@@ -33,9 +33,6 @@ pub mod render;
 pub mod topo;
 pub mod util;
 
-#[cfg(test)]
-pub mod testing_utils;
-
 use crate::{
     data::systems::{build_registries, check_textures, load_textures, VariantFolders},
     render::{core::RenderCore, meshing::controller::MeshController},

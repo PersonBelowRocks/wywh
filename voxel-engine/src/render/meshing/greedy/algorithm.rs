@@ -21,9 +21,7 @@ use crate::render::quad::GpuQuad;
 use crate::render::quad::GpuQuadBitfields;
 
 use crate::topo::block::SubdividedBlock;
-use crate::topo::world::CaoBlock;
 use crate::topo::world::Chunk;
-use crate::topo::world::Crra;
 
 use super::greedy_mesh::ChunkSliceMask;
 
@@ -109,80 +107,82 @@ impl GreedyMesher {
     }
 
     fn calculate_slice_quads<'chunk>(&mut self, cqs: &ChunkQuadSlice<'_, 'chunk>) -> CqsResult<()> {
-        let mut mask = ChunkSliceMask::new();
+        todo!()
 
-        for cs_x in 0..Chunk::SIZE {
-            for cs_y in 0..Chunk::SIZE {
-                let cs_pos = ivec2(cs_x, cs_y);
+        // let mut mask = ChunkSliceMask::new();
 
-                let block = cqs.get(cs_pos)?.block;
+        // for cs_x in 0..Chunk::SIZE {
+        //     for cs_y in 0..Chunk::SIZE {
+        //         let cs_pos = ivec2(cs_x, cs_y);
 
-                if let CaoBlock::Full(block) = block {
-                    if cqs.registry.get_by_id(block.id).model.is_none() {
-                        continue;
-                    }
-                }
+        //         let block = cqs.get(cs_pos)?.block;
 
-                if cqs.mag_at_block_edge() {
-                    let above = cqs.get_above(cs_pos)?.block;
-                    if let CaoBlock::Full(above) = above {
-                        if cqs
-                            .registry
-                            .get_by_id(above.id)
-                            .options
-                            .transparency
-                            .is_opaque()
-                        {
-                            continue;
-                        }
-                    }
-                }
+        //         if let CaoBlock::Full(block) = block {
+        //             if cqs.registry.get_by_id(block.id).model.is_none() {
+        //                 continue;
+        //             }
+        //         }
 
-                if mask.is_masked(cs_pos).unwrap() {
-                    continue;
-                }
+        //         if cqs.mag_at_block_edge() {
+        //             let above = cqs.get_above(cs_pos)?.block;
+        //             if let CaoBlock::Full(above) = above {
+        //                 if cqs
+        //                     .registry
+        //                     .get_by_id(above.id)
+        //                     .options
+        //                     .transparency
+        //                     .is_opaque()
+        //                 {
+        //                     continue;
+        //                 }
+        //             }
+        //         }
 
-                for sd_x in 0..SubdividedBlock::SUBDIVISIONS {
-                    for sd_y in 0..SubdividedBlock::SUBDIVISIONS {
-                        let fpos = ivec2(sd_x, sd_y) + (cs_pos * SubdividedBlock::SUBDIVISIONS);
+        //         if mask.is_masked(cs_pos).unwrap() {
+        //             continue;
+        //         }
 
-                        if mask.is_masked_mb(fpos).unwrap() {
-                            continue;
-                        }
+        //         for sd_x in 0..SubdividedBlock::SUBDIVISIONS {
+        //             for sd_y in 0..SubdividedBlock::SUBDIVISIONS {
+        //                 let fpos = ivec2(sd_x, sd_y) + (cs_pos * SubdividedBlock::SUBDIVISIONS);
 
-                        let Some(dataquad) = cqs.get_quad_mb(fpos)? else {
-                            continue;
-                        };
+        //                 if mask.is_masked_mb(fpos).unwrap() {
+        //                     continue;
+        //                 }
 
-                        let mut current = PositionedQuad::new(fpos, dataquad);
-                        debug_assert!(current.height() > 0);
-                        debug_assert!(current.width() > 0);
+        //                 let Some(dataquad) = cqs.get_quad_mb(fpos)? else {
+        //                     continue;
+        //                 };
 
-                        // First we try to extend the quad perpendicular to the direction we are iterating...
-                        widen_quad(fpos, &mut current, cqs, &mask)?;
-                        debug_assert!(current.width() > 0);
+        //                 let mut current = PositionedQuad::new(fpos, dataquad);
+        //                 debug_assert!(current.height() > 0);
+        //                 debug_assert!(current.width() > 0);
 
-                        // Then we extend it in the same direction we are iterating.
-                        // This supposedly leads to a higher quality mesh? I'm not sure where I read it but
-                        // it doesn't hurt to do it this way so why not.
-                        heighten_quad(fpos, &mut current, cqs, &mask)?;
-                        debug_assert!(current.height() > 0);
+        //                 // First we try to extend the quad perpendicular to the direction we are iterating...
+        //                 widen_quad(fpos, &mut current, cqs, &mask)?;
+        //                 debug_assert!(current.width() > 0);
 
-                        // mask_region will return false if any of the positions provided are outside of the
-                        // chunk bounds, so we do a little debug mode sanity check here to make sure thats
-                        // not the case, and catch the error early
-                        let result = mask.mask_mb_region_inclusive(current.min(), current.max());
-                        debug_assert!(result);
+        //                 // Then we extend it in the same direction we are iterating.
+        //                 // This supposedly leads to a higher quality mesh? I'm not sure where I read it but
+        //                 // it doesn't hurt to do it this way so why not.
+        //                 heighten_quad(fpos, &mut current, cqs, &mask)?;
+        //                 debug_assert!(current.height() > 0);
 
-                        let isoquad = cqs.isometrize(current);
+        //                 // mask_region will return false if any of the positions provided are outside of the
+        //                 // chunk bounds, so we do a little debug mode sanity check here to make sure thats
+        //                 // not the case, and catch the error early
+        //                 let result = mask.mask_mb_region_inclusive(current.min(), current.max());
+        //                 debug_assert!(result);
 
-                        self.quad_buffer_scratch.push(isoquad);
-                    }
-                }
-            }
-        }
+        //                 let isoquad = cqs.isometrize(current);
 
-        Ok(())
+        //                 self.quad_buffer_scratch.push(isoquad);
+        //             }
+        //         }
+        //     }
+        // }
+
+        // Ok(())
     }
 
     fn drain_quads(&mut self) -> (Vec<u32>, Vec<GpuQuad>) {
@@ -231,30 +231,32 @@ impl GreedyMesher {
 
     pub fn build<'reg, 'chunk>(
         &mut self,
-        access: Crra<'chunk>,
+        access: (), // TODO: Crra<'chunk>,
         cx: Context<'reg, 'chunk>,
     ) -> MesherResult {
-        let varreg = cx
-            .registries
-            .get_registry::<BlockVariantRegistry>()
-            .unwrap();
+        // let varreg = cx
+        //     .registries
+        //     .get_registry::<BlockVariantRegistry>()
+        //     .unwrap();
 
-        let mut cqs = ChunkQuadSlice::new(Face::North, 0, &access, &cx.neighbors, &varreg).unwrap();
+        // let mut cqs = ChunkQuadSlice::new(Face::North, 0, &access, &cx.neighbors, &varreg).unwrap();
 
-        for face in Face::FACES {
-            for layer in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
-                cqs.reposition(face, layer).unwrap();
+        // for face in Face::FACES {
+        //     for layer in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
+        //         cqs.reposition(face, layer).unwrap();
 
-                self.calculate_slice_quads(&cqs)?;
-            }
-        }
+        //         self.calculate_slice_quads(&cqs)?;
+        //     }
+        // }
 
-        let (idx_buf, quad_buf) = self.drain_quads();
+        // let (idx_buf, quad_buf) = self.drain_quads();
 
-        Ok(ChunkMeshData {
-            index_buffer: idx_buf,
-            quad_buffer: quad_buf,
-        })
+        // Ok(ChunkMeshData {
+        //     index_buffer: idx_buf,
+        //     quad_buffer: quad_buf,
+        // })
+
+        todo!()
     }
 }
 

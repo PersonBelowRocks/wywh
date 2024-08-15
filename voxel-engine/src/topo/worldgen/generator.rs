@@ -16,8 +16,7 @@ use crate::{
     topo::{
         block::{BlockVoxel, Microblock, SubdividedBlock},
         error::ChunkAccessError,
-        world::{chunk_ref::ChunkRefAccess, Chunk, ChunkAccessInput, ChunkPos},
-        MbWriteBehaviour, SubdivAccess,
+        world::{Chunk, ChunkPos},
     },
 };
 
@@ -118,107 +117,8 @@ impl Generator {
     pub fn write_to_chunk<'chunk>(
         &self,
         cs_pos: ChunkPos,
-        access: &mut ChunkRefAccess<'chunk>,
+        access: (), // &mut ChunkRefAccess<'chunk>,
     ) -> Result<(), GeneratorError<ChunkAccessError>> {
-        const THRESHOLD: f64 = 0.25;
-
-        let varreg = self
-            .registries
-            .get_registry::<BlockVariantRegistry>()
-            .unwrap();
-
-        let mut sd_access = SubdivAccess::new(
-            varreg,
-            access,
-            MbWriteBehaviour::Ignore,
-            Microblock::new(self.palette.void),
-        );
-
-        let stone_block = BlockVoxel::new_full(self.palette.stone);
-
-        let ws_min = cs_pos.worldspace_min();
-        let ws_min_sd = ws_min * SubdividedBlock::SUBDIVISIONS;
-        let ws_max = cs_pos.worldspace_max();
-
-        if cs_pos.y() < 0 {
-            for x in 0..Chunk::SIZE {
-                for y in 0..Chunk::SIZE {
-                    for z in 0..Chunk::SIZE {
-                        sd_access.set(
-                            ivec3(x, y, z),
-                            ChunkAccessInput::new(BlockVoxel::new_full(self.palette.water)),
-                        )?;
-                    }
-                }
-            }
-
-            return Ok(());
-        }
-
-        // FIXME: this entire section of code produces broken terrain, fix it
-        for x in 0..Chunk::SIZE {
-            for z in 0..Chunk::SIZE {
-                let ls_pos_2d = ivec2(x, z);
-                let ws_pos_2d = ls_pos_2d + ws_min.xz();
-
-                let avg_noise = self.block_corner_noise_2d(ws_pos_2d);
-
-                let height = avg_noise * 20.0 + 10.0;
-                let floored_height = height.floor() as i32;
-
-                if floored_height < 0 {
-                    continue;
-                }
-
-                if floored_height > ws_max.y {
-                    for y in 0..Chunk::SIZE {
-                        let ls_pos = ivec3(x, y, z);
-
-                        sd_access.set(ls_pos, ChunkAccessInput::new(stone_block.clone()))?;
-                    }
-                } else {
-                    let max_y = floored_height - ws_min.y;
-
-                    if max_y < 0 {
-                        continue;
-                    }
-
-                    for y in 0..max_y {
-                        let ls_pos = ivec3(x, y, z);
-
-                        sd_access.set(ls_pos, ChunkAccessInput::new(stone_block.clone()))?;
-                    }
-
-                    for mb_x in 0..4 {
-                        for mb_z in 0..4 {
-                            let ls_pos_mb_2d =
-                                ivec2(mb_x, mb_z) + (ls_pos_2d * SubdividedBlock::SUBDIVISIONS);
-
-                            let ws_pos_mb_2d = ls_pos_mb_2d + ws_min_sd.xz();
-                            let avg_noise = self.noise_mb_2d(ws_pos_mb_2d);
-
-                            let height = avg_noise * 20.0 + 10.0;
-                            let height_mb = (height * 4.0).floor() as i32;
-                            let leftovers =
-                                height_mb - (floored_height * SubdividedBlock::SUBDIVISIONS);
-
-                            if leftovers < 0 {
-                                continue;
-                            }
-
-                            for mb_y in 0..min(leftovers, 3) {
-                                let y = mb_y + (max_y * SubdividedBlock::SUBDIVISIONS);
-
-                                let ls_pos_mb = ivec3(ls_pos_mb_2d.x, y, ls_pos_mb_2d.y);
-
-                                sd_access.set_mb(ls_pos_mb, Microblock::new(self.palette.stone))?;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
+        todo!()
     }
 }
