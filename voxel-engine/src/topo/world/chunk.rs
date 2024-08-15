@@ -13,6 +13,8 @@ use crate::topo::block::{BlockVoxel, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
 
+use super::ChunkDataError;
+
 #[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
 pub struct ChunkPos(IVec3);
 
@@ -130,13 +132,71 @@ impl ChunkLoadReasons {
     }
 }
 
+/// The full-block dimensions of a chunk
+pub const CHUNK_SIZE: usize = 16;
+/// Dimensions of a subdivided block
+pub const BLOCK_SUBDIVISIONS: usize = 4;
+
+pub type ChunkDataStorageType = octo::SubdividedStorage<CHUNK_SIZE, BLOCK_SUBDIVISIONS, u32>;
+
+/// The actual voxel data of a chunk
+#[derive(Clone)]
+pub struct ChunkData {
+    default: u32,
+    storage: Option<Box<ChunkDataStorageType>>,
+}
+
+impl ChunkData {
+    /// Checks if the chunk data contains the given full-block position.
+    /// # Vectors
+    /// [`ls_pos`] is in full-block localspace.
+    #[inline]
+    pub fn contains_full_block(ls_pos: IVec3) -> bool {
+        ls_pos.cmpge(IVec3::ZERO).all() && ls_pos.cmplt(IVec3::splat(CHUNK_SIZE as _)).all()
+    }
+
+    /// Checks if the chunk data contains the given microblock position.
+    /// # Vectors
+    /// [`mb_pos`] is in microblock localspace.
+    #[inline]
+    pub fn contains_microblock(mb_pos: IVec3) -> bool {
+        mb_pos.cmpge(IVec3::ZERO).all()
+            && mb_pos
+                .cmplt(IVec3::splat((CHUNK_SIZE * BLOCK_SUBDIVISIONS) as _))
+                .all()
+    }
+
+    /// Create new chunk data with the provided default value. All reads from this data
+    /// will return that default value until anything else is written.
+    pub fn new(default: u32) -> Self {
+        Self {
+            default,
+            storage: None,
+        }
+    }
+
+    /// Get the value at the given full block position, returning an error if the position
+    /// is out of bounds or if the block at the position was subdivided.
+    /// # Vectors
+    /// [`ls_pos`] is in full-block localspace.
+    #[inline]
+    pub fn get(&self, ls_pos: IVec3) -> Result<u32, ChunkDataError> {
+        if !Self::contains_full_block(ls_pos) {
+            return Err(ChunkDataError::OutOfBounds);
+        }
+
+        self.storage.as_ref().map_or(Ok(self.default), |storage| {
+            let index = ls_pos.to_array().map(|v| v as u8);
+            storage.get(index).map_err(ChunkDataError::from)
+        })
+    }
+}
+
 pub struct Chunk {
     pub flags: RwLock<ChunkFlags>,
     pub load_reasons: RwLock<ChunkLoadReasons>,
-    pub variants: (), // TODO:
+    pub variants: RwLock<ChunkData>,
 }
-
-const CHUNK_SIZE: usize = 16;
 
 #[allow(dead_code)]
 impl Chunk {

@@ -255,7 +255,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
             sdiv_palette: Vec::with_capacity(capacity),
         }
     }
-
+    // TODO: get palette entry
     /// Get an entry of the storage's indices, returning [`None`] if the provided index is out of bounds.
     #[inline]
     pub fn get_entry(&self, index: [u8; 3]) -> Option<SSIndexEntry<T>> {

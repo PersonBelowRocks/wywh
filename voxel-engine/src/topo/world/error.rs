@@ -1,4 +1,4 @@
-#[derive(te::Error, Debug, PartialEq, Eq, Clone)]
+#[derive(te::Error, Debug, Clone)]
 pub enum ChunkManagerError {
     #[error("Chunk not loaded")]
     Unloaded,
@@ -27,7 +27,7 @@ impl ChunkManagerError {
     }
 }
 
-#[derive(te::Error, Debug, PartialEq, Eq, Clone)]
+#[derive(te::Error, Debug, Clone)]
 pub enum ChunkContainerError {
     #[error("Chunk doesn't exist")]
     DoesntExist,
@@ -37,7 +37,26 @@ pub enum ChunkContainerError {
     InvalidLoadshare,
 }
 
-#[derive(te::Error, Debug, PartialEq, Eq, Clone)]
+#[derive(te::Error, Debug, Clone)]
+pub enum ChunkDataError {
+    #[error("Out of bounds")]
+    OutOfBounds,
+    #[error("Not a full block")]
+    NonFullBlock,
+}
+
+impl From<octo::SubdivAccessError> for ChunkDataError {
+    fn from(value: octo::SubdivAccessError) -> Self {
+        use octo::SubdivAccessError as Error;
+
+        match value {
+            Error::OutOfBounds(_) => Self::OutOfBounds,
+            Error::NonFullBlock(_, _) => Self::NonFullBlock,
+        }
+    }
+}
+
+#[derive(te::Error, Debug, Clone)]
 pub enum ChunkFlagError {
     #[error("Unknown flag(s) in chunk flags: {0}")]
     UnknownFlags(u32),
