@@ -7,10 +7,10 @@ use bitflags::bitflags;
 use octo::SubdividedStorage;
 use parking_lot::RwLock;
 
-use crate::data::registries::block::BlockVariantRegistry;
+use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::data::registries::Registry;
 use crate::data::voxel::rotations::BlockModelRotation;
-use crate::topo::block::{BlockVoxel, SubdividedBlock};
+use crate::topo::block::{BlockVoxel, FullBlock, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
 
@@ -191,7 +191,7 @@ impl ChunkData {
         }
     }
 
-    /// Get the value at the given full block position, returning an error if the position
+    /// Get the value at the given full-block position, returning an error if the position
     /// is out of bounds or if the block at the position was subdivided.
     /// # Vectors
     /// [`ls_pos`] is in full-block localspace.
@@ -231,6 +231,51 @@ impl ChunkData {
         let index = ls_pos.to_array().map(|v| v as u8);
         Ok(storage.set(index, value)?)
     }
+
+    /// Get the value at the given microblock position, returning an error if the position
+    /// is out of bounds.
+    /// # Vectors
+    /// [`mb_pos`] is in microblock localspace.
+    #[inline]
+    pub fn get_mb(&self, mb_pos: IVec3) -> Result<u32, ChunkDataError> {
+        if !Self::contains_microblock(mb_pos) {
+            return Err(ChunkDataError::OutOfBounds);
+        }
+
+        self.storage.as_ref().map_or(Ok(self.default), |storage| {
+            let index = mb_pos.to_array().map(|v| v as u8);
+            storage.get_mb(index).map_err(ChunkDataError::from)
+        })
+    }
+
+    /// Set the value at the given microblock localspace position.
+    /// Returns an error if the position is out of bounds.
+    /// If this is the first time writing to this chunk and the written value is not the default value,
+    /// it will be initialized, which can cause memory allocation.
+    /// ### Microblock allocations
+    /// Writing microblocks can cause allocations in another way too, if a microblock is written
+    /// to a position that currently contains a full-block, then that full block has to be
+    /// subdivided and moved into the subdivided-block buffer, potentially allocating.
+    /// # Vectors
+    /// [`mb_pos`] is in microblock localspace.
+    #[inline]
+    pub fn set_mb(&mut self, mb_pos: IVec3, value: u32) -> Result<(), ChunkDataError> {
+        if !Self::contains_microblock(mb_pos) {
+            return Err(ChunkDataError::OutOfBounds);
+        }
+
+        // Writing is pointless if the value is the default.
+        if value == self.default {
+            return Ok(());
+        }
+
+        let storage = self
+            .storage
+            .get_or_insert_with(|| ChunkDataStorage::new(self.default));
+
+        let index = mb_pos.to_array().map(|v| v as u8);
+        Ok(storage.set_mb(index, value)?)
+    }
 }
 
 pub struct Chunk {
@@ -257,14 +302,14 @@ impl Chunk {
 
     #[inline]
     pub fn new(
-        filling: BlockVoxel,
+        filling: BlockVariantId,
         initial_flags: ChunkFlags,
         load_reasons: ChunkLoadReasons,
     ) -> Self {
         Self {
             flags: RwLock::new(initial_flags),
             load_reasons: RwLock::new(load_reasons),
-            variants: todo!(), // SyncIndexedChunkContainer::filled(filling),
+            variants: RwLock::new(ChunkData::new(filling.as_u32())),
         }
     }
 }
