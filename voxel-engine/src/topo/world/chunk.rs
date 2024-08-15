@@ -137,13 +137,13 @@ pub const CHUNK_SIZE: usize = 16;
 /// Dimensions of a subdivided block
 pub const BLOCK_SUBDIVISIONS: usize = 4;
 
-pub type ChunkDataStorageType = octo::SubdividedStorage<CHUNK_SIZE, BLOCK_SUBDIVISIONS, u32>;
+pub type ChunkDataStorage = octo::SubdividedStorage<CHUNK_SIZE, BLOCK_SUBDIVISIONS, u32>;
 
 /// The actual voxel data of a chunk
 #[derive(Clone)]
 pub struct ChunkData {
     default: u32,
-    storage: Option<Box<ChunkDataStorageType>>,
+    storage: Option<ChunkDataStorage>,
 }
 
 impl ChunkData {
@@ -189,6 +189,31 @@ impl ChunkData {
             let index = ls_pos.to_array().map(|v| v as u8);
             storage.get(index).map_err(ChunkDataError::from)
         })
+    }
+
+    /// Set the value at the given full-block localspace position.
+    /// Returns an error if the position is out of bounds.
+    /// If this is the first time writing to this chunk and the written value is not the default value,
+    /// it will be initialized, which can cause memory allocation.
+    /// # Vectors
+    /// [`ls_pos`] is in full-block localspace.
+    #[inline]
+    pub fn set(&mut self, ls_pos: IVec3, value: u32) -> Result<(), ChunkDataError> {
+        if !Self::contains_full_block(ls_pos) {
+            return Err(ChunkDataError::OutOfBounds);
+        }
+
+        // Writing is pointless if the value is the default.
+        if value == self.default {
+            return Ok(());
+        }
+
+        let storage = self
+            .storage
+            .get_or_insert_with(|| ChunkDataStorage::new(self.default));
+
+        let index = ls_pos.to_array().map(|v| v as u8);
+        Ok(storage.set(index, value)?)
     }
 }
 
