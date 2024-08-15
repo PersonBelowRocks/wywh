@@ -35,5 +35,5 @@ name = "lensed"
 harness = false
 
 [[bench]]
-name = "subdiv"
+name = "subdiv_bench"
 harness = false

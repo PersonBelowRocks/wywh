@@ -1,7 +1,9 @@
 use nda::Array3;
 use std::any::type_name;
+use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T1};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
+use std::mem;
 
 /// Trait for values that can be used in a [`SubdividedStorage`].
 ///
@@ -92,32 +94,82 @@ impl<const SD: usize, T: SubdividableValue> SSPaletteEntry<SD, T> {
         Self([[[filling; SD]; SD]; SD])
     }
 
+    /// Hint to the CPU to load the entire palette entry into cache
+    /// Currently not properly tested and benchmarked so it should not be used.
+    #[inline(always)]
+    pub fn prefetch(&self) {
+        // Assume a cache line is 64 bytes
+        const CACHE_LINE: usize = 64;
+
+        fn prefetch_ptr<K>(p: *const K) {
+            let p = unsafe { mem::transmute::<*const K, *const i8>(p) };
+            unsafe { _mm_prefetch::<{ _MM_HINT_T1 }>(p) };
+        }
+
+        let max_offset = (SD * SD * SD);
+        let step_by = CACHE_LINE / size_of::<T>();
+        for lane in (0..max_offset).step_by(step_by) {
+            let root = &self.0[0][0][0] as *const T;
+            // SAFETY: we're not reading from this pointer at any point so we can do whatever we want
+            let lane_ptr = unsafe { root.add(lane) };
+
+            prefetch_ptr::<T>(lane_ptr);
+        }
+    }
+
     /// Gets the value at a given index, returning [`None`] if the index is out of bounds.
-    #[inline]
+    #[inline(always)]
     pub fn get(&self, index: [u8; 3]) -> Option<T> {
         let [i0, i1, i2] = index.map(usize::from);
 
         self.0.get(i0)?.get(i1)?.get(i2).copied()
     }
 
+    /// Same as [`Self::get`] but does no bounds checking.
+    ///
+    /// # Safety
+    /// The given index must be within the bounds of this palette entry
+    #[inline(always)]
+    pub unsafe fn get_unchecked(&self, index: [u8; 3]) -> T {
+        let [i0, i1, i2] = index.map(usize::from);
+
+        unsafe { *self.0.get_unchecked(i0).get_unchecked(i1).get_unchecked(i2) }
+    }
+
     /// Sets a value at the given index.
     ///
     /// # Panics
     /// Will panic if the index is out of bounds.
-    #[inline]
+    #[inline(always)]
     pub fn set(&mut self, index: [u8; 3], value: T) {
         let [i0, i1, i2] = index.map(usize::from);
         self.0[i0][i1][i2] = value;
     }
 
+    /// Sets a value at the given index.
+    ///
+    /// # Safety
+    /// The given index must be within the bounds of this palette entry
+    #[inline(always)]
+    pub unsafe fn set_unchecked(&mut self, index: [u8; 3], value: T) {
+        let [i0, i1, i2] = index.map(usize::from);
+        unsafe {
+            *self
+                .0
+                .get_unchecked_mut(i0)
+                .get_unchecked_mut(i1)
+                .get_unchecked_mut(i2) = value;
+        }
+    }
+
     /// Returns the first value (value at `[0, 0, 0]`)
-    #[inline]
+    #[inline(always)]
     pub fn first(&self) -> T {
         self.0[0][0][0]
     }
 
     /// Test if all the values in this palette entry are equal.
-    #[inline]
+    #[inline(always)]
     pub fn all_equal(&self) -> bool {
         let first = self.first();
 
@@ -145,6 +197,28 @@ pub struct SubdividedStorage<const D: usize, const SD: usize, T: SubdividableVal
 }
 
 impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D, SD, T> {
+    pub fn map_mb_indices<F: FnMut([u8; 3])>(mut f: F) {
+        let d = D as u8;
+        let sd = SD as u8;
+
+        // All full-block indices
+        for p0 in 0..d {
+            for p1 in 0..d {
+                for p2 in 0..d {
+                    // Every microblock in this full block
+                    for mb0 in (p0 * sd)..((p0 * sd) + sd) {
+                        for mb1 in (p1 * sd)..((p1 * sd) + sd) {
+                            for mb2 in (p2 * sd)..((p2 * sd) + sd) {
+                                // TODO: should this be called in reverse?
+                                f([mb0, mb1, mb2])
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Create a new subdivided storage filled with the provided value.
     ///
     /// # Panics
@@ -225,9 +299,11 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
             let palette_entry = &self.sdiv_palette[palette_index];
 
             let local_index = mb_index_to_local_mb_index(mb_index, SD as u8);
-            // Unwrapping here should be fine since
-            // `mb_index_to_local_mb_index` can't return anything greater than `SD`
-            Ok(palette_entry.get(local_index).unwrap())
+            debug_assert!(local_index.iter().all(|c| *c < SD as u8));
+
+            // SAFETY: 'mb_index_to_local_mb_index' can't return anything larger than 'SD'
+            let value = unsafe { palette_entry.get_unchecked(local_index) };
+            Ok(value)
         } else {
             Ok(entry.as_value())
         }
@@ -261,7 +337,12 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
             let palette_entry = &mut self.sdiv_palette[palette_index];
 
             let local_index = mb_index_to_local_mb_index(mb_index, SD as u8);
-            palette_entry.set(local_index, value);
+            debug_assert!(local_index.iter().all(|c| *c < SD as u8));
+
+            // SAFETY: 'mb_index_to_local_mb_index' can't return anything larger than 'SD'
+            unsafe {
+                palette_entry.set_unchecked(local_index, value);
+            }
 
             Ok(())
         } else {
@@ -377,6 +458,24 @@ mod tests {
 
         assert_eq!(1337, s.get_mb([31, 31, 31]).unwrap());
         assert_eq!(1337, s.get_mb([28, 28, 28]).unwrap());
+    }
+
+    #[test]
+    fn map_mb_indices() {
+        type Storage = SubdividedStorage<16, 4, u32>;
+        let mut storage = Storage::new(0);
+
+        Storage::map_mb_indices(|index| {
+            storage.set_mb(index, 10).unwrap();
+        });
+
+        for p0 in 0..64 {
+            for p1 in 0..64 {
+                for p2 in 0..64 {
+                    assert_eq!(10, storage.get_mb([p0, p1, p2]).unwrap());
+                }
+            }
+        }
     }
 
     #[test]

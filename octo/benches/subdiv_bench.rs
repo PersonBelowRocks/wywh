@@ -11,21 +11,21 @@ const BSS_DIMS: u8 = 16 * 4;
 
 fn random_index<R: Rng>(rng: &mut R) -> [u8; 3] {
     black_box([
-        rng.gen_range(0..8),
-        rng.gen_range(0..8),
-        rng.gen_range(0..8),
+        rng.gen_range(0..64),
+        rng.gen_range(0..64),
+        rng.gen_range(0..64),
     ])
 }
 
 fn random_index_not_border<R: Rng>(rng: &mut R) -> [u8; 3] {
     let p = [
-        rng.gen_range(1..7),
-        rng.gen_range(1..7),
-        rng.gen_range(1..7),
+        rng.gen_range(1..63),
+        rng.gen_range(1..63),
+        rng.gen_range(1..63),
     ];
 
     // Sanity check to make sure we're actually not on the border
-    p.map(|val| assert!(val > 0 && val < 7));
+    p.map(|val| assert!(val > 0 && val < 63));
 
     black_box(p)
 }
@@ -150,56 +150,18 @@ fn get_3x3x3_rev_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R) {
     );
 }
 
-fn get_entire_sum_mb(s: &BenchSubdivStorage, indices: &Vec<[u8; 3]>) -> u64 {
-    let mut sum = 0u64;
-
-    for &index in indices {
-        sum += u64::from(s.get_mb(index).unwrap());
-    }
-
-    sum
-}
-
-fn all_indices() -> Vec<[u8; 3]> {
-    let mut indices = Vec::<[u8; 3]>::with_capacity((BSS_DIMS as usize).pow(3));
-
-    for p0 in 0..BSS_DIMS {
-        for p1 in 0..BSS_DIMS {
-            for p2 in 0..BSS_DIMS {
-                indices.push([p0, p1, p2]);
-            }
-        }
-    }
-
-    black_box(indices)
-}
-
-fn all_indices_rev() -> Vec<[u8; 3]> {
-    let mut indices = Vec::<[u8; 3]>::with_capacity((BSS_DIMS as usize).pow(3));
-
-    for p0 in 0..BSS_DIMS {
-        for p1 in 0..BSS_DIMS {
-            for p2 in 0..BSS_DIMS {
-                indices.push([p2, p1, p0]);
-            }
-        }
-    }
-
-    black_box(indices)
-}
-
 fn get_entire_sum_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R) {
     let storage = populated_subdiv_storage(rng);
 
     bencher.iter_batched_ref(
         || storage.clone(),
         |storage| {
-            let mut sum = 0;
+            let mut sum = 0u64;
 
             for p0 in 0..BSS_DIMS {
                 for p1 in 0..BSS_DIMS {
                     for p2 in 0..BSS_DIMS {
-                        sum += storage.get_mb([p0, p1, p2]).unwrap();
+                        sum += storage.get_mb([p0, p1, p2]).unwrap() as u64;
                     }
                 }
             }
@@ -216,17 +178,35 @@ fn get_entire_sum_rev_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R)
     bencher.iter_batched_ref(
         || storage.clone(),
         |storage| {
-            let mut sum = 0;
+            let mut sum = 0u64;
 
             for p0 in 0..BSS_DIMS {
                 for p1 in 0..BSS_DIMS {
                     for p2 in 0..BSS_DIMS {
                         // The order of these components is reversed. Might be a more cache friendly
                         // way to access the data.
-                        sum += storage.get_mb([p2, p1, p0]).unwrap();
+                        sum += storage.get_mb([p2, p1, p0]).unwrap() as u64;
                     }
                 }
             }
+
+            sum
+        },
+        BatchSize::LargeInput,
+    );
+}
+
+fn get_entire_sum_iter_helper_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R) {
+    let storage = populated_subdiv_storage(rng);
+
+    bencher.iter_batched_ref(
+        || storage.clone(),
+        |storage| {
+            let mut sum = 0u64;
+
+            BenchSubdivStorage::map_mb_indices(|index| {
+                sum += storage.get_mb(index).unwrap() as u64;
+            });
 
             sum
         },
@@ -258,6 +238,10 @@ fn benchmarks(c: &mut Criterion) {
 
     group.bench_function("get_entire_sum_rev_mb", |bencher| {
         get_entire_sum_rev_mb_routine(bencher, &mut rng)
+    });
+
+    group.bench_function("get_entire_sum_iter_helper_mb", |bencher| {
+        get_entire_sum_iter_helper_mb_routine(bencher, &mut rng)
     });
 }
 
