@@ -4,6 +4,7 @@ use bevy::math::ivec3;
 use bevy::prelude::*;
 use bitflags::bitflags;
 
+use octo::SubdividedStorage;
 use parking_lot::RwLock;
 
 use crate::data::registries::block::BlockVariantRegistry;
@@ -172,6 +173,21 @@ impl ChunkData {
         Self {
             default,
             storage: None,
+        }
+    }
+
+    /// Initialize this chunk data. Returns whether or not the storage was actually initalized,
+    /// i.e., returns false if the storage was initialized, and true if not.
+    /// The chunk data should have identical reading behaviour after this function is called,
+    /// this function is just here so that you can have more manual control of allocations.
+    #[inline]
+    pub fn touch(&mut self) -> bool {
+        match self.storage {
+            None => {
+                self.storage = Some(SubdividedStorage::new(self.default));
+                true
+            }
+            Some(_) => false,
         }
     }
 
