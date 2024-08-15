@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bitflags::bitflags;
 
 use octo::SubdividedStorage;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::data::registries::Registry;
@@ -278,10 +278,28 @@ impl ChunkData {
     }
 }
 
+pub struct ChunkReadHandle<'a> {
+    flags: RwLockReadGuard<'a, ChunkFlags>,
+    blocks: RwLockReadGuard<'a, ChunkData>,
+}
+
+impl<'a> ChunkReadHandle<'a> {
+    // TODO: methods!
+}
+
+pub struct ChunkWriteHandle<'a> {
+    flags: RwLockWriteGuard<'a, ChunkFlags>,
+    blocks: RwLockWriteGuard<'a, ChunkData>,
+}
+
+impl<'a> ChunkWriteHandle<'a> {
+    // TODO: methods!
+}
+
 pub struct Chunk {
     pub flags: RwLock<ChunkFlags>,
     pub load_reasons: RwLock<ChunkLoadReasons>,
-    pub variants: RwLock<ChunkData>,
+    pub blocks: RwLock<ChunkData>,
 }
 
 #[allow(dead_code)]
@@ -309,7 +327,7 @@ impl Chunk {
         Self {
             flags: RwLock::new(initial_flags),
             load_reasons: RwLock::new(load_reasons),
-            variants: RwLock::new(ChunkData::new(filling.as_u32())),
+            blocks: RwLock::new(ChunkData::new(filling.as_u32())),
         }
     }
 }
