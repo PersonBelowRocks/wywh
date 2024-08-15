@@ -14,7 +14,7 @@ use crate::topo::block::{BlockVoxel, FullBlock, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
 
-use super::ChunkDataError;
+use super::{ChunkDataError, ChunkHandleError};
 
 #[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
 pub struct ChunkPos(IVec3);
@@ -137,6 +137,8 @@ impl ChunkLoadReasons {
 pub const CHUNK_SIZE: usize = 16;
 /// Dimensions of a subdivided block
 pub const BLOCK_SUBDIVISIONS: usize = 4;
+/// The maximum value that can safely be stored in [`ChunkData`].
+pub const MAX_ALLOWED_CHUNK_DATA_VALUE: u32 = (0b1 << (u32::BITS - 1)) - 1;
 
 pub type ChunkDataStorage = octo::SubdividedStorage<CHUNK_SIZE, BLOCK_SUBDIVISIONS, u32>;
 
@@ -254,8 +256,8 @@ impl ChunkData {
     /// it will be initialized, which can cause memory allocation.
     /// ### Microblock allocations
     /// Writing microblocks can cause allocations in another way too, if a microblock is written
-    /// to a position that currently contains a full-block, then that full block has to be
-    /// subdivided and moved into the subdivided-block buffer, potentially allocating.
+    /// to a position that currently contains a full-block, then that full-block has to be
+    /// subdivided and moved into the subdivided block buffer, potentially allocating.
     /// # Vectors
     /// [`mb_pos`] is in microblock localspace.
     #[inline]
@@ -278,13 +280,55 @@ impl ChunkData {
     }
 }
 
+/// Read-only handle to a chunk's data. Essentially a read guard for the chunk's data lock.
 pub struct ChunkReadHandle<'a> {
     flags: RwLockReadGuard<'a, ChunkFlags>,
     blocks: RwLockReadGuard<'a, ChunkData>,
 }
 
 impl<'a> ChunkReadHandle<'a> {
-    // TODO: methods!
+    /// Get the value at the given full-block position.
+    /// Errors on any of these conditions:
+    /// - The position is out of bounds
+    /// - The block at the position is not a full-block
+    /// - The value at the position cannot be made into a [`BlockVariantId`]
+    /// # Vectors
+    /// [`ls_pos`] is in full-block localspace.
+    #[inline]
+    pub fn get(&self, ls_pos: IVec3) -> Result<BlockVariantId, ChunkHandleError> {
+        let raw = self.blocks.get(ls_pos)?;
+
+        if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
+            return Err(ChunkHandleError::InvalidDataValue(raw));
+        }
+
+        let variant_id = unsafe { BlockVariantId::from_raw(raw) };
+        Ok(variant_id)
+    }
+
+    /// Get the variant ID at the given microblock position.
+    /// Errors on any of these conditions:
+    ///  - The position is out of bounds
+    ///  - The value at the position cannot be made into a [`BlockVariantId`]
+    /// # Vectors
+    /// [`mb_pos`] is in microblock localspace.
+    #[inline]
+    pub fn get_mb(&self, mb_pos: IVec3) -> Result<BlockVariantId, ChunkHandleError> {
+        let raw = self.blocks.get_mb(mb_pos)?;
+
+        if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
+            return Err(ChunkHandleError::InvalidDataValue(raw));
+        }
+
+        let variant_id = unsafe { BlockVariantId::from_raw(raw) };
+        Ok(variant_id)
+    }
+
+    // TODO: docs
+    #[inline]
+    pub fn get_block(&self, ls_pos: IVec3) -> Result<(), ChunkDataError> {
+        todo!()
+    }
 }
 
 pub struct ChunkWriteHandle<'a> {

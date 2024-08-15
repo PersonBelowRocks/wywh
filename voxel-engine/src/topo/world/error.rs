@@ -37,12 +37,26 @@ pub enum ChunkContainerError {
     InvalidLoadshare,
 }
 
+/// Errors related to low-level chunk data reads and writes.
 #[derive(te::Error, Debug, Clone)]
 pub enum ChunkDataError {
+    /// The provided position for a chunk data operation (either read or write) is out of bounds
     #[error("Out of bounds")]
     OutOfBounds,
+    /// Attempted to read a full block at a position that had a subdivided block
     #[error("Not a full block")]
     NonFullBlock,
+}
+
+/// Errors related to chunk handle operations. Closely related to [`ChunkDataError`].
+#[derive(te::Error, Debug, Clone)]
+pub enum ChunkHandleError {
+    /// Underlying chunk data error
+    #[error(transparent)]
+    ChunkDataError(#[from] ChunkDataError),
+    /// The value stored in the chunk data is not a valid block variant ID
+    #[error("Can't create block variant ID from raw value: {0:#01x}")]
+    InvalidDataValue(u32),
 }
 
 impl From<octo::SubdivAccessError> for ChunkDataError {

@@ -191,17 +191,26 @@ pub struct BlockOptions {
 pub struct BlockVariantId(u32);
 
 impl BlockVariantId {
+    #[inline]
     pub fn index(self) -> usize {
         self.0 as usize
     }
 
+    #[inline]
     pub fn as_u32(self) -> u32 {
         self.0 as u32
     }
 
     #[cfg(test)]
+    #[inline]
     pub const fn new(id: u32) -> Self {
         Self(id)
+    }
+
+    // TODO: safety docs
+    #[inline]
+    pub unsafe fn from_raw(raw: u32) -> Self {
+        Self(raw)
     }
 }
 
