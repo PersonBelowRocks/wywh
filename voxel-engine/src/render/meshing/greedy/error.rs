@@ -1,11 +1,11 @@
-use crate::topo::error::{ChunkAccessError, NeighborAccessError};
+use crate::topo::{error::NeighborReadError, world::ChunkHandleError};
 
-#[derive(te::Error, Debug, Clone, PartialEq)]
+#[derive(te::Error, Debug, Clone)]
 pub enum CqsError {
     #[error(transparent)]
-    NeighborAccessError(#[from] NeighborAccessError),
+    NeighborAccessError(#[from] NeighborReadError),
     #[error(transparent)]
-    AccessError(ChunkAccessError),
+    AccessError(ChunkHandleError),
     #[error("Position was out of bounds")]
     OutOfBounds,
     #[error(

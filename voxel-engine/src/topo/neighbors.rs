@@ -1,20 +1,18 @@
-use std::marker::PhantomData;
-
 use bevy::math::{ivec3, IVec2, IVec3};
 
 use crate::{
-    data::tile::Face,
+    data::{registries::block::BlockVariantId, tile::Face},
     topo::{bounding_box::BoundingBox, ivec_project_to_3d},
     util::ivec3_to_1d,
 };
 
 use super::{
-    block::BlockVoxel,
-    error::NeighborAccessError,
-    world::{Chunk, OutOfBounds},
+    error::NeighborReadError,
+    world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
 };
 
 fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
+    // TODO: use bitwise math
     ivec3(
         pos.x.div_euclid(Chunk::SIZE),
         pos.y.div_euclid(Chunk::SIZE),
@@ -23,6 +21,7 @@ fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
 }
 
 fn localspace_to_neighbor_localspace(pos: IVec3) -> IVec3 {
+    // TODO: use bitwise math
     ivec3(
         pos.x.rem_euclid(Chunk::SIZE),
         pos.y.rem_euclid(Chunk::SIZE),
@@ -32,10 +31,8 @@ fn localspace_to_neighbor_localspace(pos: IVec3) -> IVec3 {
 
 // TODO: document what localspace, worldspace, chunkspace, and facespace are
 pub struct Neighbors<'a> {
-    // TODO: type
-    chunks: [Option<()>; NEIGHBOR_ARRAY_SIZE],
-    default: BlockVoxel,
-    _lt: PhantomData<&'a ()>,
+    chunks: [Option<ChunkReadHandle<'a>>; NEIGHBOR_ARRAY_SIZE],
+    default_block: BlockVariantId,
 }
 
 /// Test if the provided facespace vector is in bounds
@@ -54,50 +51,60 @@ pub fn is_in_bounds_3d(pos: IVec3) -> bool {
     pos.cmpge(min).all() && pos.cmplt(max).all() && localspace_to_chunk_pos(pos) != IVec3::ZERO
 }
 
-// TODO: type
-pub type NbResult<'a> = Result<(), NeighborAccessError>;
+pub type NbResult<'a> = Result<BlockVariantId, NeighborReadError>;
 
 pub const NEIGHBOR_CUBIC_ARRAY_DIMENSIONS: usize = 3;
 pub const NEIGHBOR_ARRAY_SIZE: usize = NEIGHBOR_CUBIC_ARRAY_DIMENSIONS.pow(3);
 
 impl<'a> Neighbors<'a> {
-    pub fn from_raw(chunks: [Option<()>; NEIGHBOR_ARRAY_SIZE], default: BlockVoxel) -> Self {
+    pub fn from_raw(
+        chunks: [Option<ChunkReadHandle<'a>>; NEIGHBOR_ARRAY_SIZE],
+        default_block: BlockVariantId,
+    ) -> Self {
         Self {
             chunks,
-            default,
-            _lt: PhantomData,
+            default_block,
         }
     }
 
-    /// `pos` is in localspace
-    fn internal_get(&self, pos: IVec3) -> NbResult<'_> {
-        let chk_pos = localspace_to_chunk_pos(pos);
+    /// Get a block in one of the neighboring chunks, returning the default block if there was no handle
+    /// for that chunk. This function allows reading from all blocks in the neighboring chunks, not just
+    /// the ones on the borders facing the center.
+    /// # Vectors
+    /// `ls_nb_pos` is in neighbor-only localspace
+    pub fn get_3d(&self, ls_nb_pos: IVec3) -> NbResult<'_> {
+        let chk_pos = localspace_to_chunk_pos(ls_nb_pos);
 
         if chk_pos == IVec3::ZERO {
             // tried to access center chunk (aka. the chunk for which we represent the neighbors)
-            return Err(NeighborAccessError::OutOfBounds);
+            return Err(NeighborReadError::OutOfBounds);
         }
 
         let chk_index = ivec3_to_1d(chk_pos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
-            .map_err(|_| NeighborAccessError::OutOfBounds)?;
+            .map_err(|_| NeighborReadError::OutOfBounds)?;
         let chk = self
             .chunks
             .get(chk_index)
-            .ok_or(NeighborAccessError::OutOfBounds)?;
+            .ok_or(NeighborReadError::OutOfBounds)?;
 
         match chk {
-            Some(access) => {
-                let neighbor_local = localspace_to_neighbor_localspace(pos);
-                todo!()
+            Some(handle) => {
+                let neighbor_local = localspace_to_neighbor_localspace(ls_nb_pos);
+                Ok(handle.get(neighbor_local)?)
             }
-            None => todo!(),
+            // No handle at this position so we return our default block
+            None => Ok(self.default_block),
         }
     }
 
-    /// `pos` in facespace
-    pub fn get(&self, face: Face, pos: IVec2) -> NbResult<'_> {
-        if !is_in_bounds(pos) {
-            return Err(NeighborAccessError::OutOfBounds);
+    /// Get the block in a neighboring chunk that "obscures" the given block position in the center chunk.
+    /// The position may exceed the chunks borders by 1 to allow getting blocks diagonal of the center chunk.
+    ///
+    /// # Vectors
+    /// `face_pos` is in local-facespace
+    pub fn get(&self, face: Face, face_pos: IVec2) -> NbResult<'_> {
+        if !is_in_bounds(face_pos) {
+            return Err(NeighborReadError::OutOfBounds);
         }
 
         let pos_3d = {
@@ -106,19 +113,10 @@ impl<'a> Neighbors<'a> {
                 mag = Chunk::SIZE;
             }
 
-            ivec_project_to_3d(pos, face, mag)
+            ivec_project_to_3d(face_pos, face, mag)
         };
 
-        self.internal_get(pos_3d)
-    }
-
-    /// `pos` in localspace
-    pub fn get_3d(&self, pos: IVec3) -> NbResult<'_> {
-        if !is_in_bounds_3d(pos) {
-            return Err(NeighborAccessError::OutOfBounds);
-        }
-
-        self.internal_get(pos)
+        self.get_3d(pos_3d)
     }
 }
 
@@ -134,11 +132,15 @@ fn is_valid_neighbor_chunk_pos(pos: IVec3) -> bool {
 pub struct NeighborsBuilder<'a>(Neighbors<'a>);
 
 impl<'a> NeighborsBuilder<'a> {
-    pub fn new(default: BlockVoxel) -> Self {
-        Self(Neighbors::from_raw(Default::default(), default))
+    pub fn new(default_block: BlockVariantId) -> Self {
+        Self(Neighbors::from_raw(Default::default(), default_block))
     }
 
-    pub fn set_neighbor(&mut self, pos: IVec3, access: ()) -> Result<(), OutOfBounds> {
+    pub fn set_neighbor(
+        &mut self,
+        pos: IVec3,
+        handle: ChunkReadHandle<'a>,
+    ) -> Result<(), OutOfBounds> {
         if !is_valid_neighbor_chunk_pos(pos) {
             return Err(OutOfBounds);
         }
@@ -147,7 +149,7 @@ impl<'a> NeighborsBuilder<'a> {
             .map_err(|_| OutOfBounds)?;
 
         let slot = self.0.chunks.get_mut(idx).ok_or(OutOfBounds)?;
-        *slot = Some(access);
+        *slot = Some(handle);
 
         Ok(())
     }

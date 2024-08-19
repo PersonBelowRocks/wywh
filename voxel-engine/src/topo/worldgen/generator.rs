@@ -1,7 +1,5 @@
-use std::cmp::min;
-
 use bevy::{
-    math::{ivec2, ivec3, IVec2, Vec3Swizzles},
+    math::{ivec2, ivec3, IVec2},
     prelude::{Event, IVec3},
 };
 use noise::{NoiseFn, Perlin};
@@ -14,9 +12,8 @@ use crate::{
         voxel::rotations::BlockModelRotation,
     },
     topo::{
-        block::{BlockVoxel, Microblock, SubdividedBlock},
-        error::ChunkAccessError,
-        world::{Chunk, ChunkPos},
+        block::SubdividedBlock,
+        world::{chunk::ChunkWriteHandle, ChunkHandleError, ChunkPos},
     },
 };
 
@@ -117,8 +114,8 @@ impl Generator {
     pub fn write_to_chunk<'chunk>(
         &self,
         cs_pos: ChunkPos,
-        access: (), // &mut ChunkRefAccess<'chunk>,
-    ) -> Result<(), GeneratorError<ChunkAccessError>> {
+        access: &mut ChunkWriteHandle<'chunk>,
+    ) -> Result<(), GeneratorError<ChunkHandleError>> {
         todo!()
     }
 }

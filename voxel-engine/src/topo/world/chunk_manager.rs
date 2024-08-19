@@ -10,9 +10,12 @@ use bevy::math::{ivec3, IVec3};
 use dashmap::DashSet;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
-use crate::topo::controller::{LoadshareId, LoadshareMap};
 use crate::topo::world::chunk::ChunkLoadReasons;
 use crate::util::ChunkSet;
+use crate::{
+    data::registries::block::BlockVariantId,
+    topo::controller::{LoadshareId, LoadshareMap},
+};
 use crate::{
     topo::{
         block::{BlockVoxel, FullBlock},
@@ -22,7 +25,10 @@ use crate::{
     util::{ivec3_to_1d, ChunkMap},
 };
 
-use super::{chunk::ChunkFlags, Chunk, ChunkContainerError, ChunkManagerError, ChunkPos, ChunkRef};
+use super::{
+    chunk::{ChunkFlags, LockStrategy},
+    Chunk, ChunkContainerError, ChunkManagerError, ChunkPos, ChunkRef,
+};
 
 #[derive(Default)]
 pub struct LoadedChunkContainer {
@@ -142,10 +148,6 @@ impl PendingChunkChanges {
 #[derive(Default)]
 pub struct ChunkStatuses {
     pub updated: DashSet<ChunkPos, fxhash::FxBuildHasher>,
-    // TODO: remove these statuses, we don't care about them and we can use an atomic counter if we
-    //  want to count the number of fresh and generating chunks
-    pub generating: DashSet<ChunkPos, fxhash::FxBuildHasher>,
-    pub fresh: DashSet<ChunkPos, fxhash::FxBuildHasher>,
 }
 
 /// Indicates what happened when we tried to load a chunk
@@ -173,7 +175,7 @@ pub enum ChunkUnloadResult {
 /// The chunks loaded under a loadshare
 pub struct LoadshareChunks<'a> {
     loadshare: LoadshareId,
-    default_block: FullBlock,
+    default_block: BlockVariantId,
     loadshare_chunks: &'a mut ChunkSet,
     statuses: &'a mut ChunkStatuses,
     chunks: &'a mut ChunkMap<Chunk>,
@@ -206,9 +208,7 @@ impl<'a> LoadshareChunks<'a> {
         // If there are no more load reasons under this loadshare, we can unload this chunk from this loadshare
         if reasons.is_empty() {
             if load_reasons.cached_reasons.is_empty() {
-                // Remove the chunk from the statuses
-                self.statuses.fresh.remove(&pos);
-                self.statuses.generating.remove(&pos);
+                // Remove the chunk from the updated chunks
                 self.statuses.updated.remove(&pos);
 
                 // Need to drop this immutable reference so we can mutate ourselves.
@@ -278,7 +278,7 @@ impl<'a> LoadshareChunks<'a> {
         }
 
         let chunk = Chunk::new(
-            BlockVoxel::Full(self.default_block),
+            self.default_block,
             ChunkFlags::PRIMORDIAL,
             ChunkLoadReasons {
                 loadshares: LoadshareMap::from_iter([(self.loadshare, load_reasons)]),
@@ -307,7 +307,7 @@ pub struct ChunkManagerAccess<'a> {
     chunks: &'a mut ChunkMap<Chunk>,
     loadshares: &'a mut LoadshareMap<ChunkSet>,
     statuses: &'a mut ChunkStatuses,
-    default_block: FullBlock,
+    default_block: BlockVariantId,
 }
 
 impl<'a> ChunkManagerAccess<'a> {
@@ -343,11 +343,11 @@ pub struct ChunkManager {
     loaded_chunks: LoadedChunkContainer,
     loadshares: RwLock<LoadshareMap<ChunkSet>>,
     status: RwLock<ChunkStatuses>,
-    default_block: FullBlock,
+    default_block: BlockVariantId,
 }
 
 impl ChunkManager {
-    pub fn new(default_block: FullBlock) -> Self {
+    pub fn new(default_block: BlockVariantId) -> Self {
         Self {
             loaded_chunks: LoadedChunkContainer::default(),
             loadshares: RwLock::new(LoadshareMap::default()),
@@ -362,25 +362,22 @@ impl ChunkManager {
         &self,
         pos: ChunkPos,
         get_primordial: bool,
-    ) -> Result<ChunkRef<'_>, ChunkManagerError> {
+    ) -> Result<LccRef<'_>, ChunkManagerError> {
         let chunk = self.loaded_chunks.get(pos)?;
 
         if !get_primordial && chunk.flags.read().contains(ChunkFlags::PRIMORDIAL) {
             return Err(ChunkManagerError::Primordial);
         }
 
-        Ok(ChunkRef {
-            chunk,
-            stats: self.status.read(),
-            pos,
-            entity: None,
-        })
+        Ok(chunk)
     }
 
-    /// Get the chunk flags for the given chunk position
+    /// Get the chunk flags for the given chunk position. This function is basically a shorthand for
+    /// getting the chunk and checking the flags manually. If you need more control over this whole
+    /// operation (like using different locking strategies), then you should do that instead.
     pub fn chunk_flags(&self, pos: ChunkPos) -> Option<ChunkFlags> {
         self.get_loaded_chunk(pos, true)
-            .map(|cref| cref.flags())
+            .map(|cref| cref.flags(LockStrategy::Blocking).unwrap())
             .ok()
     }
 
@@ -431,13 +428,17 @@ impl ChunkManager {
     }
 
     // TODO: test
-    pub fn with_neighbors<F, R>(&self, pos: ChunkPos, mut f: F) -> Result<R, ChunkManagerError>
+    pub fn with_neighbors<F, R>(
+        &self,
+        pos: ChunkPos,
+        strategy: LockStrategy,
+        mut f: F,
+    ) -> Result<R, ChunkManagerError>
     where
         F: for<'a> FnMut(Neighbors<'a>) -> R,
     {
         // we need to make a map of the neighboring chunks so that the references are owned by the function scope
-        let mut refs =
-            std::array::from_fn::<Option<ChunkRef>, { NEIGHBOR_ARRAY_SIZE }, _>(|_| None);
+        let mut refs = std::array::from_fn::<Option<LccRef>, { NEIGHBOR_ARRAY_SIZE }, _>(|_| None);
 
         for x in -1..=1 {
             for y in -1..=1 {
@@ -448,25 +449,25 @@ impl ChunkManager {
                     }
 
                     let nbrpos_ws = ChunkPos::from(nbrpos + IVec3::from(pos));
-                    if let Ok(chunk_ref) = self.get_loaded_chunk(nbrpos_ws, false) {
+                    if let Ok(chunk) = self.get_loaded_chunk(nbrpos_ws, false) {
                         refs[ivec3_to_1d(nbrpos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
-                            .unwrap()] = Some(chunk_ref)
+                            .unwrap()] = Some(chunk)
                     }
                 }
             }
         }
 
-        let mut accesses = std::array::from_fn(|_| None);
+        let mut handles = std::array::from_fn(|_| None);
 
         for i in 0..NEIGHBOR_ARRAY_SIZE {
             let Some(cref) = &refs[i] else {
                 continue;
             };
 
-            accesses[i] = todo!();
+            handles[i] = Some(cref.read_handle(strategy)?);
         }
 
-        let neighbors = Neighbors::from_raw(accesses, BlockVoxel::Full(self.default_block));
+        let neighbors = Neighbors::from_raw(handles, self.default_block);
         let result = f(neighbors);
 
         drop(refs);
@@ -484,21 +485,13 @@ pub struct UpdatedChunks<'a> {
 }
 
 impl<'a> UpdatedChunks<'a> {
-    pub fn num_fresh_chunks(&self) -> usize {
-        self.manager.status.read().fresh.len()
-    }
-
-    pub fn num_generating_chunks(&self) -> usize {
-        self.manager.status.read().generating.len()
-    }
-
     pub fn num_updated_chunks(&self) -> usize {
         self.manager.status.read().updated.len()
     }
 
     pub fn iter_chunks<F>(&self, mut f: F) -> Result<(), ChunkManagerError>
     where
-        F: for<'cref> FnMut(ChunkRef<'cref>),
+        F: for<'cref> FnMut(LccRef<'cref>),
     {
         for chunk_pos in self.manager.status.read().updated.iter() {
             let cref = self.manager.get_loaded_chunk(*chunk_pos, false)?;

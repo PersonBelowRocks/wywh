@@ -24,7 +24,10 @@ use crate::{
 
 use self::generator::Generator;
 
-use super::world::{chunk::ChunkFlags, ChunkManager, ChunkPos};
+use super::world::{
+    chunk::{ChunkFlags, LockStrategy},
+    ChunkManager, ChunkPos,
+};
 
 pub mod ecs;
 pub mod error;
@@ -141,44 +144,41 @@ async fn internal_worker_task(
         // We only want to generate into primordial chunks. Generating into already populated chunks
         // is possible but usually undesirable, and if we want to do it we probably don't want to use
         // the worldgen system for it, but rather manually work the generator algorithm.
-        if !cref.flags().contains(ChunkFlags::PRIMORDIAL) {
+        if !cref
+            .flags(LockStrategy::Blocking)
+            .unwrap()
+            .contains(ChunkFlags::PRIMORDIAL)
+        {
             continue;
         }
 
         // Flag this chunk as being generated.
-        cref.update_flags(|flags| {
+        cref.update_flags(LockStrategy::Blocking, |flags| {
             flags.insert(ChunkFlags::GENERATING);
-        });
+        })
+        .unwrap();
 
-        let result: Result<(), ()> = todo!();
-        // let result = cref.with_access(true, |mut access| {
-        //     match generator.write_to_chunk(cpos, &mut access) {
-        //         Ok(()) => {
-        //             // Optimize the chunk a bit before we flag it as updated. This can make
-        //             // building the mesh for this chunk faster.
-        //             access.coalesce_microblocks();
-        //             access.optimize_internal_storage();
-        //         }
-        //         Err(error) => {
-        //             error!("Generator raised an error generating chunk at {cpos}: {error}")
-        //         }
-        //     }
-        // });
+        let mut handle = cref.write_handle(LockStrategy::Blocking).unwrap();
 
-        // if let Err(error) = result {
-        //     error!("Error getting write access to chunk '{cpos}': {error}");
-        //     return;
-        // }
+        match generator.write_to_chunk(cpos, &mut handle) {
+            Ok(()) => {
+                // TODO: run cleanup routine for the chunk
+            }
+            Err(error) => {
+                error!("Generator raised an error generating chunk at {cpos}: {error}")
+            }
+        }
 
         // At last we remove both the primordial flag and the generating flag, indicating that
         // this chunk is ready to be treated as any other chunk.
         // We also set the remesh flags here so that the mesh is built.
-        cref.update_flags(|flags| {
+        cref.update_flags(LockStrategy::Blocking, |flags| {
             flags.remove(ChunkFlags::GENERATING | ChunkFlags::PRIMORDIAL);
             flags.insert(
                 ChunkFlags::FRESHLY_GENERATED | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::REMESH,
             );
-        });
+        })
+        .unwrap();
     }
 }
 

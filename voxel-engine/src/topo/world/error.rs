@@ -6,6 +6,8 @@ pub enum ChunkManagerError {
     Unloaded,
     #[error(transparent)]
     ContainerError(#[from] ChunkContainerError),
+    #[error(transparent)]
+    SyncError(#[from] ChunkSyncError),
     #[error("Chunk is primordial")]
     Primordial,
     #[error("Tried to initialize already existing chunk")]
