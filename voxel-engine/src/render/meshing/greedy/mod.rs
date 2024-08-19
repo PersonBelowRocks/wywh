@@ -2,7 +2,10 @@ use bevy::math::{IVec2, IVec3};
 
 use crate::{
     data::{
-        registries::{block::BlockVariantRegistry, Registry, RegistryRef},
+        registries::{
+            block::{BlockVariantId, BlockVariantRegistry},
+            Registry, RegistryRef,
+        },
         texture::FaceTexture,
         tile::Face,
         voxel::rotations::BlockModelRotation,
@@ -16,7 +19,7 @@ use crate::{
         block::{Microblock, SubdividedBlock},
         ivec_project_to_2d, ivec_project_to_3d,
         neighbors::{self, Neighbors},
-        world::{Chunk, OutOfBounds},
+        world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
     },
     util::{
         self, microblock_to_full_block, microblock_to_full_block_3d, microblock_to_subdiv_pos_3d,
@@ -35,7 +38,7 @@ pub struct ChunkQuadSlice<'a, 'chunk> {
     pub face: Face,
     pub mag: i32,
 
-    access: (), // TODO: &'a Crra<'chunk>,
+    handle: &'a ChunkReadHandle<'chunk>,
     neighbors: &'a Neighbors<'chunk>,
     registry: &'a RegistryRef<'a, BlockVariantRegistry>,
 }
@@ -49,7 +52,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     pub fn new(
         face: Face,
         magnitude: i32,
-        access: (), // TODO: &'a Crra<'chunk>,
+        handle: &'a ChunkReadHandle<'chunk>,
         neighbors: &'a Neighbors<'chunk>,
         registry: &'a RegistryRef<'a, BlockVariantRegistry>,
     ) -> Result<Self, OutOfBounds> {
@@ -60,7 +63,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         Ok(Self {
             face,
             mag: magnitude,
-            access,
+            handle,
             neighbors,
             registry,
         })
@@ -146,37 +149,43 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get_3d(&self, pos: IVec3) -> CqsResult<()> {
-        todo!()
+    pub fn get_3d(&self, pos: IVec3) -> CqsResult<BlockVariantId> {
+        Ok(self.handle.get(pos)?)
     }
 
     #[inline]
-    pub fn get_mb_3d(&self, pos_mb: IVec3) -> CqsResult<Microblock> {
-        todo!()
+    pub fn get_mb_3d(&self, pos_mb: IVec3) -> CqsResult<BlockVariantId> {
+        Ok(self.handle.get_mb(pos_mb)?)
     }
 
     /// `pos` is in localspace and can exceed the regular chunk bounds by 1 for any component of the vector.
     /// In this case the `ChunkAccessOutput` is taken from a neighboring chunk.
     #[inline]
-    pub fn auto_neighboring_get(&self, pos: IVec3) -> CqsResult<()> {
-        todo!()
-    }
-
-    #[inline]
-    pub fn auto_neighboring_get_mb(&self, pos_mb: IVec3) -> CqsResult<Microblock> {
-        let pos = microblock_to_full_block_3d(pos_mb);
-
+    pub fn auto_neighboring_get(&self, pos: IVec3) -> CqsResult<BlockVariantId> {
         if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
-            self.get_mb_3d(pos_mb)
+            self.get_3d(pos)
         } else if !Self::contains_3d(pos) && neighbors::is_in_bounds_3d(pos) {
-            todo!()
+            Ok(self.neighbors.get_3d(pos)?)
         } else {
             return Err(CqsError::OutOfBounds);
         }
     }
 
     #[inline]
-    pub fn get(&self, pos: IVec2) -> CqsResult<()> {
+    pub fn auto_neighboring_get_mb(&self, pos_mb: IVec3) -> CqsResult<BlockVariantId> {
+        let pos = microblock_to_full_block_3d(pos_mb);
+
+        if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
+            self.get_mb_3d(pos_mb)
+        } else if !Self::contains_3d(pos) && neighbors::is_in_bounds_3d(pos) {
+            todo!() // TODO:
+        } else {
+            return Err(CqsError::OutOfBounds);
+        }
+    }
+
+    #[inline]
+    pub fn get(&self, pos: IVec2) -> CqsResult<BlockVariantId> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
         }
@@ -186,7 +195,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get_mb(&self, pos_mb: IVec2) -> CqsResult<Microblock> {
+    pub fn get_mb(&self, pos_mb: IVec2) -> CqsResult<BlockVariantId> {
         if !Self::contains_mb(pos_mb) {
             return Err(CqsError::OutOfBounds);
         }
@@ -196,7 +205,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get_above(&self, pos: IVec2) -> CqsResult<()> {
+    pub fn get_above(&self, pos: IVec2) -> CqsResult<BlockVariantId> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
         }
@@ -206,7 +215,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get_mb_above(&self, pos_mb: IVec2) -> CqsResult<Microblock> {
+    pub fn get_mb_above(&self, pos_mb: IVec2) -> CqsResult<BlockVariantId> {
         todo!()
     }
 
@@ -219,8 +228,8 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         let microblock = self.get_mb(pos_mb)?;
         let microblock_above = self.get_mb_above(pos_mb)?;
 
-        let entry = self.registry.get_by_id(microblock.id);
-        let entry_above = self.registry.get_by_id(microblock_above.id);
+        let entry = self.registry.get_by_id(microblock);
+        let entry_above = self.registry.get_by_id(microblock_above);
 
         if entry.options.transparency.is_transparent()
             || entry_above.options.transparency.is_opaque()
@@ -232,11 +241,9 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
             return Ok(None);
         };
 
-        let submodel = microblock
-            .rotation
-            .map(|r| model.submodel(r.front()))
-            .unwrap_or(model.default_submodel());
-
+        // TODO: get rid of submodels completely, we should register all possible rotations
+        // on startup and not calculate anything during runtime
+        let submodel = model.default_submodel();
         let texture = submodel.texture(self.face);
 
         Ok(Some(DataQuad::new(Quad::ONE, texture)))

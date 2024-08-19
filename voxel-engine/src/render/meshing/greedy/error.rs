@@ -5,7 +5,7 @@ pub enum CqsError {
     #[error(transparent)]
     NeighborAccessError(#[from] NeighborReadError),
     #[error(transparent)]
-    AccessError(ChunkHandleError),
+    HandleError(#[from] ChunkHandleError),
     #[error("Position was out of bounds")]
     OutOfBounds,
     #[error(
