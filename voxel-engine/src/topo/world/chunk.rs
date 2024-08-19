@@ -1,11 +1,11 @@
 use bevy::math::ivec3;
 use bevy::prelude::*;
 use bitflags::bitflags;
-use std::fmt;
-use std::ops::{Deref, DerefMut};
-
 use octo::SubdividedStorage;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::fmt;
+use std::ops::{Deref, DerefMut};
+use std::time::Duration;
 
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::data::registries::Registry;
@@ -14,7 +14,7 @@ use crate::topo::block::{BlockVoxel, FullBlock, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
 
-use super::{ChunkDataError, ChunkHandleError};
+use super::{ChunkDataError, ChunkHandleError, ChunkSyncError};
 
 #[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
 pub struct ChunkPos(IVec3);
@@ -349,7 +349,6 @@ macro_rules! impl_chunk_handle_reads {
 
 /// Read-only handle to a chunk's data. Essentially a read guard for the chunk's data lock.
 pub struct ChunkReadHandle<'a> {
-    flags: RwLockReadGuard<'a, ChunkFlags>,
     blocks: RwLockReadGuard<'a, ChunkData>,
 }
 
@@ -398,6 +397,12 @@ impl<'a> ChunkWriteHandle<'a> {
         Ok(self.blocks.set_mb(mb_pos, raw)?)
     }
 
+    /// Initializes the underlying data for writing. See [`ChunkData::touch`].
+    #[inline]
+    pub fn touch(&mut self) -> bool {
+        self.blocks.touch()
+    }
+
     /// Returns the inner chunk data, which allows for more low-level operations.
     #[inline]
     pub fn inner_mut(&mut self) -> &mut ChunkData {
@@ -409,6 +414,17 @@ pub struct Chunk {
     pub flags: RwLock<ChunkFlags>,
     pub load_reasons: RwLock<ChunkLoadReasons>,
     pub blocks: RwLock<ChunkData>,
+}
+
+/// Describes the strategy that should be used when getting a lock over chunk data.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LockStrategy {
+    /// Block for the given duration while waiting for a lock, and error if we exceed the timeout.
+    Timeout(Duration),
+    /// Block indefinitely while waiting for a lock.
+    Blocking,
+    /// Immediately get a lock to the data if possible, otherwise error.
+    Immediate,
 }
 
 #[allow(dead_code)]
@@ -437,6 +453,81 @@ impl Chunk {
             flags: RwLock::new(initial_flags),
             load_reasons: RwLock::new(load_reasons),
             blocks: RwLock::new(ChunkData::new(filling.as_u32())),
+        }
+    }
+
+    /// Get a read handle for this chunk with the given [lock strategy].
+    ///
+    /// The returned error depends on the lock strategy:
+    /// - [`LockStrategy::Timeout`] will block and wait for the lock, returning [`ChunkSyncError::Timeout`]
+    /// if read access could not be obtained within the given duration.
+    /// - [`LockStrategy::Immediate`] will try to get the lock immediately (without blocking),
+    /// returning [`ChunkSyncError::ImmediateFailure`] if it couldn't be done.
+    /// - [`LockStrategy::Blocking`] will block indefinitely while waiting for the lock.
+    ///
+    /// [lock strategy]: LockStrategy
+    pub fn read_handle(
+        &self,
+        strategy: LockStrategy,
+    ) -> Result<ChunkReadHandle<'_>, ChunkSyncError> {
+        match strategy {
+            LockStrategy::Immediate => Ok(ChunkReadHandle {
+                blocks: self
+                    .blocks
+                    .try_read()
+                    .ok_or(ChunkSyncError::ImmediateFailure)?,
+            }),
+            LockStrategy::Blocking => Ok(ChunkReadHandle {
+                blocks: self.blocks.read(),
+            }),
+            LockStrategy::Timeout(dur) => Ok(ChunkReadHandle {
+                blocks: self
+                    .blocks
+                    .try_read_for(dur)
+                    .ok_or(ChunkSyncError::Timeout(dur))?,
+            }),
+        }
+    }
+
+    /// Get a write handle for this chunk with the given [lock strategy].
+    ///
+    /// The returned error depends on the lock strategy:
+    /// - [`LockStrategy::Timeout`] will block and wait for the lock, returning [`ChunkSyncError::Timeout`]
+    /// if write access could not be obtained within the given duration.
+    /// - [`LockStrategy::Immediate`] will try to get the lock immediately (without blocking),
+    /// returning [`ChunkSyncError::ImmediateFailure`] if it couldn't be done.
+    /// - [`LockStrategy::Blocking`] will block indefinitely while waiting for the lock.
+    ///
+    /// [lock strategy]: LockStrategy
+    pub fn write_handle(
+        &self,
+        strategy: LockStrategy,
+    ) -> Result<ChunkWriteHandle<'_>, ChunkSyncError> {
+        match strategy {
+            LockStrategy::Immediate => Ok(ChunkWriteHandle {
+                flags: self
+                    .flags
+                    .try_write()
+                    .ok_or(ChunkSyncError::ImmediateFailure)?,
+                blocks: self
+                    .blocks
+                    .try_write()
+                    .ok_or(ChunkSyncError::ImmediateFailure)?,
+            }),
+            LockStrategy::Blocking => Ok(ChunkWriteHandle {
+                flags: self.flags.write(),
+                blocks: self.blocks.write(),
+            }),
+            LockStrategy::Timeout(dur) => Ok(ChunkWriteHandle {
+                flags: self
+                    .flags
+                    .try_write_for(dur)
+                    .ok_or(ChunkSyncError::Timeout(dur))?,
+                blocks: self
+                    .blocks
+                    .try_write_for(dur)
+                    .ok_or(ChunkSyncError::Timeout(dur))?,
+            }),
         }
     }
 }

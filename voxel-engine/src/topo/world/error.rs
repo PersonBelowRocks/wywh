@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 #[derive(te::Error, Debug, Clone)]
 pub enum ChunkManagerError {
     #[error("Chunk not loaded")]
@@ -48,6 +50,17 @@ pub enum ChunkDataError {
     NonFullBlock,
 }
 
+impl From<octo::SubdivAccessError> for ChunkDataError {
+    fn from(value: octo::SubdivAccessError) -> Self {
+        use octo::SubdivAccessError as Error;
+
+        match value {
+            Error::OutOfBounds(_) => Self::OutOfBounds,
+            Error::NonFullBlock(_, _) => Self::NonFullBlock,
+        }
+    }
+}
+
 /// Errors related to chunk handle operations. Closely related to [`ChunkDataError`].
 #[derive(te::Error, Debug, Clone)]
 pub enum ChunkHandleError {
@@ -59,15 +72,19 @@ pub enum ChunkHandleError {
     InvalidDataValue(u32),
 }
 
-impl From<octo::SubdivAccessError> for ChunkDataError {
-    fn from(value: octo::SubdivAccessError) -> Self {
-        use octo::SubdivAccessError as Error;
-
-        match value {
-            Error::OutOfBounds(_) => Self::OutOfBounds,
-            Error::NonFullBlock(_, _) => Self::NonFullBlock,
-        }
-    }
+/// Error(s) related to chunk synchronization and locking. Usually encountered when
+/// getting [read handles] or [write handles].
+///
+/// [read handles]: crate::topo::world::chunk::ChunkReadHandle
+/// [write handles]: crate::topo::world::chunk::ChunkWriteHandle
+#[derive(te::Error, Debug, Clone)]
+pub enum ChunkSyncError {
+    /// Could not get a lock in time.
+    #[error("Timed out after waiting {0:?} for chunk lock")]
+    Timeout(Duration),
+    /// Could not get a lock immediately.
+    #[error("Could not get a lock immediately")]
+    ImmediateFailure,
 }
 
 #[derive(te::Error, Debug, Clone)]
