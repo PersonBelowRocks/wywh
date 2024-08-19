@@ -411,6 +411,7 @@ impl<'a> ChunkWriteHandle<'a> {
 }
 
 pub struct Chunk {
+    chunk_pos: ChunkPos,
     pub flags: RwLock<ChunkFlags>,
     pub load_reasons: RwLock<ChunkLoadReasons>,
     pub blocks: RwLock<ChunkData>,
@@ -445,15 +446,22 @@ impl Chunk {
 
     #[inline]
     pub fn new(
+        chunk_pos: ChunkPos,
         filling: BlockVariantId,
         initial_flags: ChunkFlags,
         load_reasons: ChunkLoadReasons,
     ) -> Self {
         Self {
+            chunk_pos,
             flags: RwLock::new(initial_flags),
             load_reasons: RwLock::new(load_reasons),
             blocks: RwLock::new(ChunkData::new(filling.as_u32())),
         }
+    }
+
+    #[inline]
+    pub fn chunk_pos(&self) -> ChunkPos {
+        self.chunk_pos
     }
 
     /// Get a read handle for this chunk with the given [lock strategy].

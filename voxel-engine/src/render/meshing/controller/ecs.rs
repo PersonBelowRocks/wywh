@@ -16,7 +16,10 @@ use crate::{
             BatchFlags, CachedBatchMembership, ChunkBatch, ChunkBatchLod, RemovedBatchChunks,
             VoxelWorldTick,
         },
-        world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
+        world::{
+            chunk::{ChunkFlags, LockStrategy},
+            Chunk, ChunkPos, VoxelRealm,
+        },
         ObserverSettings,
     },
     util::ChunkSet,
@@ -157,8 +160,7 @@ pub fn voxel_realm_remesh_updated_chunks(
     // Hueristic check to see if it's worth queuing our fresh chunks, we don't want too many to accumulate at a time and we don't want
     // to wait too long between each queuing. These numbers are kind of stupid rn and are just chosen randomly, but maybe a better hueristic can
     // be implemented in the future.
-    let should_queue_fresh =
-        updated.num_fresh_chunks() > 300 || time_since_last_fresh_build.as_millis() > 1000;
+    let should_queue_fresh = time_since_last_fresh_build.as_millis() > 1000;
 
     if should_queue_fresh {
         *last_queued_fresh = current;
@@ -171,28 +173,38 @@ pub fn voxel_realm_remesh_updated_chunks(
     // TODO: skip this update if the chunk manager is globally locked.
     let result = updated.iter_chunks(|cref| {
         // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
-        if !realm.has_render_permit(cref.pos()) || queued_primary.contains(&cref.pos()) {
+        if !realm.has_render_permit(cref.chunk_pos()) || queued_primary.contains(&cref.chunk_pos())
+        {
             return;
         }
 
         // If this chunk was previously queued as a neighbor remesh, we "convert" it to a primary
         // remesh. This is because we need to unflag all chunks that were updated, but we don't want
         // to do that to the neighbors.
-        if queued_neighbors.contains(&cref.pos()) {
-            queued_neighbors.remove(&cref.pos());
+        if queued_neighbors.contains(&cref.chunk_pos()) {
+            queued_neighbors.remove(&cref.chunk_pos());
         }
 
-        if cref.flags().contains(ChunkFlags::FRESHLY_GENERATED) && !should_queue_fresh {
+        if cref
+            .flags(LockStrategy::Blocking)
+            .unwrap()
+            .contains(ChunkFlags::FRESHLY_GENERATED)
+            && !should_queue_fresh
+        {
             return;
         }
 
-        queued_primary.insert(cref.pos());
+        queued_primary.insert(cref.chunk_pos());
         remeshings_issued += 1;
 
         // This chunk was updated in such a way that we need to remesh its neighbors too!
-        if cref.flags().contains(ChunkFlags::REMESH_NEIGHBORS) {
+        if cref
+            .flags(LockStrategy::Blocking)
+            .unwrap()
+            .contains(ChunkFlags::REMESH_NEIGHBORS)
+        {
             for face in Face::FACES {
-                let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.pos()));
+                let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.chunk_pos()));
 
                 if !realm.has_render_permit(neighbor_pos)
                     || queued_primary.contains(&neighbor_pos)
@@ -231,13 +243,14 @@ pub fn voxel_realm_remesh_updated_chunks(
 
     for pos in &queued_primary {
         if let Ok(cref) = cm.get_loaded_chunk(*pos, false) {
-            cref.update_flags(|flags| {
+            cref.update_flags(LockStrategy::Blocking, |flags| {
                 flags.remove(
                     ChunkFlags::REMESH
                         | ChunkFlags::REMESH_NEIGHBORS
                         | ChunkFlags::FRESHLY_GENERATED,
                 )
-            });
+            })
+            .unwrap();
         }
     }
 

@@ -278,6 +278,7 @@ impl<'a> LoadshareChunks<'a> {
         }
 
         let chunk = Chunk::new(
+            pos,
             self.default_block,
             ChunkFlags::PRIMORDIAL,
             ChunkLoadReasons {
@@ -430,8 +431,8 @@ impl ChunkManager {
     // TODO: test
     pub fn with_neighbors<F, R>(
         &self,
-        pos: ChunkPos,
         strategy: LockStrategy,
+        pos: ChunkPos,
         mut f: F,
     ) -> Result<R, ChunkManagerError>
     where

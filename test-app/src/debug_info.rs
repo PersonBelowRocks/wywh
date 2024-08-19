@@ -5,7 +5,11 @@ use bevy::{
 use ve::{
     diagnostics::ENGINE_DIAGNOSTICS,
     render::meshing::controller::ExtractableChunkMeshData,
-    topo::{controller::LastPosition, world::VoxelRealm, ObserverSettings},
+    topo::{
+        controller::LastPosition,
+        world::{chunk::LockStrategy, VoxelRealm},
+        ObserverSettings,
+    },
     util::ws_to_chunk_pos,
 };
 use voxel_engine::{data::tile::Face, topo::world::Chunk};
@@ -95,7 +99,7 @@ pub fn update_debug_text(
         .cm()
         .get_loaded_chunk(chunk_pos, true)
         .ok()
-        .map(|cref| cref.flags())
+        .map(|cref| cref.flags(LockStrategy::Blocking).unwrap())
         .map(|flags| format!("{flags:?}"))
         .unwrap_or_else(|| "NONE".to_string());
 

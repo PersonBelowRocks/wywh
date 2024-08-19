@@ -105,12 +105,9 @@ impl Plugin for VoxelPlugin {
 
 fn setup(mut cmds: Commands, registries: Res<Registries>) {
     let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
-    let void = FullBlock {
-        rotation: None,
-        id: varreg
-            .get_id(&rpath(BlockVariantRegistry::RPATH_VOID))
-            .unwrap(),
-    };
+    let void = varreg
+        .get_id(&rpath(BlockVariantRegistry::RPATH_VOID))
+        .unwrap();
 
     let chunk_manager = ChunkManager::new(void);
 

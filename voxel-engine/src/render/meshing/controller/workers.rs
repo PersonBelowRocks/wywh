@@ -20,7 +20,7 @@ use crate::{
         lod::LevelOfDetail,
         meshing::{error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context},
     },
-    topo::world::{ChunkManager, ChunkPos},
+    topo::world::{chunk::LockStrategy, ChunkManager, ChunkPos},
     util::{result::ResultFlattening, ChunkIndexMap, ChunkSet, Keyed},
 };
 
@@ -89,7 +89,7 @@ impl Worker {
 
                 let cm = params.chunk_manager.clone();
 
-                let result = cm.with_neighbors::<_, Result<ChunkMeshData, ChunkMeshingError>>(cmd.pos, |neighbors| {
+                let result = cm.with_neighbors(LockStrategy::Blocking, cmd.pos, |neighbors| {
                     let context = Context {
                         lod: cmd.lod,
                         neighbors,
