@@ -1,8 +1,8 @@
-use std::fmt;
-
 use bevy::math::ivec3;
 use bevy::prelude::*;
 use bitflags::bitflags;
+use std::fmt;
+use std::ops::{Deref, DerefMut};
 
 use octo::SubdividedStorage;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -145,7 +145,7 @@ pub type ChunkDataStorage = octo::SubdividedStorage<CHUNK_SIZE, BLOCK_SUBDIVISIO
 /// The actual voxel data of a chunk
 #[derive(Clone)]
 pub struct ChunkData {
-    default: u32,
+    default_value: u32,
     storage: Option<ChunkDataStorage>,
 }
 
@@ -173,12 +173,12 @@ impl ChunkData {
     /// will return that default value until anything else is written.
     pub fn new(default: u32) -> Self {
         Self {
-            default,
+            default_value: default,
             storage: None,
         }
     }
 
-    /// Initialize this chunk data. Returns whether or not the storage was actually initalized,
+    /// Initialize this chunk data. Returns whether the storage was actually initialized,
     /// i.e., returns false if the storage was initialized, and true if not.
     /// The chunk data should have identical reading behaviour after this function is called,
     /// this function is just here so that you can have more manual control of allocations.
@@ -186,7 +186,7 @@ impl ChunkData {
     pub fn touch(&mut self) -> bool {
         match self.storage {
             None => {
-                self.storage = Some(SubdividedStorage::new(self.default));
+                self.storage = Some(SubdividedStorage::new(self.default_value));
                 true
             }
             Some(_) => false,
@@ -203,10 +203,12 @@ impl ChunkData {
             return Err(ChunkDataError::OutOfBounds);
         }
 
-        self.storage.as_ref().map_or(Ok(self.default), |storage| {
-            let index = ls_pos.to_array().map(|v| v as u8);
-            storage.get(index).map_err(ChunkDataError::from)
-        })
+        self.storage
+            .as_ref()
+            .map_or(Ok(self.default_value), |storage| {
+                let index = ls_pos.to_array().map(|v| v as u8);
+                storage.get(index).map_err(ChunkDataError::from)
+            })
     }
 
     /// Set the value at the given full-block localspace position.
@@ -222,13 +224,13 @@ impl ChunkData {
         }
 
         // Writing is pointless if the value is the default.
-        if value == self.default {
+        if value == self.default_value {
             return Ok(());
         }
 
         let storage = self
             .storage
-            .get_or_insert_with(|| ChunkDataStorage::new(self.default));
+            .get_or_insert_with(|| ChunkDataStorage::new(self.default_value));
 
         let index = ls_pos.to_array().map(|v| v as u8);
         Ok(storage.set(index, value)?)
@@ -244,10 +246,12 @@ impl ChunkData {
             return Err(ChunkDataError::OutOfBounds);
         }
 
-        self.storage.as_ref().map_or(Ok(self.default), |storage| {
-            let index = mb_pos.to_array().map(|v| v as u8);
-            storage.get_mb(index).map_err(ChunkDataError::from)
-        })
+        self.storage
+            .as_ref()
+            .map_or(Ok(self.default_value), |storage| {
+                let index = mb_pos.to_array().map(|v| v as u8);
+                storage.get_mb(index).map_err(ChunkDataError::from)
+            })
     }
 
     /// Set the value at the given microblock localspace position.
@@ -267,17 +271,80 @@ impl ChunkData {
         }
 
         // Writing is pointless if the value is the default.
-        if value == self.default {
+        if value == self.default_value {
             return Ok(());
         }
 
         let storage = self
             .storage
-            .get_or_insert_with(|| ChunkDataStorage::new(self.default));
+            .get_or_insert_with(|| ChunkDataStorage::new(self.default_value));
 
         let index = mb_pos.to_array().map(|v| v as u8);
         Ok(storage.set_mb(index, value)?)
     }
+
+    /// Returns a reference to the underlying storage from `octo`, allowing for lower level
+    /// operations.
+    #[inline]
+    pub fn storage(&self) -> Option<&ChunkDataStorage> {
+        self.storage.as_ref()
+    }
+
+    /// Returns a mutable reference to the underlying storage from `octo`, allowing for lower level
+    /// operations.
+    #[inline]
+    pub fn storage_mut(&mut self) -> Option<&mut ChunkDataStorage> {
+        self.storage.as_mut()
+    }
+}
+
+macro_rules! impl_chunk_handle_reads {
+    ($lt:lifetime, $name:ty) => {
+        impl<$lt> $name {
+            /// Get the value at the given full-block position.
+            /// Errors on any of these conditions:
+            /// - The position is out of bounds
+            /// - The block at the position is not a full-block
+            /// - The value at the position cannot be made into a [`BlockVariantId`]
+            /// # Vectors
+            /// [`ls_pos`] is in full-block localspace.
+            #[inline]
+            pub fn get(&self, ls_pos: IVec3) -> Result<BlockVariantId, ChunkHandleError> {
+                let raw = self.blocks.get(ls_pos)?;
+
+                if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
+                    return Err(ChunkHandleError::InvalidDataValue(raw));
+                }
+
+                let variant_id = unsafe { BlockVariantId::from_raw(raw) };
+                Ok(variant_id)
+            }
+
+            /// Get the variant ID at the given microblock position.
+            /// Errors on any of these conditions:
+            ///  - The position is out of bounds
+            ///  - The value at the position cannot be made into a [`BlockVariantId`]
+            /// # Vectors
+            /// [`mb_pos`] is in microblock localspace.
+            #[inline]
+            pub fn get_mb(&self, mb_pos: IVec3) -> Result<BlockVariantId, ChunkHandleError> {
+                let raw = self.blocks.get_mb(mb_pos)?;
+
+                if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
+                    return Err(ChunkHandleError::InvalidDataValue(raw));
+                }
+
+                let variant_id = unsafe { BlockVariantId::from_raw(raw) };
+                Ok(variant_id)
+            }
+
+            /// Returns the inner chunk data, which allows for more low-level operations.
+            #[inline]
+            pub fn inner_ref(&self) -> &ChunkData {
+                self.blocks.deref()
+            }
+        }
+    };
 }
 
 /// Read-only handle to a chunk's data. Essentially a read guard for the chunk's data lock.
@@ -286,58 +353,56 @@ pub struct ChunkReadHandle<'a> {
     blocks: RwLockReadGuard<'a, ChunkData>,
 }
 
-impl<'a> ChunkReadHandle<'a> {
-    /// Get the value at the given full-block position.
-    /// Errors on any of these conditions:
-    /// - The position is out of bounds
-    /// - The block at the position is not a full-block
-    /// - The value at the position cannot be made into a [`BlockVariantId`]
-    /// # Vectors
-    /// [`ls_pos`] is in full-block localspace.
-    #[inline]
-    pub fn get(&self, ls_pos: IVec3) -> Result<BlockVariantId, ChunkHandleError> {
-        let raw = self.blocks.get(ls_pos)?;
+impl_chunk_handle_reads!('a, ChunkReadHandle<'a>);
 
-        if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
-            return Err(ChunkHandleError::InvalidDataValue(raw));
-        }
-
-        let variant_id = unsafe { BlockVariantId::from_raw(raw) };
-        Ok(variant_id)
-    }
-
-    /// Get the variant ID at the given microblock position.
-    /// Errors on any of these conditions:
-    ///  - The position is out of bounds
-    ///  - The value at the position cannot be made into a [`BlockVariantId`]
-    /// # Vectors
-    /// [`mb_pos`] is in microblock localspace.
-    #[inline]
-    pub fn get_mb(&self, mb_pos: IVec3) -> Result<BlockVariantId, ChunkHandleError> {
-        let raw = self.blocks.get_mb(mb_pos)?;
-
-        if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
-            return Err(ChunkHandleError::InvalidDataValue(raw));
-        }
-
-        let variant_id = unsafe { BlockVariantId::from_raw(raw) };
-        Ok(variant_id)
-    }
-
-    // TODO: docs
-    #[inline]
-    pub fn get_block(&self, ls_pos: IVec3) -> Result<(), ChunkDataError> {
-        todo!()
-    }
-}
-
+/// Read/Write handle to a chunk's data. Essentially a write guard for the chunk's data lock.
 pub struct ChunkWriteHandle<'a> {
     flags: RwLockWriteGuard<'a, ChunkFlags>,
     blocks: RwLockWriteGuard<'a, ChunkData>,
 }
 
+impl_chunk_handle_reads!('a, ChunkWriteHandle<'a>);
+
 impl<'a> ChunkWriteHandle<'a> {
-    // TODO: methods!
+    /// Set the value at the given full-block position.
+    /// Errors on any of these conditions:
+    ///  - The position is out of bounds
+    ///  - The provided [`BlockVariantId`] is invalid.
+    /// # Vectors
+    /// [`ls_pos`] is in full-block localspace.
+    #[inline]
+    pub fn set(&mut self, ls_pos: IVec3, id: BlockVariantId) -> Result<(), ChunkHandleError> {
+        let raw = id.as_u32();
+
+        if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
+            return Err(ChunkHandleError::InvalidDataValue(raw));
+        }
+
+        Ok(self.blocks.set(ls_pos, raw)?)
+    }
+
+    /// Get the variant ID at the given microblock position.
+    /// Errors on any of these conditions:
+    ///  - The position is out of bounds
+    ///  - The provided [`BlockVariantId`] is invalid.
+    /// # Vectors
+    /// [`mb_pos`] is in microblock localspace.
+    #[inline]
+    pub fn set_mb(&mut self, mb_pos: IVec3, id: BlockVariantId) -> Result<(), ChunkHandleError> {
+        let raw = id.as_u32();
+
+        if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
+            return Err(ChunkHandleError::InvalidDataValue(raw));
+        }
+
+        Ok(self.blocks.set_mb(mb_pos, raw)?)
+    }
+
+    /// Returns the inner chunk data, which allows for more low-level operations.
+    #[inline]
+    pub fn inner_mut(&mut self) -> &mut ChunkData {
+        self.blocks.deref_mut()
+    }
 }
 
 pub struct Chunk {
