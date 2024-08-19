@@ -11,7 +11,7 @@ use super::{
     world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
 };
 
-fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
+fn local_fb_to_chunk_pos(pos: IVec3) -> IVec3 {
     // TODO: use bitwise math
     ivec3(
         pos.x.div_euclid(Chunk::SIZE),
@@ -20,7 +20,7 @@ fn localspace_to_chunk_pos(pos: IVec3) -> IVec3 {
     )
 }
 
-fn localspace_to_neighbor_localspace(pos: IVec3) -> IVec3 {
+fn local_fb_to_neighbor_local_fb(pos: IVec3) -> IVec3 {
     // TODO: use bitwise math
     ivec3(
         pos.x.rem_euclid(Chunk::SIZE),
@@ -48,10 +48,8 @@ pub fn is_in_bounds_3d(pos: IVec3) -> bool {
     let min: IVec3 = -IVec3::ONE;
     let max: IVec3 = IVec3::splat(Chunk::SIZE) + IVec3::ONE;
 
-    pos.cmpge(min).all() && pos.cmplt(max).all() && localspace_to_chunk_pos(pos) != IVec3::ZERO
+    pos.cmpge(min).all() && pos.cmplt(max).all() && local_fb_to_chunk_pos(pos) != IVec3::ZERO
 }
-
-pub type NbResult<'a> = Result<BlockVariantId, NeighborReadError>;
 
 pub const NEIGHBOR_CUBIC_ARRAY_DIMENSIONS: usize = 3;
 pub const NEIGHBOR_ARRAY_SIZE: usize = NEIGHBOR_CUBIC_ARRAY_DIMENSIONS.pow(3);
@@ -71,9 +69,9 @@ impl<'a> Neighbors<'a> {
     /// for that chunk. This function allows reading from all blocks in the neighboring chunks, not just
     /// the ones on the borders facing the center.
     /// # Vectors
-    /// `ls_nb_pos` is in neighbor-only localspace
-    pub fn get_3d(&self, ls_nb_pos: IVec3) -> NbResult<'_> {
-        let chk_pos = localspace_to_chunk_pos(ls_nb_pos);
+    /// `ls_nb_pos` is chunk local, full-block, and neighbor-only
+    pub fn get_3d(&self, ls_nb_pos: IVec3) -> Result<BlockVariantId, NeighborReadError> {
+        let chk_pos = local_fb_to_chunk_pos(ls_nb_pos);
 
         if chk_pos == IVec3::ZERO {
             // tried to access center chunk (aka. the chunk for which we represent the neighbors)
@@ -89,7 +87,7 @@ impl<'a> Neighbors<'a> {
 
         match chk {
             Some(handle) => {
-                let neighbor_local = localspace_to_neighbor_localspace(ls_nb_pos);
+                let neighbor_local = local_fb_to_neighbor_local_fb(ls_nb_pos);
                 Ok(handle.get(neighbor_local)?)
             }
             // No handle at this position so we return our default block
@@ -101,8 +99,8 @@ impl<'a> Neighbors<'a> {
     /// The position may exceed the chunks borders by 1 to allow getting blocks diagonal of the center chunk.
     ///
     /// # Vectors
-    /// `face_pos` is in local-facespace
-    pub fn get(&self, face: Face, face_pos: IVec2) -> NbResult<'_> {
+    /// `face_pos` is chunk local, full-block, and on face
+    pub fn get(&self, face: Face, face_pos: IVec2) -> Result<BlockVariantId, NeighborReadError> {
         if !is_in_bounds(face_pos) {
             return Err(NeighborReadError::OutOfBounds);
         }
