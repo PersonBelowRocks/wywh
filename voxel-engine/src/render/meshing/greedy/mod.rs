@@ -149,19 +149,19 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get_3d(&self, pos: IVec3) -> CqsResult<BlockVariantId> {
+    pub fn get_3d(&self, pos: IVec3) -> CqsResult<Option<BlockVariantId>> {
         Ok(self.handle.get(pos)?)
     }
 
     #[inline]
-    pub fn get_mb_3d(&self, pos_mb: IVec3) -> CqsResult<BlockVariantId> {
+    pub fn get_3d_mb(&self, pos_mb: IVec3) -> CqsResult<BlockVariantId> {
         Ok(self.handle.get_mb(pos_mb)?)
     }
 
     /// `pos` is in localspace and can exceed the regular chunk bounds by 1 for any component of the vector.
     /// In this case the `ChunkAccessOutput` is taken from a neighboring chunk.
     #[inline]
-    pub fn auto_neighboring_get(&self, pos: IVec3) -> CqsResult<BlockVariantId> {
+    pub fn auto_neighboring_get(&self, pos: IVec3) -> CqsResult<Option<BlockVariantId>> {
         if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
             self.get_3d(pos)
         } else if !Self::contains_3d(pos) && neighbors::is_in_bounds_3d(pos) {
@@ -176,7 +176,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         let pos = microblock_to_full_block_3d(pos_mb);
 
         if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
-            self.get_mb_3d(pos_mb)
+            self.get_3d_mb(pos_mb)
         } else if !Self::contains_3d(pos) && neighbors::is_in_bounds_3d(pos) {
             Ok(self.neighbors.get_3d_mb(pos_mb)?)
         } else {
@@ -185,7 +185,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get(&self, pos: IVec2) -> CqsResult<BlockVariantId> {
+    pub fn get(&self, pos: IVec2) -> CqsResult<Option<BlockVariantId>> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
         }
@@ -201,11 +201,11 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         }
 
         let pos_mb_3d = self.pos_3d_mb(pos_mb);
-        self.get_mb_3d(pos_mb_3d)
+        self.get_3d_mb(pos_mb_3d)
     }
 
     #[inline]
-    pub fn get_above(&self, pos: IVec2) -> CqsResult<BlockVariantId> {
+    pub fn get_above(&self, pos: IVec2) -> CqsResult<Option<BlockVariantId>> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
         }
@@ -216,7 +216,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
     #[inline]
     pub fn get_mb_above(&self, mb_pos: IVec2) -> CqsResult<BlockVariantId> {
-        if !Self::contains(mb_pos) {
+        if !Self::contains_mb(mb_pos) {
             return Err(CqsError::OutOfBounds);
         }
 
