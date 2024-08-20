@@ -108,7 +108,7 @@ impl<'a> Neighbors<'a> {
     /// # Vectors
     /// `ls_nb_pos` is chunk local, full-block, and neighbor-only
     #[inline]
-    pub fn get_3d(&self, ls_nb_pos: IVec3) -> Result<BlockVariantId, NeighborReadError> {
+    pub fn get_3d(&self, ls_nb_pos: IVec3) -> Result<Option<BlockVariantId>, NeighborReadError> {
         let chunk_pos = fb_localspace_to_local_chunkspace(ls_nb_pos);
 
         let chunk = self.get_neighbor_chunk(chunk_pos)?;
@@ -120,7 +120,7 @@ impl<'a> Neighbors<'a> {
                 let neighbor_local = fb_localspace_wrap(ls_nb_pos);
                 handle.get(neighbor_local).map_err(NeighborReadError::from)
             })
-            .unwrap_or(Ok(self.default_block))
+            .unwrap_or(Ok(Some(self.default_block)))
     }
 
     /// Get a microblock in one of the neighboring chunks, returning the default block if there was no handle
@@ -139,7 +139,9 @@ impl<'a> Neighbors<'a> {
                 // Wrap the localspace position around since it refers to a position in a
                 // neighboring chunk
                 let neighbor_local = mb_localspace_wrap(mb_nb_pos);
-                handle.get(neighbor_local).map_err(NeighborReadError::from)
+                handle
+                    .get_mb(neighbor_local)
+                    .map_err(NeighborReadError::from)
             })
             .unwrap_or(Ok(self.default_block))
     }
@@ -150,7 +152,11 @@ impl<'a> Neighbors<'a> {
     /// # Vectors
     /// `face_pos` is chunk local, full-block, and on face
     #[inline]
-    pub fn get(&self, face: Face, face_pos: IVec2) -> Result<BlockVariantId, NeighborReadError> {
+    pub fn get(
+        &self,
+        face: Face,
+        face_pos: IVec2,
+    ) -> Result<Option<BlockVariantId>, NeighborReadError> {
         if !is_in_bounds(face_pos) {
             return Err(NeighborReadError::OutOfBounds);
         }
