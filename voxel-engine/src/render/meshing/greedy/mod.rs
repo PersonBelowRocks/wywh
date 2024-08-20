@@ -178,7 +178,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
             self.get_mb_3d(pos_mb)
         } else if !Self::contains_3d(pos) && neighbors::is_in_bounds_3d(pos) {
-            todo!() // TODO:
+            Ok(self.neighbors.get_3d_mb(pos_mb)?)
         } else {
             return Err(CqsError::OutOfBounds);
         }
@@ -215,8 +215,13 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline]
-    pub fn get_mb_above(&self, pos_mb: IVec2) -> CqsResult<BlockVariantId> {
-        todo!()
+    pub fn get_mb_above(&self, mb_pos: IVec2) -> CqsResult<BlockVariantId> {
+        if !Self::contains(mb_pos) {
+            return Err(CqsError::OutOfBounds);
+        }
+
+        let pos_mb_above = self.pos_3d_mb(mb_pos) + self.face.normal();
+        self.auto_neighboring_get_mb(pos_mb_above)
     }
 
     /// Get a quad for given position. This function operates on microblock resolution, so the relevant
