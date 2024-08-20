@@ -114,25 +114,23 @@ impl GreedyMesher {
             for cs_y in 0..Chunk::SIZE {
                 let cs_pos = ivec2(cs_x, cs_y);
 
-                let block = cqs.get(cs_pos)?;
-
-                if cqs.registry.get_by_id(block).model.is_none() {
-                    continue;
-                }
-
-                if cqs.mag_at_block_edge() {
-                    // TODO: this is incorrect, we need to only get full blocks here!
-                    // by default we'll error here unless we can get a full block, maybe
-                    // provide some convenience functions to simplify handling that case?
-                    let above = cqs.get_above(cs_pos)?;
-                    if cqs
-                        .registry
-                        .get_by_id(above)
-                        .options
-                        .transparency
-                        .is_opaque()
-                    {
+                if let Some(block) = cqs.get(cs_pos)? {
+                    if cqs.registry.get_by_id(block).model.is_none() {
                         continue;
+                    }
+
+                    if cqs.mag_at_block_edge() {
+                        if let Some(above) = cqs.get_above(cs_pos)? {
+                            if cqs
+                                .registry
+                                .get_by_id(above)
+                                .options
+                                .transparency
+                                .is_opaque()
+                            {
+                                continue;
+                            }
+                        }
                     }
                 }
 
