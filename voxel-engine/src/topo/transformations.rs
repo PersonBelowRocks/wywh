@@ -192,6 +192,23 @@ where
     T::from_array(arr)
 }
 
+/// In cases where you want to get the position of a full-block in a neighboring chunk from a position centered
+/// on your localized chunk, this transformation might be useful as it essentially makes the position "wrap"
+/// around.
+/// ### In
+/// Local full-block position (possibly outside of chunk bounds)
+/// ### Out
+/// Local full-block position (but within chunk bounds)
+#[inline(always)]
+pub fn fb_localspace_wrap<const SIZE: usize, T>(input: T) -> T
+where
+    T: IntegerVector<{ SIZE }>,
+{
+    let mut arr = input.to_array();
+    arr = arr.map(|e| rem_2_pow_n(e, CHUNK_FULL_BLOCK_DIMS_LOG2));
+    T::from_array(arr)
+}
+
 /// Local microblock position from world microblock position.
 /// ### In
 /// World microblock position
@@ -199,6 +216,23 @@ where
 /// Local microblock position
 #[inline(always)]
 pub fn mb_worldspace_to_mb_localspace<const SIZE: usize, T>(input: T) -> T
+where
+    T: IntegerVector<{ SIZE }>,
+{
+    let mut arr = input.to_array();
+    arr = arr.map(|e| rem_2_pow_n(e, CHUNK_MICROBLOCK_DIMS_LOG2));
+    T::from_array(arr)
+}
+
+/// In cases where you want to get the position of a microblock in a neighboring chunk from a position centered
+/// on your localized chunk, this transformation might be useful as it essentially makes the position "wrap"
+/// around.
+/// ### In
+/// Local microblock position (possibly outside of chunk bounds)
+/// ### Out
+/// Local microblock position (but within chunk bounds)
+#[inline(always)]
+pub fn mb_localspace_wrap<const SIZE: usize, T>(input: T) -> T
 where
     T: IntegerVector<{ SIZE }>,
 {

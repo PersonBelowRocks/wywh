@@ -8,7 +8,10 @@ use crate::{
 
 use super::{
     error::NeighborReadError,
+    fb_localspace_to_local_chunkspace, fb_localspace_wrap, fb_worldspace_to_fb_localspace,
+    mb_localspace_to_local_chunkspace, mb_localspace_wrap,
     world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
+    CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS,
 };
 
 fn local_fb_to_chunk_pos(pos: IVec3) -> IVec3 {
@@ -43,6 +46,15 @@ pub fn is_in_bounds(pos: IVec2) -> bool {
     pos.cmpge(min).all() && pos.cmplt(max).all()
 }
 
+/// Test if the provided microblock facespace vector is in bounds
+pub fn is_in_bounds_mb(pos: IVec2) -> bool {
+    let min: IVec2 = -IVec2::splat(FULL_BLOCK_MICROBLOCK_DIMS as _);
+    let max: IVec2 =
+        IVec2::splat(CHUNK_MICROBLOCK_DIMS as _) + IVec2::splat(FULL_BLOCK_MICROBLOCK_DIMS as _);
+
+    pos.cmpge(min).all() && pos.cmplt(max).all()
+}
+
 /// Test if the provided localspace vector is in bounds
 pub fn is_in_bounds_3d(pos: IVec3) -> bool {
     let min: IVec3 = -IVec3::ONE;
@@ -65,34 +77,71 @@ impl<'a> Neighbors<'a> {
         }
     }
 
+    /// Get a handle to a neighboring chunk from a local chunk position. Returns [`NeighborReadError::OutOfBounds`]
+    /// if the given chunk position is either `[0, 0, 0]` or not inclusively between `[-1, -1, -1]..[1, 1, 1]`.
+    ///
+    /// # Vectors
+    /// `chunk_pos` is in local, neighbor-only, chunk space
+    #[inline]
+    pub fn get_neighbor_chunk(
+        &self,
+        chunk_pos: IVec3,
+    ) -> Result<Option<&ChunkReadHandle<'_>>, NeighborReadError> {
+        if chunk_pos == IVec3::ZERO {
+            // tried to access center chunk (aka. the chunk for which we represent the neighbors)
+            return Err(NeighborReadError::OutOfBounds);
+        }
+
+        let chunk_index = ivec3_to_1d(chunk_pos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
+            .map_err(|_| NeighborReadError::OutOfBounds)?;
+        let chunk = self
+            .chunks
+            .get(chunk_index)
+            .ok_or(NeighborReadError::OutOfBounds)?;
+
+        Ok(chunk.as_ref())
+    }
+
     /// Get a block in one of the neighboring chunks, returning the default block if there was no handle
     /// for that chunk. This function allows reading from all blocks in the neighboring chunks, not just
     /// the ones on the borders facing the center.
     /// # Vectors
     /// `ls_nb_pos` is chunk local, full-block, and neighbor-only
+    #[inline]
     pub fn get_3d(&self, ls_nb_pos: IVec3) -> Result<BlockVariantId, NeighborReadError> {
-        let chk_pos = local_fb_to_chunk_pos(ls_nb_pos);
+        let chunk_pos = fb_localspace_to_local_chunkspace(ls_nb_pos);
 
-        if chk_pos == IVec3::ZERO {
-            // tried to access center chunk (aka. the chunk for which we represent the neighbors)
-            return Err(NeighborReadError::OutOfBounds);
-        }
+        let chunk = self.get_neighbor_chunk(chunk_pos)?;
 
-        let chk_index = ivec3_to_1d(chk_pos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
-            .map_err(|_| NeighborReadError::OutOfBounds)?;
-        let chk = self
-            .chunks
-            .get(chk_index)
-            .ok_or(NeighborReadError::OutOfBounds)?;
+        chunk
+            .map(|handle| {
+                // Wrap the localspace position around since it refers to a position in a
+                // neighboring chunk
+                let neighbor_local = fb_localspace_wrap(ls_nb_pos);
+                handle.get(neighbor_local).map_err(NeighborReadError::from)
+            })
+            .unwrap_or(Ok(self.default_block))
+    }
 
-        match chk {
-            Some(handle) => {
-                let neighbor_local = local_fb_to_neighbor_local_fb(ls_nb_pos);
-                Ok(handle.get(neighbor_local)?)
-            }
-            // No handle at this position so we return our default block
-            None => Ok(self.default_block),
-        }
+    /// Get a microblock in one of the neighboring chunks, returning the default block if there was no handle
+    /// for that chunk. This function allows reading from all microblocks in the neighboring chunks, not just
+    /// the ones on the borders facing the center.
+    /// # Vectors
+    /// `mb_nb_pos` is chunk local, microblock, and neighbor-only
+    #[inline]
+    pub fn get_3d_mb(&self, mb_nb_pos: IVec3) -> Result<BlockVariantId, NeighborReadError> {
+        let chunk_pos = mb_localspace_to_local_chunkspace(mb_nb_pos);
+
+        let chunk = self.get_neighbor_chunk(chunk_pos)?;
+
+        chunk
+            .map(|handle| {
+                // Wrap the localspace position around since it refers to a position in a
+                // neighboring chunk
+                let neighbor_local = mb_localspace_wrap(mb_nb_pos);
+                handle.get(neighbor_local).map_err(NeighborReadError::from)
+            })
+            .unwrap_or(Ok(self.default_block))
     }
 
     /// Get the block in a neighboring chunk that "obscures" the given block position in the center chunk.
@@ -100,6 +149,7 @@ impl<'a> Neighbors<'a> {
     ///
     /// # Vectors
     /// `face_pos` is chunk local, full-block, and on face
+    #[inline]
     pub fn get(&self, face: Face, face_pos: IVec2) -> Result<BlockVariantId, NeighborReadError> {
         if !is_in_bounds(face_pos) {
             return Err(NeighborReadError::OutOfBounds);
@@ -115,6 +165,33 @@ impl<'a> Neighbors<'a> {
         };
 
         self.get_3d(pos_3d)
+    }
+
+    /// Get the microblock in a neighboring chunk that "obscures" the given microblock position in the center chunk.
+    /// The position may exceed the chunks borders by 1 to allow getting blocks diagonal of the center chunk.
+    ///
+    /// # Vectors
+    /// `mb_face_pos` is chunk local, microblock, and on face
+    #[inline]
+    pub fn get_mb(
+        &self,
+        face: Face,
+        mb_face_pos: IVec2,
+    ) -> Result<BlockVariantId, NeighborReadError> {
+        if !is_in_bounds_mb(mb_face_pos) {
+            return Err(NeighborReadError::OutOfBounds);
+        }
+
+        let mb_pos_3d = {
+            let mut mag = face.axis_direction();
+            if mag > 0 {
+                mag = Chunk::SIZE;
+            }
+
+            ivec_project_to_3d(mb_face_pos, face, mag)
+        };
+
+        self.get_3d_mb(mb_pos_3d)
     }
 }
 
