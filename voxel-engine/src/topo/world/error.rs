@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use bevy::math::IVec3;
+
 #[derive(te::Error, Debug, Clone)]
 pub enum ChunkManagerError {
     #[error("Chunk not loaded")]
@@ -66,9 +68,12 @@ impl From<octo::SubdivAccessError> for ChunkDataError {
 /// Errors related to chunk handle operations. Closely related to [`ChunkDataError`].
 #[derive(te::Error, Debug, Clone)]
 pub enum ChunkHandleError {
-    /// Underlying chunk data error
-    #[error(transparent)]
-    ChunkDataError(#[from] ChunkDataError),
+    /// Microblock position is out of bounds
+    #[error("Microblock position {0} is out of bounds for the chunk handle")]
+    MicroblockOutOfBounds(IVec3),
+    /// Full-block position is out of bounds
+    #[error("Full-block position {0} is out of bounds for the chunk handle")]
+    FullBlockOutOfBounds(IVec3),
     /// The value stored in the chunk data is not a valid block variant ID
     #[error("Can't create block variant ID from raw value: {0:#01x}")]
     InvalidDataValue(u32),

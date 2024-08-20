@@ -301,23 +301,29 @@ impl ChunkData {
 macro_rules! impl_chunk_handle_reads {
     ($lt:lifetime, $name:ty) => {
         impl<$lt> $name {
-            /// Get the value at the given full-block position.
+            /// Get the block at the given full-block position.
+            /// Returns [`None`] if the block at the given position is not a full-block.
             /// Errors on any of these conditions:
             /// - The position is out of bounds
-            /// - The block at the position is not a full-block
             /// - The value at the position cannot be made into a [`BlockVariantId`]
             /// # Vectors
             /// [`ls_pos`] is in full-block localspace.
             #[inline]
-            pub fn get(&self, ls_pos: IVec3) -> Result<BlockVariantId, ChunkHandleError> {
-                let raw = self.blocks.get(ls_pos)?;
+            pub fn get(&self, ls_pos: IVec3) -> Result<Option<BlockVariantId>, ChunkHandleError> {
+                let raw = match self.blocks.get(ls_pos) {
+                    Ok(raw) => raw,
+                    Err(ChunkDataError::OutOfBounds) => {
+                        return Err(ChunkHandleError::FullBlockOutOfBounds(ls_pos))
+                    }
+                    Err(ChunkDataError::NonFullBlock) => return Ok(None),
+                };
 
                 if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
                     return Err(ChunkHandleError::InvalidDataValue(raw));
                 }
 
                 let variant_id = unsafe { BlockVariantId::from_raw(raw) };
-                Ok(variant_id)
+                Ok(Some(variant_id))
             }
 
             /// Get the variant ID at the given microblock position.
@@ -328,7 +334,15 @@ macro_rules! impl_chunk_handle_reads {
             /// [`mb_pos`] is in microblock localspace.
             #[inline]
             pub fn get_mb(&self, mb_pos: IVec3) -> Result<BlockVariantId, ChunkHandleError> {
-                let raw = self.blocks.get_mb(mb_pos)?;
+                let raw = match self.blocks.get_mb(mb_pos) {
+                    Ok(raw) => raw,
+                    Err(ChunkDataError::OutOfBounds) => {
+                        return Err(ChunkHandleError::MicroblockOutOfBounds(mb_pos))
+                    }
+                    Err(ChunkDataError::NonFullBlock) => unreachable!(
+                        "reading microblocks from a subdivided block is okay and intended"
+                    ),
+                };
 
                 if raw > MAX_ALLOWED_CHUNK_DATA_VALUE {
                     return Err(ChunkHandleError::InvalidDataValue(raw));
@@ -377,7 +391,12 @@ impl<'a> ChunkWriteHandle<'a> {
             return Err(ChunkHandleError::InvalidDataValue(raw));
         }
 
-        Ok(self.blocks.set(ls_pos, raw)?)
+        self.blocks.set(ls_pos, raw).map_err(|err| match err {
+            ChunkDataError::NonFullBlock => unreachable!(
+                "it should not be possible to encounter a non-full-block error when writing"
+            ),
+            ChunkDataError::OutOfBounds => ChunkHandleError::FullBlockOutOfBounds(ls_pos),
+        })
     }
 
     /// Get the variant ID at the given microblock position.
@@ -394,7 +413,12 @@ impl<'a> ChunkWriteHandle<'a> {
             return Err(ChunkHandleError::InvalidDataValue(raw));
         }
 
-        Ok(self.blocks.set_mb(mb_pos, raw)?)
+        self.blocks.set_mb(mb_pos, raw).map_err(|err| match err {
+            ChunkDataError::NonFullBlock => unreachable!(
+                "it should not be possible to encounter a non-full-block error when writing"
+            ),
+            ChunkDataError::OutOfBounds => ChunkHandleError::MicroblockOutOfBounds(mb_pos),
+        })
     }
 
     /// Initializes the underlying data for writing. See [`ChunkData::touch`].
