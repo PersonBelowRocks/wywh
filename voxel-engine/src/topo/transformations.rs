@@ -67,8 +67,7 @@ impl_integer_vector!(IVec3, 3);
 impl_integer_vector!(IVec2, 2);
 
 /// Calculate the "remainder" of `x / n^2`. It's not actually the remainder, and
-/// this operation is not the same as, say, `rem_euclid` or `%` (at least i think so).
-/// ```
+/// this operation is not the same as, say, `rem_euclid` or `%` (at least I think so).
 #[inline]
 const fn rem_2_pow_n(x: i32, n: u32) -> i32 {
     let pow = 0b1 << n;
@@ -88,6 +87,8 @@ pub const CHUNK_FULL_BLOCK_DIMS_LOG2: u32 = CHUNK_FULL_BLOCK_DIMS.ilog2();
 
 // We only want to deal with powers of two.
 static_assertions::const_assert_eq!(1, CHUNK_FULL_BLOCK_DIMS.count_ones());
+// The number must be trivially castable to an i32.
+static_assertions::const_assert!((i32::MAX as u32) >= CHUNK_FULL_BLOCK_DIMS);
 
 /// The microblock dimensions of a full-block. The number of microblocks in a
 /// full-block will be `FULL_BLOCK_MICROBLOCK_DIMS ^ 3`.
@@ -96,6 +97,8 @@ pub const FULL_BLOCK_MICROBLOCK_DIMS_LOG2: u32 = FULL_BLOCK_MICROBLOCK_DIMS.ilog
 
 // We only want to deal with powers of two.
 static_assertions::const_assert_eq!(1, FULL_BLOCK_MICROBLOCK_DIMS.count_ones());
+// The number must be trivially castable to an i32.
+static_assertions::const_assert!((i32::MAX as u32) >= FULL_BLOCK_MICROBLOCK_DIMS);
 
 /// The microblock dimensions of a chunk. The number of microblocks in a chunk
 /// will be `CHUNK_MICROBLOCK_DIMS ^ 3`.
@@ -104,6 +107,42 @@ pub const CHUNK_MICROBLOCK_DIMS_LOG2: u32 = CHUNK_MICROBLOCK_DIMS.ilog2();
 
 // We only want to deal with powers of two.
 static_assertions::const_assert_eq!(1, CHUNK_MICROBLOCK_DIMS.count_ones());
+// The number must be trivially castable to an i32.
+static_assertions::const_assert!((i32::MAX as u32) >= CHUNK_MICROBLOCK_DIMS);
+
+////////////////////////////////////////////////////////////////////////////////////
+// To worldspace
+////////////////////////////////////////////////////////////////////////////////////
+
+/// World full-block position of a chunk's minimum corner from chunk position.
+/// ### In
+/// Chunk position
+/// ### Out
+/// World full-block position of the chunk position's corner
+#[inline(always)]
+pub fn chunkspace_to_worldspace_min<const SIZE: usize, T>(input: T) -> T
+where
+    T: IntegerVector<{ SIZE }>,
+{
+    let mut arr = input.to_array();
+    arr = arr.map(|e| e * (CHUNK_FULL_BLOCK_DIMS as i32));
+    T::from_array(arr)
+}
+
+/// World microblock position of a chunk's minimum corner from chunk position.
+/// ### In
+/// Chunk position
+/// ### Out
+/// World microblock position of the chunk position's corner
+#[inline(always)]
+pub fn chunkspace_to_mb_worldspace_min<const SIZE: usize, T>(input: T) -> T
+where
+    T: IntegerVector<{ SIZE }>,
+{
+    let mut arr = input.to_array();
+    arr = arr.map(|e| e * (CHUNK_MICROBLOCK_DIMS as i32));
+    T::from_array(arr)
+}
 
 ////////////////////////////////////////////////////////////////////////////////////
 // To chunkspace
@@ -330,5 +369,27 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_chunkspace_to_mb_worldspace_min() {
+        let f = |x: i32, y: i32, z: i32| chunkspace_to_mb_worldspace_min(ivec3(x, y, z));
+
+        assert_eq!(ivec3(0, 0, 0), f(0, 0, 0));
+        assert_eq!(ivec3(0, 64, 0), f(0, 1, 0));
+        assert_eq!(ivec3(0, -64, 0), f(0, -1, 0));
+        assert_eq!(ivec3(0, -128, 0), f(0, -2, 0));
+        assert_eq!(ivec3(0, 256, 0), f(0, 4, 0));
+    }
+
+    #[test]
+    fn test_chunkspace_to_worldspace_min() {
+        let f = |x: i32, y: i32, z: i32| chunkspace_to_worldspace_min(ivec3(x, y, z));
+
+        assert_eq!(ivec3(0, 0, 0), f(0, 0, 0));
+        assert_eq!(ivec3(0, 16, 0), f(0, 1, 0));
+        assert_eq!(ivec3(0, -16, 0), f(0, -1, 0));
+        assert_eq!(ivec3(0, -32, 0), f(0, -2, 0));
+        assert_eq!(ivec3(0, 64, 0), f(0, 4, 0));
     }
 }

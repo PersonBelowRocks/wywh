@@ -13,7 +13,8 @@ use crate::{
     },
     topo::{
         block::SubdividedBlock,
-        world::{chunk::ChunkWriteHandle, ChunkHandleError, ChunkPos},
+        chunkspace_to_mb_worldspace_min, chunkspace_to_worldspace_min,
+        world::{chunk::ChunkWriteHandle, Chunk, ChunkHandleError, ChunkPos},
     },
 };
 
@@ -113,10 +114,27 @@ impl Generator {
     #[inline]
     pub fn write_to_chunk<'chunk>(
         &self,
-        cs_pos: ChunkPos,
+        chunk_pos: ChunkPos,
         access: &mut ChunkWriteHandle<'chunk>,
     ) -> Result<(), GeneratorError<ChunkHandleError>> {
-        access.set_mb(ivec3(10, 10, 10), self.palette.stone)?;
+        const THRESHOLD: f64 = 0.25;
+
+        let worldspace_min = chunkspace_to_worldspace_min(chunk_pos.as_ivec3());
+        let mb_worldspace_min = chunkspace_to_mb_worldspace_min(chunk_pos.as_ivec3());
+
+        for z in 0..64 {
+            for y in 0..64 {
+                for x in 0..64 {
+                    let mb_pos = ivec3(x, y, z);
+                    let mb_noise_pos = mb_pos + mb_worldspace_min;
+                    let noise = self.noise_mb(mb_noise_pos);
+
+                    if noise >= THRESHOLD {
+                        access.set_mb(mb_pos, self.palette.stone)?;
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
