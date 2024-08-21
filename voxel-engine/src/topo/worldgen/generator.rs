@@ -116,6 +116,8 @@ impl Generator {
         cs_pos: ChunkPos,
         access: &mut ChunkWriteHandle<'chunk>,
     ) -> Result<(), GeneratorError<ChunkHandleError>> {
-        todo!()
+        access.set_mb(ivec3(10, 10, 10), self.palette.stone)?;
+
+        Ok(())
     }
 }

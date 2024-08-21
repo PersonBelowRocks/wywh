@@ -158,7 +158,7 @@ async fn internal_worker_task(
         })
         .unwrap();
 
-        let mut handle = cref.write_handle(LockStrategy::Blocking).unwrap();
+        let mut handle = cref.chunk().write_handle(LockStrategy::Blocking).unwrap();
 
         match generator.write_to_chunk(cpos, &mut handle) {
             Ok(()) => {
@@ -168,6 +168,9 @@ async fn internal_worker_task(
                 error!("Generator raised an error generating chunk at {cpos}: {error}")
             }
         }
+
+        // Need to drop the handle to free the lock.
+        drop(handle);
 
         // At last we remove both the primordial flag and the generating flag, indicating that
         // this chunk is ready to be treated as any other chunk.

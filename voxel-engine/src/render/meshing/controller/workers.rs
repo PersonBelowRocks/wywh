@@ -97,7 +97,8 @@ impl Worker {
                     };
 
                     let chunk = cm.get_loaded_chunk(cmd.pos, false)?;
-                    todo!()
+                    let handle = chunk.chunk().read_handle(LockStrategy::Blocking).unwrap();
+                    Ok(params.mesher.build(handle, context)?)
                 }).map_err(ChunkMeshingError::from).custom_flatten();
 
                 match result {

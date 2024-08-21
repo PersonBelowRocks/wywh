@@ -363,14 +363,18 @@ impl ChunkManager {
         &self,
         pos: ChunkPos,
         get_primordial: bool,
-    ) -> Result<LccRef<'_>, ChunkManagerError> {
+    ) -> Result<ChunkRef<'_>, ChunkManagerError> {
         let chunk = self.loaded_chunks.get(pos)?;
 
         if !get_primordial && chunk.flags.read().contains(ChunkFlags::PRIMORDIAL) {
             return Err(ChunkManagerError::Primordial);
         }
 
-        Ok(chunk)
+        Ok(ChunkRef {
+            chunk,
+            stats: self.status.read(),
+            entity: None,
+        })
     }
 
     /// Get the chunk flags for the given chunk position. This function is basically a shorthand for
@@ -439,7 +443,8 @@ impl ChunkManager {
         F: for<'a> FnMut(Neighbors<'a>) -> R,
     {
         // we need to make a map of the neighboring chunks so that the references are owned by the function scope
-        let mut refs = std::array::from_fn::<Option<LccRef>, { NEIGHBOR_ARRAY_SIZE }, _>(|_| None);
+        let mut refs =
+            std::array::from_fn::<Option<ChunkRef>, { NEIGHBOR_ARRAY_SIZE }, _>(|_| None);
 
         for x in -1..=1 {
             for y in -1..=1 {
@@ -450,9 +455,9 @@ impl ChunkManager {
                     }
 
                     let nbrpos_ws = ChunkPos::from(nbrpos + IVec3::from(pos));
-                    if let Ok(chunk) = self.get_loaded_chunk(nbrpos_ws, false) {
+                    if let Ok(cref) = self.get_loaded_chunk(nbrpos_ws, false) {
                         refs[ivec3_to_1d(nbrpos + IVec3::ONE, NEIGHBOR_CUBIC_ARRAY_DIMENSIONS)
-                            .unwrap()] = Some(chunk)
+                            .unwrap()] = Some(cref)
                     }
                 }
             }
@@ -465,7 +470,7 @@ impl ChunkManager {
                 continue;
             };
 
-            handles[i] = Some(cref.read_handle(strategy)?);
+            handles[i] = Some(cref.chunk().read_handle(strategy)?);
         }
 
         let neighbors = Neighbors::from_raw(handles, self.default_block);
@@ -492,7 +497,7 @@ impl<'a> UpdatedChunks<'a> {
 
     pub fn iter_chunks<F>(&self, mut f: F) -> Result<(), ChunkManagerError>
     where
-        F: for<'cref> FnMut(LccRef<'cref>),
+        F: for<'cref> FnMut(ChunkRef<'cref>),
     {
         for chunk_pos in self.manager.status.read().updated.iter() {
             let cref = self.manager.get_loaded_chunk(*chunk_pos, false)?;

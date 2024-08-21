@@ -562,66 +562,6 @@ impl Chunk {
             }),
         }
     }
-
-    /// Get the flags for this chunk, locking according to the given lock strategy.
-    pub fn flags(&self, strategy: LockStrategy) -> Result<ChunkFlags, ChunkSyncError> {
-        match strategy {
-            LockStrategy::Immediate => Ok(self
-                .flags
-                .try_read()
-                .ok_or(ChunkSyncError::ImmediateFailure)?
-                .deref()
-                .clone()),
-            LockStrategy::Blocking => Ok(self.flags.read().clone()),
-            LockStrategy::Timeout(dur) => Ok(self
-                .flags
-                .try_read_for(dur)
-                .ok_or(ChunkSyncError::Timeout(dur))?
-                .deref()
-                .clone()),
-        }
-    }
-
-    /// Set the flags of this chunk. You should usually always prefer [`Chunk::update_flags`] over
-    /// this function as this function completely overwrites the existing flags.
-    pub fn set_flags(
-        &self,
-        strategy: LockStrategy,
-        new_flags: ChunkFlags,
-    ) -> Result<(), ChunkSyncError> {
-        let mut old_flags = match strategy {
-            LockStrategy::Timeout(dur) => self
-                .flags
-                .try_write_for(dur)
-                .ok_or(ChunkSyncError::Timeout(dur))?,
-            LockStrategy::Immediate => self
-                .flags
-                .try_write()
-                .ok_or(ChunkSyncError::ImmediateFailure)?,
-            LockStrategy::Blocking => self.flags.write(),
-        };
-
-        *old_flags = new_flags;
-        Ok(())
-    }
-
-    /// Calls the closure with a mutable reference to the existing flags, allowing the caller
-    /// to make changes to specific flags while leaving others untouched.
-    pub fn update_flags<F>(&self, strategy: LockStrategy, f: F) -> Result<(), ChunkSyncError>
-    where
-        F: for<'flags> FnOnce(&'flags mut ChunkFlags),
-    {
-        let old_flags = self.flags(strategy)?;
-        let mut new_flags = old_flags;
-        f(&mut new_flags);
-
-        self.set_flags(strategy, new_flags)?;
-        Ok(())
-    }
-
-    pub fn cached_load_reasons(&self) -> LoadReasons {
-        self.load_reasons.read().cached_reasons
-    }
 }
 
 #[cfg(test)]
