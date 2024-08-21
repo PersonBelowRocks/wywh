@@ -370,7 +370,6 @@ impl_chunk_handle_reads!('a, ChunkReadHandle<'a>);
 
 /// Read/Write handle to a chunk's data. Essentially a write guard for the chunk's data lock.
 pub struct ChunkWriteHandle<'a> {
-    flags: RwLockWriteGuard<'a, ChunkFlags>,
     blocks: RwLockWriteGuard<'a, ChunkData>,
 }
 
@@ -537,24 +536,15 @@ impl Chunk {
     ) -> Result<ChunkWriteHandle<'_>, ChunkSyncError> {
         match strategy {
             LockStrategy::Immediate => Ok(ChunkWriteHandle {
-                flags: self
-                    .flags
-                    .try_write()
-                    .ok_or(ChunkSyncError::ImmediateFailure)?,
                 blocks: self
                     .blocks
                     .try_write()
                     .ok_or(ChunkSyncError::ImmediateFailure)?,
             }),
             LockStrategy::Blocking => Ok(ChunkWriteHandle {
-                flags: self.flags.write(),
                 blocks: self.blocks.write(),
             }),
             LockStrategy::Timeout(dur) => Ok(ChunkWriteHandle {
-                flags: self
-                    .flags
-                    .try_write_for(dur)
-                    .ok_or(ChunkSyncError::Timeout(dur))?,
                 blocks: self
                     .blocks
                     .try_write_for(dur)
