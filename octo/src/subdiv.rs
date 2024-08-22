@@ -518,7 +518,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
     }
 
     #[inline]
-    pub fn delate(&mut self, unique: Option<usize>) {
+    pub fn deflate(&mut self, unique: Option<usize>) {
         // Split up the different fields that interest us so that the borrowchecker doesn't get confused.
         let Self {
             indices,
@@ -554,6 +554,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
                     let palette_index = index_entry.as_usize();
                     let palette_entry = &mut sdiv_palette[palette_index];
 
+                    // TODO: coalesce subdivided values into a whole block when deflating
                     let hash = palette_entry.cached_hash_compute(&random_state);
 
                     let visited_entry = visited
@@ -706,6 +707,59 @@ mod tests {
         suite(&s);
 
         s.cleanup();
+
+        suite(&s);
+    }
+
+    #[test]
+    fn deflate_and_inflate() {
+        fn suite(s: &SubdividedStorage<16, 4, u32>) {
+            for i0 in 0..64 {
+                for i1 in 0..2 {
+                    for i2 in 0..64 {
+                        // The minimum corner block is not 1337
+                        if [i0, i1, i2].iter().all(|&i| i < 4) {
+                            continue;
+                        }
+
+                        let v = s.get_mb([i0, i1, i2]).unwrap();
+                        assert_eq!(1337, v);
+                    }
+                }
+            }
+
+            assert_eq!(41, s.get([8, 8, 8]).unwrap());
+            assert_eq!(42, s.get([8, 9, 8]).unwrap());
+            assert_eq!(43, s.get([0, 0, 0]).unwrap());
+
+            assert_eq!(101, s.get_mb([63, 63, 63]).unwrap());
+            assert_eq!(100, s.get_mb([60, 60, 60]).unwrap());
+        }
+
+        let mut s = SubdividedStorage::<16, 4, u32>::new(0);
+
+        for i0 in 0..64 {
+            for i1 in 0..2 {
+                for i2 in 0..64 {
+                    s.set_mb([i0, i1, i2], 1337).unwrap();
+                }
+            }
+        }
+
+        s.set([8, 8, 8], 41).unwrap();
+        s.set([8, 9, 8], 42).unwrap();
+        s.set([0, 0, 0], 43).unwrap();
+
+        s.set_mb([63, 63, 63], 101).unwrap();
+        s.set_mb([60, 60, 60], 100).unwrap();
+
+        suite(&s);
+
+        s.deflate(None);
+
+        suite(&s);
+
+        s.inflate();
 
         suite(&s);
     }
