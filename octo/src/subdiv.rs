@@ -377,10 +377,17 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
 
     /// Set a value in this storage at the microblock level, returning an error if the index is out of bounds.
     /// Will automatically create and allocate a new palette entry if one doesn't already exist.
-    /// ## Warning
-    /// If this storage is in a deflated state (see [`SubdivPaletteKind`]) and you are writing to an already
-    /// subdivided position, the storage will have to be inflated in order for the write to succeed. This is
-    /// quite expensive, so you should try to call this on already inflated storages wherever possible.
+    /// ### Performance Warning
+    /// Consider the following conditions:
+    /// - The position that's being written to is part of an already subdivided block.
+    /// - The storage is deflated.
+    ///
+    /// In this case, the storage *must* inflate for the write operation to work. This function will
+    /// do that automatically, and it can be quite expensive and also likely makes the memory footprint
+    /// of the storage bigger *(often by a lot!)*. Keep this in mind when writing and deflating. Try to
+    /// batch together as many writes as you can *before* you deflate the storage.
+    ///
+    /// Subsequent writes after an inflationary call to this function will be just as fast as normal though.
     #[inline(always)]
     pub fn set_mb(&mut self, mb_index: [u8; 3], value: T) -> Result<(), SubdivAccessError> {
         let index = mb_index_to_index(mb_index, SD as u8);
@@ -463,6 +470,14 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
         self.indices = new_indices;
     }
 
+    /// Inflate this storage's palette, making it take more space in memory but enabling faster
+    /// writes *(see below)* to microblock values. Reading behaviour should be symmetrical between both inflated
+    /// and deflated storages. If the storage is already inflated, this function is a no-op.
+    ///
+    /// ### Performance Warning
+    /// Writing microblocks to a previously subdivided value is not actually possible unless the
+    /// storage is inflated. Such writes will automatically inflate the storage, which can be slow
+    /// and unexpected. See [`SubdividedStorage::set_mb`] for more information.
     #[inline]
     pub fn inflate(&mut self) {
         // Split up the different fields that interest us so that the borrowchecker doesn't get confused.
@@ -517,9 +532,21 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
         *palette_kind = SubdivPaletteKind::Inflated;
     }
 
+    /// Deflate this storage's palette, giving the storage a smaller memory footprint at the cost of
+    /// slow writes. Reading performance should be the same in both deflated and inflated storages.
+    /// You can provide an estimate of the amount of unique subdivided values in this storage.
+    /// Choosing a good estimate can potentially speed up deflation a bit.
+    ///
+    /// ### Performance Warning
+    /// Deflation is slow and inflating a previously deflated storage is slow. Due to the fact that
+    /// inflation happens automatically when writing to a storage (see [docs]) you should only deflate
+    /// when you're fairly sure that you won't be writing to this chunk again for a while.
+    /// Also check the docs on [`SubdividedStorage::set_mb`] for some more information about this behaviour.
+    ///
+    /// [docs]: [`SubdividedStorage::inflate`]
     #[inline]
     pub fn deflate(&mut self, unique: Option<usize>) {
-        // Split up the different fields that interest us so that the borrowchecker doesn't get confused.
+        // Split up the different fields that interest us so that the borrow checker doesn't get confused.
         let Self {
             indices,
             sdiv_palette,
@@ -554,7 +581,12 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
                     let palette_index = index_entry.as_usize();
                     let palette_entry = &mut sdiv_palette[palette_index];
 
-                    // TODO: coalesce subdivided values into a whole block when deflating
+                    // Coalesce subdivided values into a whole block when possible.
+                    if palette_entry.all_equal() {
+                        *index_entry = SSIndexEntry::from_value(palette_entry.first());
+                        continue;
+                    }
+
                     let hash = palette_entry.cached_hash_compute(&random_state);
 
                     let visited_entry = visited
