@@ -1,6 +1,6 @@
 [package]
 name = "octo"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [profile.bench]
@@ -28,10 +28,6 @@ rand = "0.8.5"
 
 [[bench]]
 name = "octree"
-harness = false
-
-[[bench]]
-name = "lensed"
 harness = false
 
 [[bench]]
