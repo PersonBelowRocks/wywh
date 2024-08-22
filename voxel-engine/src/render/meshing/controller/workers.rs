@@ -20,8 +20,8 @@ use crate::{
         lod::LevelOfDetail,
         meshing::{error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context},
     },
-    topo::world::{chunk::LockStrategy, ChunkManager, ChunkPos},
-    util::{result::ResultFlattening, ChunkIndexMap, ChunkSet, Keyed},
+    topo::world::{ChunkManager, ChunkPos},
+    util::{result::ResultFlattening, sync::LockStrategy, ChunkIndexMap, ChunkSet, Keyed},
 };
 
 use super::{ChunkMeshData, RemeshPriority};

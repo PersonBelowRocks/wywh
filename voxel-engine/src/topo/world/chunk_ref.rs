@@ -6,12 +6,14 @@ use std::ops::Deref;
 use super::{
     chunk::{Chunk, ChunkFlags, ChunkPos},
     chunk_manager::{ChunkStatuses, LccRef},
-    ChunkManagerError, ChunkSyncError,
+    ChunkManagerError,
 };
-use crate::topo::world::chunk::LockStrategy;
-use crate::topo::{
-    block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},
-    controller::LoadReasons,
+use crate::{
+    topo::{
+        block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},
+        controller::LoadReasons,
+    },
+    util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError},
 };
 
 /// A reference to a chunk. This type internally includes some additional metadata for chunks
@@ -43,22 +45,11 @@ impl<'a> ChunkRef<'a> {
     }
 
     /// Get the flags for this chunk, locking according to the given lock strategy.
-    pub fn flags(&self, strategy: LockStrategy) -> Result<ChunkFlags, ChunkSyncError> {
-        match strategy {
-            LockStrategy::Immediate => Ok(self
-                .chunk()
-                .flags
-                .try_read()
-                .ok_or(ChunkSyncError::ImmediateFailure)?
-                .clone()),
-            LockStrategy::Blocking => Ok(self.chunk().flags.read().clone()),
-            LockStrategy::Timeout(dur) => Ok(self
-                .chunk()
-                .flags
-                .try_read_for(dur)
-                .ok_or(ChunkSyncError::Timeout(dur))?
-                .clone()),
-        }
+    pub fn flags(&self, strategy: LockStrategy) -> Result<ChunkFlags, StrategySyncError> {
+        self.chunk()
+            .flags
+            .strategic_read(strategy)
+            .map(|flags| flags.clone())
     }
 
     /// Set the flags of this chunk. You should usually always prefer [`Chunk::update_flags`] over
@@ -67,20 +58,8 @@ impl<'a> ChunkRef<'a> {
         &self,
         strategy: LockStrategy,
         new_flags: ChunkFlags,
-    ) -> Result<(), ChunkSyncError> {
-        let mut old_flags = match strategy {
-            LockStrategy::Timeout(dur) => self
-                .chunk()
-                .flags
-                .try_write_for(dur)
-                .ok_or(ChunkSyncError::Timeout(dur))?,
-            LockStrategy::Immediate => self
-                .chunk()
-                .flags
-                .try_write()
-                .ok_or(ChunkSyncError::ImmediateFailure)?,
-            LockStrategy::Blocking => self.chunk().flags.write(),
-        };
+    ) -> Result<(), StrategySyncError> {
+        let mut old_flags = self.chunk().flags.strategic_write(strategy)?;
 
         *old_flags = new_flags;
 
@@ -95,7 +74,7 @@ impl<'a> ChunkRef<'a> {
 
     /// Calls the closure with a mutable reference to the existing flags, allowing the caller
     /// to make changes to specific flags while leaving others untouched.
-    pub fn update_flags<F>(&self, strategy: LockStrategy, f: F) -> Result<(), ChunkSyncError>
+    pub fn update_flags<F>(&self, strategy: LockStrategy, f: F) -> Result<(), StrategySyncError>
     where
         F: for<'flags> FnOnce(&'flags mut ChunkFlags),
     {

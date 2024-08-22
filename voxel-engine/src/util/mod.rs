@@ -11,6 +11,8 @@ pub mod keyed_ord;
 pub use keyed_ord::*;
 
 pub mod iteration;
+pub mod sync;
+
 pub use iteration::*;
 
 use bevy::prelude::*;

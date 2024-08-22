@@ -13,8 +13,9 @@ use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::block::{BlockVoxel, FullBlock, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
+use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
 
-use super::{ChunkDataError, ChunkHandleError, ChunkSyncError};
+use super::{ChunkDataError, ChunkHandleError};
 
 #[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
 pub struct ChunkPos(IVec3);
@@ -440,17 +441,6 @@ pub struct Chunk {
     pub blocks: RwLock<ChunkData>,
 }
 
-/// Describes the strategy that should be used when getting a lock over chunk data.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum LockStrategy {
-    /// Block for the given duration while waiting for a lock, and error if we exceed the timeout.
-    Timeout(Duration),
-    /// Block indefinitely while waiting for a lock.
-    Blocking,
-    /// Immediately get a lock to the data if possible, otherwise error.
-    Immediate,
-}
-
 #[allow(dead_code)]
 impl Chunk {
     pub const USIZE: usize = CHUNK_SIZE;
@@ -488,69 +478,29 @@ impl Chunk {
     }
 
     /// Get a read handle for this chunk with the given [lock strategy].
-    ///
-    /// The returned error depends on the lock strategy:
-    /// - [`LockStrategy::Timeout`] will block and wait for the lock, returning [`ChunkSyncError::Timeout`]
-    /// if read access could not be obtained within the given duration.
-    /// - [`LockStrategy::Immediate`] will try to get the lock immediately (without blocking),
-    /// returning [`ChunkSyncError::ImmediateFailure`] if it couldn't be done.
-    /// - [`LockStrategy::Blocking`] will block indefinitely while waiting for the lock.
+    /// The returned error depends on the lock strategy, see [`StrategySyncError`] for more information.
     ///
     /// [lock strategy]: LockStrategy
     pub fn read_handle(
         &self,
         strategy: LockStrategy,
-    ) -> Result<ChunkReadHandle<'_>, ChunkSyncError> {
-        match strategy {
-            LockStrategy::Immediate => Ok(ChunkReadHandle {
-                blocks: self
-                    .blocks
-                    .try_read()
-                    .ok_or(ChunkSyncError::ImmediateFailure)?,
-            }),
-            LockStrategy::Blocking => Ok(ChunkReadHandle {
-                blocks: self.blocks.read(),
-            }),
-            LockStrategy::Timeout(dur) => Ok(ChunkReadHandle {
-                blocks: self
-                    .blocks
-                    .try_read_for(dur)
-                    .ok_or(ChunkSyncError::Timeout(dur))?,
-            }),
-        }
+    ) -> Result<ChunkReadHandle<'_>, StrategySyncError> {
+        Ok(ChunkReadHandle {
+            blocks: self.blocks.strategic_read(strategy)?,
+        })
     }
 
     /// Get a write handle for this chunk with the given [lock strategy].
-    ///
-    /// The returned error depends on the lock strategy:
-    /// - [`LockStrategy::Timeout`] will block and wait for the lock, returning [`ChunkSyncError::Timeout`]
-    /// if write access could not be obtained within the given duration.
-    /// - [`LockStrategy::Immediate`] will try to get the lock immediately (without blocking),
-    /// returning [`ChunkSyncError::ImmediateFailure`] if it couldn't be done.
-    /// - [`LockStrategy::Blocking`] will block indefinitely while waiting for the lock.
+    /// The returned error depends on the lock strategy, see [`StrategySyncError`] for more information.
     ///
     /// [lock strategy]: LockStrategy
     pub fn write_handle(
         &self,
         strategy: LockStrategy,
-    ) -> Result<ChunkWriteHandle<'_>, ChunkSyncError> {
-        match strategy {
-            LockStrategy::Immediate => Ok(ChunkWriteHandle {
-                blocks: self
-                    .blocks
-                    .try_write()
-                    .ok_or(ChunkSyncError::ImmediateFailure)?,
-            }),
-            LockStrategy::Blocking => Ok(ChunkWriteHandle {
-                blocks: self.blocks.write(),
-            }),
-            LockStrategy::Timeout(dur) => Ok(ChunkWriteHandle {
-                blocks: self
-                    .blocks
-                    .try_write_for(dur)
-                    .ok_or(ChunkSyncError::Timeout(dur))?,
-            }),
-        }
+    ) -> Result<ChunkWriteHandle<'_>, StrategySyncError> {
+        Ok(ChunkWriteHandle {
+            blocks: self.blocks.strategic_write(strategy)?,
+        })
     }
 }
 

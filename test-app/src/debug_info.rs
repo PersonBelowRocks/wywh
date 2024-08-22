@@ -5,12 +5,8 @@ use bevy::{
 use ve::{
     diagnostics::ENGINE_DIAGNOSTICS,
     render::meshing::controller::ExtractableChunkMeshData,
-    topo::{
-        controller::LastPosition,
-        world::{chunk::LockStrategy, VoxelRealm},
-        ObserverSettings,
-    },
-    util::ws_to_chunk_pos,
+    topo::{controller::LastPosition, world::VoxelRealm, ObserverSettings},
+    util::{sync::LockStrategy, ws_to_chunk_pos},
 };
 use voxel_engine::{data::tile::Face, topo::world::Chunk};
 

@@ -16,13 +16,10 @@ use crate::{
             BatchFlags, CachedBatchMembership, ChunkBatch, ChunkBatchLod, RemovedBatchChunks,
             VoxelWorldTick,
         },
-        world::{
-            chunk::{ChunkFlags, LockStrategy},
-            Chunk, ChunkPos, VoxelRealm,
-        },
+        world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
         ObserverSettings,
     },
-    util::ChunkSet,
+    util::{sync::LockStrategy, ChunkSet},
 };
 
 use super::{

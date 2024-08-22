@@ -10,12 +10,12 @@ use bevy::math::{ivec3, IVec3};
 use dashmap::DashSet;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
-use crate::topo::world::chunk::ChunkLoadReasons;
 use crate::util::ChunkSet;
 use crate::{
     data::registries::block::BlockVariantId,
     topo::controller::{LoadshareId, LoadshareMap},
 };
+use crate::{topo::world::chunk::ChunkLoadReasons, util::sync::LockStrategy};
 use crate::{
     topo::{
         block::{BlockVoxel, FullBlock},
@@ -25,10 +25,7 @@ use crate::{
     util::{ivec3_to_1d, ChunkMap},
 };
 
-use super::{
-    chunk::{ChunkFlags, LockStrategy},
-    Chunk, ChunkContainerError, ChunkManagerError, ChunkPos, ChunkRef,
-};
+use super::{chunk::ChunkFlags, Chunk, ChunkContainerError, ChunkManagerError, ChunkPos, ChunkRef};
 
 #[derive(Default)]
 pub struct LoadedChunkContainer {

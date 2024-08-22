@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use bevy::math::IVec3;
 
+use crate::util::sync::StrategySyncError;
+
 #[derive(te::Error, Debug, Clone)]
 pub enum ChunkManagerError {
     #[error("Chunk not loaded")]
@@ -9,7 +11,7 @@ pub enum ChunkManagerError {
     #[error(transparent)]
     ContainerError(#[from] ChunkContainerError),
     #[error(transparent)]
-    SyncError(#[from] ChunkSyncError),
+    SyncError(#[from] StrategySyncError),
     #[error("Chunk is primordial")]
     Primordial,
     #[error("Tried to initialize already existing chunk")]
@@ -77,21 +79,6 @@ pub enum ChunkHandleError {
     /// The value stored in the chunk data is not a valid block variant ID
     #[error("Can't create block variant ID from raw value: {0:#01x}")]
     InvalidDataValue(u32),
-}
-
-/// Error(s) related to chunk synchronization and locking. Usually encountered when
-/// getting [read handles] or [write handles].
-///
-/// [read handles]: crate::topo::world::chunk::ChunkReadHandle
-/// [write handles]: crate::topo::world::chunk::ChunkWriteHandle
-#[derive(te::Error, Debug, Clone)]
-pub enum ChunkSyncError {
-    /// Could not get a lock in time.
-    #[error("Timed out after waiting {0:?} for chunk lock")]
-    Timeout(Duration),
-    /// Could not get a lock immediately.
-    #[error("Could not get a lock immediately")]
-    ImmediateFailure,
 }
 
 #[derive(te::Error, Debug, Clone)]

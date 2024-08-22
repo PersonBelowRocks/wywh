@@ -19,15 +19,12 @@ use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TrySendError}
 
 use crate::{
     data::registries::Registries,
-    util::{Keyed, KeyedOrd},
+    util::{sync::LockStrategy, Keyed, KeyedOrd},
 };
 
 use self::generator::Generator;
 
-use super::world::{
-    chunk::{ChunkFlags, LockStrategy},
-    ChunkManager, ChunkPos,
-};
+use super::world::{chunk::ChunkFlags, ChunkManager, ChunkPos};
 
 pub mod ecs;
 pub mod error;
