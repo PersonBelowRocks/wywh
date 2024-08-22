@@ -16,9 +16,12 @@ codegen-units = 1
 rpath = false
 
 [dependencies]
+ahash = "0.8.11"
 derive-new = "0.6.0"
 glam = "0.28.0"
+hashbrown = "0.14.5"
 ndarray = "0.16.0"
+smallvec = "1.13.2"
 static_assertions = "1.1.0"
 thiserror = "1.0.63"
 

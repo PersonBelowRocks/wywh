@@ -1,7 +1,10 @@
+use hashbrown::{HashMap, HashSet, HashTable};
 use nda::Array3;
+use smallvec::SmallVec;
 use std::any::type_name;
 use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T1};
 use std::fmt::{Debug, Formatter};
+use std::hash::BuildHasher;
 use std::marker::PhantomData;
 use std::mem;
 
@@ -10,7 +13,7 @@ use std::mem;
 /// # Safety
 /// Implementors must never use the highest bit in a [`u32`] for anything, as that bit is used
 /// internally by the storage for tracking whether index entries point to subdivided palette entries or not.
-pub unsafe trait SubdividableValue: Copy + Eq {
+pub unsafe trait SubdividableValue: Copy + Eq + std::hash::Hash {
     /// Convert bits to this type. The first bit in the provided [`u32`] will always be `0`.
     fn from_bits_31(bits: u32) -> Self;
 
@@ -85,13 +88,26 @@ impl<T: SubdividableValue> SSIndexEntry<T> {
 
 /// A palette level entry of a subdivided storage. Contains a `SD*SD*SD` array of microblocks.
 #[derive(Clone)]
-pub struct SSPaletteEntry<const SD: usize, T: SubdividableValue>([[[T; SD]; SD]; SD]);
+pub struct SSPaletteEntry<const SD: usize, T: SubdividableValue> {
+    data: [[[T; SD]; SD]; SD],
+    cached_hash: Option<u64>,
+}
 
 impl<const SD: usize, T: SubdividableValue> SSPaletteEntry<SD, T> {
     /// Creates a new palette entry filled with the given value.
     #[inline]
     pub fn new(filling: T) -> Self {
-        Self([[[filling; SD]; SD]; SD])
+        Self {
+            data: [[[filling; SD]; SD]; SD],
+            cached_hash: None,
+        }
+    }
+
+    /// Get the cached hash for this entry, or compute the value if there's none cached.
+    #[inline]
+    pub fn cached_hash_compute(&self, state: &ahash::RandomState) -> u64 {
+        self.cached_hash
+            .unwrap_or_else(|| state.hash_one(self.data))
     }
 
     /// Hint to the CPU to load the entire palette entry into cache
@@ -106,10 +122,10 @@ impl<const SD: usize, T: SubdividableValue> SSPaletteEntry<SD, T> {
             unsafe { _mm_prefetch::<{ _MM_HINT_T1 }>(p) };
         }
 
-        let max_offset = (SD * SD * SD);
+        let max_offset = SD * SD * SD;
         let step_by = CACHE_LINE / size_of::<T>();
         for lane in (0..max_offset).step_by(step_by) {
-            let root = &self.0[0][0][0] as *const T;
+            let root = &self.data[0][0][0] as *const T;
             // SAFETY: we're not reading from this pointer at any point so we can do whatever we want
             let lane_ptr = unsafe { root.add(lane) };
 
@@ -122,7 +138,7 @@ impl<const SD: usize, T: SubdividableValue> SSPaletteEntry<SD, T> {
     pub fn get(&self, index: [u8; 3]) -> Option<T> {
         let [i0, i1, i2] = index.map(usize::from);
 
-        self.0.get(i0)?.get(i1)?.get(i2).copied()
+        self.data.get(i0)?.get(i1)?.get(i2).copied()
     }
 
     /// Same as [`Self::get`] but does no bounds checking.
@@ -133,7 +149,13 @@ impl<const SD: usize, T: SubdividableValue> SSPaletteEntry<SD, T> {
     pub unsafe fn get_unchecked(&self, index: [u8; 3]) -> T {
         let [i0, i1, i2] = index.map(usize::from);
 
-        unsafe { *self.0.get_unchecked(i0).get_unchecked(i1).get_unchecked(i2) }
+        unsafe {
+            *self
+                .data
+                .get_unchecked(i0)
+                .get_unchecked(i1)
+                .get_unchecked(i2)
+        }
     }
 
     /// Sets a value at the given index.
@@ -143,7 +165,8 @@ impl<const SD: usize, T: SubdividableValue> SSPaletteEntry<SD, T> {
     #[inline(always)]
     pub fn set(&mut self, index: [u8; 3], value: T) {
         let [i0, i1, i2] = index.map(usize::from);
-        self.0[i0][i1][i2] = value;
+        self.data[i0][i1][i2] = value;
+        self.cached_hash = None;
     }
 
     /// Sets a value at the given index.
@@ -155,17 +178,18 @@ impl<const SD: usize, T: SubdividableValue> SSPaletteEntry<SD, T> {
         let [i0, i1, i2] = index.map(usize::from);
         unsafe {
             *self
-                .0
+                .data
                 .get_unchecked_mut(i0)
                 .get_unchecked_mut(i1)
                 .get_unchecked_mut(i2) = value;
         }
+        self.cached_hash = None;
     }
 
     /// Returns the first value (value at `[0, 0, 0]`)
     #[inline(always)]
     pub fn first(&self) -> T {
-        self.0[0][0][0]
+        self.data[0][0][0]
     }
 
     /// Test if all the values in this palette entry are equal.
@@ -173,7 +197,7 @@ impl<const SD: usize, T: SubdividableValue> SSPaletteEntry<SD, T> {
     pub fn all_equal(&self) -> bool {
         let first = self.first();
 
-        self.0
+        self.data
             .as_flattened()
             .as_flattened()
             .iter()
@@ -189,14 +213,40 @@ pub enum SubdivAccessError {
     NonFullBlock(u32, [u8; 3]),
 }
 
+/// Describes whether the palette for a subdividable storage is inflated or deflated.
+/// See the docs on the variants for a description of each kind and what it implies for the storage.
+///
+/// The different kinds only really affect how writing to a storage should be handled, the read logic
+/// should be identical in both palette kinds.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum SubdivPaletteKind {
+    /// In an inflated state, the palette has duplicates of its elements.
+    /// Each subdivided value in a storage will have its own unique index in the palette.
+    /// This uses a lot of memory since there will often be duplicates of subdivided values, but
+    /// it will be extremely fast to write to the palette in this state.
+    Inflated,
+    /// In a deflated state, the palette has no duplicates of its elements (or at least less duplicates).
+    /// The variant's [`usize`] field describes the length of the palette were it to be inflated again.
+    /// This is very useful for preallocating a vector with a capacity that will fit all the items in an inflated
+    /// palette. Writing directly to subdivided values is not possible in a deflated state, since other
+    /// values may be pointing to the same palette entry. In order to write to a storage with a deflated palette
+    /// it must first be inflated.
+    Deflated(usize),
+}
+
 /// Stores a mixture of full blocks and microblocks in a more efficient way than just one big 3D array
 #[derive(Clone)]
 pub struct SubdividedStorage<const D: usize, const SD: usize, T: SubdividableValue> {
+    /// The indices into the palette, or the values themselves if they're not subdivided.
     indices: Array3<SSIndexEntry<T>>,
+    /// The palette, may be inflated or deflated depending on [`Self::palette_kind`].
     sdiv_palette: Vec<SSPaletteEntry<SD, T>>,
+    /// The kind of palette currently being used by this storage.
+    palette_kind: SubdivPaletteKind,
 }
 
 impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D, SD, T> {
+    // TODO: get rid of this and make a flexible 3D iterator type
     pub fn map_mb_indices<F: FnMut([u8; 3])>(mut f: F) {
         let d = D as u8;
         let sd = SD as u8;
@@ -234,6 +284,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
         Self {
             indices: Array3::from_elem((D, D, D), initial_entry_index),
             sdiv_palette: Vec::new(),
+            palette_kind: SubdivPaletteKind::Inflated,
         }
     }
 
@@ -253,8 +304,10 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
         Self {
             indices: Array3::from_elem((D, D, D), initial_entry_index),
             sdiv_palette: Vec::with_capacity(capacity),
+            palette_kind: SubdivPaletteKind::Inflated,
         }
     }
+
     // TODO: get palette entry
     /// Get an entry of the storage's indices, returning [`None`] if the provided index is out of bounds.
     #[inline]
@@ -272,7 +325,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
     /// Get an index-level value from this storage, returning an error if the provided index is out of
     /// bounds or the entry at the index is subdivided. Will never query the palette for microblock values.
     /// Use [`Self::get_mb`] to get microblocks.
-    #[inline]
+    #[inline(always)]
     pub fn get(&self, index: [u8; 3]) -> Result<T, SubdivAccessError> {
         let entry = self
             .get_entry(index)
@@ -312,7 +365,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
     /// Set a value at the index level for this storage. If the entry at the index pointed to a subdivided
     /// palette entry, that entry will be leaked and must be manually removed by calling [`Self::cleanup`].
     /// Returns an error if the provided index is out of bounds.
-    #[inline]
+    #[inline(always)]
     pub fn set(&mut self, index: [u8; 3], value: T) -> Result<(), SubdivAccessError> {
         let entry = self
             .get_entry_mut(index)
@@ -324,7 +377,11 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
 
     /// Set a value in this storage at the microblock level, returning an error if the index is out of bounds.
     /// Will automatically create and allocate a new palette entry if one doesn't already exist.
-    #[inline]
+    /// ## Warning
+    /// If this storage is in a deflated state (see [`SubdivPaletteKind`]) and you are writing to an already
+    /// subdivided position, the storage will have to be inflated in order for the write to succeed. This is
+    /// quite expensive, so you should try to call this on already inflated storages wherever possible.
+    #[inline(always)]
     pub fn set_mb(&mut self, mb_index: [u8; 3], value: T) -> Result<(), SubdivAccessError> {
         let index = mb_index_to_index(mb_index, SD as u8);
         let new_index = self.sdiv_palette.len() as u32;
@@ -333,6 +390,14 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
             .ok_or(SubdivAccessError::OutOfBounds(index))?;
 
         if entry.points_to_subdivided() {
+            // We're trying to write a microblock, so we need to be in an inflated state.
+            self.inflate();
+
+            // New entry, this time pointing to a unique index in the palette.
+            let entry = self
+                .get_entry_mut(index)
+                .ok_or(SubdivAccessError::OutOfBounds(index))?;
+
             let palette_index = entry.as_usize();
             let palette_entry = &mut self.sdiv_palette[palette_index];
 
@@ -397,7 +462,130 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
 
         self.indices = new_indices;
     }
+
+    #[inline]
+    pub fn inflate(&mut self) {
+        // Split up the different fields that interest us so that the borrowchecker doesn't get confused.
+        let Self {
+            indices,
+            sdiv_palette,
+            palette_kind,
+        } = self;
+
+        let SubdivPaletteKind::Deflated(inflated_size) = *palette_kind else {
+            // Palette is already inflated, so there's nothing to do.
+            return;
+        };
+
+        // If we inflate the palette then there's a decent chance that we'll end up inserting
+        // a new subdivided value, so we don't use reserve_exact here.
+        sdiv_palette.reserve(inflated_size);
+
+        let palette_length = sdiv_palette.len();
+        // Keeps track of which indices we've visited at least once before. If we naively insert
+        // a new palette entry every time we encounter a subdivided value, we won't get to re-use the already
+        // present values in the palette!
+        type Buf = SmallVec<[bool; INFLATION_INSERTION_TRACKING_BUFFER_SIZE]>;
+        let mut inserted: Buf = smallvec::smallvec![false; palette_length];
+
+        for i0 in 0..(D as u8) {
+            for i1 in 0..(D as u8) {
+                for i2 in 0..(D as u8) {
+                    let index = [i0, i1, i2];
+                    let entry = &mut indices[index.map(usize::from)];
+
+                    // Skip values that are not subdivided, since they don't have to touch the palette.
+                    if !entry.points_to_subdivided() {
+                        continue;
+                    }
+
+                    let palette_index = entry.as_usize();
+                    // Only insert if this is NOT the first time we encounter this index.
+                    if inserted[palette_index] {
+                        let subdivided = sdiv_palette[palette_index].clone();
+                        let duplicate_index = sdiv_palette.len();
+                        sdiv_palette.push(subdivided);
+
+                        *entry = SSIndexEntry::from_index(duplicate_index as u32);
+                    }
+
+                    inserted[palette_index] = true;
+                }
+            }
+        }
+
+        *palette_kind = SubdivPaletteKind::Inflated;
+    }
+
+    #[inline]
+    pub fn delate(&mut self, unique: Option<usize>) {
+        // Split up the different fields that interest us so that the borrowchecker doesn't get confused.
+        let Self {
+            indices,
+            sdiv_palette,
+            palette_kind,
+        } = self;
+
+        // This may be called on a deflated storage to further deflate it, in which case we don't want to use
+        // the already inflated palette's length.
+        let old_palette_len = match palette_kind {
+            SubdivPaletteKind::Inflated => sdiv_palette.len(),
+            SubdivPaletteKind::Deflated(old_len) => *old_len,
+        };
+
+        let random_state = ahash::RandomState::new();
+
+        let mut new_palette: Vec<SSPaletteEntry<SD, T>> =
+            unique.map(Vec::with_capacity).unwrap_or_default();
+        let mut visited: HashMap<[[[T; SD]; SD]; SD], usize> =
+            unique.map(HashMap::with_capacity).unwrap_or_default();
+
+        for i0 in 0..(D as u8) {
+            for i1 in 0..(D as u8) {
+                for i2 in 0..(D as u8) {
+                    let index = [i0, i1, i2];
+                    let index_entry = &mut indices[index.map(usize::from)];
+
+                    // Skip values that are not subdivided, since they don't have to touch the palette.
+                    if !index_entry.points_to_subdivided() {
+                        continue;
+                    }
+
+                    let palette_index = index_entry.as_usize();
+                    let palette_entry = &mut sdiv_palette[palette_index];
+
+                    let hash = palette_entry.cached_hash_compute(&random_state);
+
+                    let visited_entry = visited
+                        .raw_entry_mut()
+                        .from_hash(hash, |data| &palette_entry.data == data);
+
+                    visited_entry
+                        .and_modify(|_, &mut index| {
+                            // We've already come across this value before.
+                            *index_entry = SSIndexEntry::from_index(index as u32);
+                        })
+                        .or_insert_with(|| {
+                            // This is the first time we're seeing (and inserting) this value.
+
+                            palette_entry.cached_hash = Some(hash);
+                            let new_palette_index = new_palette.len();
+                            *index_entry = SSIndexEntry::from_index(new_palette_index as u32);
+
+                            new_palette.push(palette_entry.clone());
+
+                            (palette_entry.data, new_palette_index)
+                        });
+                }
+            }
+        }
+
+        *palette_kind = SubdivPaletteKind::Deflated(old_palette_len);
+        *sdiv_palette = new_palette;
+    }
 }
+
+pub const INFLATION_INSERTION_TRACKING_BUFFER_SIZE: usize = 16;
 
 #[inline(always)]
 pub const fn mb_index_to_index(mb_index: [u8; 3], sdims: u8) -> [u8; 3] {
