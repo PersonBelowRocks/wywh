@@ -207,10 +207,27 @@ impl<const SD: usize, T: SubdividableValue> SSPaletteEntry<SD, T> {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum SubdivAccessError {
-    #[error("{0:?} is out of bounds for the subdivided storage")]
+    #[error("{0:?} is out of bounds for the storage")]
     OutOfBounds([u8; 3]),
     #[error("Entry {0:#01x} at {1:?} is not a full block")]
     NonFullBlock(u32, [u8; 3]),
+}
+
+/// Error encountered when getting a reference *(mutable or immutable)* to an entry in a storage's palette.
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum PaletteEntryError {
+    /// The index was out of bounds for the storage.
+    #[error("{0:?} is out of bounds for the storage")]
+    OutOfBounds([u8; 3]),
+    /// The entry at the given index was not subdivided and therefore had no palette entry.
+    #[error("Entry {0:#01x} at {1:?} is not subdivided, so there is no palette entry for it")]
+    NotSubdivided(u32, [u8; 3]),
+    /// The storage is currently deflated and therefore palette entries cannot be mutated,
+    /// so you cannot get a mutable reference to an entry within the palette.
+    ///
+    /// See [`SubdivPaletteKind`] and [`SubdividedStorage::deflate()`] for more information.
+    #[error("Cannot get a mutable reference for a palette entry if the palette is deflated")]
+    DeflatedStorage,
 }
 
 /// Describes whether the palette for a subdividable storage is inflated or deflated.
@@ -243,6 +260,8 @@ pub struct SubdividedStorage<const D: usize, const SD: usize, T: SubdividableVal
     sdiv_palette: Vec<SSPaletteEntry<SD, T>>,
     /// The kind of palette currently being used by this storage.
     palette_kind: SubdivPaletteKind,
+    /// The random state used during deflation
+    random_state: ahash::RandomState,
 }
 
 impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D, SD, T> {
@@ -285,6 +304,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
             indices: Array3::from_elem((D, D, D), initial_entry_index),
             sdiv_palette: Vec::new(),
             palette_kind: SubdivPaletteKind::Inflated,
+            random_state: ahash::RandomState::new(),
         }
     }
 
@@ -305,10 +325,81 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
             indices: Array3::from_elem((D, D, D), initial_entry_index),
             sdiv_palette: Vec::with_capacity(capacity),
             palette_kind: SubdivPaletteKind::Inflated,
+            random_state: ahash::RandomState::new(),
         }
     }
 
-    // TODO: get palette entry
+    /// Whether the palette of this storage is inflated or not.
+    /// See [`SubdivPaletteKind`] for more information.
+    #[inline]
+    pub fn is_inflated(&self) -> bool {
+        matches!(self.palette_kind, SubdivPaletteKind::Inflated)
+    }
+
+    /// Whether the palette of this storage is deflated or not.
+    /// See [`SubdivPaletteKind`] for more information.
+    #[inline]
+    pub fn is_deflated(&self) -> bool {
+        matches!(self.palette_kind, SubdivPaletteKind::Deflated(_))
+    }
+
+    /// Get the length of the palette. This is not the number of unique elements but rather the
+    /// length of the internal vector where all palette entries are stored. If called after a
+    /// [`SubdividedStorage::deflate()`] call then this should be the number of unique entries in the palette.
+    #[inline]
+    pub fn palette_len(&self) -> usize {
+        self.sdiv_palette.len()
+    }
+
+    /// Get a reference to the palette entry at the given index. Returns an error if:
+    /// - Index is out of bounds.
+    /// - Index is not subdivided and therefore has no palette entry.
+    ///
+    /// See [`PaletteEntryError`] for more information.
+    #[inline]
+    pub fn get_palette_entry(
+        &self,
+        index: [u8; 3],
+    ) -> Result<&SSPaletteEntry<SD, T>, PaletteEntryError> {
+        let entry = self
+            .get_entry(index)
+            .ok_or(PaletteEntryError::OutOfBounds(index))?;
+
+        if !entry.points_to_subdivided() {
+            return Err(PaletteEntryError::NotSubdivided(entry.0, index));
+        }
+
+        let palette_index = entry.as_usize();
+        Ok(&self.sdiv_palette[palette_index])
+    }
+
+    /// Get a mutable reference to the palette entry at the given index. Returns an error if:
+    /// - Index is out of bounds.
+    /// - Index is not subdivided and therefore has no palette entry.
+    /// - The storage is currently deflated and therefore cannot be mutated.
+    ///
+    /// See [`PaletteEntryError`] for more information.
+    #[inline]
+    pub fn get_palette_entry_mut(
+        &mut self,
+        index: [u8; 3],
+    ) -> Result<&mut SSPaletteEntry<SD, T>, PaletteEntryError> {
+        if self.is_deflated() {
+            return Err(PaletteEntryError::DeflatedStorage);
+        }
+
+        let entry = self
+            .get_entry(index)
+            .ok_or(PaletteEntryError::OutOfBounds(index))?;
+
+        if !entry.points_to_subdivided() {
+            return Err(PaletteEntryError::NotSubdivided(entry.0, index));
+        }
+
+        let palette_index = entry.as_usize();
+        Ok(&mut self.sdiv_palette[palette_index])
+    }
+
     /// Get an entry of the storage's indices, returning [`None`] if the provided index is out of bounds.
     #[inline]
     pub fn get_entry(&self, index: [u8; 3]) -> Option<SSIndexEntry<T>> {
@@ -416,6 +507,9 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
                 palette_entry.set_unchecked(local_index, value);
             }
 
+            // Reset the cached hash since the data is now changed.
+            palette_entry.cached_hash = None;
+
             Ok(())
         } else {
             let old_value = entry.as_value();
@@ -485,6 +579,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
             indices,
             sdiv_palette,
             palette_kind,
+            ..
         } = self;
 
         let SubdivPaletteKind::Deflated(inflated_size) = *palette_kind else {
@@ -544,13 +639,14 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
     /// Also check the docs on [`SubdividedStorage::set_mb`] for some more information about this behaviour.
     ///
     /// [docs]: [`SubdividedStorage::inflate`]
-    #[inline]
+    #[inline(never)]
     pub fn deflate(&mut self, unique: Option<usize>) {
         // Split up the different fields that interest us so that the borrow checker doesn't get confused.
         let Self {
             indices,
             sdiv_palette,
             palette_kind,
+            ..
         } = self;
 
         // This may be called on a deflated storage to further deflate it, in which case we don't want to use
@@ -560,12 +656,14 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
             SubdivPaletteKind::Deflated(old_len) => *old_len,
         };
 
-        let random_state = ahash::RandomState::new();
+        let capacity = unique.unwrap_or(0);
+
+        // Need to initialize the hashmap with the same random state we use for caching hashes
+        let mut visited: HashMap<[[[T; SD]; SD]; SD], usize, ahash::RandomState> =
+            HashMap::with_capacity_and_hasher(capacity, self.random_state.clone());
 
         let mut new_palette: Vec<SSPaletteEntry<SD, T>> =
             unique.map(Vec::with_capacity).unwrap_or_default();
-        let mut visited: HashMap<[[[T; SD]; SD]; SD], usize> =
-            unique.map(HashMap::with_capacity).unwrap_or_default();
 
         for i0 in 0..(D as u8) {
             for i1 in 0..(D as u8) {
@@ -579,6 +677,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
                     }
 
                     let palette_index = index_entry.as_usize();
+
                     let palette_entry = &mut sdiv_palette[palette_index];
 
                     // Coalesce subdivided values into a whole block when possible.
@@ -587,7 +686,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
                         continue;
                     }
 
-                    let hash = palette_entry.cached_hash_compute(&random_state);
+                    let hash = palette_entry.cached_hash_compute(&self.random_state);
 
                     let visited_entry = visited
                         .raw_entry_mut()
@@ -745,6 +844,8 @@ mod tests {
 
     #[test]
     fn deflate_and_inflate() {
+        const BASE: [u8; 3] = [12, 60, 12];
+
         fn suite(s: &SubdividedStorage<16, 4, u32>) {
             for i0 in 0..64 {
                 for i1 in 0..2 {
@@ -756,6 +857,16 @@ mod tests {
 
                         let v = s.get_mb([i0, i1, i2]).unwrap();
                         assert_eq!(1337, v);
+                    }
+                }
+            }
+
+            for i0 in 0..4 {
+                for i1 in 0..4 {
+                    for i2 in 0..4 {
+                        let index = [i0 + BASE[0], i1 + BASE[1], i2 + BASE[2]];
+
+                        assert_eq!(404, s.get_mb(index).unwrap());
                     }
                 }
             }
@@ -785,9 +896,20 @@ mod tests {
         s.set_mb([63, 63, 63], 101).unwrap();
         s.set_mb([60, 60, 60], 100).unwrap();
 
+        for i0 in 0..4 {
+            for i1 in 0..4 {
+                for i2 in 0..4 {
+                    let index = [i0 + BASE[0], i1 + BASE[1], i2 + BASE[2]];
+
+                    s.set_mb(index, 404).unwrap();
+                }
+            }
+        }
+
         suite(&s);
 
         s.deflate(None);
+        assert_eq!(2, s.palette_len());
 
         suite(&s);
 
