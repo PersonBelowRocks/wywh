@@ -54,6 +54,8 @@ pub enum ChunkDataError {
     /// Attempted to read a full block at a position that had a subdivided block
     #[error("Not a full block")]
     NonFullBlock,
+    #[error("Value {0:#01x?} cannot be stored in a subdivided storage")]
+    InvalidValue(u32),
 }
 
 impl From<octo::SubdivAccessError> for ChunkDataError {
