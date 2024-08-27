@@ -197,7 +197,7 @@ impl ChunkData {
     /// The chunk data should have identical reading behaviour after this function is called,
     /// this function is just here so that you can have more manual control of allocations.
     #[inline]
-    pub fn touch(&mut self) -> bool {
+    pub fn initialize(&mut self) -> bool {
         match self.storage {
             None => {
                 self.storage = Some(SubdividedStorage::new(self.default_value.as_u32()));
@@ -205,6 +205,24 @@ impl ChunkData {
             }
             Some(_) => false,
         }
+    }
+
+    /// Inflate the underlying storage, preparing it for writing. Does nothing if the
+    /// chunk data is not initialized.
+    ///
+    /// See [`octo::SubdividedStorage::inflate()`] for more information.
+    #[inline]
+    pub fn inflate(&mut self) {
+        self.storage.as_mut().map(|storage| storage.inflate());
+    }
+
+    /// Deflate the underlying storage, shrinking its memory footprint. Does nothing if the
+    /// chunk data is not initialized.
+    ///
+    /// See [`octo::SubdividedStorage::delfate()`] for more information.
+    #[inline]
+    pub fn deflate(&mut self, unique: Option<usize>) {
+        self.storage.as_mut().map(|storage| storage.deflate(unique));
     }
 
     /// Whether this chunk data is initialized or not.
@@ -465,7 +483,17 @@ impl<'a> ChunkWriteHandle<'a> {
     /// Initializes the underlying data for writing. See [`ChunkData::touch`].
     #[inline]
     pub fn touch(&mut self) -> bool {
-        self.blocks.touch()
+        // We inflate before initializing since the storage is inflated by default when initialized.
+        self.blocks.inflate();
+        self.blocks.initialize()
+    }
+
+    /// Compresses the chunk data in memory.
+    ///
+    /// See [`octo::SubdividedStorage::deflate()`] for more information.
+    #[inline]
+    pub fn deflate(&mut self, unique: Option<usize>) {
+        self.blocks.deflate(unique);
     }
 
     /// Returns the inner chunk data, which allows for more low-level operations.
