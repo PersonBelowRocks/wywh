@@ -13,6 +13,7 @@ use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::block::{BlockVoxel, FullBlock, SubdividedBlock};
 use crate::topo::bounding_box::BoundingBox;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
+use crate::topo::CHUNK_FULL_BLOCK_DIMS;
 use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
 
 use super::{ChunkDataError, ChunkHandleError};
@@ -66,19 +67,22 @@ bitflags! {
     pub struct ChunkFlags: u32 {
         /// Indicates that the chunk is currently being populated by the world generator.
         const GENERATING = 0b1 << 0;
-        /// Indicates that the chunk should be remeshed, when the engine remeshes the chunk this flag will
-        /// be unset.
+        /// Indicates that the chunk was updated and should be remeshed.
+        /// When the engine remeshes the chunk this flag will be unset.
         const REMESH = 0b1 << 1;
         // TODO: have flags for each edge that was updated
-        /// Indicates that the chunk's neighbors should be remeshed
+        /// Indicates that the chunk's neighbors should be remeshed.
         const REMESH_NEIGHBORS = 0b1 << 2;
-        /// Indicates that this chunk was just generated and has not been meshed before
+        /// Indicates that this chunk was just generated and has not been meshed before.
         const FRESHLY_GENERATED = 0b1 << 3;
         /// Indicates that a chunk has not been populated with the generator and is only really
         /// acting as a "dummy" until it's further processed by the engine.
         /// Chunks are not supposed to be primordial for long, primordial chunks are usually immediately
         /// queued for further processing by the engine to get them out of their primordial state.
         const PRIMORDIAL = 0b1 << 4;
+        /// Indicates that a chunk is entirely composed of solid blocks. Such chunks can be
+        /// used as occluders for occluder-based HZB culling.
+        const SOLID = 0b1 << 5;
     }
 }
 
@@ -90,6 +94,7 @@ impl fmt::Debug for ChunkFlags {
             (Self::REMESH_NEIGHBORS, "REMESH_NEIGHBORS"),
             (Self::FRESHLY_GENERATED, "FRESHLY_GENERATED"),
             (Self::PRIMORDIAL, "PRIMORDIAL"),
+            (Self::SOLID, "SOLID"),
         ];
 
         let mut list = f.debug_list();
@@ -373,6 +378,46 @@ impl ChunkData {
     #[inline]
     pub fn storage_mut(&mut self) -> Option<&mut ChunkDataStorage> {
         self.storage.as_mut()
+    }
+
+    /// Tests if all blocks in this chunk are full-blocks and that they all pass some test.
+    /// - Will return `true` if all blocks are full and pass the test.
+    /// - Will return `false` if any block is not a full-block or if any of the blocks failed the test.
+    ///
+    /// This function should be ran on freshly deflated data otherwise it might produce invalid
+    /// results (for example if there's a subdivided block but all its microblocks are the same).
+    #[inline]
+    pub fn all_full_blocks_and<F>(&self, test: F) -> bool
+    where
+        F: Fn(BlockVariantId) -> bool,
+    {
+        const SIZE: i32 = CHUNK_FULL_BLOCK_DIMS as i32;
+
+        // If we're not initialized, all reads will return the default value, so instead of doing all the
+        // reads we can just run the function once for our default value.
+        if self.storage.is_none() {
+            return test(self.default_value);
+        }
+
+        for x in 0..SIZE {
+            for y in 0..SIZE {
+                for z in 0..SIZE {
+                    let ls_pos = ivec3(x, y, z);
+                    match self.get(ls_pos) {
+                        Ok(id) => {
+                            if !test(id) {
+                                return false;
+                            }
+                        }
+                        // Not a full-block.
+                        Err(ChunkDataError::NonFullBlock) => return false,
+                        Err(_) => unreachable!(),
+                    }
+                }
+            }
+        }
+
+        true
     }
 }
 

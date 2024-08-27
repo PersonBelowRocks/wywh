@@ -18,7 +18,7 @@ use bevy::{
 use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TrySendError};
 
 use crate::{
-    data::registries::Registries,
+    data::registries::{block::BlockVariantRegistry, Registries, Registry},
     util::{sync::LockStrategy, Keyed, KeyedOrd},
 };
 
@@ -93,6 +93,10 @@ async fn internal_worker_task(
 ) {
     let cm = params.chunk_manager;
     let mut backlog_cmd = None::<GeneratorCommand>;
+    let block_registry = params
+        .registries
+        .get_registry::<BlockVariantRegistry>()
+        .unwrap();
 
     while !interrupt.load(Ordering::Relaxed) {
         // Try to get the command from the backlog before we get a new one.
@@ -156,10 +160,19 @@ async fn internal_worker_task(
         .unwrap();
 
         let mut handle = cref.chunk().write_handle(LockStrategy::Blocking).unwrap();
+        let mut is_solid = false;
 
         match generator.write_to_chunk(cpos, &mut handle) {
-            Ok(()) => {
-                // TODO: run cleanup routine for the chunk
+            Ok(_) => {
+                handle.deflate(None);
+
+                is_solid = handle.inner_ref().all_full_blocks_and(|block| {
+                    block_registry
+                        .get_by_id(block)
+                        .options
+                        .transparency
+                        .is_opaque()
+                });
             }
             Err(error) => {
                 error!("Generator raised an error generating chunk at {cpos}: {error}")
@@ -177,6 +190,10 @@ async fn internal_worker_task(
             flags.insert(
                 ChunkFlags::FRESHLY_GENERATED | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::REMESH,
             );
+
+            if is_solid {
+                flags.insert(ChunkFlags::SOLID);
+            }
         })
         .unwrap();
     }

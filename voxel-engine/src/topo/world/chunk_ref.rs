@@ -16,6 +16,16 @@ use crate::{
     util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError},
 };
 
+macro_rules! update_status_for_flag {
+    ($field:expr, $chunk_pos:expr, $new_flags:expr, $flag:expr) => {
+        if $new_flags.contains($flag) {
+            $field.insert($chunk_pos);
+        } else {
+            $field.remove(&$chunk_pos);
+        }
+    };
+}
+
 /// A reference to a chunk. This type internally includes some additional metadata for chunks
 /// that individual chunks don't have. Since this type is provided by the chunk manager, the
 /// chunk manager can attach some data to the references it returns like a set of all updated chunks or
@@ -63,11 +73,19 @@ impl<'a> ChunkRef<'a> {
 
         *old_flags = new_flags;
 
-        if new_flags.contains(ChunkFlags::REMESH) {
-            self.stats.updated.insert(self.chunk_pos());
-        } else {
-            self.stats.updated.remove(&self.chunk_pos());
-        }
+        update_status_for_flag!(
+            self.stats.remesh,
+            self.chunk_pos(),
+            new_flags,
+            ChunkFlags::REMESH
+        );
+
+        update_status_for_flag!(
+            self.stats.solid,
+            self.chunk_pos(),
+            new_flags,
+            ChunkFlags::SOLID
+        );
 
         Ok(())
     }

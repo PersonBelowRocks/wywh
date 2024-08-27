@@ -144,7 +144,8 @@ impl PendingChunkChanges {
 
 #[derive(Default)]
 pub struct ChunkStatuses {
-    pub updated: DashSet<ChunkPos, fxhash::FxBuildHasher>,
+    pub remesh: DashSet<ChunkPos, fxhash::FxBuildHasher>,
+    pub solid: DashSet<ChunkPos, fxhash::FxBuildHasher>,
 }
 
 /// Indicates what happened when we tried to load a chunk
@@ -206,7 +207,7 @@ impl<'a> LoadshareChunks<'a> {
         if reasons.is_empty() {
             if load_reasons.cached_reasons.is_empty() {
                 // Remove the chunk from the updated chunks
-                self.statuses.updated.remove(&pos);
+                self.statuses.remesh.remove(&pos);
 
                 // Need to drop this immutable reference so we can mutate ourselves.
                 drop(load_reasons);
@@ -489,14 +490,14 @@ pub struct UpdatedChunks<'a> {
 
 impl<'a> UpdatedChunks<'a> {
     pub fn num_updated_chunks(&self) -> usize {
-        self.manager.status.read().updated.len()
+        self.manager.status.read().remesh.len()
     }
 
     pub fn iter_chunks<F>(&self, mut f: F) -> Result<(), ChunkManagerError>
     where
         F: for<'cref> FnMut(ChunkRef<'cref>),
     {
-        for chunk_pos in self.manager.status.read().updated.iter() {
+        for chunk_pos in self.manager.status.read().remesh.iter() {
             let cref = self.manager.get_loaded_chunk(*chunk_pos, false)?;
             f(cref);
         }
