@@ -1,4 +1,5 @@
 use bevy::log::warn;
+use itertools::Itertools;
 use std::{
     mem,
     ops::{Deref, DerefMut},
@@ -482,6 +483,15 @@ impl ChunkManager {
     pub fn updated_chunks(&self) -> UpdatedChunks<'_> {
         UpdatedChunks { manager: &self }
     }
+
+    pub fn solid_chunks(&self) -> Vec<ChunkPos> {
+        self.status
+            .read()
+            .solid
+            .iter()
+            .map(|r| r.clone())
+            .collect_vec()
+    }
 }
 
 pub struct UpdatedChunks<'a> {
@@ -497,6 +507,8 @@ impl<'a> UpdatedChunks<'a> {
     where
         F: for<'cref> FnMut(ChunkRef<'cref>),
     {
+        // TODO: Instead of locking all the statuses we should just copy all the chunks into some buffer and iterate
+        //  through that. That way we don't hang the generator.
         for chunk_pos in self.manager.status.read().remesh.iter() {
             let cref = self.manager.get_loaded_chunk(*chunk_pos, false)?;
             f(cref);

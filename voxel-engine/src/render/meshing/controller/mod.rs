@@ -4,7 +4,7 @@ mod workers;
 use std::{cmp, fmt};
 
 use bevy::prelude::*;
-use ecs::{batch_chunk_extraction, remove_chunks};
+use ecs::{batch_chunk_extraction, collect_solid_chunks_as_occluders, remove_chunks};
 use workers::FinishedChunkMeshData;
 
 use crate::{
@@ -23,7 +23,7 @@ use self::ecs::{
     voxel_realm_remesh_updated_chunks,
 };
 
-pub use self::ecs::RemeshChunk;
+pub use self::ecs::{OccluderChunks, RemeshChunk};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RemeshType {
@@ -234,6 +234,7 @@ impl Plugin for MeshController {
         info!("Initializing mesh controller");
 
         app.init_resource::<ExtractableChunkMeshData>()
+            .init_resource::<OccluderChunks>()
             .add_event::<RemeshChunk>();
 
         app.add_systems(
@@ -243,7 +244,12 @@ impl Plugin for MeshController {
 
         app.add_systems(
             PreUpdate,
-            (remove_chunks, insert_chunks, batch_chunk_extraction)
+            (
+                remove_chunks,
+                insert_chunks,
+                batch_chunk_extraction,
+                collect_solid_chunks_as_occluders,
+            )
                 .chain()
                 .run_if(in_state(EngineState::Finished)),
         );

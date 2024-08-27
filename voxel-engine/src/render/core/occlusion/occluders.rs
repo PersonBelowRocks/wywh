@@ -10,13 +10,17 @@ use bevy::{
             VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
         },
         renderer::{RenderDevice, RenderQueue},
+        Extract,
     },
 };
 use bytemuck::{cast_slice, Pod, Zeroable};
 use dn::new;
 
 use crate::{
-    render::core::{shaders::OCCLUDER_DEPTH_HANDLE, BindGroupProvider},
+    render::{
+        core::{shaders::OCCLUDER_DEPTH_HANDLE, BindGroupProvider},
+        meshing::controller::OccluderChunks,
+    },
     topo::world::{Chunk, ChunkPos},
 };
 
@@ -165,11 +169,13 @@ impl OccluderBoxes {
 }
 
 /// Extract occluder boxes
-pub fn extract_occluders(mut occluders: ResMut<OccluderBoxes>) {
-    occluders.clear();
-    occluders.insert(ChunkPos::new(0, 0, 0));
-    occluders.insert(ChunkPos::new(0, 1, 1));
-    // TODO: implement
+pub fn extract_occluders(
+    mut occluders: ResMut<OccluderBoxes>,
+    chunks: Extract<Res<OccluderChunks>>,
+) {
+    for &chunk in chunks.iter() {
+        occluders.insert(chunk);
+    }
 }
 
 pub fn prepare_occluders(

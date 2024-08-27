@@ -30,6 +30,11 @@ use super::{
 #[derive(Resource, Deref)]
 pub struct MeshWorkerTaskPool(TaskPool);
 
+/// Chunks that act as occluders for HZB occlusion culling. Packaged into a vector
+/// for easy extraction to the render world.
+#[derive(Resource, Deref, Default)]
+pub struct OccluderChunks(Vec<ChunkPos>);
+
 #[derive(Event, Clone)]
 pub struct RemeshChunk {
     pub pos: ChunkPos,
@@ -37,6 +42,10 @@ pub struct RemeshChunk {
     pub remesh_type: RemeshType,
     pub priority: RemeshPriority,
     pub tick: u64,
+}
+
+pub fn collect_solid_chunks_as_occluders(realm: VoxelRealm, mut occluders: ResMut<OccluderChunks>) {
+    occluders.0 = realm.cm().solid_chunks();
 }
 
 /// This system queues meshing jobs in the mesh builder from `RemeshChunk` events.
