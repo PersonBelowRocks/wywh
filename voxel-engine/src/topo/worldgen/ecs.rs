@@ -58,12 +58,12 @@ pub fn generate_chunks_from_events(
 
     for event in reader.read() {
         let cmd = GeneratorCommand {
-            pos: event.pos,
+            pos: event.chunk_pos,
             priority: event.priority,
         };
 
         commands
-            .entry(event.pos)
+            .entry(event.chunk_pos)
             .and_modify(|c| c.priority = max(c.priority, cmd.priority))
             .or_insert(cmd);
     }

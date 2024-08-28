@@ -206,7 +206,7 @@ pub fn generate_chunks_with_priority(
             .unwrap_or(GenerationPriority::LOWEST);
 
         GenerateChunk {
-            pos: chunk_pos,
+            chunk_pos,
             priority,
         }
     }));

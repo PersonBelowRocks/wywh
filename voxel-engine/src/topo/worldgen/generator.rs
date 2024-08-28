@@ -28,7 +28,7 @@ pub enum GeneratorChoice {
 
 #[derive(Event, Debug)]
 pub struct GenerateChunk {
-    pub pos: ChunkPos,
+    pub chunk_pos: ChunkPos,
     pub priority: GenerationPriority,
 }
 

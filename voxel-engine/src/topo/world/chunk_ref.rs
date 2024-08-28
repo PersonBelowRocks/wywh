@@ -1,7 +1,7 @@
 use bevy::{ecs::entity::Entity, math::UVec3, prelude::IVec3};
 use parking_lot::RwLockReadGuard;
-use std::hash::BuildHasher;
 use std::ops::Deref;
+use std::{hash::BuildHasher, sync::Arc};
 
 use super::{
     chunk::{Chunk, ChunkFlags, ChunkPos},
@@ -32,8 +32,8 @@ macro_rules! update_status_for_flag {
 /// the entity this chunk is tied to (if it exists). Updating the flags of a chunk reference will
 /// also update the map of all updated chunks accordingly.
 pub struct ChunkRef<'a> {
-    pub(super) chunk: LccRef<'a>,
-    pub(super) stats: RwLockReadGuard<'a, ChunkStatuses>,
+    pub(super) chunk: Arc<Chunk>,
+    pub(super) stats: &'a ChunkStatuses,
     pub(super) entity: Option<Entity>,
 }
 
@@ -102,10 +102,5 @@ impl<'a> ChunkRef<'a> {
 
         self.set_flags(strategy, new_flags)?;
         Ok(())
-    }
-
-    /// A union of all loadshares' reasons for having this chunk loaded.
-    pub fn cached_load_reasons(&self) -> LoadReasons {
-        self.chunk().load_reasons.read().cached_reasons
     }
 }
