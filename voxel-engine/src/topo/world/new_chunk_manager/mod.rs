@@ -2,9 +2,16 @@ use std::ops::Range;
 
 use dashmap::DashSet;
 use error::{ChunkGetError, ChunkLoadError};
-use inner_storage::InnerChunkStorage;
+use hb::{hash_map::Entry, HashMap};
+use inner_storage::{ChunkStorageHasher, InnerChunkStorage};
+use itertools::Itertools;
+use parking_lot::RwLock;
 
-use crate::{data::registries::block::BlockVariantId, topo::controller::LoadReasons};
+use crate::{
+    data::registries::block::BlockVariantId,
+    topo::controller::{LoadReasons, LoadshareId, LoadshareMap},
+    util::ChunkSet,
+};
 
 use super::{chunk::ChunkFlags, Chunk, ChunkPos, ChunkRef};
 
@@ -33,9 +40,9 @@ pub fn chunk_pos_in_bounds(chunk_pos: ChunkPos) -> bool {
 #[derive(Default)]
 pub struct ChunkStatuses {
     /// Chunks that need remeshing.
-    pub remesh: DashSet<ChunkPos, fxhash::FxBuildHasher>,
+    pub remesh: DashSet<ChunkPos, ChunkStorageHasher>,
     /// Chunks that are completely solid.
-    pub solid: DashSet<ChunkPos, fxhash::FxBuildHasher>,
+    pub solid: DashSet<ChunkPos, ChunkStorageHasher>,
 }
 
 /// The chunk manager stores and manages the lifecycle of chunks.
@@ -43,6 +50,7 @@ pub struct ChunkManager2 {
     pub(super) default_block: BlockVariantId,
     pub(super) storage: InnerChunkStorage,
     pub(super) statuses: ChunkStatuses,
+    pub(super) loadshares: ChunkLoadshareTable,
 }
 
 impl ChunkManager2 {
@@ -52,6 +60,7 @@ impl ChunkManager2 {
             default_block,
             storage: InnerChunkStorage::default(),
             statuses: ChunkStatuses::default(),
+            loadshares: ChunkLoadshareTable::default(),
         }
     }
 
@@ -86,4 +95,137 @@ impl ChunkManager2 {
     pub(super) fn new_primordial_chunk(&self, chunk_pos: ChunkPos) -> Chunk {
         Chunk::new(chunk_pos, self.default_block, ChunkFlags::PRIMORDIAL)
     }
+}
+
+/// A chunk's loadshare(s). If a chunk is only loaded under one loadshare (very common), this data will
+/// be stored inline to avoid unnecessary allocations.
+#[derive(Clone)]
+pub struct ChunkLoadshares(ChunkLoadsharesInner);
+
+/// The inner enum for [`ChunkLoadshares`]. This is private so that users can't mess with the enum variants since
+/// there's some rules we'd like to enforce for those.
+#[derive(Clone)]
+enum ChunkLoadsharesInner {
+    /// No loadshares or load reasons. This variant should only be encountered temporarily and
+    /// indicates that a chunk should be purged.
+    Empty,
+    /// Chunk is loaded under a single loadshare.
+    Single {
+        loadshare: LoadshareId,
+        reasons: LoadReasons,
+    },
+    /// Chunk is loaded under multiple loadshares.
+    Many(LoadshareMap<LoadReasons>),
+}
+
+impl ChunkLoadshares {
+    pub fn single(loadshare: LoadshareId, reasons: LoadReasons) -> Self {
+        Self(ChunkLoadsharesInner::Single { loadshare, reasons })
+    }
+
+    /// Returns `true` if there are no loadshares (and therefore no load reasons) for this chunk.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        matches!(self.0, ChunkLoadsharesInner::Empty)
+    }
+
+    /// Get the union of all the load reasons.
+    #[inline]
+    pub fn load_reasons_union(&self) -> LoadReasons {
+        match &self.0 {
+            ChunkLoadsharesInner::Empty => LoadReasons::empty(),
+            ChunkLoadsharesInner::Single { reasons, .. } => reasons.clone(),
+            ChunkLoadsharesInner::Many(loadshares) => loadshares
+                .values()
+                .cloned()
+                .reduce(|acc, reasons| acc.r#union(reasons))
+                .unwrap_or(LoadReasons::empty()),
+        }
+    }
+
+    /// Insert some new load reasons for a loadshare. Will update the existing load reasons if the loadshare
+    /// is already present.
+    #[inline]
+    pub fn insert(&mut self, new_loadshare: LoadshareId, new_reasons: LoadReasons) {
+        match &mut self.0 {
+            // If we were empty, we re-initialize ourselves to a single loadshare.
+            ChunkLoadsharesInner::Empty => *self = Self::single(new_loadshare, new_reasons),
+            ChunkLoadsharesInner::Single { loadshare, reasons } => {
+                if *loadshare == new_loadshare {
+                    // The new loadshare is the same as the existing, single loadshare, so we just update
+                    // the single load reasons.
+                    reasons.insert(new_reasons);
+                } else {
+                    // We have more than 2 loadshares so we need to move to the heap.
+                    // Also keep our existing loadshare and its reasons.
+                    self.0 = ChunkLoadsharesInner::Many(HashMap::from_iter([
+                        (*loadshare, *reasons),
+                        (new_loadshare, new_reasons),
+                    ]));
+                }
+            }
+            ChunkLoadsharesInner::Many(loadshares) => {
+                // Update existing reasons or insert this loadshare as a new one.
+                loadshares
+                    .entry(new_loadshare)
+                    .and_modify(|reasons| reasons.insert(new_reasons))
+                    .or_insert(new_reasons);
+            }
+        }
+    }
+
+    /// Remove load reasons from a loadshare. If the loadshare ends up having no reasons left it will be removed
+    /// from the [`ChunkLoadshares`]. If the removed loadshare was the only loadshare then the [`ChunkLoadshares`]
+    /// will turn into [`ChunkLoadshares::Empty`], in which case the chunk should be purged.
+    #[inline]
+    pub fn remove(&mut self, remove_loadshare: LoadshareId, remove_reasons: LoadReasons) {
+        match &mut self.0 {
+            // We're already empty so there's nothing to do.
+            ChunkLoadsharesInner::Empty => return,
+            ChunkLoadsharesInner::Single { loadshare, reasons } => {
+                // The loadshare was not present for this chunk,
+                // so there's nothing to remove and we can return early.
+                if *loadshare != remove_loadshare {
+                    return;
+                }
+
+                reasons.remove(remove_reasons);
+                // Since this chunk was only loaded under a single loadshare, and we removed all the reasons for
+                // that loadshare, we no longer have any reason to be loaded and we are empty.
+                if reasons.is_empty() {
+                    self.0 = ChunkLoadsharesInner::Empty;
+                }
+            }
+            ChunkLoadsharesInner::Many(loadshares) => {
+                let Entry::Occupied(mut entry) = loadshares.entry(remove_loadshare) else {
+                    // As usual, return early if the loadshare doesn't exist for this chunk.
+                    return;
+                };
+
+                let reasons = entry.get_mut();
+                reasons.remove(remove_reasons);
+                if reasons.is_empty() {
+                    entry.remove();
+                }
+
+                // We should never end up in a situation where the loadshare hashmap is empty. If there
+                // are no remaining loadshares for this chunk then we should be a Self::Empty variant.
+                debug_assert!(!loadshares.is_empty());
+
+                let (&loadshare, &reasons) = loadshares.iter().next().unwrap();
+                *self = Self::single(loadshare, reasons);
+            }
+        }
+    }
+}
+
+/// Table of loadshare ownership of chunks. Mainly used to organize the interests of different loaders so that
+/// chunks are only unloaded when there is consensus among loaders to do so.
+#[derive(Default)]
+pub struct ChunkLoadshareTable {
+    /// A map of all chunks and the loadshares they are loaded under with the reasons why.
+    pub(super) loadshares_for_chunks:
+        RwLock<HashMap<ChunkPos, ChunkLoadshares, ChunkStorageHasher>>,
+    /// A map of all loadshares and the chunks they have loaded (for any reason).
+    pub(super) chunks_for_loadshares: RwLock<LoadshareMap<ChunkSet>>,
 }

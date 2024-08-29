@@ -6,24 +6,32 @@ use parking_lot::RwLock;
 
 use bevy::log::error;
 
-use crate::topo::{
-    controller::{LoadChunks, LoadReasons, UnloadChunks},
-    world::{chunk::ChunkFlags, new_chunk_manager::chunk_pos_in_bounds, Chunk, ChunkPos},
-    worldgen::{generator::GenerateChunk, GenerationPriority},
+use crate::{
+    topo::{
+        controller::{LoadChunks, LoadReasons, UnloadChunks},
+        world::{
+            chunk::ChunkFlags, chunk_manager::LoadshareChunks,
+            new_chunk_manager::chunk_pos_in_bounds, Chunk, ChunkPos,
+        },
+        worldgen::{generator::GenerateChunk, GenerationPriority},
+    },
+    util::ChunkSet,
 };
 
 use super::{
     error::{ChunkLoadError, ChunkPurgeError},
-    ChunkManager2,
+    ChunkLoadshares, ChunkLoadsharesInner, ChunkManager2,
 };
 
 /// The hash function used for chunk storage
-type ChunkStorageHasher = fxhash::FxBuildHasher;
+pub type ChunkStorageHasher = fxhash::FxBuildHasher;
 
 #[derive(Clone)]
 pub struct LoadedChunk {
     pub chunk: Arc<Chunk>,
-    pub load_reasons: LoadReasons,
+    /// A cached union of all the different load reasons that loadshares have for this chunk.
+    /// Must be recalculated every time a loadshare updates its load reasons for this chunk.
+    pub cached_loadshare_reasons_union: LoadReasons,
 }
 
 /// The inner chunk storage of the chunk manager. This is where chunks "live".
@@ -53,6 +61,12 @@ impl InnerChunkStorage {
     }
 }
 
+fn recalculate_load_reasons_union(reasons: impl Iterator<Item = LoadReasons>) -> LoadReasons {
+    reasons
+        .reduce(|acc, reasons| acc.r#union(reasons))
+        .unwrap_or(LoadReasons::empty())
+}
+
 /// The internal chunk load task. Should be run in an async task to avoid blocking the whole app.
 #[inline]
 pub(super) fn load_chunks_from_event(
@@ -61,10 +75,18 @@ pub(super) fn load_chunks_from_event(
     generation_events: &Sender<GenerateChunk>,
     lock_granularity: usize,
 ) {
+    // Don't do anything if there are no reasons. Chunks should never be loaded without any load reasons!
+    if event.reasons.is_empty() {
+        return;
+    }
+
     while !event.chunks.is_empty() {
         // We're coarsely locking here to give other tasks a chance to make changes to the chunk storage.
         let mut loaded = cm.storage.loaded.write();
         let mut purgatory = cm.storage.purgatory.write();
+
+        let mut chunks_to_loadshares = cm.loadshares.loadshares_for_chunks.write();
+        let mut loadshares_to_chunks = cm.loadshares.chunks_for_loadshares.write();
 
         for _ in 0..lock_granularity {
             let Some(chunk_pos) = event.chunks.pop() else {
@@ -73,21 +95,64 @@ pub(super) fn load_chunks_from_event(
 
             let mut should_generate = event.auto_generate;
 
-            loaded
-                .entry(chunk_pos)
-                .and_modify(|loaded_chunk| {
-                    // Modify the load reasons if the chunk is already loaded.
-                    loaded_chunk.load_reasons.insert(event.reasons);
-                    // Don't send generation events if the chunk is already loaded.
+            match loaded.entry(chunk_pos) {
+                // If the chunk is already loaded, place it under this loadshare and update its load reasons
+                Entry::Occupied(mut occupied_chunk) => {
+                    // Don't send generation event if the chunk is already loaded.
                     should_generate = false;
-                })
-                .or_insert_with(|| LoadedChunk {
-                    load_reasons: event.reasons,
-                    // If the chunk we're trying to load is in purgatory, then resurrect it instead of creating a new one.
-                    chunk: purgatory
+
+                    let loaded_chunk = occupied_chunk.get_mut();
+
+                    // Add this loadshare to the chunk.
+                    let loadshares = chunks_to_loadshares
+                        .entry(chunk_pos)
+                        .and_modify(|loadshares| loadshares.insert(event.loadshare, event.reasons))
+                        .or_insert(ChunkLoadshares::single(event.loadshare, event.reasons));
+
+                    // Update the cached load reasons.
+                    let load_reasons = loadshares.load_reasons_union();
+                    loaded_chunk.cached_loadshare_reasons_union = load_reasons;
+
+                    // Add this chunk to the loadshare.
+                    loadshares_to_chunks
+                        .entry(event.loadshare)
+                        .and_modify(|chunks| {
+                            chunks.set(chunk_pos);
+                        })
+                        .or_insert_with(|| ChunkSet::single(chunk_pos));
+                }
+                Entry::Vacant(vacant_chunk) => {
+                    // If a chunk is not loaded, it also cannot have any load reasons or be under any loadshare.
+                    debug_assert!(!chunks_to_loadshares.contains_key(&chunk_pos));
+                    debug_assert!(!loadshares_to_chunks
+                        .get(&event.loadshare)
+                        .is_some_and(|c| c.contains(chunk_pos)));
+
+                    chunks_to_loadshares.insert(
+                        chunk_pos,
+                        ChunkLoadshares::single(event.loadshare, event.reasons),
+                    );
+
+                    loadshares_to_chunks
+                        .entry(event.loadshare)
+                        .and_modify(|chunks| {
+                            chunks.set(chunk_pos);
+                        })
+                        .or_insert_with(|| ChunkSet::single(chunk_pos));
+
+                    // Revive the chunk from purgatory if possible, otherwise create a new one.
+                    // TODO: should we avoid sending generation events if the chunk was revived too?
+                    let chunk = purgatory
                         .remove(&chunk_pos)
-                        .unwrap_or_else(|| Arc::new(cm.new_primordial_chunk(chunk_pos))),
-                });
+                        .unwrap_or_else(|| Arc::new(cm.new_primordial_chunk(chunk_pos)));
+
+                    vacant_chunk.insert(LoadedChunk {
+                        chunk,
+                        // Since this is the first time we're loading this chunk, this event's load reasons will be the initial ones.
+                        cached_loadshare_reasons_union: event.reasons,
+                    });
+                }
+            }
 
             if should_generate {
                 generation_events
@@ -134,9 +199,11 @@ pub(super) fn purge_chunks_from_event(
 
             let loaded_chunk = entry.get_mut();
 
-            loaded_chunk.load_reasons.remove(event.reasons);
+            loaded_chunk
+                .cached_loadshare_reasons_union
+                .remove(event.reasons);
             // No remaining load reasons so we can actually move this chunk to purgatory.
-            if loaded_chunk.load_reasons.is_empty() {
+            if loaded_chunk.cached_loadshare_reasons_union.is_empty() {
                 let chunk = entry.remove();
                 purgatory.insert(chunk_pos, chunk.chunk);
             }
