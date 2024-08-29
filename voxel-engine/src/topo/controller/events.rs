@@ -24,7 +24,7 @@ pub struct LoadChunks {
     pub loadshare: LoadshareId,
     pub reasons: LoadReasons,
     pub auto_generate: bool,
-    pub chunks: ChunkSet,
+    pub chunks: Vec<ChunkPos>,
 }
 
 /// Event triggered when a chunk is loaded. This event is "downstream" from [`LoadChunksEvent`] in that
@@ -44,7 +44,7 @@ pub struct LoadedChunkEvent {
 pub struct UnloadChunks {
     pub loadshare: LoadshareId,
     pub reasons: LoadReasons,
-    pub chunks: ChunkSet,
+    pub chunks: Vec<ChunkPos>,
 }
 
 /// Event triggered when a chunk is unloaded. This event is "downstream" from [`UnloadChunksEvent`] in that

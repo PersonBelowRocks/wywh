@@ -79,4 +79,11 @@ impl ChunkManager2 {
             entity: None,
         })
     }
+
+    /// Create a new primordial chunk at the given position. Does not load or unload any chunks, rather
+    /// this function uses the manager's settins to create a pre-configured chunk that can be loaded seperately.
+    #[inline]
+    pub(super) fn new_primordial_chunk(&self, chunk_pos: ChunkPos) -> Chunk {
+        Chunk::new(chunk_pos, self.default_block, ChunkFlags::PRIMORDIAL)
+    }
 }

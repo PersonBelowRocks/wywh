@@ -1,14 +1,21 @@
 use std::sync::Arc;
 
-use hb::HashMap;
+use cb::channel::Sender;
+use hb::{hash_map::Entry, HashMap};
 use parking_lot::RwLock;
 
+use bevy::log::error;
+
 use crate::topo::{
-    controller::LoadReasons,
-    world::{new_chunk_manager::chunk_pos_in_bounds, Chunk, ChunkPos},
+    controller::{LoadChunks, LoadReasons, UnloadChunks},
+    world::{chunk::ChunkFlags, new_chunk_manager::chunk_pos_in_bounds, Chunk, ChunkPos},
+    worldgen::{generator::GenerateChunk, GenerationPriority},
 };
 
-use super::error::{ChunkLoadError, ChunkPurgeError};
+use super::{
+    error::{ChunkLoadError, ChunkPurgeError},
+    ChunkManager2,
+};
 
 /// The hash function used for chunk storage
 type ChunkStorageHasher = fxhash::FxBuildHasher;
@@ -23,10 +30,10 @@ pub struct LoadedChunk {
 #[derive(Default)]
 pub struct InnerChunkStorage {
     /// All loaded chunks, wrapped in an RW lock for thread safety.
-    loaded: RwLock<HashMap<ChunkPos, LoadedChunk, ChunkStorageHasher>>,
+    pub(super) loaded: RwLock<HashMap<ChunkPos, LoadedChunk, ChunkStorageHasher>>,
     /// A temporary stop for chunks before they are unloaded. Chunks in purgatory should not
     /// be modified, but they may be revived and moved back to the loaded state.
-    purgatory: RwLock<HashMap<ChunkPos, Arc<Chunk>, ChunkStorageHasher>>,
+    pub(super) purgatory: RwLock<HashMap<ChunkPos, Arc<Chunk>, ChunkStorageHasher>>,
 }
 
 static_assertions::assert_impl_all!(InnerChunkStorage: Send, Sync);
@@ -44,131 +51,99 @@ impl InnerChunkStorage {
     pub fn is_loaded(&self, chunk_pos: ChunkPos) -> bool {
         self.loaded.read().contains_key(&chunk_pos)
     }
+}
 
-    /// Add the given load reasons to a loaded chunks load reasons, updating them. Does nothing if
-    /// the chunk is not loaded.
-    #[inline]
-    pub fn add_load_reasons(&self, chunk_pos: ChunkPos, reasons: LoadReasons) {
-        self.loaded
-            .write()
-            .entry(chunk_pos)
-            .and_modify(|loaded_chunk| loaded_chunk.load_reasons.insert(reasons));
-    }
+/// The internal chunk load task. Should be run in an async task to avoid blocking the whole app.
+#[inline]
+pub(super) fn load_chunks_from_event(
+    cm: &ChunkManager2,
+    mut event: LoadChunks,
+    generation_events: &Sender<GenerateChunk>,
+    lock_granularity: usize,
+) {
+    while !event.chunks.is_empty() {
+        // We're coarsely locking here to give other tasks a chance to make changes to the chunk storage.
+        let mut loaded = cm.storage.loaded.write();
+        let mut purgatory = cm.storage.purgatory.write();
 
-    /// Load a chunk. This function will attempt to revive a chunk from purgatory if possible.
-    /// For this reason the provided chunk may not necessarily be the one that gets loaded.
-    ///
-    /// A returned error of [`ChunkLoadError::AlreadyLoaded`] is not necessarily a problem, but rather
-    /// a warning to the caller that their call might not have had the expected effect.
-    ///
-    /// Only loads the provided chunk if:
-    /// - Chunk at this position is not already loaded.
-    /// - Chunk at this position is not in purgatory.
-    ///
-    /// Revives chunk from purgatory if:
-    /// - Chunk at this position is not already loaded.
-    /// - Chunk at this position exists in purgatory.
-    ///
-    /// # Panics
-    /// Will panic if the provided chunk is both loaded and in purgatory (should NEVER happen).
-    #[inline]
-    pub fn load(&self, chunk: Chunk, reasons: LoadReasons) -> Result<(), ChunkLoadError> {
-        let chunk_pos = chunk.chunk_pos();
-        if !chunk_pos_in_bounds(chunk_pos) {
-            return Err(ChunkLoadError::out_of_bounds(chunk_pos));
-        }
+        for _ in 0..lock_granularity {
+            let Some(chunk_pos) = event.chunks.pop() else {
+                break;
+            };
 
-        if reasons.is_empty() {
-            return Err(ChunkLoadError::NoReasons(chunk_pos));
-        }
+            let mut should_generate = event.auto_generate;
 
-        let mut loaded = self.loaded.write();
-        let mut purgatory = self.purgatory.write();
+            loaded
+                .entry(chunk_pos)
+                .and_modify(|loaded_chunk| {
+                    // Modify the load reasons if the chunk is already loaded.
+                    loaded_chunk.load_reasons.insert(event.reasons);
+                    // Don't send generation events if the chunk is already loaded.
+                    should_generate = false;
+                })
+                .or_insert_with(|| LoadedChunk {
+                    load_reasons: event.reasons,
+                    // If the chunk we're trying to load is in purgatory, then resurrect it instead of creating a new one.
+                    chunk: purgatory
+                        .remove(&chunk_pos)
+                        .unwrap_or_else(|| Arc::new(cm.new_primordial_chunk(chunk_pos))),
+                });
 
-        match purgatory.remove(&chunk_pos) {
-            // Revive chunk from purgatory wherever possible to re-use resources.
-            Some(revived) => {
-                // Make sure the chunk positions are actually the same. If they're not something
-                // has gone seriously wrong.
-                debug_assert_eq!(revived.chunk_pos(), chunk_pos);
-
-                // Chunks must NEVER be both loaded and in purgatory.
-                if loaded.contains_key(&chunk_pos) {
-                    // Re-insert the chunk into purgatory so we don't leave the storage in a broken state.
-                    purgatory.insert(chunk_pos, revived);
-                    panic!("Chunk {chunk_pos} was in purgatory, but was also loaded");
-                }
-
-                loaded.insert(
-                    chunk_pos,
-                    LoadedChunk {
-                        chunk: revived,
-                        load_reasons: reasons,
-                    },
-                );
-            }
-            None => {
-                // We only insert this chunk is it doesn't already exist. Already alive chunks take
-                // priority over revived chunks.
-                if loaded.contains_key(&chunk_pos) {
-                    return Err(ChunkLoadError::AlreadyLoaded(chunk_pos));
-                } else {
-                    // Just to be 100% sure we do this instead of a regular .insert() call.
-                    loaded.entry(chunk_pos).or_insert(LoadedChunk {
-                        load_reasons: reasons,
-                        chunk: Arc::new(chunk),
-                    });
-                }
+            if should_generate {
+                generation_events
+                    .send(GenerateChunk {
+                        chunk_pos,
+                        priority: GenerationPriority::new(0),
+                    })
+                    .unwrap();
             }
         }
-
-        // If we reach this point the chunk should be loaded and not in purgatory.
-        debug_assert!(loaded.contains_key(&chunk_pos));
-        debug_assert!(!purgatory.contains_key(&chunk_pos));
 
         // Explicitly drop our RW lock guards for clarity.
         drop(loaded);
         drop(purgatory);
-
-        Ok(())
     }
+}
 
-    /// Purge this chunk, moving it into purgatory to be cleaned up and unloaded.
-    ///
-    /// Returns an error if:
-    /// - Chunk was not loaded to begin with.
-    /// - Chunk was already in purgatory.
-    /// - Chunk was out of bounds.
-    #[inline]
-    pub fn purge(&self, chunk_pos: ChunkPos) -> Result<(), ChunkPurgeError> {
-        if !chunk_pos_in_bounds(chunk_pos) {
-            return Err(ChunkPurgeError::out_of_bounds(chunk_pos));
+/// The internal chunk purge task. Should be run in an async task to avoid blocking the whole app.
+#[inline]
+pub(super) fn purge_chunks_from_event(
+    cm: &ChunkManager2,
+    mut event: UnloadChunks,
+    lock_granularity: usize,
+) {
+    while !event.chunks.is_empty() {
+        // We're coarsely locking here to give other tasks a chance to make changes to the chunk storage.
+        let mut loaded = cm.storage.loaded.write();
+        let mut purgatory = cm.storage.purgatory.write();
+
+        for _ in 0..lock_granularity {
+            let Some(chunk_pos) = event.chunks.pop() else {
+                break;
+            };
+
+            // Get the occupied entry for this chunk.
+            let Entry::Occupied(mut entry) = loaded.entry(chunk_pos) else {
+                continue;
+            };
+
+            // This case should never happen and would be a bug, so we need to catch this error and abort.
+            if purgatory.contains_key(&chunk_pos) {
+                panic!("Loaded chunk was found in purgatory: {chunk_pos}");
+            }
+
+            let loaded_chunk = entry.get_mut();
+
+            loaded_chunk.load_reasons.remove(event.reasons);
+            // No remaining load reasons so we can actually move this chunk to purgatory.
+            if loaded_chunk.load_reasons.is_empty() {
+                let chunk = entry.remove();
+                purgatory.insert(chunk_pos, chunk.chunk);
+            }
         }
-
-        let mut loaded = self.loaded.write();
-        let mut purgatory = self.purgatory.write();
-
-        if purgatory.contains_key(&chunk_pos) {
-            return Err(ChunkPurgeError::AlreadyPurged(chunk_pos));
-        }
-
-        if !loaded.contains_key(&chunk_pos) {
-            return Err(ChunkPurgeError::NotLoaded(chunk_pos));
-        }
-
-        let purged_chunk = loaded
-            .remove(&chunk_pos)
-            .expect("we just checked that this key exists")
-            .chunk;
-        // Make sure that the positions match up.
-        debug_assert_eq!(chunk_pos, purged_chunk.chunk_pos());
-
-        purgatory.insert(chunk_pos, purged_chunk);
 
         // Explicitly drop our RW lock guards for clarity.
         drop(loaded);
         drop(purgatory);
-
-        Ok(())
     }
 }
