@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use bevy::math::{ivec3, IVec3};
 use dashmap::DashSet;
 use error::{ChunkGetError, ChunkLoadError};
 use hb::{hash_map::Entry, HashMap};
@@ -9,8 +10,11 @@ use parking_lot::RwLock;
 
 use crate::{
     data::registries::block::BlockVariantId,
-    topo::controller::{LoadReasons, LoadshareId, LoadshareMap},
-    util::ChunkSet,
+    topo::{
+        controller::{LoadReasons, LoadshareId, LoadshareMap},
+        neighbors::{Neighbors, NeighborsBuilder},
+    },
+    util::{sync::LockStrategy, ChunkSet},
 };
 
 use super::{chunk::ChunkFlags, Chunk, ChunkPos, ChunkRef};
@@ -84,9 +88,46 @@ impl ChunkManager2 {
 
         Ok(ChunkRef {
             chunk,
-            stats: todo!(), // TODO: &self.statuses,
+            stats: &self.statuses,
             entity: None,
         })
+    }
+
+    // TODO: locking strategy parameter here + docs
+    #[inline]
+    pub fn neighbors<T, F>(&self, chunk_pos: ChunkPos, callback: F) -> Result<T, ChunkGetError>
+    where
+        F: for<'a> FnOnce(Neighbors<'a>) -> T,
+    {
+        // This vector will hold all our chunks while we read from them.
+        let mut chunks = Vec::with_capacity(3 * 3 * 3);
+
+        for x in -1..=1 {
+            for y in -1..=1 {
+                for z in -1..=1 {
+                    let offset = ivec3(x, y, z);
+                    // Ignore the center chunk since that's the one we're getting the neighbors for.
+                    if offset == IVec3::ZERO {
+                        continue;
+                    }
+
+                    let neighbor_chunk_pos = ChunkPos::from(offset + chunk_pos.as_ivec3());
+                    if let Some(chunk) = self.storage.get(neighbor_chunk_pos) {
+                        chunks.push((offset, chunk));
+                    }
+                }
+            }
+        }
+
+        let mut neighbor_builder = NeighborsBuilder::new(self.default_block);
+        for (offset, chunk) in chunks.iter() {
+            let read_handle = chunk.read_handle(LockStrategy::Blocking).unwrap();
+            neighbor_builder.set_neighbor(*offset, read_handle).unwrap();
+        }
+
+        let neighbors = neighbor_builder.build();
+
+        Ok(callback(neighbors))
     }
 
     /// Create a new primordial chunk at the given position. Does not load or unload any chunks, rather

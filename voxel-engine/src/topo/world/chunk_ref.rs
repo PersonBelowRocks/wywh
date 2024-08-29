@@ -3,9 +3,10 @@ use parking_lot::RwLockReadGuard;
 use std::ops::Deref;
 use std::{hash::BuildHasher, sync::Arc};
 
+use super::new_chunk_manager::ChunkStatuses;
 use super::{
     chunk::{Chunk, ChunkFlags, ChunkPos},
-    chunk_manager::{ChunkStatuses, LccRef},
+    chunk_manager::LccRef,
     ChunkManagerError,
 };
 use crate::{
