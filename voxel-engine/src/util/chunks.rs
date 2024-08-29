@@ -137,7 +137,7 @@ pub struct ChunkSet(hb::HashSet<ChunkPos, ahash::RandomState>);
 
 impl ChunkSet {
     pub fn single(chunk_pos: ChunkPos) -> Self {
-        Self(hb::HashSet::from_iter(chunk_pos))
+        Self(hb::HashSet::from_iter([chunk_pos]))
     }
 
     pub fn with_capacity(capacity: usize) -> Self {

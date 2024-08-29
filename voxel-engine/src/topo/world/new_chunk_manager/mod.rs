@@ -118,6 +118,17 @@ enum ChunkLoadsharesInner {
     Many(LoadshareMap<LoadReasons>),
 }
 
+/// The result of removing a loadshare from [`ChunkLoadshares`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LoadshareRemovalResult {
+    /// The load reasons were updated but did not turn out empty.
+    LoadReasonsUpdated,
+    /// The specified loadshare had no remaining load reasons after the removal and was removed from this chunk.
+    LoadshareRemoved,
+    /// The chunk has no loadshares and/or this loadshare was not present for this chunk.
+    NoLoadshare,
+}
+
 impl ChunkLoadshares {
     pub fn single(loadshare: LoadshareId, reasons: LoadReasons) -> Self {
         Self(ChunkLoadsharesInner::Single { loadshare, reasons })
@@ -178,15 +189,19 @@ impl ChunkLoadshares {
     /// from the [`ChunkLoadshares`]. If the removed loadshare was the only loadshare then the [`ChunkLoadshares`]
     /// will turn into [`ChunkLoadshares::Empty`], in which case the chunk should be purged.
     #[inline]
-    pub fn remove(&mut self, remove_loadshare: LoadshareId, remove_reasons: LoadReasons) {
+    pub fn remove(
+        &mut self,
+        remove_loadshare: LoadshareId,
+        remove_reasons: LoadReasons,
+    ) -> LoadshareRemovalResult {
         match &mut self.0 {
             // We're already empty so there's nothing to do.
-            ChunkLoadsharesInner::Empty => return,
+            ChunkLoadsharesInner::Empty => return LoadshareRemovalResult::NoLoadshare,
             ChunkLoadsharesInner::Single { loadshare, reasons } => {
                 // The loadshare was not present for this chunk,
                 // so there's nothing to remove and we can return early.
                 if *loadshare != remove_loadshare {
-                    return;
+                    return LoadshareRemovalResult::NoLoadshare;
                 }
 
                 reasons.remove(remove_reasons);
@@ -194,26 +209,35 @@ impl ChunkLoadshares {
                 // that loadshare, we no longer have any reason to be loaded and we are empty.
                 if reasons.is_empty() {
                     self.0 = ChunkLoadsharesInner::Empty;
+                    LoadshareRemovalResult::LoadshareRemoved
+                } else {
+                    LoadshareRemovalResult::LoadReasonsUpdated
                 }
             }
             ChunkLoadsharesInner::Many(loadshares) => {
                 let Entry::Occupied(mut entry) = loadshares.entry(remove_loadshare) else {
                     // As usual, return early if the loadshare doesn't exist for this chunk.
-                    return;
+                    return LoadshareRemovalResult::NoLoadshare;
                 };
 
                 let reasons = entry.get_mut();
                 reasons.remove(remove_reasons);
                 if reasons.is_empty() {
+                    // If there are no remaining load reasons, we can remoe this loadshare from the chunk.
                     entry.remove();
+
+                    // We should never end up in a situation where the loadshare hashmap is empty. If there
+                    // are no remaining loadshares for this chunk then we should be a Self::Empty variant.
+                    debug_assert!(!loadshares.is_empty());
+                    if loadshares.len() == 1 {
+                        let (&loadshare, &reasons) = loadshares.iter().next().unwrap();
+                        *self = Self::single(loadshare, reasons);
+                    }
+
+                    LoadshareRemovalResult::LoadshareRemoved
+                } else {
+                    LoadshareRemovalResult::LoadReasonsUpdated
                 }
-
-                // We should never end up in a situation where the loadshare hashmap is empty. If there
-                // are no remaining loadshares for this chunk then we should be a Self::Empty variant.
-                debug_assert!(!loadshares.is_empty());
-
-                let (&loadshare, &reasons) = loadshares.iter().next().unwrap();
-                *self = Self::single(loadshare, reasons);
             }
         }
     }

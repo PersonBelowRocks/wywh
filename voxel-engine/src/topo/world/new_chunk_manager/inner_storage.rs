@@ -10,8 +10,10 @@ use crate::{
     topo::{
         controller::{LoadChunks, LoadReasons, UnloadChunks},
         world::{
-            chunk::ChunkFlags, chunk_manager::LoadshareChunks,
-            new_chunk_manager::chunk_pos_in_bounds, Chunk, ChunkPos,
+            chunk::ChunkFlags,
+            chunk_manager::LoadshareChunks,
+            new_chunk_manager::{chunk_pos_in_bounds, LoadshareRemovalResult},
+            Chunk, ChunkPos,
         },
         worldgen::{generator::GenerateChunk, GenerationPriority},
     },
@@ -141,7 +143,6 @@ pub(super) fn load_chunks_from_event(
                         .or_insert_with(|| ChunkSet::single(chunk_pos));
 
                     // Revive the chunk from purgatory if possible, otherwise create a new one.
-                    // TODO: should we avoid sending generation events if the chunk was revived too?
                     let chunk = purgatory
                         .remove(&chunk_pos)
                         .unwrap_or_else(|| Arc::new(cm.new_primordial_chunk(chunk_pos)));
@@ -154,6 +155,7 @@ pub(super) fn load_chunks_from_event(
                 }
             }
 
+            // TODO: should we also avoid sending generation events if the chunk was revived?
             if should_generate {
                 generation_events
                     .send(GenerateChunk {
@@ -167,6 +169,8 @@ pub(super) fn load_chunks_from_event(
         // Explicitly drop our RW lock guards for clarity.
         drop(loaded);
         drop(purgatory);
+        drop(chunks_to_loadshares);
+        drop(loadshares_to_chunks);
     }
 }
 
@@ -182,6 +186,9 @@ pub(super) fn purge_chunks_from_event(
         let mut loaded = cm.storage.loaded.write();
         let mut purgatory = cm.storage.purgatory.write();
 
+        let mut chunks_to_loadshares = cm.loadshares.loadshares_for_chunks.write();
+        let mut loadshares_to_chunks = cm.loadshares.chunks_for_loadshares.write();
+
         for _ in 0..lock_granularity {
             let Some(chunk_pos) = event.chunks.pop() else {
                 break;
@@ -193,24 +200,40 @@ pub(super) fn purge_chunks_from_event(
             };
 
             // This case should never happen and would be a bug, so we need to catch this error and abort.
-            if purgatory.contains_key(&chunk_pos) {
-                panic!("Loaded chunk was found in purgatory: {chunk_pos}");
+            debug_assert!(!purgatory.contains_key(&chunk_pos));
+
+            // If a chunk is loaded it must be loaded under at least one loadshare.
+            let loadshares = chunks_to_loadshares.get_mut(&chunk_pos).unwrap();
+
+            let result = loadshares.remove(event.loadshare, event.reasons);
+            if result == LoadshareRemovalResult::LoadshareRemoved {
+                if let Entry::Occupied(mut entry) = loadshares_to_chunks.entry(event.loadshare) {
+                    entry.get_mut().remove(chunk_pos);
+                    // If there are no more chunks loaded under this loadshare, then just remove the whole loadshare.
+                    if entry.get_mut().is_empty() {
+                        entry.remove();
+                    }
+                }
             }
 
-            let loaded_chunk = entry.get_mut();
-
-            loaded_chunk
-                .cached_loadshare_reasons_union
-                .remove(event.reasons);
             // No remaining load reasons so we can actually move this chunk to purgatory.
-            if loaded_chunk.cached_loadshare_reasons_union.is_empty() {
+            if loadshares.is_empty() {
+                chunks_to_loadshares.remove(&chunk_pos);
+
                 let chunk = entry.remove();
-                purgatory.insert(chunk_pos, chunk.chunk);
+                // Unwrap here so we assert that this chunk was not in purgatory from before.
+                purgatory.insert(chunk_pos, chunk.chunk).unwrap();
+            } else {
+                // In this case, there are remaining load reasons so we just update the cached load reasons.
+                let cached_load_reasons = loadshares.load_reasons_union();
+                entry.get_mut().cached_loadshare_reasons_union = cached_load_reasons;
             }
         }
 
         // Explicitly drop our RW lock guards for clarity.
         drop(loaded);
         drop(purgatory);
+        drop(chunks_to_loadshares);
+        drop(loadshares_to_chunks);
     }
 }
