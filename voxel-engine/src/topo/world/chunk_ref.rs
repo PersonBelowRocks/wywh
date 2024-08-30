@@ -3,12 +3,8 @@ use parking_lot::RwLockReadGuard;
 use std::ops::Deref;
 use std::{hash::BuildHasher, sync::Arc};
 
-use super::new_chunk_manager::ChunkStatuses;
-use super::{
-    chunk::{Chunk, ChunkFlags, ChunkPos},
-    chunk_manager::LccRef,
-    ChunkManagerError,
-};
+use super::chunk::{Chunk, ChunkFlags, ChunkPos};
+use super::chunk_manager::ChunkStatuses;
 use crate::{
     topo::{
         block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},

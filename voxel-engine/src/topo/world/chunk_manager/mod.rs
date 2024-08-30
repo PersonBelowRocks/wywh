@@ -53,7 +53,7 @@ pub struct ChunkStatuses {
 }
 
 /// The chunk manager stores and manages the lifecycle of chunks.
-pub struct ChunkManager2 {
+pub struct ChunkManager {
     default_block: BlockVariantId,
     storage: InnerChunkStorage,
     statuses: ChunkStatuses,
@@ -75,7 +75,7 @@ pub struct ChunkStorageStructure<'a> {
     pub chunks_for_loadshares: &'a DashMap<LoadshareId, ChunkSet, LoadshareIdHasher>,
 }
 
-impl ChunkManager2 {
+impl ChunkManager {
     /// Create a new chunk manager with a default block.
     pub fn new(default_block: BlockVariantId) -> Self {
         Self {
@@ -121,6 +121,26 @@ impl ChunkManager2 {
         self.storage.is_loaded(chunk_pos)
     }
 
+    /// Get all the solid chunks in this manager.
+    #[inline]
+    pub fn solid_chunks(&self) -> Vec<ChunkPos> {
+        self.statuses
+            .solid
+            .iter()
+            .map(|chunk_pos| chunk_pos.clone())
+            .collect_vec()
+    }
+
+    /// Get all the chunks marked for remeshing/mesh-building in this manager.
+    #[inline]
+    pub fn remesh_chunks(&self) -> Vec<ChunkPos> {
+        self.statuses
+            .remesh
+            .iter()
+            .map(|chunk_pos| chunk_pos.clone())
+            .collect_vec()
+    }
+
     /// Get the chunk loaded at the given position.
     #[inline]
     pub fn loaded_chunk(&self, chunk_pos: ChunkPos) -> Result<ChunkRef<'_>, ChunkGetError> {
@@ -139,9 +159,23 @@ impl ChunkManager2 {
         })
     }
 
-    // TODO: locking strategy parameter here + docs
+    /// Get the flags for the given chunk blockingly.
     #[inline]
-    pub fn neighbors<T, F>(&self, chunk_pos: ChunkPos, callback: F) -> Result<T, ChunkGetError>
+    pub fn chunk_flags(&self, chunk_pos: ChunkPos) -> Result<ChunkFlags, ChunkGetError> {
+        Ok(self
+            .loaded_chunk(chunk_pos)?
+            .flags(LockStrategy::Blocking)
+            .unwrap())
+    }
+
+    // TODO: docs
+    #[inline]
+    pub fn neighbors<T, F>(
+        &self,
+        chunk_pos: ChunkPos,
+        strategy: LockStrategy,
+        callback: F,
+    ) -> Result<T, ChunkGetError>
     where
         F: for<'a> FnOnce(Neighbors<'a>) -> T,
     {
@@ -167,7 +201,7 @@ impl ChunkManager2 {
 
         let mut neighbor_builder = NeighborsBuilder::new(self.default_block);
         for (offset, chunk) in chunks.iter() {
-            let read_handle = chunk.read_handle(LockStrategy::Blocking).unwrap();
+            let read_handle = chunk.read_handle(strategy).unwrap();
             neighbor_builder.set_neighbor(*offset, read_handle).unwrap();
         }
 

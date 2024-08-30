@@ -119,25 +119,15 @@ async fn internal_worker_task(
 
         let Some(cmd) = cmd else { continue };
 
-        let cpos = cmd.pos;
+        let chunk_pos = cmd.pos;
 
-        let cref = match cm.get_loaded_chunk(cpos, true) {
+        let cref = match cm.loaded_chunk(chunk_pos) {
             Ok(cref) => cref,
             // A global lock isn't an error for us, we just need to try again a little later.
-            Err(error) => {
-                if error.is_globally_locked() {
-                    // Place the command in the backlog, we'll try again next loop.
-                    backlog_cmd = Some(cmd);
-                    // We need to sleep here to emulate waiting on the channel.
-                    // Otherwise we end up busy looping.
-                    thread::sleep(params.timeout);
-                }
-
+            Err(_error) => {
                 // We don't log the error here because it likely isn't an error. If
                 // the chunk didn't exist then it's likely that the chunk was unloaded before
-                // we could process the command, which is normal. And other than that
-                // there's not really any error that's relevant here other than the global lock error,
-                // (which we already handled) so we just skip to the next command.
+                // we could process the command, which is normal.
                 continue;
             }
         };
@@ -162,7 +152,7 @@ async fn internal_worker_task(
         let mut handle = cref.chunk().write_handle(LockStrategy::Blocking).unwrap();
         let mut is_solid = false;
 
-        match generator.write_to_chunk(cpos, &mut handle) {
+        match generator.write_to_chunk(chunk_pos, &mut handle) {
             Ok(_) => {
                 handle.deflate(None);
 
@@ -175,7 +165,7 @@ async fn internal_worker_task(
                 });
             }
             Err(error) => {
-                error!("Generator raised an error generating chunk at {cpos}: {error}")
+                error!("Generator raised an error generating chunk at {chunk_pos}: {error}")
             }
         }
 

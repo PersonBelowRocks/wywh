@@ -44,7 +44,7 @@ pub struct WorkerParams {
 
 #[derive(Clone)]
 pub struct MeshBuilderCommand {
-    pub pos: ChunkPos,
+    pub chunk_pos: ChunkPos,
     pub lod: LevelOfDetail,
     pub priority: RemeshPriority,
     pub generation: u64,
@@ -89,14 +89,18 @@ impl Worker {
 
                 let cm = params.chunk_manager.clone();
 
-                let result = cm.with_neighbors(LockStrategy::Blocking, cmd.pos, |neighbors| {
+                let result = cm.neighbors(cmd.chunk_pos, LockStrategy::Blocking, |neighbors| {
                     let context = Context {
                         lod: cmd.lod,
                         neighbors,
                         registries: &params.registries,
                     };
 
-                    let chunk = cm.get_loaded_chunk(cmd.pos, false)?;
+                    let chunk = cm.loaded_chunk(cmd.chunk_pos)?;
+                    if chunk.is_primordial() {
+                        return Err(ChunkMeshingError::PrimordialChunk)
+                    }
+
                     let handle = chunk.chunk().read_handle(LockStrategy::Blocking).unwrap();
                     Ok(params.mesher.build(handle, context)?)
                 }).map_err(ChunkMeshingError::from).custom_flatten();
@@ -106,22 +110,19 @@ impl Worker {
                         params.finished.send(FinishedChunkMeshData {
                             data: output,
                             lod: cmd.lod,
-                            pos: cmd.pos,
+                            pos: cmd.chunk_pos,
                             tick: cmd.generation
                         }).unwrap();
                     }
-                    Err(ChunkMeshingError::ChunkManagerError(error)) => {
-                        // backlog if globally locked
-                        if error.is_globally_locked() {
-                            backlog_cmd = Some(cmd);
-                            // sleep here to avoid busy looping
-                            thread::sleep(channel_timeout);
-                        }
-
+                    Err(ChunkMeshingError::ChunkGetError(_)) => {
+                        // No point in logging here, chunk is likely just not loaded which could happen if the event was queued before the chunk was purged/unloaded.
                         continue;
                     },
+                    Err(ChunkMeshingError::PrimordialChunk) => {
+                        warn!("Attempted to build mesh for {} but the chunk was primordial", cmd.chunk_pos);
+                    }
                     Err(ChunkMeshingError::MesherError(error)) => {
-                        error!("Error in worker '{task_label}' building chunk mesh for {}: {error}", cmd.pos);
+                        error!("Error in worker '{task_label}' building chunk mesh for {}: {error}", cmd.chunk_pos);
                     }
                 }
             }
@@ -210,7 +211,7 @@ impl MeshBuilder {
     /// with workers is full. This function must be called periodically (even with just an empty iterator)
     /// to send the next commands to the workers.
     pub fn queue_jobs<I: Iterator<Item = MeshBuilderCommand>>(&mut self, cmds: I) {
-        self.pending.extend(cmds.map(|c| (c.pos, c)));
+        self.pending.extend(cmds.map(|c| (c.chunk_pos, c)));
         self.pending
             .sort_unstable_by(|_, l, _, r| r.priority.cmp(&l.priority));
 
@@ -225,12 +226,12 @@ impl MeshBuilder {
             if let Err(error) = self.cmds.try_send(next) {
                 match error {
                     TrySendError::Disconnected(msg) => {
-                        self.pending.insert(msg.pos, msg);
+                        self.pending.insert(msg.chunk_pos, msg);
                         error!("Could not send remesh command to workers because the channel is disconnected.");
                         break;
                     }
                     TrySendError::Full(msg) => {
-                        self.pending.insert(msg.pos, msg);
+                        self.pending.insert(msg.chunk_pos, msg);
                         break;
                     }
                 }

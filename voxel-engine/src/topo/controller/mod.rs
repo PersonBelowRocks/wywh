@@ -6,7 +6,6 @@ use bevy::prelude::*;
 use bitflags::bitflags;
 use hb::HashSet;
 
-use handle_events::handle_chunk_loads_and_unloads;
 use observer_events::{
     dispatch_move_events, generate_chunks_with_priority, update_observer_batches,
 };
@@ -310,7 +309,7 @@ impl Plugin for WorldController {
             FixedPostUpdate,
             (
                 dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
-                handle_chunk_loads_and_unloads.in_set(WorldControllerSystems::CoreEvents),
+                // handle_chunk_loads_and_unloads.in_set(WorldControllerSystems::CoreEvents),
                 generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),
             ),
         );

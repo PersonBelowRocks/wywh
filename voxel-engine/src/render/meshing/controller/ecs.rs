@@ -62,7 +62,7 @@ pub fn queue_chunk_mesh_jobs(
 
     for event in events.read() {
         let cmd = MeshBuilderCommand {
-            pos: event.pos,
+            chunk_pos: event.pos,
             lod: event.lod,
             priority: event.priority,
             generation: event.tick,
@@ -113,7 +113,7 @@ pub fn remove_chunks(
             continue;
         };
 
-        for chunk in event.chunks.iter() {
+        for &chunk in event.chunks.iter() {
             if !members.has_flags(chunk, BatchFlags::RENDER) {
                 meshes.remove_chunk(chunk, lod.0);
                 remove.set(chunk);
@@ -158,7 +158,6 @@ pub fn voxel_realm_remesh_updated_chunks(
     let mut neighbor_remeshings_issued = 0;
 
     let cm = realm.cm();
-    let updated = cm.updated_chunks();
 
     let current = time.elapsed();
     let time_since_last_fresh_build = current - *last_queued_fresh;
@@ -176,12 +175,18 @@ pub fn voxel_realm_remesh_updated_chunks(
     let mut queued_primary = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
     let mut queued_neighbors = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
 
-    // TODO: skip this update if the chunk manager is globally locked.
-    let result = updated.iter_chunks(|cref| {
+    let remesh = cm.remesh_chunks();
+
+    for &chunk_pos in &remesh {
+        let Ok(cref) = cm.loaded_chunk(chunk_pos) else {
+            // TODO: maybe warn here?
+            continue;
+        };
+
         // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
         if !realm.has_render_permit(cref.chunk_pos()) || queued_primary.contains(&cref.chunk_pos())
         {
-            return;
+            continue;
         }
 
         // If this chunk was previously queued as a neighbor remesh, we "convert" it to a primary
@@ -197,7 +202,7 @@ pub fn voxel_realm_remesh_updated_chunks(
             .contains(ChunkFlags::FRESHLY_GENERATED)
             && !should_queue_fresh
         {
-            return;
+            continue;
         }
 
         queued_primary.insert(cref.chunk_pos());
@@ -224,7 +229,7 @@ pub fn voxel_realm_remesh_updated_chunks(
                 // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
                 let avoid_flags: ChunkFlags =
                     ChunkFlags::PRIMORDIAL | ChunkFlags::GENERATING | ChunkFlags::FRESHLY_GENERATED;
-                let Some(flags) = cm.chunk_flags(neighbor_pos) else {
+                let Ok(flags) = cm.chunk_flags(neighbor_pos) else {
                     continue;
                 };
 
@@ -236,19 +241,10 @@ pub fn voxel_realm_remesh_updated_chunks(
                 neighbor_remeshings_issued += 1;
             }
         }
-    });
-
-    if let Err(error) = result {
-        // A global lock error is fine (and expected from time to time), we just retry on the next
-        // iteration of this system. Since chunks are unflagged in this system, and we didn't manage to
-        // queue any chunks for remeshing and unflagging, the flags will be the same on the next iteration.
-        if !error.is_globally_locked() {
-            error!("Error trying to iterate over remeshable chunks: {error}");
-        }
     }
 
     for pos in &queued_primary {
-        if let Ok(cref) = cm.get_loaded_chunk(*pos, false) {
+        if let Ok(cref) = cm.loaded_chunk(*pos) {
             cref.update_flags(LockStrategy::Blocking, |flags| {
                 flags.remove(
                     ChunkFlags::REMESH

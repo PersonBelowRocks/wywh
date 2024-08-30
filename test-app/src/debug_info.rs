@@ -81,19 +81,21 @@ pub fn update_debug_text(
     sections.push("\n".to_string());
     sections.push(format!("chunk: {}\n", chunk_pos));
 
-    let hr_load_reasons = realm
-        .cm()
-        .get_loaded_chunk(chunk_pos, true)
-        .ok()
-        .map(|cref| cref.cached_load_reasons())
-        .map(|reasons| format!("{reasons:?}"))
-        .unwrap_or_else(|| "NONE".to_string());
+    // let hr_load_reasons = realm
+    //     .cm()
+    //     .loaded_chunk(chunk_pos)
+    //     .ok()
+    //     .map(|cref| cref.cached_load_reasons())
+    //     .map(|reasons| format!("{reasons:?}"))
+    //     .unwrap_or_else(|| "NONE".to_string());
+
+    let hr_load_reasons = "UNKNOWN";
 
     sections.push(format!("Load reasons: {hr_load_reasons}\n"));
 
     let hr_chunk_flags = realm
         .cm()
-        .get_loaded_chunk(chunk_pos, true)
+        .loaded_chunk(chunk_pos)
         .ok()
         .map(|cref| cref.flags(LockStrategy::Blocking).unwrap())
         .map(|flags| format!("{flags:?}"))

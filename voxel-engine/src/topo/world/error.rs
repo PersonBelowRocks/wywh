@@ -4,47 +4,6 @@ use bevy::math::IVec3;
 
 use crate::util::sync::StrategySyncError;
 
-#[derive(te::Error, Debug, Clone)]
-pub enum ChunkManagerError {
-    #[error("Chunk not loaded")]
-    Unloaded,
-    #[error(transparent)]
-    ContainerError(#[from] ChunkContainerError),
-    #[error(transparent)]
-    SyncError(#[from] StrategySyncError),
-    #[error("Chunk is primordial")]
-    Primordial,
-    #[error("Tried to initialize already existing chunk")]
-    AlreadyLoaded,
-    #[error("Could associate the entity with a chunk")]
-    MissingEntity,
-    #[error("Chunk position is out of bounds")]
-    OutOfBounds,
-}
-
-impl ChunkManagerError {
-    pub fn is_globally_locked(&self) -> bool {
-        matches!(
-            self,
-            Self::ContainerError(ChunkContainerError::GloballyLocked)
-        )
-    }
-
-    pub fn is_doesnt_exists(&self) -> bool {
-        matches!(self, Self::ContainerError(ChunkContainerError::DoesntExist))
-    }
-}
-
-#[derive(te::Error, Debug, Clone)]
-pub enum ChunkContainerError {
-    #[error("Chunk doesn't exist")]
-    DoesntExist,
-    #[error("Chunk container is globally locked")]
-    GloballyLocked,
-    #[error("Chunk is not loaded under this loadshare")]
-    InvalidLoadshare,
-}
-
 /// Errors related to low-level chunk data reads and writes.
 #[derive(te::Error, Debug, Clone)]
 pub enum ChunkDataError {

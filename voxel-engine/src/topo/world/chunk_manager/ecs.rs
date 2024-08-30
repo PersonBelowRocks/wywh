@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use bevy::{
-    ecs::event::ManualEventReader,
     prelude::*,
-    tasks::{futures_lite::FutureExt, AsyncComputeTaskPool, Task},
+    tasks::{AsyncComputeTaskPool, Task},
 };
 use cb::channel::{Receiver, Sender};
 use hb::hash_map::Entry;
@@ -19,7 +18,7 @@ use crate::topo::{
 
 use super::{
     inner_storage::{load_chunks_from_event, purge_chunks_from_event},
-    ChunkManager2,
+    ChunkManager,
 };
 
 /// The granularity of the lock in asynchronous chunk management tasks.
@@ -31,7 +30,7 @@ pub struct ChunkManagementTaskLockGranularity(pub usize);
 
 /// An ECS resource for the chunk manager.
 #[derive(Resource, Deref)]
-pub struct ChunkManagerRes(Arc<ChunkManager2>);
+pub struct ChunkManagerRes(Arc<ChunkManager>);
 
 /// Channels for the chunk generation events, which are produced in an async task as events are processed.
 #[derive(Resource)]

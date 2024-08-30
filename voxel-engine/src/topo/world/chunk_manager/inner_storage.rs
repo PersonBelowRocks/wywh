@@ -11,8 +11,7 @@ use crate::{
         controller::{LoadChunks, LoadReasons, UnloadChunks},
         world::{
             chunk::ChunkFlags,
-            chunk_manager::LoadshareChunks,
-            new_chunk_manager::{chunk_pos_in_bounds, LoadshareRemovalResult},
+            chunk_manager::{chunk_pos_in_bounds, LoadshareRemovalResult},
             Chunk, ChunkPos,
         },
         worldgen::{generator::GenerateChunk, GenerationPriority},
@@ -20,7 +19,7 @@ use crate::{
     util::{sync::LockStrategy, ChunkSet},
 };
 
-use super::{ChunkLoadshares, ChunkManager2};
+use super::{ChunkLoadshares, ChunkManager};
 
 /// The hash function used for chunk storage
 pub type ChunkStorageHasher = fxhash::FxBuildHasher;
@@ -69,7 +68,7 @@ fn recalculate_load_reasons_union(reasons: impl Iterator<Item = LoadReasons>) ->
 /// The internal chunk load task. Should be run in an async task to avoid blocking the whole app.
 #[inline]
 pub(super) fn load_chunks_from_event(
-    cm: &ChunkManager2,
+    cm: &ChunkManager,
     mut event: LoadChunks,
     generation_events: &Sender<GenerateChunk>,
     lock_granularity: usize,
@@ -175,11 +174,12 @@ pub(super) fn load_chunks_from_event(
 /// The internal chunk purge task. Should be run in an async task to avoid blocking the whole app.
 #[inline]
 pub(super) fn purge_chunks_from_event(
-    cm: &ChunkManager2,
+    cm: &ChunkManager,
     mut event: UnloadChunks,
     lock_granularity: usize,
 ) {
     while !event.chunks.is_empty() {
+        // TODO: remove flags from purged chunks
         cm.structural_access(LockStrategy::Blocking, |access| {
             // We're coarsely locking here to give other tasks a chance to make changes to the chunk storage.
             for _ in 0..lock_granularity {
