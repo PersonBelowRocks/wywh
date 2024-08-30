@@ -207,11 +207,14 @@ pub(super) fn purge_chunks_from_event(
 
                 // No remaining load reasons so we can actually move this chunk to purgatory.
                 if loadshares.is_empty() {
+                    // Need to drop this reference into the dashmap, otherwise we'll deadlock when we
+                    // try to remove the chunk!
+                    drop(loadshares);
+
                     access.loadshares_for_chunks.remove(&chunk_pos);
 
                     let chunk = entry.remove();
-                    // Unwrap here so we assert that this chunk was not in purgatory from before.
-                    access.purgatory.insert(chunk_pos, chunk.chunk).unwrap();
+                    access.purgatory.insert(chunk_pos, chunk.chunk);
                 } else {
                     // In this case, there are remaining load reasons so we just update the cached load reasons.
                     let cached_load_reasons = loadshares.load_reasons_union();

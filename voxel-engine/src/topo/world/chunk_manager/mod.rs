@@ -142,7 +142,7 @@ impl ChunkManager {
     }
 
     /// Get the chunk loaded at the given position.
-    #[inline]
+    #[inline(never)] // Never inline this function so that it shows up when debugging.
     pub fn loaded_chunk(&self, chunk_pos: ChunkPos) -> Result<ChunkRef<'_>, ChunkGetError> {
         if !chunk_pos_in_bounds(chunk_pos) {
             return Err(ChunkGetError::out_of_bounds(chunk_pos));
