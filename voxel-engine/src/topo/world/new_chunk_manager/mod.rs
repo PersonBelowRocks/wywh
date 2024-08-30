@@ -136,7 +136,6 @@ impl ChunkManager2 {
         Ok(ChunkRef {
             chunk,
             stats: &self.statuses,
-            entity: None,
         })
     }
 
