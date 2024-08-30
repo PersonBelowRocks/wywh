@@ -134,6 +134,8 @@ pub(super) fn load_chunks_from_event(
                             .or_insert_with(|| ChunkSet::single(chunk_pos));
 
                         // Revive the chunk from purgatory if possible, otherwise create a new one.
+                        // FIXME: it seems that reviving a chunk doesn't play nicely with meshes, we
+                        //  should probably handle this a bit more elegantly
                         let chunk = access
                             .purgatory
                             .remove(&chunk_pos)

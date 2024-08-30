@@ -173,6 +173,7 @@ pub fn extract_occluders(
     mut occluders: ResMut<OccluderBoxes>,
     chunks: Extract<Res<OccluderChunks>>,
 ) {
+    // FIXME: occluders are currently super slow to upload, tanking the FPS
     for &chunk in chunks.iter() {
         occluders.insert(chunk);
     }
