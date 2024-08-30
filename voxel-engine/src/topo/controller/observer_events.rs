@@ -108,14 +108,14 @@ pub fn update_observer_batches(
         .expect("We shouldn't be able to produce an observer loadshare component that doesn't have an ID yet 
             since we're using component hooks to set it immediately");
 
-    let mut update_cached_flags = ChunkSet::default();
+    let mut update_cached_flags = Vec::with_capacity(64);
 
     for &batch_entity in observer_batches.owned.iter() {
         let batch = q_batches
             .get(batch_entity)
             .expect("Batches should automatically track their own ownership with lifecycle hooks, so if this observer owns this batch, it should exist in the world");
 
-        let mut out_of_range = ChunkSet::with_capacity(10);
+        let mut out_of_range = Vec::with_capacity(64);
 
         // Remove out of range chunks
         out_of_range.extend(
@@ -123,9 +123,7 @@ pub fn update_observer_batches(
                 .chunks()
                 .iter()
                 .filter(|&c| !settings.within_range(event.new_chunk, c))
-                .inspect(|&c| {
-                    update_cached_flags.set(c);
-                }),
+                .inspect(|&c| update_cached_flags.push(c)),
         );
 
         if !out_of_range.is_empty() {
@@ -139,7 +137,7 @@ pub fn update_observer_batches(
         }
 
         // Add in-range chunks
-        let mut in_range = ChunkSet::with_capacity(10);
+        let mut in_range = Vec::with_capacity(64);
 
         in_range.extend(
             settings
@@ -148,9 +146,7 @@ pub fn update_observer_batches(
                 .map(|pos| pos + event.new_chunk.as_ivec3())
                 .map(ChunkPos::from)
                 .filter(|&cpos| !batch.chunks().contains(cpos))
-                .inspect(|&c| {
-                    update_cached_flags.set(c);
-                }),
+                .inspect(|&c| update_cached_flags.push(c)),
         );
 
         if !in_range.is_empty() {

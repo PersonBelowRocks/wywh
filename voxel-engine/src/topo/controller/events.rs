@@ -57,15 +57,15 @@ pub struct UnloadedChunkEvent {
 }
 
 #[derive(Clone, Event, Debug)]
-pub struct AddBatchChunks(pub ChunkSet);
+pub struct AddBatchChunks(pub Vec<ChunkPos>);
 
 #[derive(Clone, Event, Debug)]
-pub struct RemoveBatchChunks(pub ChunkSet);
+pub struct RemoveBatchChunks(pub Vec<ChunkPos>);
 
 ///
 #[derive(Clone, Event, Debug)]
 pub struct RemovedBatchChunks {
-    pub chunks: ChunkSet,
+    pub chunks: Vec<ChunkPos>,
     pub batch: Entity,
 }
 

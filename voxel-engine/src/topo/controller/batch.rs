@@ -102,7 +102,7 @@ impl CachedBatchMembership {
 }
 
 #[derive(Event, Debug)]
-pub struct UpdateCachedChunkFlags(pub ChunkSet);
+pub struct UpdateCachedChunkFlags(pub Vec<ChunkPos>);
 
 pub fn update_cached_chunk_flags(
     trigger: Trigger<UpdateCachedChunkFlags>,
@@ -111,7 +111,7 @@ pub fn update_cached_chunk_flags(
 ) {
     let event = trigger.event();
 
-    for chunk in event.0.iter() {
+    for &chunk in event.0.iter() {
         let Some(batch_entities) = membership.get(chunk) else {
             continue;
         };
@@ -231,7 +231,8 @@ pub fn add_batch_chunks(
         event
             .0
             .iter()
-            .inspect(|&chunk| membership.add(chunk, batch_entity)),
+            .cloned()
+            .inspect(|&chunk_pos| membership.add(chunk_pos, batch_entity)),
     );
 
     // Rebuild the cached flags for the added chunks
@@ -263,7 +264,7 @@ pub fn remove_batch_chunks(
 
     // Set the update tick to the current tick
     batch.tick = tick.get();
-    for chunk in event.0.iter() {
+    for &chunk in event.0.iter() {
         batch.chunks.remove(chunk);
         membership.remove(chunk, batch_entity);
     }
