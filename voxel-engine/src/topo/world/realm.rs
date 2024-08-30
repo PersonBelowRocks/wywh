@@ -9,14 +9,14 @@ use crate::topo::controller::{
     BatchFlags, CachedBatchMembership, ChunkBatch, LoadshareId, LoadshareProvider, VoxelWorldTick,
 };
 
-use super::{chunk_manager::ChunkManager, ChunkPos};
-
-#[derive(Resource)]
-pub struct ChunkManagerResource(pub(crate) Arc<ChunkManager>);
+use super::{
+    chunk_manager::{ecs::ChunkManagerRes, ChunkManager},
+    ChunkPos,
+};
 
 #[derive(SystemParam)]
 pub struct VoxelRealm<'w, 's> {
-    chunk_manager: Res<'w, ChunkManagerResource>,
+    chunk_manager: Res<'w, ChunkManagerRes>,
     membership: Res<'w, CachedBatchMembership>,
     loadshares: Res<'w, LoadshareProvider>,
     tick: Res<'w, VoxelWorldTick>,

@@ -24,7 +24,7 @@ use render::core::RenderCoreDebug;
 use topo::{
     block::FullBlock,
     controller::{WorldController, WorldControllerSettings, WorldControllerSystems},
-    world::{realm::ChunkManagerResource, ChunkManager},
+    world::{chunk_manager::ecs::ChunkManagerRes, ChunkManager},
 };
 
 pub mod data;
@@ -111,5 +111,5 @@ fn setup(mut cmds: Commands, registries: Res<Registries>) {
 
     let chunk_manager = ChunkManager::new(void);
 
-    cmds.insert_resource(ChunkManagerResource(Arc::new(chunk_manager)));
+    cmds.insert_resource(ChunkManagerRes(Arc::new(chunk_manager)));
 }

@@ -22,7 +22,7 @@ use crate::{
 
 use super::{chunk::ChunkFlags, Chunk, ChunkPos, ChunkRef};
 
-mod ecs;
+pub mod ecs;
 /// Errors related to chunk management.
 pub mod error;
 mod inner_storage;

@@ -10,9 +10,15 @@ use observer_events::{
     dispatch_move_events, generate_chunks_with_priority, update_observer_batches,
 };
 
+use crate::topo::world::chunk_manager::ecs::{
+    clear_chunk_lifecycle_task_pools, handle_async_generation_events,
+    handle_chunk_load_events_asynchronously, handle_chunk_unload_events_asynchronously,
+    ChunkLoadTasks, ChunkPurgeTasks, GenerationEventChannels,
+};
 use crate::{CoreEngineSetup, EngineState};
 
 use super::bounding_box::BoundingBox;
+use super::world::chunk_manager::ecs::ChunkLifecycleTaskLockGranularity;
 use super::world::ChunkPos;
 
 mod error;
@@ -279,6 +285,9 @@ pub struct WorldControllerSettings {
     pub chunk_loading_handler_backlog_threshold: usize,
 }
 
+pub const DEFAULT_LOCK_GRANULARITY: ChunkLifecycleTaskLockGranularity =
+    ChunkLifecycleTaskLockGranularity(16);
+
 pub struct WorldController {
     pub settings: WorldControllerSettings,
 }
@@ -291,6 +300,10 @@ impl Plugin for WorldController {
             .init_resource::<LoadshareProvider>()
             .init_resource::<VoxelWorldTick>()
             .init_resource::<CachedBatchMembership>()
+            .init_resource::<ChunkLoadTasks>()
+            .init_resource::<ChunkPurgeTasks>()
+            .init_resource::<GenerationEventChannels>()
+            .insert_resource(DEFAULT_LOCK_GRANULARITY)
             .add_event::<LoadChunks>()
             .add_event::<LoadedChunkEvent>()
             .add_event::<UnloadChunks>()
@@ -309,6 +322,10 @@ impl Plugin for WorldController {
             FixedPostUpdate,
             (
                 dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
+                handle_chunk_load_events_asynchronously,
+                handle_chunk_unload_events_asynchronously,
+                handle_async_generation_events,
+                clear_chunk_lifecycle_task_pools,
                 // handle_chunk_loads_and_unloads.in_set(WorldControllerSystems::CoreEvents),
                 generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),
             ),
