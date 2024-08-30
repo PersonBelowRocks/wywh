@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, thread::JoinHandle};
 
 use bevy::{
     prelude::*,
@@ -28,6 +28,66 @@ use super::{
 #[derive(Resource, Clone)]
 pub struct ChunkLifecycleTaskLockGranularity(pub usize);
 
+/// Tasks for managing the lifecycle of chunks, and channels to send commands to those tasks.
+#[derive(Resource, Default)]
+pub struct ChunkLifecycleTasks {
+    load: Option<JoinHandle<()>>,
+    purge: Option<JoinHandle<()>>,
+}
+
+impl ChunkLifecycleTasks {
+    /// Initialize and start the chunk loading task.
+    ///
+    /// # Panics
+    /// Will panic if the task is already initialized.
+    pub fn init_load_task(
+        &mut self,
+        cm: Arc<ChunkManager>,
+        granularity: usize,
+        generate_chunks_tx: Sender<GenerateChunk>,
+    ) -> Sender<LoadChunks> {
+        if self.load.is_some() {
+            panic!("Chunk loading task is already initialized");
+        }
+
+        let (tx, rx) = cb::channel::unbounded::<LoadChunks>();
+        let load_task_handle = std::thread::spawn(move || {
+            while let Ok(incoming) = rx.recv() {
+                load_chunks_from_event(cm.as_ref(), incoming, &generate_chunks_tx, granularity);
+            }
+        });
+
+        self.load = Some(load_task_handle);
+
+        tx
+    }
+
+    /// Initialize and start the chunk purging task.
+    ///
+    /// # Panics
+    /// Will panic if the task is already initialized.
+    pub fn init_purge_task(
+        &mut self,
+        cm: Arc<ChunkManager>,
+        granularity: usize,
+    ) -> Sender<UnloadChunks> {
+        if self.purge.is_some() {
+            panic!("Chunk purging task is already initialized");
+        }
+
+        let (tx, rx) = cb::channel::unbounded::<UnloadChunks>();
+        let purge_task_handle = std::thread::spawn(move || {
+            while let Ok(incoming) = rx.recv() {
+                purge_chunks_from_event(cm.as_ref(), incoming, granularity);
+            }
+        });
+
+        self.purge = Some(purge_task_handle);
+
+        tx
+    }
+}
+
 /// An ECS resource for the chunk manager.
 #[derive(Resource, Deref)]
 pub struct ChunkManagerRes(pub Arc<ChunkManager>);
@@ -47,46 +107,25 @@ impl Default for GenerationEventChannels {
     }
 }
 
-/// A little buffer for tracking all chunk loading tasks. We can use this to show some diagnostics and whatnot.
-/// Or gracefully handling shutdown.
-#[derive(Resource, Deref, DerefMut, Default)]
-pub struct ChunkLoadTasks(Vec<Task<()>>);
-
-/// A little buffer for tracking all chunk unloading tasks. Very similar to [`ChunkLoadTasks`].
-#[derive(Resource, Deref, DerefMut, Default)]
-pub struct ChunkPurgeTasks(Vec<Task<()>>);
-
-/// Handle incoming chunk loading events asynchronously by loading them on another thread in a
-/// bevy task (spawned in the [`AsyncComputeTaskPool`]). Tasks will send generation events as needed,
-/// which will be collected and forwarded to the bevy [`Events`] resource by [`handle_async_generation_events`]
+/// Handle incoming chunk loading events asynchronously by loading them on another thread.
+/// Tasks will send generation events as needed, which will be collected and
+/// forwarded to the bevy [`Events`] resource by [`handle_async_generation_events`]
 pub fn handle_chunk_load_events_asynchronously(
     cm: Res<ChunkManagerRes>,
     channels: Res<GenerationEventChannels>,
-    mut tasks: ResMut<ChunkLoadTasks>,
+    mut tasks: ResMut<ChunkLifecycleTasks>,
     mut incoming: ResMut<Events<LoadChunks>>,
+    mut task_event_sender: Local<Option<Sender<LoadChunks>>>,
     granularity: Res<ChunkLifecycleTaskLockGranularity>,
 ) {
     let granularity = granularity.0;
 
+    let event_sender = task_event_sender
+        .get_or_insert_with(|| tasks.init_load_task(cm.clone(), granularity, channels.tx.clone()));
+
     for event in incoming.update_drain() {
-        let cm = cm.clone();
-        let generate_chunks_tx = channels.tx.clone();
-
-        let task = AsyncComputeTaskPool::get().spawn(async move {
-            load_chunks_from_event(cm.as_ref(), event, &generate_chunks_tx, granularity);
-        });
-
-        tasks.push(task);
+        event_sender.send(event).unwrap();
     }
-}
-
-/// A system for removing chunk lifecycle tasks from their tracking pools.
-pub fn clear_chunk_lifecycle_task_pools(
-    mut load_tasks: ResMut<ChunkLoadTasks>,
-    mut purge_tasks: ResMut<ChunkPurgeTasks>,
-) {
-    load_tasks.retain(|task| !task.is_finished());
-    purge_tasks.retain(|task| !task.is_finished());
 }
 
 /// A system for handling asynchronous chunk generation events sent by chunk loading tasks.
@@ -103,19 +142,16 @@ pub fn handle_async_generation_events(
 /// Handles chunk unload events by asynchronously purging chunks as needed.
 pub fn handle_chunk_unload_events_asynchronously(
     cm: Res<ChunkManagerRes>,
-    mut tasks: ResMut<ChunkPurgeTasks>,
+    mut tasks: ResMut<ChunkLifecycleTasks>,
     mut incoming: ResMut<Events<UnloadChunks>>,
+    mut task_event_sender: Local<Option<Sender<UnloadChunks>>>,
     granularity: Res<ChunkLifecycleTaskLockGranularity>,
 ) {
     let granularity = granularity.0;
+    let event_sender =
+        task_event_sender.get_or_insert_with(|| tasks.init_purge_task(cm.clone(), granularity));
 
     for event in incoming.update_drain() {
-        let cm = cm.clone();
-
-        let task = AsyncComputeTaskPool::get().spawn(async move {
-            purge_chunks_from_event(cm.as_ref(), event, granularity);
-        });
-
-        tasks.push(task);
+        event_sender.send(event).unwrap();
     }
 }

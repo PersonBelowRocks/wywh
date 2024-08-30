@@ -11,9 +11,8 @@ use observer_events::{
 };
 
 use crate::topo::world::chunk_manager::ecs::{
-    clear_chunk_lifecycle_task_pools, handle_async_generation_events,
-    handle_chunk_load_events_asynchronously, handle_chunk_unload_events_asynchronously,
-    ChunkLoadTasks, ChunkPurgeTasks, GenerationEventChannels,
+    handle_async_generation_events, handle_chunk_load_events_asynchronously,
+    handle_chunk_unload_events_asynchronously, ChunkLifecycleTasks, GenerationEventChannels,
 };
 use crate::{CoreEngineSetup, EngineState};
 
@@ -300,8 +299,7 @@ impl Plugin for WorldController {
             .init_resource::<LoadshareProvider>()
             .init_resource::<VoxelWorldTick>()
             .init_resource::<CachedBatchMembership>()
-            .init_resource::<ChunkLoadTasks>()
-            .init_resource::<ChunkPurgeTasks>()
+            .init_resource::<ChunkLifecycleTasks>()
             .init_resource::<GenerationEventChannels>()
             .insert_resource(DEFAULT_LOCK_GRANULARITY)
             .add_event::<LoadChunks>()
@@ -325,7 +323,6 @@ impl Plugin for WorldController {
                 handle_chunk_load_events_asynchronously,
                 handle_chunk_unload_events_asynchronously,
                 handle_async_generation_events,
-                clear_chunk_lifecycle_task_pools,
                 // handle_chunk_loads_and_unloads.in_set(WorldControllerSystems::CoreEvents),
                 generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),
             ),

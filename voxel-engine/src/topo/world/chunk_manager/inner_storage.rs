@@ -59,14 +59,8 @@ impl InnerChunkStorage {
     }
 }
 
-fn recalculate_load_reasons_union(reasons: impl Iterator<Item = LoadReasons>) -> LoadReasons {
-    reasons
-        .reduce(|acc, reasons| acc.r#union(reasons))
-        .unwrap_or(LoadReasons::empty())
-}
-
 /// The internal chunk load task. Should be run in an async task to avoid blocking the whole app.
-#[inline]
+#[inline(never)] // never inline so we can easily find this function when debugging
 pub(super) fn load_chunks_from_event(
     cm: &ChunkManager,
     mut event: LoadChunks,
@@ -172,7 +166,7 @@ pub(super) fn load_chunks_from_event(
 }
 
 /// The internal chunk purge task. Should be run in an async task to avoid blocking the whole app.
-#[inline]
+#[inline(never)] // never inline so we can easily find this function when debugging
 pub(super) fn purge_chunks_from_event(
     cm: &ChunkManager,
     mut event: UnloadChunks,
