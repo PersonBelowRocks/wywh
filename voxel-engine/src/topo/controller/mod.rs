@@ -163,6 +163,7 @@ pub struct LoadshareId(u32);
 impl nohash::IsEnabled for LoadshareId {}
 
 pub type LoadshareMap<T> = hb::HashMap<LoadshareId, T, nohash::BuildNoHashHasher<LoadshareId>>;
+pub type LoadshareIdHasher = nohash::BuildNoHashHasher<LoadshareId>;
 
 /// Provides unique loadshare IDs. You can leak resources by getting a unique loadshare ID from the
 /// provider, allocating a resource under that loadshare, and forgetting or losing track of the ID.

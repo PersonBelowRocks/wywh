@@ -1,20 +1,23 @@
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 use bevy::math::{ivec3, IVec3};
-use dashmap::DashSet;
+use dashmap::{DashMap, DashSet};
 use error::{ChunkGetError, ChunkLoadError};
 use hb::{hash_map::Entry, HashMap};
-use inner_storage::{ChunkStorageHasher, InnerChunkStorage};
+use inner_storage::{ChunkStorageHasher, InnerChunkStorage, LoadedChunk};
 use itertools::Itertools;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, MutexGuard, RwLock};
 
 use crate::{
     data::registries::block::BlockVariantId,
     topo::{
-        controller::{LoadReasons, LoadshareId, LoadshareMap},
+        controller::{LoadReasons, LoadshareId, LoadshareIdHasher, LoadshareMap},
         neighbors::{Neighbors, NeighborsBuilder},
     },
-    util::{sync::LockStrategy, ChunkSet},
+    util::{
+        sync::{LockStrategy, StrategicWriteLock, StrategySyncError},
+        ChunkSet,
+    },
 };
 
 use super::{chunk::ChunkFlags, Chunk, ChunkPos, ChunkRef};
@@ -51,21 +54,65 @@ pub struct ChunkStatuses {
 
 /// The chunk manager stores and manages the lifecycle of chunks.
 pub struct ChunkManager2 {
-    pub(super) default_block: BlockVariantId,
-    pub(super) storage: InnerChunkStorage,
-    pub(super) statuses: ChunkStatuses,
-    pub(super) loadshares: ChunkLoadshareTable,
+    default_block: BlockVariantId,
+    storage: InnerChunkStorage,
+    statuses: ChunkStatuses,
+    loadshares: ChunkLoadshareTable,
+    structural_lock: Mutex<()>,
+}
+
+/// A "write" handle to the chunk manager, allowing for structural changes related to chunk lifecycle management.
+pub struct ChunkStorageStructure<'a> {
+    guard: MutexGuard<'a, ()>,
+    /// All loaded chunks.
+    pub loaded: &'a DashMap<ChunkPos, LoadedChunk, ChunkStorageHasher>,
+    /// A temporary stop for chunks before they are unloaded. Chunks in purgatory should not
+    /// be modified, but they may be revived and moved back to the loaded state.
+    pub purgatory: &'a DashMap<ChunkPos, Arc<Chunk>, ChunkStorageHasher>,
+    /// A map of all chunks and the loadshares they are loaded under with the reasons why.
+    pub loadshares_for_chunks: &'a DashMap<ChunkPos, ChunkLoadshares, ChunkStorageHasher>,
+    /// A map of all loadshares and the chunks they have loaded (for any reason).
+    pub chunks_for_loadshares: &'a DashMap<LoadshareId, ChunkSet, LoadshareIdHasher>,
 }
 
 impl ChunkManager2 {
     /// Create a new chunk manager with a default block.
     pub fn new(default_block: BlockVariantId) -> Self {
         Self {
+            structural_lock: Mutex::default(),
             default_block,
             storage: InnerChunkStorage::default(),
             statuses: ChunkStatuses::default(),
             loadshares: ChunkLoadshareTable::default(),
         }
+    }
+
+    /// Get a handle to perform structural changes to the chunk storage (i.e., loading and purging chunks).
+    /// Returns an error depending on the [locking strategy][].
+    ///
+    /// This is a very low-level API and should not be used outside of engine internals.
+    ///
+    /// [locking strategy]: LockStrategy
+    #[inline]
+    pub fn structural_access<F>(
+        &self,
+        strategy: LockStrategy,
+        callback: F,
+    ) -> Result<(), StrategySyncError>
+    where
+        F: for<'a> FnOnce(ChunkStorageStructure<'a>),
+    {
+        let guard = self.structural_lock.strategic_write(strategy)?;
+
+        callback(ChunkStorageStructure {
+            guard,
+            loaded: &self.storage.loaded,
+            purgatory: &self.storage.purgatory,
+            loadshares_for_chunks: &self.loadshares.loadshares_for_chunks,
+            chunks_for_loadshares: &self.loadshares.chunks_for_loadshares,
+        });
+
+        Ok(())
     }
 
     /// Whether the given chunk is loaded or not.
@@ -289,8 +336,7 @@ impl ChunkLoadshares {
 #[derive(Default)]
 pub struct ChunkLoadshareTable {
     /// A map of all chunks and the loadshares they are loaded under with the reasons why.
-    pub(super) loadshares_for_chunks:
-        RwLock<HashMap<ChunkPos, ChunkLoadshares, ChunkStorageHasher>>,
+    loadshares_for_chunks: DashMap<ChunkPos, ChunkLoadshares, ChunkStorageHasher>,
     /// A map of all loadshares and the chunks they have loaded (for any reason).
-    pub(super) chunks_for_loadshares: RwLock<LoadshareMap<ChunkSet>>,
+    chunks_for_loadshares: DashMap<LoadshareId, ChunkSet, LoadshareIdHasher>,
 }

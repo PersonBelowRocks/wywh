@@ -102,3 +102,21 @@ impl<T> StrategicWriteLock for parking_lot::RwLock<T> {
         }
     }
 }
+
+impl<T> StrategicWriteLock for parking_lot::Mutex<T> {
+    type WGuard<'a> = parking_lot::MutexGuard<'a, T> where T: 'a;
+
+    #[inline]
+    fn strategic_write(
+        &self,
+        strategy: LockStrategy,
+    ) -> Result<Self::WGuard<'_>, StrategySyncError> {
+        match strategy {
+            LockStrategy::Timeout(dur) => self
+                .try_lock_for(dur)
+                .ok_or(StrategySyncError::Timeout(dur)),
+            LockStrategy::Immediate => self.try_lock().ok_or(StrategySyncError::ImmediateFailure),
+            LockStrategy::Blocking => Ok(self.lock()),
+        }
+    }
+}
