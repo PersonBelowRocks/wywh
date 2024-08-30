@@ -1,5 +1,6 @@
 target
 renderdoc
 octo/octo-vtune
+.vtune
 
 Cargo.lock
