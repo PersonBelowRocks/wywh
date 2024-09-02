@@ -1,13 +1,11 @@
 //! Useful utilities to extend the functionality of bevy's default events.
-//! Simplifies the process of gathering results of tasks to use them in the
+//! Simplifies the process of gathering results of tasks to use them in the main world.
 
-use std::{
-    any::{type_name, TypeId},
-    marker::PhantomData,
-};
+use std::{any::type_name, marker::PhantomData};
 
+use bevy::ecs::event::EventUpdates;
 use bevy::prelude::*;
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::Sender;
 
 /// Plugin that adds the necessary infrastructure for funneling an event type.
 pub struct EventFunnelPlugin<E: Event + 'static> {
@@ -57,7 +55,7 @@ impl<E: Event> EventFunnel<E> {
 }
 
 impl<E: Event> EventFunnelPlugin<E> {
-    // TODO: order this after bevy's event update system
+    /// The system set for the collection system for this event's funnel.
     pub const COLLECTION_SYSTEM: FunnelCollectSystem<E> = FunnelCollectSystem::<E>(PhantomData);
 }
 
@@ -65,6 +63,11 @@ impl<E: Event> Plugin for EventFunnelPlugin<E> {
     fn build(&self, app: &mut App) {
         if !self.manual {
             app.add_event::<E>();
+        } else {
+            assert!(
+                app.world().contains_resource::<Events<E>>(),
+                "tried to add event funnel for existing event type, but the event type was not registered in the app's world"
+            );
         }
 
         let (tx, rx) = crossbeam::channel::unbounded::<E>();
@@ -74,7 +77,9 @@ impl<E: Event> Plugin for EventFunnelPlugin<E> {
         };
 
         app.insert_resource(EventFunnel { tx })
-            .add_systems(First, event_funnel_collect.in_set(Self::COLLECTION_SYSTEM));
+            .add_systems(First, event_funnel_collect.in_set(Self::COLLECTION_SYSTEM))
+            // need to collect events after we clear the old ones
+            .configure_sets(First, Self::COLLECTION_SYSTEM.after(EventUpdates));
     }
 }
 
@@ -87,7 +92,7 @@ mod funnel_system_label {
 
     use super::*;
 
-    /// The system set of the collection system for this event's funnel.
+    /// The system set for the collection system for this event's funnel.
     #[derive(derive_more::Debug, Copy, SystemSet)]
     pub struct FunnelCollectSystem<E: 'static>(#[debug(skip)] pub(crate) PhantomData<&'static E>);
 
