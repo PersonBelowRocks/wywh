@@ -61,11 +61,16 @@ impl<E: Event> EventFunnelPlugin<E> {
 
 impl<E: Event> Plugin for EventFunnelPlugin<E> {
     fn build(&self, app: &mut App) {
+        assert!(
+            app.world().contains_resource::<EventFunnel<E>>(),
+            "event funnel already exists for this event"
+        );
+
         if !self.manual {
             app.add_event::<E>();
         } else {
             assert!(
-                app.world().contains_resource::<Events<E>>(),
+                !app.world().contains_resource::<Events<E>>(),
                 "tried to add event funnel for existing event type, but the event type was not registered in the app's world"
             );
         }
