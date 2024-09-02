@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, time::Duration};
+use std::{any::type_name, marker::PhantomData, time::Duration};
 
 use bevy::prelude::*;
 use flume::{Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -33,6 +33,11 @@ impl<E: Event + 'static> AsyncEventWriter<E> {
     /// The number of events currently in the underlying channel.
     pub fn events(&self) -> usize {
         self.tx.len()
+    }
+
+    /// The number of receivers for this event.
+    pub fn receivers(&self) -> usize {
+        self.tx.receiver_count()
     }
 }
 
@@ -119,6 +124,18 @@ pub fn broadcast_async_events<E: Event>(
     tx: Res<AsyncEventWriter<E>>,
     mut events: ResMut<Events<E>>,
 ) {
+    if tx.receivers() == 1 {
+        warn!("Broadcasting event {} with only one receiver, which is likely the one in the main world. 
+            Events will leak unless they are processed elsewhere.", type_name::<E>());
+    }
+
+    if tx.receivers() == 0 {
+        warn!(
+            "Broadcasting event {} with no receiver, meaning the channel is likely closed.",
+            type_name::<E>()
+        );
+    }
+
     for event in events.update_drain() {
         tx.send(event).unwrap()
     }
