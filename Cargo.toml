@@ -7,7 +7,7 @@ members = [
     "mip-texture-array",
     "bevy_renderdoc",
     "octo",
-    "event-funnel"
+    "async-bevy-events"
 ]
 
 [workspace.dependencies]
