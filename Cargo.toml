@@ -6,7 +6,8 @@ members = [
     "voxel-engine",
     "mip-texture-array",
     "bevy_renderdoc",
-    "octo"
+    "octo",
+    "event-funnel"
 ]
 
 [workspace.dependencies]
