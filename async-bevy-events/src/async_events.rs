@@ -1,5 +1,6 @@
 use std::{any::type_name, marker::PhantomData, time::Duration};
 
+use bevy::ecs::event::EventUpdates;
 use bevy::prelude::*;
 use flume::{Receiver, RecvTimeoutError, Sender, TryRecvError};
 
@@ -113,6 +114,7 @@ impl<E: Event + 'static> Plugin for AsyncEventPlugin<E> {
         app.init_resource::<Events<E>>()
             .insert_resource(AsyncEventReader { rx })
             .insert_resource(AsyncEventWriter { tx })
+            .configure_sets(First, Self::BROADCAST_SYSTEM.in_set(EventUpdates))
             .add_systems(
                 First,
                 broadcast_async_events::<E>.in_set(Self::BROADCAST_SYSTEM),
@@ -125,8 +127,7 @@ pub fn broadcast_async_events<E: Event>(
     mut events: ResMut<Events<E>>,
 ) {
     if tx.receivers() == 1 {
-        warn!("Broadcasting event {} with only one receiver, which is likely the one in the main world. 
-            Events will leak unless they are processed elsewhere.", type_name::<E>());
+        warn!("Broadcasting event {} with only one receiver, which is likely the one in the main world.", type_name::<E>());
     }
 
     if tx.receivers() == 0 {
