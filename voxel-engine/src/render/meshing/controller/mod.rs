@@ -239,7 +239,7 @@ impl Plugin for MeshController {
 
         app.add_systems(
             OnEnter(EngineState::Finished),
-            setup_chunk_meshing_workers.after(CoreEngineSetup),
+            setup_chunk_meshing_workers.in_set(CoreEngineSetup::Initialize),
         );
 
         app.add_systems(

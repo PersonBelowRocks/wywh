@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{fmt, time::Duration};
 
 use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
@@ -11,15 +12,19 @@ use observer_events::{
     dispatch_move_events, generate_chunks_with_priority, update_observer_batches,
 };
 
+use crate::data::registries::block::BlockVariantRegistry;
+use crate::data::registries::{Registries, Registry};
+use crate::data::resourcepath::rpath;
 use crate::topo::world::chunk_manager::ecs::{
     start_async_chunk_load_task, start_async_chunk_purge_task,
 };
+use crate::topo::worldgen::ecs::setup_terrain_generator_workers;
 use crate::topo::worldgen::generator::GenerateChunk;
 use crate::{CoreEngineSetup, EngineState};
 
 use super::bounding_box::BoundingBox;
-use super::world::chunk_manager::ecs::ChunkLifecycleTaskLockGranularity;
-use super::world::ChunkPos;
+use super::world::chunk_manager::ecs::{ChunkLifecycleTaskLockGranularity, ChunkManagerRes};
+use super::world::{ChunkManager, ChunkPos};
 
 mod error;
 mod events;
@@ -314,15 +319,30 @@ impl Plugin for WorldController {
         .add_event::<RemoveBatchChunks>()
         .add_event::<RemovedBatchChunks>();
 
+        // We need to manually register the hooks in this world (the main world) only. Otherwise the hooks will run in the render
+        // world which 1. doesn't make any sense and 2. is impossible because the resources needed for the hooks to run
+        // aren't there.
+        let chunk_batch_hooks = app.world_mut().register_component_hooks::<ChunkBatch>();
+        ChunkBatch::manually_register_hooks(chunk_batch_hooks);
+
         app.observe(update_observer_batches)
             .observe(add_batch_chunks)
             .observe(remove_batch_chunks);
 
-        app.add_systems(Startup, setup_world_controller.in_set(CoreEngineSetup));
+        app.add_systems(
+            OnEnter(EngineState::Finished),
+            initialize_chunk_manager.in_set(CoreEngineSetup::InitializeChunkManager),
+        );
 
         app.add_systems(
             OnEnter(EngineState::Finished),
-            (start_async_chunk_load_task, start_async_chunk_purge_task),
+            (
+                start_async_chunk_load_task,
+                start_async_chunk_purge_task,
+                setup_terrain_generator_workers,
+            )
+                .chain()
+                .in_set(CoreEngineSetup::Initialize),
         );
 
         app.add_systems(
@@ -349,12 +369,18 @@ impl Plugin for WorldController {
     }
 }
 
-fn setup_world_controller(world: &mut World) {
-    // We need to manually register the hooks in this world only. Otherwise the hooks will run in the render
-    // world which 1. doesn't make any sense and 2. is impossible because the resources needed for the hooks to run
-    // aren't there.
-    let chunk_batch_hooks = world.register_component_hooks::<ChunkBatch>();
-    ChunkBatch::manually_register_hooks(chunk_batch_hooks);
+fn initialize_chunk_manager(world: &mut World) {
+    let chunk_manager = {
+        let registries = world.resource::<Registries>();
+        let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
+        let void = varreg
+            .get_id(&rpath(BlockVariantRegistry::RPATH_VOID))
+            .unwrap();
+
+        ChunkManager::new(void)
+    };
+
+    world.insert_resource(ChunkManagerRes(Arc::new(chunk_manager)));
 }
 
 #[cfg(test)]

@@ -84,7 +84,7 @@ fn main() {
             },
             FrameTimeDiagnosticsPlugin,
         ))
-        .add_systems(Startup, setup.after(CoreEngineSetup))
+        .add_systems(Startup, setup.after(CoreEngineSetup::Initialize))
         .add_systems(
             Update,
             (

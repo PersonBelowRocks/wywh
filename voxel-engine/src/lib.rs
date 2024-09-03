@@ -58,8 +58,12 @@ pub enum EngineState {
     Finished,
 }
 
-#[derive(Default, Copy, Clone, PartialEq, Eq, Hash, Debug, SystemSet)]
-pub struct CoreEngineSetup;
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, SystemSet)]
+pub enum CoreEngineSetup {
+    BuildRegistries,
+    InitializeChunkManager,
+    Initialize,
+}
 
 impl Plugin for VoxelPlugin {
     fn build(&self, app: &mut App) {
@@ -85,13 +89,21 @@ impl Plugin for VoxelPlugin {
         app.insert_resource(VariantFolders::new(self.variant_folders.clone()));
         app.insert_resource(GeneratorSeed(140));
 
+        app.configure_sets(
+            OnEnter(EngineState::Finished),
+            (
+                CoreEngineSetup::BuildRegistries,
+                CoreEngineSetup::InitializeChunkManager,
+                CoreEngineSetup::Initialize,
+            )
+                .chain(),
+        );
+
         app.add_systems(OnEnter(EngineState::Setup), load_textures);
         app.add_systems(Update, check_textures.run_if(in_state(EngineState::Setup)));
         app.add_systems(
             OnEnter(EngineState::Finished),
-            (build_registries, setup, setup_terrain_generator_workers)
-                .chain()
-                .in_set(CoreEngineSetup),
+            build_registries.in_set(CoreEngineSetup::BuildRegistries),
         );
 
         app.add_systems(
@@ -101,15 +113,4 @@ impl Plugin for VoxelPlugin {
                 .after(WorldControllerSystems::CoreEvents),
         );
     }
-}
-
-fn setup(mut cmds: Commands, registries: Res<Registries>) {
-    let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
-    let void = varreg
-        .get_id(&rpath(BlockVariantRegistry::RPATH_VOID))
-        .unwrap();
-
-    let chunk_manager = ChunkManager::new(void);
-
-    cmds.insert_resource(ChunkManagerRes(Arc::new(chunk_manager)));
 }
