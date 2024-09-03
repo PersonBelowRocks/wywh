@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::topo::world::chunk_manager::ChunkLoadResult;
 use crate::util::ChunkSet;
 use crate::{render::lod::LevelOfDetail, topo::world::ChunkPos};
 
@@ -35,6 +36,19 @@ pub struct LoadChunks {
 pub struct LoadedChunkEvent {
     pub chunk_pos: ChunkPos,
     pub auto_generate: bool,
+    pub load_result: ChunkLoadResult,
+}
+
+/// Event triggered when the load reasons for a chunk are updated.
+#[derive(Copy, Clone, Event, Debug)]
+pub struct LoadReasonsAddedEvent {
+    pub chunk_pos: ChunkPos,
+    /// The load reasons added to the chunk for this loadshare.
+    pub reasons_added: LoadReasons,
+    /// The load reasons' loadshare.
+    pub loadshare: LoadshareId,
+    /// Whether the chunk was just loaded and these load reasons were the ones first added.
+    pub was_loaded: bool,
 }
 
 /// This chunk should be unloaded for the given reasons.
@@ -47,13 +61,23 @@ pub struct UnloadChunks {
     pub chunks: Vec<ChunkPos>,
 }
 
-/// Event triggered when a chunk is unloaded. This event is "downstream" from [`UnloadChunksEvent`] in that
-/// `UnloadChunkEvent`'s handler system in the engine also triggers this event. But this event is dispatched
-/// AFTER a chunk is unloaded, whereas `UnloadChunkEvent` is dispatched TO UNLOAD a chunk.
-/// This event is not triggered when load reasons are updated, only when a chunk is unloaded from the manager.
+/// Event triggered when a chunk is purged. This event is "downstream" of the [`UnloadChunks`] event,
+/// because [`UnloadChunks`] events will lead to chunks being purged and this event being sent.
 #[derive(Copy, Clone, Event, Debug)]
-pub struct UnloadedChunkEvent {
+pub struct PurgedChunkEvent {
     pub chunk_pos: ChunkPos,
+}
+
+/// Event triggered when load reasons are removed from a chunk.
+#[derive(Copy, Clone, Event, Debug)]
+pub struct LoadReasonsRemovedEvent {
+    pub chunk_pos: ChunkPos,
+    /// The load reasons that were removed from the chunk for this loadshare.
+    pub reasons_removed: LoadReasons,
+    /// The loadshare that had load reasons removed.
+    pub loadshare: LoadshareId,
+    /// Whether the removal of the load reasons caused the chunk to be purged.
+    pub was_purged: bool,
 }
 
 #[derive(Clone, Event, Debug)]

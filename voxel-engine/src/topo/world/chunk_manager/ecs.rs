@@ -1,25 +1,33 @@
 use std::{sync::Arc, thread::JoinHandle};
 
+use async_bevy_events::{AsyncEventReader, EventFunnel};
 use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
 };
 use cb::channel::{Receiver, Sender};
-use hb::hash_map::Entry;
+use dashmap::mapref::entry::Entry;
 use itertools::Itertools;
 
 use parking_lot::lock_api::RwLockUpgradableReadGuard as ReadGuard;
 
-use crate::topo::{
-    controller::{LoadChunks, UnloadChunks},
-    world::{chunk::ChunkFlags, Chunk},
-    worldgen::{generator::GenerateChunk, GenerationPriority},
+use crate::{
+    topo::{
+        controller::{
+            LoadChunks, LoadReasons, LoadReasonsAddedEvent, LoadReasonsRemovedEvent,
+            LoadedChunkEvent, LoadshareId, PurgedChunkEvent, UnloadChunks,
+        },
+        world::{
+            chunk::ChunkFlags,
+            chunk_manager::{inner_storage::LoadedChunk, ChunkLoadshares},
+            Chunk, ChunkPos,
+        },
+        worldgen::{generator::GenerateChunk, GenerationPriority},
+    },
+    util::{sync::LockStrategy, ChunkSet},
 };
 
-use super::{
-    inner_storage::{load_chunks_from_event, purge_chunks_from_event},
-    ChunkManager,
-};
+use super::{ChunkManager, ChunkStorageStructure};
 
 /// The granularity of the lock in asynchronous chunk lifecycle tasks.
 /// Performance may be different with different values.
@@ -28,130 +36,199 @@ use super::{
 #[derive(Resource, Clone)]
 pub struct ChunkLifecycleTaskLockGranularity(pub usize);
 
-/// Tasks for managing the lifecycle of chunks, and channels to send commands to those tasks.
-#[derive(Resource, Default)]
-pub struct ChunkLifecycleTasks {
-    load: Option<JoinHandle<()>>,
-    purge: Option<JoinHandle<()>>,
-}
-
-impl ChunkLifecycleTasks {
-    /// Initialize and start the chunk loading task.
-    ///
-    /// # Panics
-    /// Will panic if the task is already initialized.
-    pub fn init_load_task(
-        &mut self,
-        cm: Arc<ChunkManager>,
-        granularity: usize,
-        generate_chunks_tx: Sender<GenerateChunk>,
-    ) -> Sender<LoadChunks> {
-        if self.load.is_some() {
-            panic!("Chunk loading task is already initialized");
-        }
-
-        let (tx, rx) = cb::channel::unbounded::<LoadChunks>();
-        let load_task_handle = std::thread::spawn(move || {
-            while let Ok(incoming) = rx.recv() {
-                load_chunks_from_event(cm.as_ref(), incoming, &generate_chunks_tx, granularity);
-            }
-        });
-
-        self.load = Some(load_task_handle);
-
-        tx
-    }
-
-    /// Initialize and start the chunk purging task.
-    ///
-    /// # Panics
-    /// Will panic if the task is already initialized.
-    pub fn init_purge_task(
-        &mut self,
-        cm: Arc<ChunkManager>,
-        granularity: usize,
-    ) -> Sender<UnloadChunks> {
-        if self.purge.is_some() {
-            panic!("Chunk purging task is already initialized");
-        }
-
-        let (tx, rx) = cb::channel::unbounded::<UnloadChunks>();
-        let purge_task_handle = std::thread::spawn(move || {
-            while let Ok(incoming) = rx.recv() {
-                purge_chunks_from_event(cm.as_ref(), incoming, granularity);
-            }
-        });
-
-        self.purge = Some(purge_task_handle);
-
-        tx
-    }
-}
-
 /// An ECS resource for the chunk manager.
 #[derive(Resource, Deref)]
 pub struct ChunkManagerRes(pub Arc<ChunkManager>);
 
-/// Channels for the chunk generation events, which are produced in an async task as events are processed.
-#[derive(Resource)]
-pub struct GenerationEventChannels {
-    pub tx: Sender<GenerateChunk>,
-    pub rx: Receiver<GenerateChunk>,
-}
-
-impl Default for GenerationEventChannels {
-    fn default() -> Self {
-        let (tx, rx) = cb::channel::unbounded();
-
-        Self { tx, rx }
-    }
-}
-
-/// Handle incoming chunk loading events asynchronously by loading them on another thread.
-/// Tasks will send generation events as needed, which will be collected and
-/// forwarded to the bevy [`Events`] resource by [`handle_async_generation_events`]
-pub fn handle_chunk_load_events_asynchronously(
-    cm: Res<ChunkManagerRes>,
-    channels: Res<GenerationEventChannels>,
-    mut tasks: ResMut<ChunkLifecycleTasks>,
-    mut incoming: ResMut<Events<LoadChunks>>,
-    mut task_event_sender: Local<Option<Sender<LoadChunks>>>,
-    granularity: Res<ChunkLifecycleTaskLockGranularity>,
+fn handle_load_chunk<'a>(
+    access: &ChunkStorageStructure<'a>,
+    chunk_manager: &ChunkManager,
+    loaded_chunk_funnel: &EventFunnel<LoadedChunkEvent>,
+    added_load_reasons_funnel: &EventFunnel<LoadReasonsAddedEvent>,
+    chunk_pos: ChunkPos,
+    load_reasons: LoadReasons,
+    loadshare: LoadshareId,
+    auto_generate: bool,
 ) {
-    let granularity = granularity.0;
+    if access.is_loaded(chunk_pos) {
+        access
+            .add_loadshare_load_reasons(chunk_pos, loadshare, load_reasons)
+            .unwrap();
 
-    let event_sender = task_event_sender
-        .get_or_insert_with(|| tasks.init_load_task(cm.clone(), granularity, channels.tx.clone()));
+        added_load_reasons_funnel
+            .send(LoadReasonsAddedEvent {
+                chunk_pos,
+                reasons_added: load_reasons,
+                loadshare: loadshare,
+                was_loaded: false,
+            })
+            .unwrap();
+    } else {
+        let result = access
+            .load_chunk(chunk_manager.new_primordial_chunk(chunk_pos))
+            .unwrap();
+        // Load reasons must be manually added
+        access
+            .add_loadshare_load_reasons(chunk_pos, loadshare, load_reasons)
+            .unwrap();
 
-    for event in incoming.update_drain() {
-        event_sender.send(event).unwrap();
+        added_load_reasons_funnel
+            .send(LoadReasonsAddedEvent {
+                chunk_pos,
+                reasons_added: load_reasons,
+                loadshare: loadshare,
+                // These load reasons caused the chunk to be loaded
+                was_loaded: true,
+            })
+            .unwrap();
+
+        loaded_chunk_funnel
+            .send(LoadedChunkEvent {
+                chunk_pos,
+                auto_generate: auto_generate,
+                load_result: result,
+            })
+            .unwrap();
     }
 }
 
-/// A system for handling asynchronous chunk generation events sent by chunk loading tasks.
-/// Pretty much just forwards the events to their bevy [`Events`] resource.
-pub fn handle_async_generation_events(
-    channels: Res<GenerationEventChannels>,
-    mut generation_events: EventWriter<GenerateChunk>,
+pub fn start_async_chunk_load_task(
+    load_chunks: Res<AsyncEventReader<LoadChunks>>,
+    loaded_chunk_funnel: Res<EventFunnel<LoadedChunkEvent>>,
+    added_load_reasons_funnel: Res<EventFunnel<LoadReasonsAddedEvent>>,
+    chunk_manager: Res<ChunkManagerRes>,
+    lock_granularity: Res<ChunkLifecycleTaskLockGranularity>,
 ) {
-    while let Ok(event) = channels.rx.try_recv() {
-        generation_events.send(event);
-    }
+    let lock_granularity = lock_granularity.0;
+    let chunk_manager = chunk_manager.clone();
+
+    let load_chunks = load_chunks.clone();
+    let loaded_chunk_funnel = loaded_chunk_funnel.clone();
+    let added_load_reasons_funnel = added_load_reasons_funnel.clone();
+
+    info!("Starting asynchronous chunk LOADING task. GRANULARITY={lock_granularity}");
+
+    AsyncComputeTaskPool::get()
+        .spawn(async move {
+            while let Ok(mut event) = load_chunks.recv_async().await {
+                // Don't do anything if there are no reasons. Chunks should never be loaded without any load reasons!
+                if event.reasons.is_empty() {
+                    return;
+                }
+
+                while !event.chunks.is_empty() {
+                    chunk_manager
+                        .structural_access(LockStrategy::Blocking, |access| {
+                            // We're coarsely locking here to give other tasks a chance to make changes to the chunk storage.
+                            for _ in 0..lock_granularity {
+                                let Some(chunk_pos) = event.chunks.pop() else {
+                                    break;
+                                };
+
+                                handle_load_chunk(
+                                    &access,
+                                    chunk_manager.as_ref(),
+                                    &loaded_chunk_funnel,
+                                    &added_load_reasons_funnel,
+                                    chunk_pos,
+                                    event.reasons,
+                                    event.loadshare,
+                                    event.auto_generate,
+                                );
+                            }
+                        })
+                        .unwrap();
+                }
+            }
+        })
+        .detach();
 }
 
-/// Handles chunk unload events by asynchronously purging chunks as needed.
-pub fn handle_chunk_unload_events_asynchronously(
-    cm: Res<ChunkManagerRes>,
-    mut tasks: ResMut<ChunkLifecycleTasks>,
-    mut incoming: ResMut<Events<UnloadChunks>>,
-    mut task_event_sender: Local<Option<Sender<UnloadChunks>>>,
-    granularity: Res<ChunkLifecycleTaskLockGranularity>,
+fn handle_purge_chunk<'a>(
+    access: &ChunkStorageStructure<'a>,
+    purged_chunk_funnel: &EventFunnel<PurgedChunkEvent>,
+    removed_load_reasons_funnel: &EventFunnel<LoadReasonsRemovedEvent>,
+    chunk_pos: ChunkPos,
+    remove_reasons: LoadReasons,
+    loadshare: LoadshareId,
 ) {
-    let granularity = granularity.0;
-    let event_sender =
-        task_event_sender.get_or_insert_with(|| tasks.init_purge_task(cm.clone(), granularity));
-
-    for event in incoming.update_drain() {
-        event_sender.send(event).unwrap();
+    if access
+        .remove_loadshare_load_reasons(chunk_pos, loadshare, remove_reasons)
+        .is_err()
+    {
+        return;
     }
+
+    let Ok(load_reasons_union) = access.load_reasons_union(chunk_pos) else {
+        return;
+    };
+
+    let mut was_purged = false;
+    if load_reasons_union.is_empty() {
+        access.purge_chunk(chunk_pos).unwrap();
+
+        purged_chunk_funnel
+            .send(PurgedChunkEvent { chunk_pos })
+            .unwrap();
+        was_purged = true;
+    }
+
+    removed_load_reasons_funnel
+        .send(LoadReasonsRemovedEvent {
+            chunk_pos,
+            reasons_removed: remove_reasons,
+            loadshare,
+            was_purged,
+        })
+        .unwrap();
+}
+
+pub fn start_async_chunk_purge_task(
+    unload_chunks: Res<AsyncEventReader<UnloadChunks>>,
+    purged_chunk_funnel: Res<EventFunnel<PurgedChunkEvent>>,
+    removed_load_reasons_funnel: Res<EventFunnel<LoadReasonsRemovedEvent>>,
+    chunk_manager: Res<ChunkManagerRes>,
+    lock_granularity: Res<ChunkLifecycleTaskLockGranularity>,
+) {
+    let lock_granularity = lock_granularity.0;
+    let chunk_manager = chunk_manager.clone();
+
+    let unload_chunks = unload_chunks.clone();
+    let purged_chunk_funnel = purged_chunk_funnel.clone();
+    let removed_load_reasons_funnel = removed_load_reasons_funnel.clone();
+
+    info!("Starting asynchronous chunk PURGING task. GRANULARITY={lock_granularity}");
+
+    AsyncComputeTaskPool::get()
+        .spawn(async move {
+            while let Ok(mut event) = unload_chunks.recv_async().await {
+                // Don't do anything if there are no reasons. Chunks should never be loaded without any load reasons!
+                if event.reasons.is_empty() {
+                    return;
+                }
+
+                while !event.chunks.is_empty() {
+                    chunk_manager
+                        .structural_access(LockStrategy::Blocking, |access| {
+                            // We're coarsely locking here to give other tasks a chance to make changes to the chunk storage.
+                            for _ in 0..lock_granularity {
+                                let Some(chunk_pos) = event.chunks.pop() else {
+                                    break;
+                                };
+
+                                handle_purge_chunk(
+                                    &access,
+                                    &purged_chunk_funnel,
+                                    &removed_load_reasons_funnel,
+                                    chunk_pos,
+                                    event.reasons,
+                                    event.loadshare,
+                                );
+                            }
+                        })
+                        .unwrap();
+                }
+            }
+        })
+        .detach();
 }

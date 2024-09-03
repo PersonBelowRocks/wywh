@@ -67,6 +67,22 @@ pub enum ChunkGetError {
 
 impl_oob_error!(ChunkGetError);
 
+#[derive(te::Error, Debug, Clone)]
+pub enum CmStructuralError {
+    /// This chunk is not loaded, so the operation cannot complete.
+    #[error("Chunk is not loaded")]
+    NotLoaded,
+    /// This chunk is loaded, but not in the loadshare, so the operation cannot complete.
+    #[error("Chunk is not in this loadshare")]
+    NotInLoadshare,
+    /// Attempted to load a chunk with no load reasons
+    #[error("No load reasons")]
+    NoLoadReasons,
+    /// This chunk is already loaded and cannot be loaded twice.
+    #[error("Chunk is already loaded")]
+    ChunkAlreadyLoaded,
+}
+
 /// General out of bounds error for chunks.
 /// See the `WORLD_HORIZONTAL_DIMENSIONS` and `WORLD_VERTICAL_DIMENSIONS` constants for more information.
 #[derive(te::Error, Debug, Clone, Deref, dm::Into)]

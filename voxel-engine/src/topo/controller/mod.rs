@@ -1,5 +1,6 @@
 use std::{fmt, time::Duration};
 
+use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
 use bevy::ecs::component::{ComponentHooks, StorageType};
 use bevy::math::ivec3;
 use bevy::prelude::*;
@@ -11,9 +12,9 @@ use observer_events::{
 };
 
 use crate::topo::world::chunk_manager::ecs::{
-    handle_async_generation_events, handle_chunk_load_events_asynchronously,
-    handle_chunk_unload_events_asynchronously, ChunkLifecycleTasks, GenerationEventChannels,
+    start_async_chunk_load_task, start_async_chunk_purge_task,
 };
+use crate::topo::worldgen::generator::GenerateChunk;
 use crate::{CoreEngineSetup, EngineState};
 
 use super::bounding_box::BoundingBox;
@@ -295,20 +296,23 @@ impl Plugin for WorldController {
     fn build(&self, app: &mut App) {
         info!("Initializing world controller");
 
-        app.insert_resource(self.settings)
-            .init_resource::<LoadshareProvider>()
-            .init_resource::<VoxelWorldTick>()
-            .init_resource::<CachedBatchMembership>()
-            .init_resource::<ChunkLifecycleTasks>()
-            .init_resource::<GenerationEventChannels>()
-            .insert_resource(DEFAULT_LOCK_GRANULARITY)
-            .add_event::<LoadChunks>()
-            .add_event::<LoadedChunkEvent>()
-            .add_event::<UnloadChunks>()
-            .add_event::<UnloadedChunkEvent>()
-            .add_event::<AddBatchChunks>()
-            .add_event::<RemoveBatchChunks>()
-            .add_event::<RemovedBatchChunks>();
+        app.add_plugins((
+            AsyncEventPlugin::<LoadChunks>::default(),
+            AsyncEventPlugin::<UnloadChunks>::default(),
+            EventFunnelPlugin::<LoadedChunkEvent>::for_new(),
+            EventFunnelPlugin::<PurgedChunkEvent>::for_new(),
+            EventFunnelPlugin::<LoadReasonsAddedEvent>::for_new(),
+            EventFunnelPlugin::<LoadReasonsRemovedEvent>::for_new(),
+        ))
+        .add_event::<GenerateChunk>()
+        .insert_resource(self.settings)
+        .init_resource::<LoadshareProvider>()
+        .init_resource::<VoxelWorldTick>()
+        .init_resource::<CachedBatchMembership>()
+        .insert_resource(DEFAULT_LOCK_GRANULARITY)
+        .add_event::<AddBatchChunks>()
+        .add_event::<RemoveBatchChunks>()
+        .add_event::<RemovedBatchChunks>();
 
         app.observe(update_observer_batches)
             .observe(add_batch_chunks)
@@ -317,12 +321,14 @@ impl Plugin for WorldController {
         app.add_systems(Startup, setup_world_controller.in_set(CoreEngineSetup));
 
         app.add_systems(
+            OnEnter(EngineState::Finished),
+            (start_async_chunk_load_task, start_async_chunk_purge_task),
+        );
+
+        app.add_systems(
             FixedPostUpdate,
             (
                 dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
-                handle_chunk_load_events_asynchronously,
-                handle_chunk_unload_events_asynchronously,
-                handle_async_generation_events,
                 // handle_chunk_loads_and_unloads.in_set(WorldControllerSystems::CoreEvents),
                 generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),
             ),

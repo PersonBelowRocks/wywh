@@ -1,8 +1,8 @@
 use std::{ops::Range, sync::Arc};
 
 use bevy::math::{ivec3, IVec3};
-use dashmap::{DashMap, DashSet};
-use error::{ChunkGetError, ChunkLoadError};
+use dashmap::{mapref::entry::Entry as DashMapEntry, DashMap, DashSet};
+use error::{ChunkGetError, ChunkLoadError, CmStructuralError};
 use hb::{hash_map::Entry, HashMap};
 use inner_storage::{ChunkStorageHasher, InnerChunkStorage, LoadedChunk};
 use itertools::Itertools;
@@ -74,6 +74,208 @@ pub struct ChunkStorageStructure<'a> {
     /// A map of all loadshares and the chunks they have loaded (for any reason).
     pub chunks_for_loadshares: &'a DashMap<LoadshareId, ChunkSet, LoadshareIdHasher>,
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Chunk Manager Structural Access
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Describes details of how a chunk was loaded
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ChunkLoadResult {
+    /// The chunk was revived from purgatory.
+    Revived,
+    /// The chunk was freshly loaded.
+    New,
+}
+
+impl<'a> ChunkStorageStructure<'a> {
+    /// Returns `true` if the chunk is present in [`Self::loaded`].
+    pub fn is_loaded(&self, chunk_pos: ChunkPos) -> bool {
+        self.loaded.contains_key(&chunk_pos)
+    }
+
+    /// Returns `true` if the chunk is present in [`Self::purgatory`].
+    pub fn is_purged(&self, chunk_pos: ChunkPos) -> bool {
+        self.purgatory.contains_key(&chunk_pos)
+    }
+
+    /// Get the union of all load reasons across all loadshares for this chunk.
+    /// If the result is empty (i.e., no load reasons), the chunk should be purged.
+    /// Returns [`CmStructuralError::NotLoaded`] if the chunk was not loaded.
+    pub fn load_reasons_union(
+        &self,
+        chunk_pos: ChunkPos,
+    ) -> Result<LoadReasons, CmStructuralError> {
+        self.loaded
+            .get(&chunk_pos)
+            .map(|loaded_chunk| loaded_chunk.cached_loadshare_reasons_union)
+            .ok_or(CmStructuralError::NotLoaded)
+    }
+
+    /// Place a chunk under a loadshare for the given `load_reasons`. This operates on already loaded chunks and will not load any chunk.
+    /// - If the chunk was loaded, but not under this loadshare, it will be placed under this loadshare for the given reasons.
+    /// - If the chunk was loaded under this loadshare, that loadshare's load reasons will have the given `load_reasons` added to them.
+    ///
+    /// Returns an error if:
+    /// - The chunk was not loaded
+    /// - The provided load reasons were empty.
+    pub fn add_loadshare_load_reasons(
+        &self,
+        chunk_pos: ChunkPos,
+        loadshare: LoadshareId,
+        load_reasons: LoadReasons,
+    ) -> Result<(), CmStructuralError> {
+        let mut loaded_chunk = self
+            .loaded
+            .get_mut(&chunk_pos)
+            .ok_or(CmStructuralError::NotLoaded)?;
+
+        if load_reasons.is_empty() {
+            return Err(CmStructuralError::NoLoadReasons);
+        }
+
+        // Add this loadshare to the chunk.
+        let loadshares = self
+            .loadshares_for_chunks
+            .entry(chunk_pos)
+            .and_modify(|loadshares| loadshares.insert(loadshare, load_reasons))
+            .or_insert(ChunkLoadshares::single(loadshare, load_reasons));
+
+        // Update the cached load reasons.
+        let load_reasons = loadshares.load_reasons_union();
+        loaded_chunk.cached_loadshare_reasons_union = load_reasons;
+
+        // Add this chunk to the loadshare.
+        self.chunks_for_loadshares
+            .entry(loadshare)
+            .and_modify(|chunks| {
+                chunks.set(chunk_pos);
+            })
+            .or_insert_with(|| ChunkSet::single(chunk_pos));
+
+        Ok(())
+    }
+
+    /// Remove the given `load_reasons` from a loadshare's load reasons for a chunk.
+    /// If the loadshare has no load reasons for this chunk after the given `load_reasons` were removed, the chunk is removed from that loadshare.
+    /// Returns an error if:
+    /// - The chunk was not loaded under at all
+    /// - The chunk was not loaded under the given loadshare
+    /// - The provided load reasons were empty
+    ///
+    /// # Important
+    /// If the union of all load reasons for this chunk is empty, the chunk must be purged. Callers must do this manually after running this function.
+    pub fn remove_loadshare_load_reasons(
+        &self,
+        chunk_pos: ChunkPos,
+        loadshare: LoadshareId,
+        load_reasons: LoadReasons,
+    ) -> Result<(), CmStructuralError> {
+        let mut loaded_chunk = self
+            .loaded
+            .get_mut(&chunk_pos)
+            .ok_or(CmStructuralError::NotLoaded)?;
+
+        // We're not adding any new load reasons so we can skip everything else.
+        if load_reasons.is_empty() {
+            return Err(CmStructuralError::NoLoadReasons);
+        }
+
+        // If a chunk is loaded it must be loaded under at least one loadshare.
+        let mut loadshares = self
+            .loadshares_for_chunks
+            .get_mut(&chunk_pos)
+            .ok_or(CmStructuralError::NotInLoadshare)?;
+
+        let result = loadshares.remove(loadshare, load_reasons);
+        if result == LoadshareRemovalResult::LoadshareRemoved {
+            if let DashMapEntry::Occupied(mut entry) = self.chunks_for_loadshares.entry(loadshare) {
+                entry.get_mut().remove(chunk_pos);
+                // If there are no more chunks loaded under this loadshare, then just remove the whole loadshare.
+                if entry.get_mut().is_empty() {
+                    entry.remove();
+                }
+            }
+        } else if result == LoadshareRemovalResult::NoLoadshare {
+            return Err(CmStructuralError::NotInLoadshare);
+        }
+
+        let cached_load_reasons = loadshares.load_reasons_union();
+        loaded_chunk.cached_loadshare_reasons_union = cached_load_reasons;
+
+        Ok(())
+    }
+
+    /// Load or revive a chunk. Returns [`ChunkLoadResult`] which indicates if the chunk was revived or loaded.
+    /// Returns an error if the chunk was already loaded.
+    /// The loaded chunk will have no load reasons and will not be under any loadshares, it's up to the caller to sort this out after calling this function.
+    /// Chunks should not remain loaded without loadshares and/or load reasons.
+    pub fn load_chunk(&self, chunk: Chunk) -> Result<ChunkLoadResult, CmStructuralError> {
+        if self.loaded.contains_key(&chunk.chunk_pos()) {
+            return Err(CmStructuralError::ChunkAlreadyLoaded);
+        }
+
+        let mut result = ChunkLoadResult::New;
+
+        // Revive the chunk from purgatory if possible, otherwise create a new one.
+        // FIXME: it seems that reviving a chunk doesn't play nicely with meshes, we
+        //  should probably handle this a bit more elegantly
+        let chunk = self
+            .purgatory
+            .remove(&chunk.chunk_pos())
+            .inspect(|_| result = ChunkLoadResult::Revived)
+            .unwrap_or_else(|| (chunk.chunk_pos(), Arc::new(chunk)))
+            .1;
+
+        self.loaded.insert(
+            chunk.chunk_pos(),
+            LoadedChunk {
+                chunk,
+                // Caller must set load reasons manually
+                cached_loadshare_reasons_union: LoadReasons::empty(),
+            },
+        );
+
+        Ok(result)
+    }
+
+    /// Purge a chunk. Returns [`CmStructuralError::NotLoaded`] if the chunk was not loaded or was already purged.
+    /// Will wipe this chunk from all loadshares.
+    pub fn purge_chunk(&self, chunk_pos: ChunkPos) -> Result<(), CmStructuralError> {
+        let purged_chunk = self
+            .loaded
+            .remove(&chunk_pos)
+            .ok_or(CmStructuralError::NotLoaded)?
+            .1;
+
+        // Remove this chunk from all loadshares
+        self.loadshares_for_chunks
+            .remove(&chunk_pos)
+            .map(|(_, loadshares)| {
+                for loadshare in loadshares.iter_loadshares() {
+                    let DashMapEntry::Occupied(mut entry) =
+                        self.chunks_for_loadshares.entry(loadshare)
+                    else {
+                        continue;
+                    };
+
+                    // Remove this chunk from this loadshare, and if there are no more chunks in the loadshare, remove the entire loadshare.
+                    entry.get_mut().remove(chunk_pos);
+                    if entry.get().is_empty() {
+                        entry.remove();
+                    }
+                }
+            });
+
+        self.purgatory.insert(chunk_pos, purged_chunk.chunk);
+
+        Ok(())
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Chunk Manager
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 impl ChunkManager {
     /// Create a new chunk manager with a default block.
@@ -259,6 +461,18 @@ impl ChunkLoadshares {
     #[inline]
     pub fn is_empty(&self) -> bool {
         matches!(self.0, ChunkLoadsharesInner::Empty)
+    }
+
+    /// Iterate through all the loadshares.
+    #[inline]
+    pub fn iter_loadshares(&self) -> impl Iterator<Item = LoadshareId> {
+        match &self.0 {
+            ChunkLoadsharesInner::Empty => Vec::new().into_iter(),
+            ChunkLoadsharesInner::Single { loadshare, .. } => {
+                Vec::from_iter([*loadshare]).into_iter()
+            }
+            ChunkLoadsharesInner::Many(map) => map.keys().cloned().collect_vec().into_iter(),
+        }
     }
 
     /// Get the union of all the load reasons.

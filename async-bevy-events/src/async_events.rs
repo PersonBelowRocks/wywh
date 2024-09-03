@@ -67,6 +67,13 @@ impl<E: Event> AsyncEventReader<E> {
         })
     }
 
+    pub async fn recv_async(&self) -> Result<E, AsyncRecvError> {
+        self.rx
+            .recv_async()
+            .await
+            .map_err(|_| AsyncRecvError::ChannelClosed)
+    }
+
     /// The number of events currently in the underlying channel.
     pub fn events(&self) -> usize {
         self.rx.len()
@@ -86,6 +93,14 @@ impl<E: Event> AsyncEventReader<E> {
 /// [EventWriter]: bevy::prelude::EventWriter
 pub struct AsyncEventPlugin<E: 'static + Event> {
     _event_type: PhantomData<&'static E>,
+}
+
+impl<E: 'static + Event> Default for AsyncEventPlugin<E> {
+    fn default() -> Self {
+        Self {
+            _event_type: PhantomData,
+        }
+    }
 }
 
 impl<E: Event> AsyncEventPlugin<E> {
