@@ -8,7 +8,6 @@ pub mod error;
 pub mod neighbors;
 pub mod transformations;
 pub mod world;
-pub mod worldgen;
 
 pub use transformations::*;
 

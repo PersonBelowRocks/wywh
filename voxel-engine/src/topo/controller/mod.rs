@@ -8,9 +8,7 @@ use bevy::prelude::*;
 use bitflags::bitflags;
 use hb::HashSet;
 
-use observer_events::{
-    dispatch_move_events, generate_chunks_with_priority, update_observer_batches,
-};
+use observer_events::{dispatch_move_events, update_observer_batches};
 
 use crate::data::registries::block::BlockVariantRegistry;
 use crate::data::registries::{Registries, Registry};
@@ -18,8 +16,6 @@ use crate::data::resourcepath::rpath;
 use crate::topo::world::chunk_manager::ecs::{
     start_async_chunk_load_task, start_async_chunk_purge_task,
 };
-use crate::topo::worldgen::ecs::setup_terrain_generator_workers;
-use crate::topo::worldgen::generator::GenerateChunk;
 use crate::{CoreEngineSetup, EngineState};
 
 use super::bounding_box::BoundingBox;
@@ -28,7 +24,6 @@ use super::world::{ChunkManager, ChunkPos};
 
 mod error;
 mod events;
-mod handle_events;
 mod observer_events;
 pub use events::*;
 
@@ -309,7 +304,6 @@ impl Plugin for WorldController {
             EventFunnelPlugin::<LoadReasonsAddedEvent>::for_new(),
             EventFunnelPlugin::<LoadReasonsRemovedEvent>::for_new(),
         ))
-        .add_event::<GenerateChunk>()
         .insert_resource(self.settings)
         .init_resource::<LoadshareProvider>()
         .init_resource::<VoxelWorldTick>()
@@ -336,22 +330,14 @@ impl Plugin for WorldController {
 
         app.add_systems(
             OnEnter(EngineState::Finished),
-            (
-                start_async_chunk_load_task,
-                start_async_chunk_purge_task,
-                setup_terrain_generator_workers,
-            )
+            (start_async_chunk_load_task, start_async_chunk_purge_task)
                 .chain()
                 .in_set(CoreEngineSetup::Initialize),
         );
 
         app.add_systems(
             FixedPostUpdate,
-            (
-                dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
-                // handle_chunk_loads_and_unloads.in_set(WorldControllerSystems::CoreEvents),
-                generate_chunks_with_priority.after(WorldControllerSystems::CoreEvents),
-            ),
+            (dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),),
         );
 
         app.add_systems(FixedLast, increase_voxel_world_tick);

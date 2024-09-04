@@ -95,4 +95,12 @@ pub struct RemovedBatchChunks {
 
 #[derive(Clone, Event, Debug)]
 pub struct AddBatch(pub Option<LevelOfDetail>);
+
 // TODO: loadshare remove event
+
+// TODO: docs
+#[derive(Clone, Event, Debug)]
+pub struct PopulateChunkEvent {
+    pub chunk_pos: ChunkPos,
+    pub priority: u32,
+}

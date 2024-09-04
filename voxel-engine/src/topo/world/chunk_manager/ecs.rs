@@ -22,7 +22,6 @@ use crate::{
             chunk_manager::{inner_storage::LoadedChunk, ChunkLoadshares},
             Chunk, ChunkPos,
         },
-        worldgen::{generator::GenerateChunk, GenerationPriority},
     },
     util::{sync::LockStrategy, ChunkSet},
 };

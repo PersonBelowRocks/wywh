@@ -15,7 +15,6 @@ use crate::{
             chunk_manager::{chunk_pos_in_bounds, LoadshareRemovalResult},
             Chunk, ChunkPos,
         },
-        worldgen::{generator::GenerateChunk, GenerationPriority},
     },
     util::{sync::LockStrategy, ChunkSet},
 };

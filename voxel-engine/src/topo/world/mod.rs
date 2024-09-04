@@ -1,5 +1,6 @@
 pub mod chunk;
 pub mod chunk_manager;
+pub mod chunk_populator;
 pub mod chunk_ref;
 pub mod error;
 pub mod realm;

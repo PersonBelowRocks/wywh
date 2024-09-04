@@ -1,10 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    topo::{
-        world::{Chunk, ChunkPos},
-        worldgen::{generator::GenerateChunk, GenerationPriority},
-    },
+    topo::world::{Chunk, ChunkPos},
     util::{ws_to_chunk_pos, ChunkSet},
 };
 
@@ -164,46 +161,4 @@ pub fn update_observer_batches(
     if !update_cached_flags.is_empty() {
         cmds.trigger(UpdateCachedChunkFlags(update_cached_flags));
     }
-}
-
-fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> GenerationPriority {
-    const CHUNK_SIZE_F32: f32 = Chunk::SIZE as f32;
-    const CHUNK_SIZE_DIV2: f32 = CHUNK_SIZE_F32 / 2.0;
-
-    let chunk_center = (chunk_pos.as_vec3() * CHUNK_SIZE_F32) + Vec3::splat(CHUNK_SIZE_DIV2);
-
-    let distance_sq = chunk_center.distance_squared(trans.translation);
-    let distance_sq_int = distance_sq.clamp(0.0, u32::MAX as _) as u32;
-
-    GenerationPriority::new(distance_sq_int)
-}
-
-pub fn generate_chunks_with_priority(
-    observers: Query<&Transform, With<ObserverSettings>>,
-    mut loaded_chunks: EventReader<LoadedChunkEvent>,
-    mut generation_events: EventWriter<GenerateChunk>,
-) {
-    let mut chunks_to_gen = ChunkSet::default();
-
-    // We only care about auto_generate chunks
-    for chunk in loaded_chunks.read() {
-        if chunk.auto_generate {
-            chunks_to_gen.set(chunk.chunk_pos);
-        }
-    }
-
-    generation_events.send_batch(chunks_to_gen.iter().map(|chunk_pos| {
-        // Calculate priority based on distance to nearest observer, if there's no observers we use
-        // the lowest priority.
-        let priority = observers
-            .iter()
-            .map(|trans| calculate_priority(trans, chunk_pos))
-            .max()
-            .unwrap_or(GenerationPriority::LOWEST);
-
-        GenerateChunk {
-            chunk_pos,
-            priority,
-        }
-    }));
 }

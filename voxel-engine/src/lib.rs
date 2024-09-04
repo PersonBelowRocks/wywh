@@ -36,10 +36,6 @@ pub mod util;
 use crate::{
     data::systems::{build_registries, check_textures, load_textures, VariantFolders},
     render::{core::RenderCore, meshing::controller::MeshController},
-    topo::worldgen::{
-        ecs::{generate_chunks_from_events, setup_terrain_generator_workers, GeneratorSeed},
-        generator::GenerateChunk,
-    },
 };
 
 #[derive(Default)]
@@ -83,11 +79,9 @@ impl Plugin for VoxelPlugin {
         });
         app.add_plugins(MippedArrayTexturePlugin::default());
 
-        app.add_event::<GenerateChunk>();
         app.init_state::<EngineState>();
 
         app.insert_resource(VariantFolders::new(self.variant_folders.clone()));
-        app.insert_resource(GeneratorSeed(140));
 
         app.configure_sets(
             OnEnter(EngineState::Finished),
@@ -104,13 +98,6 @@ impl Plugin for VoxelPlugin {
         app.add_systems(
             OnEnter(EngineState::Finished),
             build_registries.in_set(CoreEngineSetup::BuildRegistries),
-        );
-
-        app.add_systems(
-            FixedPostUpdate,
-            generate_chunks_from_events
-                .run_if(in_state(EngineState::Finished))
-                .after(WorldControllerSystems::CoreEvents),
         );
     }
 }
