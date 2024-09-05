@@ -10,9 +10,6 @@ homepage = "https://github.com/pramberg/bevy_renderdoc"
 repository = "https://github.com/pramberg/bevy_renderdoc"
 
 [dependencies]
-bevy = {workspace = true}
+bevy.workspace = true
 renderdoc = "0.12.1"
 sysinfo = "0.30.12"
-
-[dev-dependencies]
-bevy = {workspace = true}

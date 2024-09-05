@@ -4,7 +4,7 @@ use ordered_float::{FloatIsNan, NotNan};
 #[derive(
     Copy, Clone, Hash, PartialEq, Eq, Debug, dm::Display, serde::Deserialize, serde::Serialize,
 )]
-#[display(fmt = "{}", "self.vec()")]
+#[display("{}", "self.vec()")]
 pub struct NotNanVec2 {
     pub x: NotNan<f32>,
     pub y: NotNan<f32>,

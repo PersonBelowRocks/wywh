@@ -12,7 +12,7 @@ use bevy::{
     log::{error, warn},
     tasks::{block_on, futures_lite::future, Task, TaskPool},
 };
-use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TrySendError};
+use flume::{Receiver, RecvTimeoutError, Sender, TrySendError};
 
 use crate::{
     data::registries::Registries,
@@ -172,8 +172,8 @@ impl MeshBuilder {
         cm: Arc<ChunkManager>,
     ) -> Self {
         let (cmd_sender, cmd_recver) =
-            channel::bounded::<MeshBuilderCommand>(settings.job_channel_capacity);
-        let (mesh_sender, mesh_recver) = channel::unbounded::<FinishedChunkMeshData>();
+            flume::bounded::<MeshBuilderCommand>(settings.job_channel_capacity);
+        let (mesh_sender, mesh_recver) = flume::unbounded::<FinishedChunkMeshData>();
         let mut workers = Vec::<Worker>::with_capacity(settings.workers);
 
         let default_channel_timeout_duration = Duration::from_millis(50);

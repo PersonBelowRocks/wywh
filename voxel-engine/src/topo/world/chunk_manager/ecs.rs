@@ -5,8 +5,8 @@ use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
 };
-use cb::channel::{Receiver, Sender};
 use dashmap::mapref::entry::Entry;
+use flume::{Receiver, Sender};
 use itertools::Itertools;
 
 use parking_lot::lock_api::RwLockUpgradableReadGuard as ReadGuard;

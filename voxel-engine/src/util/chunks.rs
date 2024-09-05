@@ -212,7 +212,7 @@ impl<T> SyncChunkMap<T> {
         self.0.insert(pos, data)
     }
 
-    pub fn get(&self, pos: ChunkPos) -> Option<DashMapRef<ChunkPos, T, ahash::RandomState>> {
+    pub fn get(&self, pos: ChunkPos) -> Option<DashMapRef<ChunkPos, T>> {
         self.0.get(&pos)
     }
 
@@ -224,7 +224,7 @@ impl<T> SyncChunkMap<T> {
         self.0.contains_key(&pos)
     }
 
-    pub fn entry(&self, pos: ChunkPos) -> DashMapEntry<'_, ChunkPos, T, ahash::RandomState> {
+    pub fn entry(&self, pos: ChunkPos) -> DashMapEntry<'_, ChunkPos, T> {
         self.0.entry(pos)
     }
 

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = {workspace = true}
-crossbeam = {workspace = true}
-voxel-engine = {path = "../voxel-engine"}
-bevy_renderdoc = {path = "../bevy_renderdoc"}
+bevy.workspace = true
+flume.workspace = true
+voxel-engine.workspace = true
+bevy_renderdoc.workspace = true

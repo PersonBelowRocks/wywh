@@ -143,8 +143,8 @@ pub fn batch_chunk_extraction(
 }
 
 pub struct UpdateDetectionRemeshResults {
-    primary: hb::HashSet<ChunkPos, fxhash::FxBuildHasher>,
-    neighbors: hb::HashSet<ChunkPos, fxhash::FxBuildHasher>,
+    primary: hb::HashSet<ChunkPos, rustc_hash::FxBuildHasher>,
+    neighbors: hb::HashSet<ChunkPos, rustc_hash::FxBuildHasher>,
 }
 
 /// This system tracks updates in the voxel realm and dispatches remesh events accordingly.
@@ -172,8 +172,8 @@ pub fn voxel_realm_remesh_updated_chunks(
     }
 
     // We need this to keep track of queued chunks, we don't want to queue chunks for remeshing twice!
-    let mut queued_primary = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
-    let mut queued_neighbors = hb::HashSet::<ChunkPos, fxhash::FxBuildHasher>::default();
+    let mut queued_primary = hb::HashSet::<ChunkPos, rustc_hash::FxBuildHasher>::default();
+    let mut queued_neighbors = hb::HashSet::<ChunkPos, rustc_hash::FxBuildHasher>::default();
 
     let remesh = cm.remesh_chunks();
 

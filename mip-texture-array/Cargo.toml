@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = {workspace = true}
-thiserror = "1.0.57"
+bevy.workspace = true
+thiserror.workspace = true
 uuid = "1.8.0"

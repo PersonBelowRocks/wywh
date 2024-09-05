@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_bevy_events::EventFunnel;
-use cb::channel::Sender;
 use dashmap::{mapref::entry::Entry, DashMap};
 use parking_lot::{Mutex, MutexGuard, RwLock};
 
@@ -22,7 +21,7 @@ use crate::{
 use super::{ChunkLoadshares, ChunkManager};
 
 /// The hash function used for chunk storage
-pub type ChunkStorageHasher = fxhash::FxBuildHasher;
+pub type ChunkStorageHasher = rustc_hash::FxBuildHasher;
 
 #[derive(Clone)]
 pub struct LoadedChunk {

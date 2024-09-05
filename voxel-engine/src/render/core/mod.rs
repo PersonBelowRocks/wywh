@@ -13,6 +13,7 @@ mod shaders;
 mod utils;
 mod views;
 
+use flume::Receiver;
 pub use occlusion::hzb::ChunkHzbOcclusionCulling;
 
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
@@ -43,7 +44,6 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use cb::channel::Receiver;
 use chunk_batches::{extract_batches_with_lods, initialize_and_queue_batch_buffers};
 use commands::DrawDeferredBatch;
 use gpu_chunk::{

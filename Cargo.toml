@@ -11,9 +11,24 @@ members = [
 ]
 
 [workspace.dependencies]
-# bevy = {git = "https://github.com/bevyengine/bevy.git", rev = "2c7eab1b4c4ec6c533b6b609d5ddf8a7282f2c4f"}
+# Workspace crates
+async-bevy-events.path = "./async-bevy-events"
+bevy_renderdoc.path = "./bevy_renderdoc"
+octo.path = "./octo"
+voxel-engine.path = "./voxel-engine"
+mip-texture-array.path = "./mip-texture-array"
+
+# Regular dependencies
 bevy = "0.14.1"
-crossbeam = "0.8.2"
+flume = "0.11.0"
+thiserror = "1.0.63"
+dashmap = "6.1.0"
+static_assertions = "1.1.0"
+parking_lot = "0.12.3"
+
+[workspace.dependencies.derive_more]
+version = "1.0.0"
+features = ["full"]
 
 [profile.release]
 opt-level = 2

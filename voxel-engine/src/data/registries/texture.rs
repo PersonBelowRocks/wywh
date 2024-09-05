@@ -214,7 +214,7 @@ impl<'a> TextureRegistryEntry<'a> {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, dm::Display)]
-#[display(fmt="[texture:{:08}]", self.0)]
+#[display("[texture:{:08}]", self.0)]
 pub struct TextureId(u32);
 
 impl TextureId {

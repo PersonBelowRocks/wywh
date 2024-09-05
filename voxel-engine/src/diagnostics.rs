@@ -7,7 +7,7 @@ use bevy::{
     prelude::*,
     render::RenderApp,
 };
-use cb::channel::*;
+use flume::{Receiver, Sender};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum DiagRecStatus {
@@ -85,7 +85,7 @@ fn create_channels(paths: &[DiagnosticPath]) -> (DiagnosticsTx, DiagnosticsRx) {
     let mut receivers = Vec::new();
 
     for path in paths {
-        let (tx, rx) = bounded::<DiagnosticMeasurement>(1);
+        let (tx, rx) = flume::bounded::<DiagnosticMeasurement>(1);
 
         senders.push((path.clone(), tx));
         receivers.push((path.clone(), rx));

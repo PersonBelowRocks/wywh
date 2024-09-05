@@ -20,8 +20,8 @@ use bevy::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use bevy_renderdoc::RenderDocPlugin;
-use crossbeam::channel::{self, Sender};
 use debug_info::{DebugText, FpsText};
+use flume::Sender;
 use ve::render::core::RenderCoreDebug;
 use ve::render::lod::LevelOfDetail;
 use ve::render::ChunkHzbOcclusionCulling;
@@ -42,8 +42,8 @@ fn main() {
         env::current_dir().unwrap().to_string_lossy()
     );
 
-    let (ci_tx, ci_rx) = channel::unbounded::<()>();
-    let (insp_tx, insp_rx) = channel::unbounded::<ChunkPos>();
+    let (ci_tx, ci_rx) = flume::unbounded::<()>();
+    let (insp_tx, insp_rx) = flume::unbounded::<ChunkPos>();
 
     App::new()
         .insert_resource(RenderCoreDebugSender {

@@ -187,7 +187,7 @@ pub struct BlockOptions {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, dm::Display)]
-#[display(fmt="[block_variant:{:08}]", self.0)]
+#[display("[block_variant:{:08}]", self.0)]
 pub struct BlockVariantId(u32);
 
 impl BlockVariantId {
