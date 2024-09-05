@@ -10,19 +10,11 @@ extern crate num_derive;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use bevy::prelude::*;
-use data::{
-    registries::{block::BlockVariantRegistry, Registries, Registry},
-    resourcepath::rpath,
-};
 use diagnostics::VoxelEngineDiagnosticsPlugin;
 use mip_texture_array::MippedArrayTexturePlugin;
 
 use render::core::RenderCoreDebug;
-use topo::{
-    block::FullBlock,
-    controller::{WorldController, WorldControllerSettings, WorldControllerSystems},
-    world::{chunk_manager::ecs::ChunkManagerRes, ChunkManager},
-};
+use topo::controller::{WorldController, WorldControllerSettings};
 
 pub mod data;
 pub mod diagnostics;

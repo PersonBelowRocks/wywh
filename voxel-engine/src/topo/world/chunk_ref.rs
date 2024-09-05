@@ -1,17 +1,9 @@
-use bevy::{ecs::entity::Entity, math::UVec3, prelude::IVec3};
-use parking_lot::RwLockReadGuard;
 use std::ops::Deref;
-use std::{hash::BuildHasher, sync::Arc};
+use std::sync::Arc;
 
 use super::chunk::{Chunk, ChunkFlags, ChunkPos};
 use super::chunk_manager::ChunkStatuses;
-use crate::{
-    topo::{
-        block::{BlockVoxel, FullBlock, Microblock, SubdividedBlock},
-        controller::LoadReasons,
-    },
-    util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError},
-};
+use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
 
 macro_rules! update_status_for_flag {
     ($field:expr, $chunk_pos:expr, $new_flags:expr, $flag:expr) => {

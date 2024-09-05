@@ -1,10 +1,9 @@
-use hashbrown::{HashMap, HashSet, HashTable};
+use hashbrown::HashMap;
 use nda::Array3;
 use smallvec::SmallVec;
 use std::any::type_name;
 use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T1};
 use std::fmt::{Debug, Formatter};
-use std::hash::BuildHasher;
 use std::marker::PhantomData;
 use std::mem;
 

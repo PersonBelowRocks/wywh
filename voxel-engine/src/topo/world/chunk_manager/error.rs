@@ -1,6 +1,6 @@
 use bevy::prelude::Deref;
 
-use crate::{data::error, topo::world::ChunkPos};
+use crate::topo::world::ChunkPos;
 
 /// Implement an `out_of_bounds` function for this type to easily create an out-of-bounds error from
 /// a chunk position. The target type must be an enum with a variant called `OutOfBounds` with a field of

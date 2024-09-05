@@ -1,18 +1,15 @@
-use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use bevy::prelude::*;
 
-use bevy::tasks::{available_parallelism, futures_lite, Task, TaskPool, TaskPoolBuilder};
+use bevy::tasks::{available_parallelism, Task, TaskPool, TaskPoolBuilder};
 use futures_util::future::join_all;
-use indexmap::{IndexMap, IndexSet};
 use parking_lot::Mutex;
 use priority_queue::PriorityQueue;
 
-use crate::topo::world::chunk_manager::ecs::ChunkManagerRes;
-use crate::topo::world::{ChunkManager, ChunkPos, VoxelRealm};
+use crate::topo::world::ChunkPos;
 
 /// The name of the threads in the worldgen task pool.
 /// See [`TaskPoolBuilder::thread_name()`] for some more information.

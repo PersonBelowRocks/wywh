@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 
 use crate::topo::world::chunk_manager::ChunkLoadResult;
-use crate::util::ChunkSet;
 use crate::{render::lod::LevelOfDetail, topo::world::ChunkPos};
 
 use super::{LoadReasons, LoadshareId};

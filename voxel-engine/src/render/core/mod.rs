@@ -314,7 +314,7 @@ fn set_inspection(
 }
 
 #[derive(Resource, Clone)]
-pub(crate) struct BindGroupProvider {
+pub struct BindGroupProvider {
     pub registry_bg_layout: BindGroupLayout,
     pub icd_quad_bg_layout: BindGroupLayout,
     pub preprocess_mesh_metadata_bg_layout: BindGroupLayout,

@@ -38,9 +38,8 @@ pub fn add_shader_constants(shader_defs: &mut Vec<ShaderDefVal>) {
 }
 
 pub fn add_mesh_pipeline_shader_defs(key: MeshPipelineKey, shader_defs: &mut Vec<ShaderDefVal>) {
-    if cfg!(feature = "pbr_transmission_textures") {
-        shader_defs.push("PBR_TRANSMISSION_TEXTURES_SUPPORTED".into());
-    }
+    // TODO: support this
+    // shader_defs.push("PBR_TRANSMISSION_TEXTURES_SUPPORTED".into());
 
     if key.msaa_samples() > 1 {
         shader_defs.push("MULTISAMPLED".into());

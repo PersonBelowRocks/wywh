@@ -1,10 +1,10 @@
-use criterion::{criterion_group, criterion_main, BatchSize, Bencher, Criterion, SamplingMode};
+use criterion::{criterion_group, criterion_main, BatchSize, Bencher, Criterion};
 use octo::subdiv::SubdividedStorage;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
 use std::time::Duration;
-use std::{array, cell::LazyCell, hint::black_box};
+use std::{cell::LazyCell, hint::black_box};
 
 type BenchSubdivStorage = SubdividedStorage<16, 4, u32>;
 const BSS_DIMS: u8 = 16 * 4;
@@ -150,7 +150,7 @@ fn get_3x3x3_rev_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R) {
     );
 }
 
-fn get_entire_sum_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R) {
+fn get_entire_sum_mb_routine<R: Rng>(bencher: &mut Bencher, rng: &mut R) {
     let storage = populated_subdiv_storage(rng);
 
     bencher.iter_batched_ref(
@@ -172,7 +172,7 @@ fn get_entire_sum_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R) {
     );
 }
 
-fn get_entire_sum_rev_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R) {
+fn get_entire_sum_rev_mb_routine<R: Rng>(bencher: &mut Bencher, rng: &mut R) {
     let storage = populated_subdiv_storage(rng);
 
     bencher.iter_batched_ref(
@@ -196,7 +196,7 @@ fn get_entire_sum_rev_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R)
     );
 }
 
-fn get_entire_sum_iter_helper_mb_routine<R: Rng>(bencher: &mut Bencher, mut rng: &mut R) {
+fn get_entire_sum_iter_helper_mb_routine<R: Rng>(bencher: &mut Bencher, rng: &mut R) {
     let storage = populated_subdiv_storage(rng);
 
     bencher.iter_batched_ref(

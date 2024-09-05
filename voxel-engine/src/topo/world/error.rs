@@ -1,8 +1,4 @@
-use std::time::Duration;
-
 use bevy::math::IVec3;
-
-use crate::util::sync::StrategySyncError;
 
 /// Errors related to low-level chunk data reads and writes.
 #[derive(te::Error, Debug, Clone)]

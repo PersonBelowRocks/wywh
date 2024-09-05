@@ -1,14 +1,11 @@
 use bevy::prelude::*;
 
-use crate::{
-    topo::world::{Chunk, ChunkPos},
-    util::{ws_to_chunk_pos, ChunkSet},
-};
+use crate::{topo::world::ChunkPos, util::ws_to_chunk_pos};
 
 use super::{
     AddBatchChunks, ChunkBatch, CrossChunkBorder, LastPosition, LoadChunks, LoadReasons,
-    LoadedChunkEvent, ObserverBatches, ObserverLoadshare, ObserverSettings, RemoveBatchChunks,
-    UnloadChunks, UpdateCachedChunkFlags,
+    ObserverBatches, ObserverLoadshare, ObserverSettings, RemoveBatchChunks, UnloadChunks,
+    UpdateCachedChunkFlags,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -70,10 +67,6 @@ pub fn dispatch_move_events(
             }
         }
     }
-}
-
-fn chunk_pos_center_vec3(pos: ChunkPos) -> Vec3 {
-    pos.as_vec3() + Vec3::splat(0.5)
 }
 
 pub fn update_observer_batches(

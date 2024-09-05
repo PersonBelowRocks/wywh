@@ -11,14 +11,11 @@ use bevy::{
 };
 use events::{PopulateChunkEvent, RecalculatePopulateEventPriorities};
 use futures_util::StreamExt;
-use itertools::Itertools;
-use parking_lot::Mutex;
-use priority_queue::PriorityQueue;
 use worldgen::{WorldgenTaskPool, WorldgenWorker, WorldgenWorkerPool};
 
 use crate::data::registries::Registries;
 
-use super::{ChunkManager, ChunkPos, VoxelRealm};
+use super::{ChunkManager, VoxelRealm};
 
 pub struct ChunkPopulatorController;
 

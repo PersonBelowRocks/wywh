@@ -10,9 +10,9 @@ use bevy::pbr::{LightEntity, PrepassViewBindGroup};
 use bevy::render::camera::Viewport;
 use bevy::render::extract_component::ExtractComponent;
 use bevy::render::render_resource::{
-    BindGroup, CachedComputePipelineId, CachedRenderPipelineId, CompareFunction, DepthBiasState,
-    DepthStencilState, Extent3d, FragmentState, ImageSubresourceRange, IndexFormat, LoadOp,
-    MultisampleState, Operations, PipelineCache, PrimitiveState, RenderPassDepthStencilAttachment,
+    BindGroup, CachedRenderPipelineId, CompareFunction, DepthBiasState, DepthStencilState,
+    Extent3d, FragmentState, ImageSubresourceRange, IndexFormat, LoadOp, MultisampleState,
+    Operations, PipelineCache, PrimitiveState, RenderPassDepthStencilAttachment,
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, StencilState, StoreOp,
     TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
     TextureViewDescriptor, TextureViewDimension,

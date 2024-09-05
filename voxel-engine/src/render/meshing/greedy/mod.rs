@@ -16,15 +16,12 @@ use crate::{
         isometric::{IsometrizedQuad, PositionedQuad, QuadIsometry},
     },
     topo::{
-        block::{Microblock, SubdividedBlock},
+        block::SubdividedBlock,
         ivec_project_to_2d, ivec_project_to_3d,
         neighbors::{self, Neighbors},
         world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
     },
-    util::{
-        self, microblock_to_full_block, microblock_to_full_block_3d, microblock_to_subdiv_pos_3d,
-        rem_euclid_2_pow_n,
-    },
+    util::{self, microblock_to_full_block, microblock_to_full_block_3d, rem_euclid_2_pow_n},
 };
 
 use self::error::CqsError;

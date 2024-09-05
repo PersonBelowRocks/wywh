@@ -40,7 +40,7 @@
 //! since we are addressing *microblocks* that are *local* to a chunk. Or we could do the same but for
 //! the entire world!
 
-use bevy::math::{ivec3, IVec2, IVec3, IVec4};
+use bevy::math::{IVec2, IVec3, IVec4};
 
 /// Describes an integer vector like `IVec3` or `IVec2`.
 pub trait IntegerVector<const SIZE: usize> {
@@ -297,6 +297,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use bevy::math::ivec3;
+
     use super::*;
 
     #[test]

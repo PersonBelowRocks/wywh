@@ -1,24 +1,11 @@
 use std::sync::Arc;
 
-use async_bevy_events::EventFunnel;
-use dashmap::{mapref::entry::Entry, DashMap};
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use dashmap::DashMap;
 
-use bevy::log::error;
-
-use crate::{
-    topo::{
-        controller::{LoadChunks, LoadReasons, LoadedChunkEvent, UnloadChunks},
-        world::{
-            chunk::ChunkFlags,
-            chunk_manager::{chunk_pos_in_bounds, LoadshareRemovalResult},
-            Chunk, ChunkPos,
-        },
-    },
-    util::{sync::LockStrategy, ChunkSet},
+use crate::topo::{
+    controller::LoadReasons,
+    world::{Chunk, ChunkPos},
 };
-
-use super::{ChunkLoadshares, ChunkManager};
 
 /// The hash function used for chunk storage
 pub type ChunkStorageHasher = rustc_hash::FxBuildHasher;

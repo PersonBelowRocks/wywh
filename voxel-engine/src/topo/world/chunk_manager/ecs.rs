@@ -1,15 +1,8 @@
-use std::{sync::Arc, thread::JoinHandle};
+use std::sync::Arc;
 
 use async_bevy_events::{AsyncEventReader, EventFunnel};
-use bevy::{
-    prelude::*,
-    tasks::{AsyncComputeTaskPool, Task},
-};
-use dashmap::mapref::entry::Entry;
-use flume::{Receiver, Sender};
+use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 use itertools::Itertools;
-
-use parking_lot::lock_api::RwLockUpgradableReadGuard as ReadGuard;
 
 use crate::{
     topo::{
@@ -17,13 +10,9 @@ use crate::{
             LoadChunks, LoadReasons, LoadReasonsAddedEvent, LoadReasonsRemovedEvent,
             LoadedChunkEvent, LoadshareId, PurgedChunkEvent, UnloadChunks,
         },
-        world::{
-            chunk::ChunkFlags,
-            chunk_manager::{inner_storage::LoadedChunk, ChunkLoadshares},
-            Chunk, ChunkPos,
-        },
+        world::ChunkPos,
     },
-    util::{sync::LockStrategy, ChunkSet},
+    util::sync::LockStrategy,
 };
 
 use super::{ChunkManager, ChunkStorageStructure};

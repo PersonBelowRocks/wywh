@@ -2,11 +2,11 @@ use std::{ops::Range, sync::Arc};
 
 use bevy::math::{ivec3, IVec3};
 use dashmap::{mapref::entry::Entry as DashMapEntry, DashMap, DashSet};
-use error::{ChunkGetError, ChunkLoadError, CmStructuralError};
+use error::{ChunkGetError, CmStructuralError};
 use hb::{hash_map::Entry, HashMap};
 use inner_storage::{ChunkStorageHasher, InnerChunkStorage, LoadedChunk};
 use itertools::Itertools;
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use parking_lot::{Mutex, MutexGuard};
 
 use crate::{
     data::registries::block::BlockVariantId,
@@ -63,7 +63,7 @@ pub struct ChunkManager {
 
 /// A "write" handle to the chunk manager, allowing for structural changes related to chunk lifecycle management.
 pub struct ChunkStorageStructure<'a> {
-    guard: MutexGuard<'a, ()>,
+    _guard: MutexGuard<'a, ()>,
     /// All loaded chunks.
     pub loaded: &'a DashMap<ChunkPos, LoadedChunk, ChunkStorageHasher>,
     /// A temporary stop for chunks before they are unloaded. Chunks in purgatory should not
@@ -307,7 +307,7 @@ impl ChunkManager {
         let guard = self.structural_lock.strategic_write(strategy)?;
 
         callback(ChunkStorageStructure {
-            guard,
+            _guard: guard,
             loaded: &self.storage.loaded,
             purgatory: &self.storage.purgatory,
             loadshares_for_chunks: &self.loadshares.loadshares_for_chunks,

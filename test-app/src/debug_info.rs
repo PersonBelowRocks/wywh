@@ -16,9 +16,6 @@ use crate::controls::PlayerCamController;
 pub struct DebugText;
 
 #[derive(Component)]
-pub struct DirectionText;
-
-#[derive(Component)]
 pub struct FpsText;
 
 pub fn text_section(string: impl Into<String>) -> TextSection {

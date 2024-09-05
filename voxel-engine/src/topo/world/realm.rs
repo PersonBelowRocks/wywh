@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy::{
     ecs::system::{Res, SystemParam},
-    prelude::{Query, Resource},
+    prelude::Query,
 };
 
 use crate::topo::controller::{
