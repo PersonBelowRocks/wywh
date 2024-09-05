@@ -2,90 +2,143 @@ pub mod error;
 pub mod events;
 pub mod worldgen;
 
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
-use async_lock::Mutex;
-use bevy::{prelude::*, tasks::TaskPool};
-use events::PopulateChunkEvent;
+use async_bevy_events::{AsyncEventPlugin, AsyncEventReader};
+use bevy::{
+    prelude::*,
+    tasks::{AsyncComputeTaskPool, Task, TaskPool},
+};
+use events::{PopulateChunkEvent, RecalculatePopulateEventPriorities};
+use futures_util::StreamExt;
+use itertools::Itertools;
+use parking_lot::Mutex;
 use priority_queue::PriorityQueue;
-use worldgen::{GenerateChunk, GenerateChunkActor};
-use xtra::Address;
+use worldgen::{WorldgenTaskPool, WorldgenWorker, WorldgenWorkerPool};
 
-use super::{ChunkManager, ChunkPos};
+use crate::data::registries::Registries;
+
+use super::{ChunkManager, ChunkPos, VoxelRealm};
 
 pub struct ChunkPopulatorController;
 
 impl Plugin for ChunkPopulatorController {
     fn build(&self, app: &mut App) {
+        app.add_plugins((
+            AsyncEventPlugin::<RecalculatePopulateEventPriorities>::default(),
+            AsyncEventPlugin::<PopulateChunkEvent>::default(),
+        ));
+
         todo!()
     }
 }
 
-#[derive(Resource, Deref)]
-pub struct PopulationQueue(Arc<Mutex<PriorityQueue<ChunkPos, u32, rustc_hash::FxBuildHasher>>>);
-
-// TODO: docs
-#[derive(xtra::Actor)]
-pub struct PopulateEventBusActor {
-    chunk_manager: Arc<ChunkManager>,
-    generator_task_pool: Arc<TaskPool>,
-    generator_actor_address: Option<Address<GenerateChunkActor>>,
+/// Task responsible for receiving chunk population events and passing them on to
+/// be handled appropriately. Chunks are either populated from disk or generated.
+/// This task is responsible for deciding which of the two options should be chosen.
+#[derive(Resource)]
+pub struct PopulatorTaskHandle {
+    shutdown_tx: flume::Sender<()>,
+    task: Task<()>,
 }
 
-impl PopulateEventBusActor {
-    // TODO: docs
-    pub fn cached_generator_actor_address(&mut self) -> Address<GenerateChunkActor> {
-        self.generator_actor_address
-            .get_or_insert_with(|| {
-                let (address, mailbox) = xtra::Mailbox::<GenerateChunkActor>::unbounded();
+pub struct PopulatorTaskState {
+    chunk_manager: Arc<ChunkManager>,
+    registries: Registries,
+    worldgen_task_pool: Arc<TaskPool>,
+    worldgen_worker_pool: WorldgenWorkerPool,
+}
 
-                for id in 0..self.generator_task_pool.thread_num() {
-                    let actor = GenerateChunkActor {
-                        id,
-                        chunk_manager: self.chunk_manager.clone(),
+impl PopulatorTaskState {
+    pub fn new<F: Fn() -> Box<dyn WorldgenWorker>>(
+        chunk_manager: Arc<ChunkManager>,
+        registries: Registries,
+        worldgen_task_pool: Arc<TaskPool>,
+        worldgen_worker_factory: F,
+    ) -> Self {
+        let worldgen_worker_pool =
+            WorldgenWorkerPool::new(&worldgen_task_pool, worldgen_worker_factory);
+
+        Self {
+            chunk_manager,
+            registries,
+            worldgen_task_pool,
+            worldgen_worker_pool,
+        }
+    }
+
+    pub fn handle_populate_chunk_event(&mut self, event: PopulateChunkEvent) {
+        self.worldgen_worker_pool
+            .job_queue
+            .lock()
+            .push(event.chunk_pos, event.priority);
+    }
+
+    pub fn handle_recalc_priorities_event(&mut self, event: RecalculatePopulateEventPriorities) {
+        let mut guard = self.worldgen_worker_pool.job_queue.lock();
+
+        for (&mut chunk_pos, priority) in guard.iter_mut() {
+            todo!();
+        }
+    }
+
+    pub async fn on_shutdown(&mut self) {
+        self.worldgen_worker_pool.shutdown().await;
+    }
+}
+
+/// This system starts the [`PopulationEventBusTask`] task with the appropriate data and configuration.
+pub fn start_chunk_population_event_bus_task(
+    mut cmds: Commands,
+    worldgen_task_pool: Res<WorldgenTaskPool>,
+    realm: VoxelRealm,
+    registries: Res<Registries>,
+    populate_chunk_events: Res<AsyncEventReader<PopulateChunkEvent>>,
+    recalc_priority_events: Res<AsyncEventReader<RecalculatePopulateEventPriorities>>,
+) {
+    let populate_chunk_events = populate_chunk_events.clone();
+    let recalc_priority_events = recalc_priority_events.clone();
+
+    let mut task_state = PopulatorTaskState::new(
+        realm.clone_cm(),
+        registries.clone(),
+        worldgen_task_pool.clone(),
+        || todo!(),
+    );
+
+    // This is basically a oneshot channel. If we send a message through here we tell the chunk populator task to shut down.
+    let (shutdown_tx, shutdown_rx) = flume::bounded::<()>(1);
+
+    let task = AsyncComputeTaskPool::get().spawn(async move {
+        let mut populate_chunk_events_stream = populate_chunk_events.stream();
+        let mut recalc_priority_events_stream = recalc_priority_events.stream();
+        let mut shutdown_stream = shutdown_rx.stream();
+
+        'task_loop: loop {
+            futures_util::select! {
+                // If we ever receive something on the shutdown channel, we stop the task.
+                _ = shutdown_stream.next() => {
+                    break 'task_loop;
+                },
+                event = populate_chunk_events_stream.next() => {
+                    let Some(event) = event else {
+                        continue;
                     };
 
-                    self.generator_task_pool
-                        .spawn(xtra::run(mailbox.clone(), actor))
-                        .detach();
+                    task_state.handle_populate_chunk_event(event);
+                },
+                event = recalc_priority_events_stream.next() => {
+                    let Some(event) = event else {
+                        continue;
+                    };
+
+                    task_state.handle_recalc_priorities_event(event);
                 }
+            }
+        }
 
-                address
-            })
-            .clone()
-    }
-}
+        task_state.on_shutdown().await;
+    });
 
-// TODO: docs
-#[derive(Copy, Clone, Debug)]
-pub struct PopulateChunk {
-    pub priority: u32,
-    pub chunk_pos: ChunkPos,
-}
-
-// TODO: docs
-#[derive(Copy, Clone)]
-pub enum ChunkPopulationStatus {
-    Generating,
-    LoadingFromDisk,
-}
-
-impl xtra::Handler<PopulateChunk> for PopulateEventBusActor {
-    type Return = ChunkPopulationStatus;
-
-    async fn handle(
-        &mut self,
-        message: PopulateChunk,
-        ctx: &mut xtra::Context<Self>,
-    ) -> Self::Return {
-        let address = self.cached_generator_actor_address();
-        // TODO: error handling
-        address
-            .send(GenerateChunk(message.chunk_pos))
-            .priority(message.priority)
-            .detach()
-            .await;
-
-        ChunkPopulationStatus::Generating
-    }
+    cmds.insert_resource(PopulatorTaskHandle { shutdown_tx, task });
 }

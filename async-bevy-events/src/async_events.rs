@@ -2,7 +2,7 @@ use std::{any::type_name, marker::PhantomData, time::Duration};
 
 use bevy::ecs::event::EventUpdates;
 use bevy::prelude::*;
-use flume::{Receiver, RecvTimeoutError, Sender, TryRecvError};
+use flume::{r#async::RecvStream, Receiver, RecvTimeoutError, Sender, TryRecvError};
 
 use crate::{funnel::EventFunnel, generic_system_set, ChannelClosed};
 
@@ -72,6 +72,11 @@ impl<E: Event> AsyncEventReader<E> {
             .recv_async()
             .await
             .map_err(|_| AsyncRecvError::ChannelClosed)
+    }
+
+    /// Return an async stream from which events can be read. The returned stream implements `FusedFuture`.
+    pub fn stream(&self) -> RecvStream<'_, E> {
+        self.rx.stream()
     }
 
     /// The number of events currently in the underlying channel.
