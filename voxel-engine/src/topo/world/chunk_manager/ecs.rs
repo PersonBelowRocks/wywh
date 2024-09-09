@@ -73,7 +73,7 @@ fn handle_load_chunk<'a>(
         loaded_chunk_funnel
             .send(LoadedChunkEvent {
                 chunk_pos,
-                auto_generate: auto_generate,
+                auto_populate: auto_generate,
                 load_result: result,
             })
             .unwrap();
@@ -121,7 +121,7 @@ pub fn start_async_chunk_load_task(
                                     chunk_pos,
                                     event.reasons,
                                     event.loadshare,
-                                    event.auto_generate,
+                                    event.auto_populate,
                                 );
                             }
                         })

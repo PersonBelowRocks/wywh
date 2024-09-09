@@ -1,11 +1,16 @@
 use bevy::prelude::*;
 
-use crate::{topo::world::ChunkPos, util::ws_to_chunk_pos};
+use crate::{
+    topo::world::{
+        chunk_manager::ChunkLoadResult, chunk_populator::events::PopulateChunk, ChunkPos,
+    },
+    util::ws_to_chunk_pos,
+};
 
 use super::{
     AddBatchChunks, ChunkBatch, CrossChunkBorder, LastPosition, LoadChunks, LoadReasons,
-    ObserverBatches, ObserverLoadshare, ObserverSettings, RemoveBatchChunks, UnloadChunks,
-    UpdateCachedChunkFlags,
+    LoadedChunkEvent, ObserverBatches, ObserverLoadshare, ObserverSettings, RemoveBatchChunks,
+    UnloadChunks, UpdateCachedChunkFlags,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -143,7 +148,7 @@ pub fn update_observer_batches(
             load_chunks.send(LoadChunks {
                 loadshare: loadshare_id,
                 reasons: LoadReasons::RENDER,
-                auto_generate: true,
+                auto_populate: true,
                 chunks: in_range.clone(),
             });
 
@@ -153,5 +158,35 @@ pub fn update_observer_batches(
 
     if !update_cached_flags.is_empty() {
         cmds.trigger(UpdateCachedChunkFlags(update_cached_flags));
+    }
+}
+
+pub fn populate_loaded_chunks(
+    q_observers: Query<&Transform, With<ObserverSettings>>,
+    mut loaded_chunk_events: EventReader<LoadedChunkEvent>,
+    mut populate_chunk_events: EventWriter<PopulateChunk>,
+) {
+    for loaded in loaded_chunk_events.read() {
+        // Don't send population events for revived chunks or chunks that don't want to be automatically populated.
+        if !loaded.auto_populate || matches!(loaded.load_result, ChunkLoadResult::Revived) {
+            // TODO: we still need to rebuild the mesh in this case
+            continue;
+        }
+
+        let center = loaded.chunk_pos.worldspace_center();
+
+        let mut min_distance: f32 = 0.0;
+        for &observer_transform in &q_observers {
+            let pos = observer_transform.translation;
+            // TODO: maybe handle NaN values here?
+            let distance = pos.distance_squared(center);
+            min_distance = f32::min(min_distance, distance);
+        }
+
+        populate_chunk_events.send(PopulateChunk {
+            chunk_pos: loaded.chunk_pos,
+            // Closer chunk positions are higher priority, so we need to invert the distance.
+            priority: u32::MAX - (min_distance as u32),
+        });
     }
 }

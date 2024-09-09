@@ -39,6 +39,12 @@ impl ChunkPos {
         self.0 * Chunk::SIZE
     }
 
+    /// The center of the chunk in worldspace.
+    pub fn worldspace_center(self) -> Vec3 {
+        const HALF: f32 = (Chunk::SIZE as f32) / 2.0;
+        self.worldspace_min().as_vec3() + HALF
+    }
+
     pub fn x(self) -> i32 {
         self.0.x
     }
@@ -612,6 +618,8 @@ impl Chunk {
 
 #[cfg(test)]
 mod test {
+    use bevy::math::vec3;
+
     use super::*;
 
     #[test]

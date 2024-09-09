@@ -2,14 +2,20 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_bevy_events::{ChannelClosed, EventFunnel};
 use bevy::prelude::*;
 
 use bevy::tasks::{available_parallelism, Task, TaskPool, TaskPoolBuilder};
+use flume::Sender;
 use futures_util::future::join_all;
 use parking_lot::Mutex;
 use priority_queue::PriorityQueue;
 
-use crate::topo::world::ChunkPos;
+use crate::topo::world::chunk::ChunkFlags;
+use crate::topo::world::{ChunkManager, ChunkPos, ChunkRef};
+use crate::util::sync::LockStrategy;
+
+use super::events::{ChunkPopulated, PopulationSource};
 
 /// The name of the threads in the worldgen task pool.
 /// See [`TaskPoolBuilder::thread_name()`] for some more information.
@@ -55,14 +61,27 @@ pub struct WorldgenWorkerPool {
 impl WorldgenWorkerPool {
     /// Create a new pool of workers running in the given task pool.
     /// You provide a factory closure to this function which will create the worldgen workers.
-    pub fn new<F: Fn() -> Box<dyn WorldgenWorker>>(task_pool: &TaskPool, factory: F) -> Self {
+    /// Workers can send [`ChunkPopulated`] events through the provided funnel.
+    pub fn new<F: Fn() -> Box<dyn WorldgenWorker>>(
+        task_pool: &TaskPool,
+        chunk_populated_funnel: EventFunnel<ChunkPopulated>,
+        chunk_manager: Arc<ChunkManager>,
+        factory: F,
+    ) -> Self {
         let shutdown_interrupt = Arc::new(AtomicBool::new(false));
         let mut tasks = Vec::with_capacity(task_pool.thread_num());
         let job_queue = Arc::new(Mutex::new(new_worldgen_job_queue()));
 
+        info!(
+            "World generation worker pool size: {}",
+            task_pool.thread_num()
+        );
+
         for _ in 0..task_pool.thread_num() {
             let interrupt = shutdown_interrupt.clone();
             let queue = job_queue.clone();
+            let funnel = chunk_populated_funnel.clone();
+            let cm = chunk_manager.clone();
             let mut worker = factory();
 
             let task = task_pool.spawn(async move {
@@ -76,7 +95,12 @@ impl WorldgenWorkerPool {
                         continue;
                     };
 
-                    WorldgenWorker::run(worker.as_mut(), next_chunk_pos)
+                    let cx = WorldgenContext {
+                        populated: &funnel,
+                        chunk_manager: cm.as_ref(),
+                    };
+
+                    WorldgenWorker::run(worker.as_mut(), next_chunk_pos, cx);
                 }
             });
 
@@ -97,8 +121,48 @@ impl WorldgenWorkerPool {
     }
 }
 
+/// Context for a worldgen job.
+pub struct WorldgenContext<'a> {
+    populated: &'a EventFunnel<ChunkPopulated>,
+    chunk_manager: &'a ChunkManager,
+}
+
+impl<'a> WorldgenContext<'a> {
+    /// Send a [`ChunkPopulated`] event on the main world to notify the rest of the engine that
+    /// a chunk was successfully populated with the world generator and can be read from.
+    pub fn notify_done(&self, chunk_pos: ChunkPos) -> Result<(), ChannelClosed<ChunkPos>> {
+        self.populated
+            .send(ChunkPopulated {
+                chunk_pos,
+                source: PopulationSource::Worldgen,
+            })
+            .map_err(|_| ChannelClosed(chunk_pos))
+    }
+
+    /// The engine's chunk manager.
+    pub fn chunk_manager(&self) -> &ChunkManager {
+        &self.chunk_manager
+    }
+
+    /// Get the *primordial* chunk at the given position. Will return [`None`] if the
+    /// chunk is out of bounds, not loaded, or not primordial.
+    pub fn loaded_primordial_chunk(&self, chunk_pos: ChunkPos) -> Option<ChunkRef<'_>> {
+        let chunk_ref = self.chunk_manager().loaded_chunk(chunk_pos).ok()?;
+        let chunk_flags = chunk_ref.flags(LockStrategy::Blocking).unwrap();
+
+        if chunk_flags.contains(ChunkFlags::PRIMORDIAL) {
+            Some(chunk_ref)
+        } else {
+            None
+        }
+    }
+}
+
+/// An object-safe trait implemented by types that act as worldgen workers.
 pub trait WorldgenWorker: Send {
-    fn run(&mut self, chunk_pos: ChunkPos);
+    /// Run a worldgen routine for the given chunk position.
+    /// Implementors should notify the engine of their completion through the provided context.
+    fn run<'a>(&mut self, chunk_pos: ChunkPos, cx: WorldgenContext<'a>);
 }
 
 static_assertions::assert_obj_safe!(WorldgenWorker);

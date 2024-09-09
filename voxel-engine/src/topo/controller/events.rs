@@ -23,7 +23,7 @@ pub struct CrossChunkBorder {
 pub struct LoadChunks {
     pub loadshare: LoadshareId,
     pub reasons: LoadReasons,
-    pub auto_generate: bool,
+    pub auto_populate: bool,
     pub chunks: Vec<ChunkPos>,
 }
 
@@ -34,7 +34,7 @@ pub struct LoadChunks {
 #[derive(Copy, Clone, Event, Debug)]
 pub struct LoadedChunkEvent {
     pub chunk_pos: ChunkPos,
-    pub auto_generate: bool,
+    pub auto_populate: bool,
     pub load_result: ChunkLoadResult,
 }
 

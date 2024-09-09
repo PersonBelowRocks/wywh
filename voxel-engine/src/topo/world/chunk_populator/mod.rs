@@ -1,19 +1,23 @@
+pub mod default_generator;
 pub mod error;
 pub mod events;
 pub mod worldgen;
 
 use std::sync::Arc;
 
-use async_bevy_events::{AsyncEventPlugin, AsyncEventReader};
+use async_bevy_events::{AsyncEventPlugin, AsyncEventReader, EventFunnel, EventFunnelPlugin};
 use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, TaskPool},
 };
-use events::{PopulateChunkEvent, RecalculatePopulateEventPriorities};
+use default_generator::WorldGenerator;
+use events::{
+    ChunkPopulated, PopulateChunk, PriorityCalcStrategy, RecalculatePopulateEventPriorities,
+};
 use futures_util::StreamExt;
-use worldgen::{WorldgenTaskPool, WorldgenWorker, WorldgenWorkerPool};
+use worldgen::{WorldgenJobQueue, WorldgenTaskPool, WorldgenWorker, WorldgenWorkerPool};
 
-use crate::data::registries::Registries;
+use crate::{data::registries::Registries, CoreEngineSetup, EngineState};
 
 use super::{ChunkManager, VoxelRealm};
 
@@ -21,12 +25,21 @@ pub struct ChunkPopulatorController;
 
 impl Plugin for ChunkPopulatorController {
     fn build(&self, app: &mut App) {
+        info!("Setting up chunk populator controller");
+
         app.add_plugins((
             AsyncEventPlugin::<RecalculatePopulateEventPriorities>::default(),
-            AsyncEventPlugin::<PopulateChunkEvent>::default(),
+            AsyncEventPlugin::<PopulateChunk>::default(),
+            EventFunnelPlugin::<ChunkPopulated>::for_new(),
         ));
 
-        todo!()
+        let worldgen_task_pool = WorldgenTaskPool::default();
+        app.insert_resource(worldgen_task_pool);
+
+        app.add_systems(
+            OnEnter(EngineState::Finished),
+            start_chunk_population_event_bus_task.in_set(CoreEngineSetup::Initialize),
+        );
     }
 }
 
@@ -46,15 +59,45 @@ pub struct PopulatorTaskState {
     worldgen_worker_pool: WorldgenWorkerPool,
 }
 
+/// Calculate new priorities for the items in the queue based on the distance returned by the distance function.
+/// Distances are calculated between chunk positions and positions in the `positions` slice.
+/// The new priority of an item will be based on the distance to the closest position in `positions`.
+/// The shorter the distance, the higher the priority.
+/// If `positions` is empty all priorities will be zero.
+fn calculate_priorities_based_on_distance<F: Fn(Vec3, Vec3) -> f32>(
+    distance_fn: F,
+    positions: &[Vec3],
+    queue: &mut WorldgenJobQueue,
+) {
+    for (&mut chunk_pos, priority) in queue.iter_mut() {
+        let center = chunk_pos.worldspace_center();
+
+        let mut min_distance: f32 = 0.0;
+        for &pos in positions {
+            // TODO: maybe handle NaN values here?
+            let distance = distance_fn(pos, center);
+            min_distance = f32::min(min_distance, distance);
+        }
+
+        // Closer chunk positions are higher priority, so we need to invert the distance.
+        *priority = u32::MAX - (min_distance as u32);
+    }
+}
+
 impl PopulatorTaskState {
     pub fn new<F: Fn() -> Box<dyn WorldgenWorker>>(
         chunk_manager: Arc<ChunkManager>,
         registries: Registries,
         worldgen_task_pool: Arc<TaskPool>,
+        chunk_populated_funnel: EventFunnel<ChunkPopulated>,
         worldgen_worker_factory: F,
     ) -> Self {
-        let worldgen_worker_pool =
-            WorldgenWorkerPool::new(&worldgen_task_pool, worldgen_worker_factory);
+        let worldgen_worker_pool = WorldgenWorkerPool::new(
+            &worldgen_task_pool,
+            chunk_populated_funnel,
+            chunk_manager.clone(),
+            worldgen_worker_factory,
+        );
 
         Self {
             chunk_manager,
@@ -64,7 +107,7 @@ impl PopulatorTaskState {
         }
     }
 
-    pub fn handle_populate_chunk_event(&mut self, event: PopulateChunkEvent) {
+    pub fn handle_populate_chunk_event(&mut self, event: PopulateChunk) {
         self.worldgen_worker_pool
             .job_queue
             .lock()
@@ -74,8 +117,21 @@ impl PopulatorTaskState {
     pub fn handle_recalc_priorities_event(&mut self, event: RecalculatePopulateEventPriorities) {
         let mut guard = self.worldgen_worker_pool.job_queue.lock();
 
-        for (&mut chunk_pos, priority) in guard.iter_mut() {
-            todo!();
+        match event.strategy {
+            PriorityCalcStrategy::ClosestDistanceSq(positions) => {
+                calculate_priorities_based_on_distance(
+                    |p1, p2| p1.distance_squared(p2),
+                    &positions,
+                    &mut guard,
+                );
+            }
+            PriorityCalcStrategy::ClosestDistance(positions) => {
+                calculate_priorities_based_on_distance(
+                    |p1, p2| p1.distance(p2),
+                    &positions,
+                    &mut guard,
+                );
+            }
         }
     }
 
@@ -90,9 +146,12 @@ pub fn start_chunk_population_event_bus_task(
     worldgen_task_pool: Res<WorldgenTaskPool>,
     realm: VoxelRealm,
     registries: Res<Registries>,
-    populate_chunk_events: Res<AsyncEventReader<PopulateChunkEvent>>,
+    populate_chunk_events: Res<AsyncEventReader<PopulateChunk>>,
     recalc_priority_events: Res<AsyncEventReader<RecalculatePopulateEventPriorities>>,
+    chunk_populated_funnel: Res<EventFunnel<ChunkPopulated>>,
 ) {
+    info!("Starting background chunk population event bus task.");
+
     let populate_chunk_events = populate_chunk_events.clone();
     let recalc_priority_events = recalc_priority_events.clone();
 
@@ -100,7 +159,8 @@ pub fn start_chunk_population_event_bus_task(
         realm.clone_cm(),
         registries.clone(),
         worldgen_task_pool.clone(),
-        || todo!(),
+        chunk_populated_funnel.clone(),
+        || Box::new(WorldGenerator::new(&registries)),
     );
 
     // This is basically a oneshot channel. If we send a message through here we tell the chunk populator task to shut down.

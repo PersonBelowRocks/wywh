@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bitflags::bitflags;
 use hb::HashSet;
 
-use observer_events::{dispatch_move_events, update_observer_batches};
+use observer_events::{dispatch_move_events, populate_loaded_chunks, update_observer_batches};
 
 use crate::data::registries::block::BlockVariantRegistry;
 use crate::data::registries::{Registries, Registry};
@@ -16,6 +16,7 @@ use crate::data::resourcepath::rpath;
 use crate::topo::world::chunk_manager::ecs::{
     start_async_chunk_load_task, start_async_chunk_purge_task,
 };
+use crate::topo::world::chunk_populator::ChunkPopulatorController;
 use crate::{CoreEngineSetup, EngineState};
 
 use super::bounding_box::BoundingBox;
@@ -297,6 +298,7 @@ impl Plugin for WorldController {
         info!("Initializing world controller");
 
         app.add_plugins((
+            ChunkPopulatorController,
             AsyncEventPlugin::<LoadChunks>::default(),
             AsyncEventPlugin::<UnloadChunks>::default(),
             EventFunnelPlugin::<LoadedChunkEvent>::for_new(),
@@ -337,7 +339,10 @@ impl Plugin for WorldController {
 
         app.add_systems(
             FixedPostUpdate,
-            (dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),),
+            (
+                dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
+                populate_loaded_chunks.in_set(WorldControllerSystems::ObserverResponses),
+            ),
         );
 
         app.add_systems(FixedLast, increase_voxel_world_tick);
