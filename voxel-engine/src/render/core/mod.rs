@@ -89,7 +89,7 @@ use self::{
     utils::main_world_res_exists,
 };
 
-use super::{meshing::controller::ExtractableChunkMeshData, quad::GpuQuad};
+use super::{meshing::controller::ChunkMeshExtractBridge, quad::GpuQuad};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, SystemSet)]
 pub enum CoreSet {
@@ -224,7 +224,7 @@ impl Plugin for RenderCore {
                 extract_occluders,
                 extract_chunk_camera_phases,
                 extract_texreg_faces.run_if(not(resource_exists::<ExtractedTexregFaces>)),
-                extract_chunk_mesh_data.run_if(main_world_res_exists::<ExtractableChunkMeshData>),
+                extract_chunk_mesh_data.run_if(main_world_res_exists::<ChunkMeshExtractBridge>),
             )
                 .in_set(CoreSet::Extract),
         );

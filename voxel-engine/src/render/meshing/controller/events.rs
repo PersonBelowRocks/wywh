@@ -1,5 +1,5 @@
 use crate::{
-    render::lod::LevelOfDetail,
+    render::lod::{LODs, LevelOfDetail},
     topo::world::{chunk_populator::events::PriorityCalcStrategy, ChunkPos},
 };
 use bevy::prelude::*;
@@ -41,6 +41,14 @@ pub struct MeshFinishedEvent {
 
 /// Event sent to recalculate the priorities of pending mesh building tasks based on the provided strategy.
 #[derive(Clone, Event, Debug)]
-pub struct RecalculateMeshBuildingEventPriorities {
+pub struct RecalculateMeshBuildingEventPrioritiesEvent {
     pub strategy: PriorityCalcStrategy,
+}
+
+/// Event sent to remove chunk meshes at LODs from the render world and the mesh builder job queue.
+#[derive(Clone, Event, Debug)]
+pub struct RemoveChunkMeshEvent {
+    pub chunk_pos: ChunkPos,
+    pub lods: LODs,
+    pub tick: u64,
 }

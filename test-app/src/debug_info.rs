@@ -4,7 +4,7 @@ use bevy::{
 };
 use ve::{
     diagnostics::ENGINE_DIAGNOSTICS,
-    render::meshing::controller::ExtractableChunkMeshData,
+    render::meshing::controller::ChunkMeshExtractBridge,
     topo::{controller::LastPosition, world::VoxelRealm, ObserverSettings},
     util::{sync::LockStrategy, ws_to_chunk_pos},
 };
@@ -31,7 +31,7 @@ pub fn text_section(string: impl Into<String>) -> TextSection {
 pub fn update_debug_text(
     diagnostics: Res<DiagnosticsStore>,
     realm: VoxelRealm,
-    meshes: Res<ExtractableChunkMeshData>,
+    meshes: Res<ChunkMeshExtractBridge>,
     mut q: Query<&mut Text, With<DebugText>>,
     player_q: Query<&Transform, With<PlayerCamController>>,
 ) {

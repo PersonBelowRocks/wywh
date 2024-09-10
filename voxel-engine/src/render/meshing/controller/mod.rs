@@ -6,14 +6,16 @@ use std::{cmp, fmt};
 
 use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
 use bevy::prelude::*;
-use ecs::{batch_chunk_extraction, collect_solid_chunks_as_occluders, remove_chunks};
-use events::{BuildMeshEvent, MeshFinishedEvent};
-use workers::FinishedChunkMeshData;
+use ecs::{
+    batch_chunk_extraction, collect_solid_chunks_as_occluders,
+    remove_chunk_meshes_from_extraction_bridge, send_mesh_removal_events_from_batch_removal_events,
+};
+use events::{BuildMeshEvent, MeshFinishedEvent, RemoveChunkMeshEvent};
+use workers::{start_mesh_builder_tasks, MeshBuilderTaskPool};
 
 use crate::{
     render::{
         lod::{LODs, LevelOfDetail, LodMap},
-        meshing::controller::ecs::dispatch_updated_chunk_remeshings,
         quad::GpuQuad,
     },
     topo::world::ChunkPos,
@@ -21,10 +23,7 @@ use crate::{
     CoreEngineSetup, EngineState,
 };
 
-use self::ecs::{
-    insert_chunks, queue_chunk_mesh_jobs, setup_chunk_meshing_workers,
-    voxel_realm_remesh_updated_chunks,
-};
+use self::ecs::prepare_finished_meshes_for_extraction;
 
 pub use self::ecs::{OccluderChunks, RemeshChunk};
 
@@ -100,8 +99,10 @@ impl ChunkMeshStatus {
     }
 }
 
+/// Acts as a sort of bridge between the main world and render world for chunk meshes.
+/// The render world will change its state depending on how this resource changes.
 #[derive(Resource)]
-pub struct ExtractableChunkMeshData {
+pub struct ChunkMeshExtractBridge {
     statuses: LodMap<ChunkMap<TimedChunkMeshStatus>>,
     add: LodMap<ChunkMap<ChunkMeshData>>,
     remove: LodMap<ChunkSet>,
@@ -112,7 +113,7 @@ pub struct ExtractableChunkMeshData {
     should_extract: bool,
 }
 
-impl Default for ExtractableChunkMeshData {
+impl Default for ChunkMeshExtractBridge {
     fn default() -> Self {
         Self {
             should_extract: false,
@@ -124,7 +125,7 @@ impl Default for ExtractableChunkMeshData {
     }
 }
 
-impl ExtractableChunkMeshData {
+impl ChunkMeshExtractBridge {
     fn set_status(&mut self, pos: ChunkPos, lod: LevelOfDetail, status: TimedChunkMeshStatus) {
         self.statuses[lod].set(pos, status);
     }
@@ -163,39 +164,44 @@ impl ExtractableChunkMeshData {
 
     /// Try to queue a chunk mesh of a given age and LOD for extraction. Will do nothing if there's
     /// a newer version either already queued or extracted.
-    pub fn add_chunk_mesh(&mut self, mesh: FinishedChunkMeshData) {
+    pub fn add_chunk_mesh(
+        &mut self,
+        chunk_pos: ChunkPos,
+        lod: LevelOfDetail,
+        tick: u64,
+        mesh_data: ChunkMeshData,
+    ) {
         // If we already have a newer chunk mesh, then we return early since we should never extract an
         // older version of a chunk mesh.
-        if let Some(status) = self.statuses[mesh.lod].get(mesh.pos) {
-            if status.tick > mesh.tick {
+        if let Some(status) = self.statuses[lod].get(chunk_pos) {
+            if status.tick > tick {
                 return;
             }
         }
 
         // Will have an empty status if the mesh is empty
-        let status = ChunkMeshStatus::from_mesh_data(&mesh.data);
+        let status = ChunkMeshStatus::from_mesh_data(&mesh_data);
 
         // Only queue the mesh for extraction if it's filled.
         if status == ChunkMeshStatus::Filled {
-            self.add[mesh.lod].set(mesh.pos, mesh.data);
+            self.add[lod].set(chunk_pos, mesh_data);
         }
 
         // Even if we don't queue the mesh for extraction we still need to note down its status.
-        self.set_status(
-            mesh.pos,
-            mesh.lod,
-            TimedChunkMeshStatus {
-                tick: mesh.tick,
-                status,
-            },
-        );
+        self.set_status(chunk_pos, lod, TimedChunkMeshStatus { tick, status });
     }
 
     /// Queue a chunk at a given LOD for removal from the render world.
-    pub fn remove_chunk(&mut self, pos: ChunkPos, lod: LevelOfDetail) {
-        self.statuses[lod].remove(pos);
-        self.add[lod].remove(pos);
-        self.remove[lod].set(pos);
+    pub fn remove_chunk(&mut self, chunk_pos: ChunkPos, lod: LevelOfDetail, tick: u64) {
+        if let Some(existing) = self.statuses[lod].get(chunk_pos) {
+            if existing.tick > tick {
+                return;
+            }
+        }
+
+        self.statuses[lod].remove(chunk_pos);
+        self.add[lod].remove(chunk_pos);
+        self.remove[lod].set(chunk_pos);
     }
 
     pub fn additions(
@@ -236,36 +242,32 @@ impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
         info!("Initializing mesh controller");
 
+        let mesh_builder_task_pool = MeshBuilderTaskPool::default();
+
         app.add_plugins((
             AsyncEventPlugin::<BuildMeshEvent>::default(),
             EventFunnelPlugin::<MeshFinishedEvent>::for_new(),
+            AsyncEventPlugin::<RemoveChunkMeshEvent>::default(),
         ))
-        .init_resource::<ExtractableChunkMeshData>()
+        .insert_resource(mesh_builder_task_pool)
+        .init_resource::<ChunkMeshExtractBridge>()
         .init_resource::<OccluderChunks>()
         .add_event::<RemeshChunk>();
 
         app.add_systems(
             OnEnter(EngineState::Finished),
-            setup_chunk_meshing_workers.in_set(CoreEngineSetup::Initialize),
+            start_mesh_builder_tasks.in_set(CoreEngineSetup::Initialize),
         );
 
         app.add_systems(
             PreUpdate,
             (
-                remove_chunks,
-                insert_chunks,
+                // TODO: send mesh building events when necessary!
+                send_mesh_removal_events_from_batch_removal_events,
+                remove_chunk_meshes_from_extraction_bridge,
+                prepare_finished_meshes_for_extraction,
                 batch_chunk_extraction,
                 collect_solid_chunks_as_occluders,
-            )
-                .chain()
-                .run_if(in_state(EngineState::Finished)),
-        );
-
-        app.add_systems(
-            FixedPostUpdate,
-            (
-                voxel_realm_remesh_updated_chunks.pipe(dispatch_updated_chunk_remeshings),
-                queue_chunk_mesh_jobs,
             )
                 .chain()
                 .run_if(in_state(EngineState::Finished)),

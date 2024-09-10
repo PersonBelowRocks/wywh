@@ -12,7 +12,7 @@ use crate::{
     diagnostics::{DiagRecStatus, DiagnosticsTx, ENGINE_DIAGNOSTICS},
     render::{
         lod::{FilledLodMap, LODs, LevelOfDetail},
-        meshing::controller::{ChunkMeshData, ExtractableChunkMeshData},
+        meshing::controller::{ChunkMeshData, ChunkMeshExtractBridge},
     },
     util::{ChunkMap, ChunkSet},
 };
@@ -30,7 +30,7 @@ pub fn extract_chunk_mesh_data(
     mut main_world: ResMut<MainWorld>,
     diagnostics_tx: Res<DiagnosticsTx>,
 ) {
-    main_world.resource_scope::<ExtractableChunkMeshData, _>(|_, mut meshes| {
+    main_world.resource_scope::<ChunkMeshExtractBridge, _>(|_, mut meshes| {
         // The main world regulates how often we're allowed to extract these, so if we're not currently allowed
         // to extract we return early and check again next frame.
         if !meshes.should_extract() {

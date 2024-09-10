@@ -27,7 +27,10 @@ use crate::{
     util::sync::LockStrategy,
 };
 
-use super::events::{BuildMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPriorities};
+use super::events::{
+    BuildMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
+    RemoveChunkMeshEvent,
+};
 
 /// The name of the threads in the mesh builder task pool.
 /// See [`TaskPoolBuilder::thread_name()`] for some more information.
@@ -52,7 +55,7 @@ impl MeshBuilderTaskPool {
 impl Default for MeshBuilderTaskPool {
     fn default() -> Self {
         let cores = available_parallelism();
-        Self::new(cores)
+        Self::new(cores / 2)
     }
 }
 
@@ -107,6 +110,24 @@ impl TickedMeshJobQueue {
 
     pub fn pop(&mut self) -> Option<MeshBuilderJob> {
         self.0.pop().map(|pair| pair.0)
+    }
+
+    pub fn remove(&mut self, chunk_pos: ChunkPos, tick: u64) {
+        // The tick field is "hidden" for hashing and equality operations, so this is basically a chunk position key
+        let job = MeshBuilderJob {
+            chunk_pos,
+            // Doesn't matter, we just need the chunk position
+            tick: 0,
+        };
+
+        let Some((contained, _)) = self.0.get(&job) else {
+            return;
+        };
+
+        // Only remove the job if it's older than the removal operation
+        if contained.tick < tick {
+            self.0.remove(&job);
+        }
     }
 }
 
@@ -242,7 +263,7 @@ impl MeshBuilderEventProxyTaskState {
 
     pub fn handle_build_mesh_event(&mut self, event: BuildMeshEvent) {
         let MeshJobUrgency::P1(priority) = event.urgency else {
-            todo!();
+            todo!("Immediate mesh building is not supported yet");
         };
 
         self.mesh_builder_pool.job_queues[event.lod].lock().push(
@@ -254,12 +275,19 @@ impl MeshBuilderEventProxyTaskState {
 
     pub fn handle_recalc_priorities_event(
         &mut self,
-        event: RecalculateMeshBuildingEventPriorities,
+        event: RecalculateMeshBuildingEventPrioritiesEvent,
     ) {
         for lod in LevelOfDetail::LODS {
             let mut guard = self.mesh_builder_pool.job_queues[lod].lock();
 
             todo!();
+        }
+    }
+
+    pub fn handle_remove_mesh_event(&mut self, event: RemoveChunkMeshEvent) {
+        for lod in event.lods.contained_lods() {
+            let mut guard = self.mesh_builder_pool.job_queues[lod].lock();
+            guard.remove(event.chunk_pos, event.tick);
         }
     }
 
@@ -275,19 +303,21 @@ pub struct MeshBuilderEventProxyTaskHandle {
 }
 
 /// This system starts the mesh builder pool and the proxy task that forwards events to the pool.
-pub fn start_mesh_builder_pool(
+pub fn start_mesh_builder_tasks(
     mut cmds: Commands,
     mesh_builder_task_pool: Res<MeshBuilderTaskPool>,
     realm: VoxelRealm,
     registries: Res<Registries>,
     build_mesh_events: Res<AsyncEventReader<BuildMeshEvent>>,
-    recalc_priority_events: Res<AsyncEventReader<RecalculateMeshBuildingEventPriorities>>,
+    recalc_priority_events: Res<AsyncEventReader<RecalculateMeshBuildingEventPrioritiesEvent>>,
+    remove_chunk_mesh_events: Res<AsyncEventReader<RemoveChunkMeshEvent>>,
     mesh_finished_funnel: Res<EventFunnel<MeshFinishedEvent>>,
 ) {
     info!("Starting background mesh builder pool and mesh event proxy task.");
 
     let build_mesh_events = build_mesh_events.clone();
     let recalc_priority_events = recalc_priority_events.clone();
+    let remove_chunk_mesh_events = remove_chunk_mesh_events.clone();
 
     let mut task_state = MeshBuilderEventProxyTaskState::new(
         &mesh_builder_task_pool,
@@ -302,6 +332,7 @@ pub fn start_mesh_builder_pool(
     let task = AsyncComputeTaskPool::get().spawn(async move {
         let mut build_mesh_events_stream = build_mesh_events.stream();
         let mut recalc_priority_events_stream = recalc_priority_events.stream();
+        let mut remove_chunk_mesh_events_stream = remove_chunk_mesh_events.stream();
         let mut shutdown_stream = shutdown_rx.stream();
 
         'task_loop: loop {
@@ -323,6 +354,13 @@ pub fn start_mesh_builder_pool(
 
                     task_state.handle_recalc_priorities_event(event);
                 },
+                event = remove_chunk_mesh_events_stream.next() => {
+                    let Some(event) = event else {
+                        continue;
+                    };
+
+                    task_state.handle_remove_mesh_event(event);
+                }
             };
         }
 
