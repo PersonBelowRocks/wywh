@@ -1,10 +1,13 @@
 mod ecs;
+pub mod events;
 mod workers;
 
 use std::{cmp, fmt};
 
+use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
 use bevy::prelude::*;
 use ecs::{batch_chunk_extraction, collect_solid_chunks_as_occluders, remove_chunks};
+use events::{BuildMeshEvent, MeshFinishedEvent};
 use workers::FinishedChunkMeshData;
 
 use crate::{
@@ -233,9 +236,13 @@ impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
         info!("Initializing mesh controller");
 
-        app.init_resource::<ExtractableChunkMeshData>()
-            .init_resource::<OccluderChunks>()
-            .add_event::<RemeshChunk>();
+        app.add_plugins((
+            AsyncEventPlugin::<BuildMeshEvent>::default(),
+            EventFunnelPlugin::<MeshFinishedEvent>::for_new(),
+        ))
+        .init_resource::<ExtractableChunkMeshData>()
+        .init_resource::<OccluderChunks>()
+        .add_event::<RemeshChunk>();
 
         app.add_systems(
             OnEnter(EngineState::Finished),

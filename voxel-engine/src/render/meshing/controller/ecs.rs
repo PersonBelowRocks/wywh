@@ -10,7 +10,7 @@ use bevy::{
 
 use crate::{
     data::{registries::Registries, tile::Face},
-    render::{lod::LevelOfDetail, meshing::controller::workers::MeshBuilderSettings},
+    render::lod::LevelOfDetail,
     topo::{
         controller::{
             BatchFlags, CachedBatchMembership, ChunkBatch, ChunkBatchLod, RemovedBatchChunks,
@@ -22,10 +22,7 @@ use crate::{
     util::{sync::LockStrategy, ChunkSet},
 };
 
-use super::{
-    workers::{MeshBuilder, MeshBuilderCommand},
-    ExtractableChunkMeshData, RemeshPriority, RemeshType,
-};
+use super::{ExtractableChunkMeshData, RemeshPriority, RemeshType};
 
 #[derive(Resource, Deref)]
 pub struct MeshWorkerTaskPool(TaskPool);
@@ -48,42 +45,9 @@ pub fn collect_solid_chunks_as_occluders(realm: VoxelRealm, mut occluders: ResMu
     occluders.0 = realm.cm().solid_chunks();
 }
 
-/// This system queues meshing jobs in the mesh builder from `RemeshChunk` events.
-pub fn queue_chunk_mesh_jobs(
-    mut builder: ResMut<MeshBuilder>,
-    mut events: EventReader<RemeshChunk>,
-) {
-    if events.len() > 0 {
-        debug!("Queuing {} chunks for remeshing from events", events.len());
-    }
-
-    let mut commands = Vec::<MeshBuilderCommand>::with_capacity(events.len());
-    let mut immediate = Vec::<MeshBuilderCommand>::new();
-
-    for event in events.read() {
-        let cmd = MeshBuilderCommand {
-            chunk_pos: event.pos,
-            lod: event.lod,
-            priority: event.priority,
-            generation: event.tick,
-        };
-
-        match event.remesh_type {
-            RemeshType::Delayed => commands.push(cmd),
-            RemeshType::Immediate => immediate.push(cmd),
-        }
-    }
-
-    builder.queue_jobs(commands.into_iter());
-
-    for _cmd in immediate.iter() {
-        error!("Not yet implemented!");
-    }
-}
-
 /// This system makes finished chunk meshes available for extraction by the renderer.
 pub fn insert_chunks(
-    workers: Res<MeshBuilder>,
+    workers: Res<MeshBuilderPool>,
     mut meshes: ResMut<ExtractableChunkMeshData>,
     realm: VoxelRealm,
 ) {
@@ -104,7 +68,7 @@ pub fn remove_chunks(
     mut events: EventReader<RemovedBatchChunks>,
     members: Res<CachedBatchMembership>,
     q_batches: Query<&ChunkBatchLod, With<ChunkBatch>>,
-    mut builder: ResMut<MeshBuilder>,
+    mut builder: ResMut<MeshBuilderPool>,
 ) {
     let mut remove = ChunkSet::with_capacity(events.len());
     for event in events.read() {
@@ -140,203 +104,4 @@ pub fn batch_chunk_extraction(
         *last_extract = Some(now);
         meshes.should_extract = true;
     }
-}
-
-pub struct UpdateDetectionRemeshResults {
-    primary: hb::HashSet<ChunkPos, rustc_hash::FxBuildHasher>,
-    neighbors: hb::HashSet<ChunkPos, rustc_hash::FxBuildHasher>,
-}
-
-/// This system tracks updates in the voxel realm and dispatches remesh events accordingly.
-/// Will dispatch remesh events for chunks neighboring the updated chunks if necessary.
-pub fn voxel_realm_remesh_updated_chunks(
-    time: Res<Time>,
-    realm: VoxelRealm,
-    mut last_queued_fresh: Local<Duration>,
-) -> UpdateDetectionRemeshResults {
-    let mut remeshings_issued = 0;
-    let mut neighbor_remeshings_issued = 0;
-
-    let cm = realm.cm();
-
-    let current = time.elapsed();
-    let time_since_last_fresh_build = current - *last_queued_fresh;
-
-    // Hueristic check to see if it's worth queuing our fresh chunks, we don't want too many to accumulate at a time and we don't want
-    // to wait too long between each queuing. These numbers are kind of stupid rn and are just chosen randomly, but maybe a better hueristic can
-    // be implemented in the future.
-    let should_queue_fresh = time_since_last_fresh_build.as_millis() > 1000;
-
-    if should_queue_fresh {
-        *last_queued_fresh = current;
-    }
-
-    // We need this to keep track of queued chunks, we don't want to queue chunks for remeshing twice!
-    let mut queued_primary = hb::HashSet::<ChunkPos, rustc_hash::FxBuildHasher>::default();
-    let mut queued_neighbors = hb::HashSet::<ChunkPos, rustc_hash::FxBuildHasher>::default();
-
-    let remesh = cm.remesh_chunks();
-
-    for &chunk_pos in &remesh {
-        let Ok(cref) = cm.loaded_chunk(chunk_pos) else {
-            // TODO: maybe warn here?
-            continue;
-        };
-
-        // Don't remesh chunks we don't have a permit to render, and don't remesh already queued chunks.
-        if !realm.has_render_permit(cref.chunk_pos()) || queued_primary.contains(&cref.chunk_pos())
-        {
-            continue;
-        }
-
-        // If this chunk was previously queued as a neighbor remesh, we "convert" it to a primary
-        // remesh. This is because we need to unflag all chunks that were updated, but we don't want
-        // to do that to the neighbors.
-        if queued_neighbors.contains(&cref.chunk_pos()) {
-            queued_neighbors.remove(&cref.chunk_pos());
-        }
-
-        if cref
-            .flags(LockStrategy::Blocking)
-            .unwrap()
-            .contains(ChunkFlags::FRESHLY_GENERATED)
-            && !should_queue_fresh
-        {
-            continue;
-        }
-
-        queued_primary.insert(cref.chunk_pos());
-        remeshings_issued += 1;
-
-        // This chunk was updated in such a way that we need to remesh its neighbors too!
-        if cref
-            .flags(LockStrategy::Blocking)
-            .unwrap()
-            .contains(ChunkFlags::REMESH_NEIGHBORS)
-        {
-            for face in Face::FACES {
-                let neighbor_pos = ChunkPos::from(face.normal() + IVec3::from(cref.chunk_pos()));
-
-                if !realm.has_render_permit(neighbor_pos)
-                    || queued_primary.contains(&neighbor_pos)
-                    || queued_neighbors.contains(&neighbor_pos)
-                {
-                    continue;
-                }
-
-                // We only remesh the neighbor if it's neither generating or fresh (or primordial).
-                // We don't mesh generating neighbors because they contain nothing and will be meshed soon anyway,
-                // and we don't mesh fresh chunks because they'll also be meshed soon anyway.
-                let avoid_flags: ChunkFlags =
-                    ChunkFlags::PRIMORDIAL | ChunkFlags::GENERATING | ChunkFlags::FRESHLY_GENERATED;
-                let Ok(flags) = cm.chunk_flags(neighbor_pos) else {
-                    continue;
-                };
-
-                if flags.intersects(avoid_flags) {
-                    continue;
-                }
-
-                queued_neighbors.insert(neighbor_pos);
-                neighbor_remeshings_issued += 1;
-            }
-        }
-    }
-
-    for pos in &queued_primary {
-        if let Ok(cref) = cm.loaded_chunk(*pos) {
-            cref.update_flags(LockStrategy::Blocking, |flags| {
-                flags.remove(
-                    ChunkFlags::REMESH
-                        | ChunkFlags::REMESH_NEIGHBORS
-                        | ChunkFlags::FRESHLY_GENERATED,
-                )
-            })
-            .unwrap();
-        }
-    }
-
-    let span = debug_span!("auto-remesh-report");
-    span.in_scope(|| {
-        if remeshings_issued > 0 || neighbor_remeshings_issued > 0 {
-            let total_remeshings = remeshings_issued + neighbor_remeshings_issued;
-            debug!("Primary remeshes: {remeshings_issued}");
-            debug!("Neighbor remeshes: {neighbor_remeshings_issued}");
-            debug!("Total remeshes: {total_remeshings}");
-        }
-    });
-
-    UpdateDetectionRemeshResults {
-        primary: queued_primary,
-        neighbors: queued_neighbors,
-    }
-}
-
-fn calculate_priority(trans: &Transform, chunk_pos: ChunkPos) -> RemeshPriority {
-    const CHUNK_SIZE_F32: f32 = Chunk::SIZE as f32;
-    const CHUNK_SIZE_DIV2: f32 = CHUNK_SIZE_F32 / 2.0;
-
-    let chunk_center = (chunk_pos.as_vec3() * CHUNK_SIZE_F32) + Vec3::splat(CHUNK_SIZE_DIV2);
-
-    let distance_sq = chunk_center.distance_squared(trans.translation);
-    let distance_sq_int = distance_sq.clamp(0.0, u32::MAX as _) as u32;
-
-    RemeshPriority::new(distance_sq_int)
-}
-
-/// This system dispatches remesh jobs for chunks discovered by `voxel_realm_remesh_updated_chunks`
-pub fn dispatch_updated_chunk_remeshings(
-    In(detected): In<UpdateDetectionRemeshResults>,
-    tick: Res<VoxelWorldTick>,
-    observers: Query<&Transform, With<ObserverSettings>>,
-    mut writer: EventWriter<RemeshChunk>,
-) {
-    writer.send_batch(
-        detected
-            .primary
-            .into_iter()
-            .chain(detected.neighbors.into_iter())
-            .map(|chunk_pos| {
-                // Calculate remesh priority based on distance to nearest "observer"
-                let priority = observers
-                    .iter()
-                    .map(|trans| calculate_priority(trans, chunk_pos))
-                    .max()
-                    .unwrap_or(RemeshPriority::LOWEST);
-
-                RemeshChunk {
-                    pos: chunk_pos,
-                    // TODO: calculate LOD!!
-                    lod: LevelOfDetail::X16Subdiv,
-                    remesh_type: RemeshType::Delayed,
-                    priority,
-                    tick: tick.get(),
-                }
-            }),
-    );
-}
-
-/// Sets up the background mesh builder pool.
-pub fn setup_chunk_meshing_workers(
-    mut cmds: Commands,
-    registries: Res<Registries>,
-    realm: VoxelRealm,
-) {
-    info!("Setting up chunk meshing workers");
-
-    let task_pool = TaskPoolBuilder::new()
-        .thread_name("Mesh Worker Task Pool".into())
-        .num_threads(max(1, available_parallelism() / 4))
-        .build();
-
-    let settings = MeshBuilderSettings {
-        workers: task_pool.thread_num(),
-        job_channel_capacity: task_pool.thread_num() * 4,
-        worker_mesh_backlog_capacity: 3,
-    };
-
-    let worker_pool = MeshBuilder::new(settings, &task_pool, registries.clone(), realm.clone_cm());
-
-    cmds.insert_resource(worker_pool);
-    cmds.insert_resource(MeshWorkerTaskPool(task_pool));
 }

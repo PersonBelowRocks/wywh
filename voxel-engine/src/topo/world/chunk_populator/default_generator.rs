@@ -1,5 +1,5 @@
 use bevy::math::ivec3;
-use noise::{utils::NoiseMapBuilder, Perlin};
+use noise::Perlin;
 
 use crate::{
     data::{

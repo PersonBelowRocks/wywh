@@ -1,4 +1,5 @@
 use std::{
+    cmp::max,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -6,256 +7,327 @@ use std::{
     time::Duration,
 };
 
+use async_bevy_events::{AsyncEventReader, AsyncEventWriter, EventFunnel};
 use bevy::{
-    ecs::system::Resource,
-    log::{error, warn},
-    tasks::{block_on, futures_lite::future, Task, TaskPool},
+    prelude::*,
+    tasks::{available_parallelism, AsyncComputeTaskPool, Task, TaskPool, TaskPoolBuilder},
 };
-use flume::{Receiver, RecvTimeoutError, Sender, TrySendError};
+use flume::Sender;
+use futures_util::{future::join_all, StreamExt};
+use parking_lot::Mutex;
+use priority_queue::PriorityQueue;
 
 use crate::{
     data::registries::Registries,
     render::{
-        lod::LevelOfDetail,
-        meshing::{error::ChunkMeshingError, greedy::algorithm::GreedyMesher, Context},
+        lod::{LevelOfDetail, LodMap},
+        meshing::{controller::events::MeshJobUrgency, greedy::algorithm::GreedyMesher, Context},
     },
-    topo::world::{ChunkManager, ChunkPos},
-    util::{result::ResultFlattening, sync::LockStrategy, ChunkIndexMap, ChunkSet, Keyed},
+    topo::world::{ChunkManager, ChunkPos, VoxelRealm},
+    util::sync::LockStrategy,
 };
 
-use super::{ChunkMeshData, RemeshPriority};
+use super::events::{BuildMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPriorities};
 
-pub struct Worker {
-    task: Task<()>,
-    interrupt: Arc<AtomicBool>,
-    label: String,
+/// The name of the threads in the mesh builder task pool.
+/// See [`TaskPoolBuilder::thread_name()`] for some more information.
+pub static MESH_BUILDER_TASK_POOL_THREAD_NAME: &'static str = "Mesh Builder Task Pool";
+
+pub const MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT: Duration = Duration::from_millis(10);
+
+#[derive(Resource, Deref)]
+pub struct MeshBuilderTaskPool(Arc<TaskPool>);
+
+impl MeshBuilderTaskPool {
+    /// Creates a mesh builder task pool with the given number of tasks.
+    pub fn new(tasks: usize) -> Self {
+        let task_pool = TaskPoolBuilder::new()
+            .num_threads(tasks)
+            .thread_name(MESH_BUILDER_TASK_POOL_THREAD_NAME.into())
+            .build();
+        Self(Arc::new(task_pool))
+    }
 }
 
-#[derive(Clone)]
-pub struct WorkerParams {
-    pub registries: Registries,
-    pub chunk_manager: Arc<ChunkManager>,
-    pub mesher: GreedyMesher,
-
-    pub finished: Sender<FinishedChunkMeshData>,
-    pub cmds: Receiver<MeshBuilderCommand>,
+impl Default for MeshBuilderTaskPool {
+    fn default() -> Self {
+        let cores = available_parallelism();
+        Self::new(cores)
+    }
 }
 
-#[derive(Clone)]
-pub struct MeshBuilderCommand {
+/// An item in the mesh building job queue. Ignores its `tick` field in equality checks and hashing.
+#[derive(Copy, Clone)]
+pub struct MeshBuilderJob {
     pub chunk_pos: ChunkPos,
-    pub lod: LevelOfDetail,
-    pub priority: RemeshPriority,
-    pub generation: u64,
-}
-
-impl Keyed<RemeshPriority> for MeshBuilderCommand {
-    type Key = RemeshPriority;
-
-    fn key(&self) -> &Self::Key {
-        &self.priority
-    }
-}
-
-impl Worker {
-    pub fn new(
-        pool: &TaskPool,
-        mut params: WorkerParams,
-        channel_timeout: Duration,
-        label: String,
-    ) -> Self {
-        let atomic_interrupt = Arc::new(AtomicBool::new(false));
-
-        let task_label = label.clone();
-        let task_interrupt = atomic_interrupt.clone();
-        let task = pool.spawn(async move {
-            let mut backlog_cmd = None::<MeshBuilderCommand>;
-
-            while !task_interrupt.load(Ordering::Relaxed) {
-                let cmd = match backlog_cmd.take() {
-                    Some(cmd) => Some(cmd),
-                    None => match params.cmds.recv_timeout(channel_timeout) {
-                        Ok(cmd) => Some(cmd),
-                        Err(RecvTimeoutError::Timeout) => None,
-                        Err(RecvTimeoutError::Disconnected) => {
-                            warn!("Channel disconnected for meshing worker '{task_label}', worker is shutting down.");
-                            return;
-                        }
-                    }
-                };
-
-                let Some(cmd) = cmd else { continue };
-
-                let cm = params.chunk_manager.clone();
-
-                let result = cm.neighbors(cmd.chunk_pos, LockStrategy::Blocking, |neighbors| {
-                    let context = Context {
-                        lod: cmd.lod,
-                        neighbors,
-                        registries: &params.registries,
-                    };
-
-                    let chunk = cm.loaded_chunk(cmd.chunk_pos)?;
-                    if chunk.is_primordial() {
-                        return Err(ChunkMeshingError::PrimordialChunk)
-                    }
-
-                    let handle = chunk.chunk().read_handle(LockStrategy::Blocking).unwrap();
-                    Ok(params.mesher.build(handle, context)?)
-                }).map_err(ChunkMeshingError::from).custom_flatten();
-
-                match result {
-                    Ok(output) => {
-                        params.finished.send(FinishedChunkMeshData {
-                            data: output,
-                            lod: cmd.lod,
-                            pos: cmd.chunk_pos,
-                            tick: cmd.generation
-                        }).unwrap();
-                    }
-                    Err(ChunkMeshingError::ChunkGetError(_)) => {
-                        // No point in logging here, chunk is likely just not loaded which could happen if the event was queued before the chunk was purged/unloaded.
-                        continue;
-                    },
-                    Err(ChunkMeshingError::PrimordialChunk) => {
-                        warn!("Attempted to build mesh for {} but the chunk was primordial", cmd.chunk_pos);
-                    }
-                    Err(ChunkMeshingError::MesherError(error)) => {
-                        error!("Error in worker '{task_label}' building chunk mesh for {}: {error}", cmd.chunk_pos);
-                    }
-                }
-            }
-        });
-
-        Self {
-            interrupt: atomic_interrupt,
-            task,
-            label: label.clone(),
-        }
-    }
-
-    pub async fn stop(self) {
-        self.interrupt.store(true, Ordering::Relaxed);
-        future::poll_once(self.task.cancel()).await;
-    }
-}
-
-pub struct FinishedChunkMeshData {
-    pub pos: ChunkPos,
-    pub lod: LevelOfDetail,
-    pub data: ChunkMeshData,
     pub tick: u64,
 }
 
-#[derive(Copy, Clone)]
-pub struct MeshBuilderSettings {
-    pub workers: usize,
-    pub job_channel_capacity: usize,
-    // TODO: if a worker cant send its finished mesh immediately, then let it build another while waiting
-    pub worker_mesh_backlog_capacity: usize,
+impl std::hash::Hash for MeshBuilderJob {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.chunk_pos.hash(state)
+    }
 }
 
-#[derive(Resource)]
-pub struct MeshBuilder {
-    workers: Vec<Worker>,
-    cmds: Sender<MeshBuilderCommand>,
-    pending: ChunkIndexMap<MeshBuilderCommand>,
-    finished: Receiver<FinishedChunkMeshData>,
+impl std::cmp::PartialEq for MeshBuilderJob {
+    fn eq(&self, other: &Self) -> bool {
+        self.chunk_pos == other.chunk_pos
+    }
 }
 
-impl MeshBuilder {
+impl std::cmp::Eq for MeshBuilderJob {}
+
+/// A queue of mesh building jobs. Automatically handles logic around job recency and priority.
+pub struct TickedMeshJobQueue(PriorityQueue<MeshBuilderJob, u32, rustc_hash::FxBuildHasher>);
+
+impl TickedMeshJobQueue {
+    pub fn new() -> Self {
+        Self(PriorityQueue::with_hasher(
+            rustc_hash::FxBuildHasher::default(),
+        ))
+    }
+
+    pub fn push(&mut self, chunk_pos: ChunkPos, tick: u64, priority: u32) {
+        let job = MeshBuilderJob { chunk_pos, tick };
+
+        // If a job already existed for this chunk position, update it so that its as recent as this
+        // job and bump its priority if needed.
+        if let Some((existing, &priority)) = self.0.get_mut(&job) {
+            // Mutation here is okay since the tick field does not affect the hash result or equality.
+            existing.tick = max(tick, existing.tick);
+
+            // Set the priority to whichever was highest
+            self.0.change_priority_by(&job, |existing_priority| {
+                *existing_priority = max(priority, *existing_priority);
+            });
+        } else {
+            self.0.push(job, priority);
+        }
+    }
+
+    pub fn pop(&mut self) -> Option<MeshBuilderJob> {
+        self.0.pop().map(|pair| pair.0)
+    }
+}
+
+pub struct MeshBuilderPool {
+    pub job_queues: Arc<LodMap<Mutex<TickedMeshJobQueue>>>,
+    shutdown_interrupt: Arc<AtomicBool>,
+    tasks: Vec<Task<()>>,
+}
+
+fn new_lod_job_queues() -> Arc<LodMap<Mutex<TickedMeshJobQueue>>> {
+    Arc::new(LodMap::from_fn(|_| {
+        Some(Mutex::new(TickedMeshJobQueue::new()))
+    }))
+}
+
+const DEFAULT_DEBUG_LOD: LevelOfDetail = LevelOfDetail::X16Subdiv;
+
+impl MeshBuilderPool {
     pub fn new(
-        settings: MeshBuilderSettings,
-        pool: &TaskPool,
+        task_pool: &TaskPool,
+        finished_meshes: EventFunnel<MeshFinishedEvent>,
+        chunk_manager: Arc<ChunkManager>,
         registries: Registries,
-        cm: Arc<ChunkManager>,
     ) -> Self {
-        let (cmd_sender, cmd_recver) =
-            flume::bounded::<MeshBuilderCommand>(settings.job_channel_capacity);
-        let (mesh_sender, mesh_recver) = flume::unbounded::<FinishedChunkMeshData>();
-        let mut workers = Vec::<Worker>::with_capacity(settings.workers);
+        let shutdown_interrupt = Arc::new(AtomicBool::new(false));
+        let mut tasks = Vec::<Task<()>>::with_capacity(task_pool.thread_num());
+        let job_queues = new_lod_job_queues();
 
-        let default_channel_timeout_duration = Duration::from_millis(50);
+        info!("Mesh builder pool size: {}", task_pool.thread_num());
 
-        let worker_params = WorkerParams {
-            registries,
-            chunk_manager: cm,
-            mesher: GreedyMesher::new(),
-            finished: mesh_sender,
-            cmds: cmd_recver,
-        };
+        for _ in 0..task_pool.thread_num() {
+            // Clone everything so it can be moved into the task.
+            let interrupt = shutdown_interrupt.clone();
+            let queues = job_queues.clone();
+            let cm = chunk_manager.clone();
+            let reg = registries.clone();
+            let finished = finished_meshes.clone();
 
-        for i in 0..settings.workers {
-            let worker = Worker::new(
-                pool,
-                worker_params.clone(),
-                default_channel_timeout_duration,
-                format!("mesh_worker_{i}"),
-            );
+            // Add the task to our list of all tasks so we can gracefully shut them down.
+            tasks.push(task_pool.spawn(async move {
+                // Initialize the mesher and its scratch buffers here
+                let mut greedy_mesher = GreedyMesher::new();
 
-            workers.push(worker);
+                while !interrupt.load(Ordering::Relaxed) {
+                    let queue_result = queues[DEFAULT_DEBUG_LOD]
+                        .try_lock_for(MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT)
+                        .and_then(|mut guard| guard.pop());
+
+                    // FIXME: this will currently go into a busy loop if the queue is empty, we should sleep for a little
+                    // so that the queue has time to potentially refill and other stuff can run.
+                    let Some(job) = queue_result else {
+                        continue;
+                    };
+
+                    let Ok(chunk_ref) = cm.loaded_chunk(job.chunk_pos) else {
+                        // TODO: maybe warn here?
+                        continue;
+                    };
+
+                    let Ok(mesher_result) =
+                        cm.neighbors(job.chunk_pos, LockStrategy::Blocking, |neighbors| {
+                            let read_handle = chunk_ref
+                                .chunk()
+                                .read_handle(LockStrategy::Blocking)
+                                .unwrap();
+
+                            let context = Context {
+                                lod: DEFAULT_DEBUG_LOD,
+                                neighbors,
+                                registries: &reg,
+                            };
+
+                            greedy_mesher.build(read_handle, context)
+                        })
+                    else {
+                        // TODO: maybe warn here?
+                        continue;
+                    };
+
+                    match mesher_result {
+                        Ok(chunk_mesh_data) => finished
+                            .send(MeshFinishedEvent {
+                                chunk_pos: job.chunk_pos,
+                                lod: DEFAULT_DEBUG_LOD,
+                                mesh: chunk_mesh_data,
+                                tick: job.tick,
+                            })
+                            .unwrap(),
+                        Err(error) => error!(
+                            "Mesh building job error (CHUNK_POS={} LOD={:?} TICK={}): {error}",
+                            job.chunk_pos, DEFAULT_DEBUG_LOD, job.tick
+                        ),
+                    }
+
+                    todo!();
+                }
+            }))
         }
 
         Self {
-            workers,
-            pending: ChunkIndexMap::default(),
-            cmds: cmd_sender,
-            finished: mesh_recver,
+            job_queues,
+            shutdown_interrupt,
+            tasks,
         }
     }
 
-    /// Queue jobs for workers based on their priority. The provided commands may not be sent immediately.
-    /// Internally this function places the commands in a sorted buffer ordered by the command priority.
-    /// Then it pops the highest-priority commands out of the buffer until the internal channel used to communicate
-    /// with workers is full. This function must be called periodically (even with just an empty iterator)
-    /// to send the next commands to the workers.
-    pub fn queue_jobs<I: Iterator<Item = MeshBuilderCommand>>(&mut self, cmds: I) {
-        self.pending.extend(cmds.map(|c| (c.chunk_pos, c)));
-        self.pending
-            .sort_unstable_by(|_, l, _, r| r.priority.cmp(&l.priority));
+    pub async fn shutdown(&mut self) {
+        self.shutdown_interrupt.store(true, Ordering::Relaxed);
+        join_all(self.tasks.drain(..)).await;
+    }
+}
 
-        #[cfg(debug_assertions)]
-        if !self.pending.is_empty() {
-            debug_assert!(
-                self.pending.first().unwrap().1.priority <= self.pending.last().unwrap().1.priority
-            );
-        }
+pub struct MeshBuilderEventProxyTaskState {
+    mesh_builder_pool: MeshBuilderPool,
+}
 
-        while let Some((_, next)) = self.pending.pop() {
-            if let Err(error) = self.cmds.try_send(next) {
-                match error {
-                    TrySendError::Disconnected(msg) => {
-                        self.pending.insert(msg.chunk_pos, msg);
-                        error!("Could not send remesh command to workers because the channel is disconnected.");
-                        break;
-                    }
-                    TrySendError::Full(msg) => {
-                        self.pending.insert(msg.chunk_pos, msg);
-                        break;
-                    }
-                }
-            }
+impl MeshBuilderEventProxyTaskState {
+    pub fn new(
+        mesh_builder_task_pool: &TaskPool,
+        chunk_manager: Arc<ChunkManager>,
+        registries: Registries,
+        finished_meshes: EventFunnel<MeshFinishedEvent>,
+    ) -> Self {
+        Self {
+            mesh_builder_pool: MeshBuilderPool::new(
+                mesh_builder_task_pool,
+                finished_meshes,
+                chunk_manager,
+                registries,
+            ),
         }
     }
 
-    /// Removes the given chunks from the pending commands.
-    pub fn remove_pending(&mut self, remove: &ChunkSet) {
-        self.pending.retain(|chunk, _| !remove.contains(*chunk));
+    pub fn handle_build_mesh_event(&mut self, event: BuildMeshEvent) {
+        let MeshJobUrgency::P1(priority) = event.urgency else {
+            todo!();
+        };
+
+        self.mesh_builder_pool.job_queues[event.lod].lock().push(
+            event.chunk_pos,
+            event.tick,
+            priority,
+        );
     }
 
-    pub fn shutdown(self) {
-        for worker in self.workers.into_iter() {
-            block_on(worker.stop());
+    pub fn handle_recalc_priorities_event(
+        &mut self,
+        event: RecalculateMeshBuildingEventPriorities,
+    ) {
+        for lod in LevelOfDetail::LODS {
+            let mut guard = self.mesh_builder_pool.job_queues[lod].lock();
+
+            todo!();
         }
     }
 
-    pub fn get_finished_meshes(&self) -> Vec<FinishedChunkMeshData> {
-        let mut vec = Vec::with_capacity(self.finished.len());
+    pub async fn on_shutdown(&mut self) {
+        self.mesh_builder_pool.shutdown().await;
+    }
+}
 
-        while let Ok(finished) = self.finished.try_recv() {
-            vec.push(finished);
+#[derive(Resource)]
+pub struct MeshBuilderEventProxyTaskHandle {
+    shutdown_tx: Sender<()>,
+    task: Task<()>,
+}
+
+/// This system starts the mesh builder pool and the proxy task that forwards events to the pool.
+pub fn start_mesh_builder_pool(
+    mut cmds: Commands,
+    mesh_builder_task_pool: Res<MeshBuilderTaskPool>,
+    realm: VoxelRealm,
+    registries: Res<Registries>,
+    build_mesh_events: Res<AsyncEventReader<BuildMeshEvent>>,
+    recalc_priority_events: Res<AsyncEventReader<RecalculateMeshBuildingEventPriorities>>,
+    mesh_finished_funnel: Res<EventFunnel<MeshFinishedEvent>>,
+) {
+    info!("Starting background mesh builder pool and mesh event proxy task.");
+
+    let build_mesh_events = build_mesh_events.clone();
+    let recalc_priority_events = recalc_priority_events.clone();
+
+    let mut task_state = MeshBuilderEventProxyTaskState::new(
+        &mesh_builder_task_pool,
+        realm.clone_cm(),
+        registries.clone(),
+        mesh_finished_funnel.clone(),
+    );
+
+    // Shutdown one-shot channel
+    let (shutdown_tx, shutdown_rx) = flume::bounded::<()>(1);
+
+    let task = AsyncComputeTaskPool::get().spawn(async move {
+        let mut build_mesh_events_stream = build_mesh_events.stream();
+        let mut recalc_priority_events_stream = recalc_priority_events.stream();
+        let mut shutdown_stream = shutdown_rx.stream();
+
+        'task_loop: loop {
+            futures_util::select! {
+                _ = shutdown_stream.next() => {
+                    break 'task_loop;
+                },
+                event = build_mesh_events_stream.next() => {
+                    let Some(event) = event else {
+                        continue;
+                    };
+
+                    task_state.handle_build_mesh_event(event);
+                },
+                event = recalc_priority_events_stream.next() => {
+                    let Some(event) = event else {
+                        continue;
+                    };
+
+                    task_state.handle_recalc_priorities_event(event);
+                },
+            };
         }
 
-        vec
-    }
+        task_state.on_shutdown().await;
+    });
+
+    cmds.insert_resource(MeshBuilderEventProxyTaskHandle { shutdown_tx, task });
 }

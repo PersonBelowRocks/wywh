@@ -375,6 +375,10 @@ impl ChunkManager {
     pub fn neighbors<T, F>(
         &self,
         chunk_pos: ChunkPos,
+        // TODO: this should be a bit more clever,
+        //  we should be able to build meshes for a chunk while neighboring chunks are being populated.
+        //  currently this function will be really janky when calling with LockStrategy::Blocking, and might
+        //  panic with anything else.
         strategy: LockStrategy,
         callback: F,
     ) -> Result<T, ChunkGetError>
@@ -403,6 +407,7 @@ impl ChunkManager {
 
         let mut neighbor_builder = NeighborsBuilder::new(self.default_block);
         for (offset, chunk) in chunks.iter() {
+            // FIXME: don't unwrap here, rather allow the caller to decide what should happen if this fails
             let read_handle = chunk.read_handle(strategy).unwrap();
             neighbor_builder.set_neighbor(*offset, read_handle).unwrap();
         }
