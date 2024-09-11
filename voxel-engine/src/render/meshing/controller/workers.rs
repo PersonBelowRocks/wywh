@@ -23,7 +23,7 @@ use crate::{
         lod::{LevelOfDetail, LodMap},
         meshing::{controller::events::MeshJobUrgency, greedy::algorithm::GreedyMesher, Context},
     },
-    topo::world::{ChunkManager, ChunkPos, VoxelRealm},
+    topo::world::{chunk::ChunkFlags, ChunkManager, ChunkPos, VoxelRealm},
     util::sync::LockStrategy,
 };
 
@@ -187,6 +187,13 @@ impl MeshBuilderPool {
                         continue;
                     };
 
+                    // We don't want to try reading data from primordial chunks. If a mesh building event
+                    // was sent for a primordial chunk it's either a mistake or the chunk was reloaded before
+                    // the event could be processed. Either way the most sane and safe thing to do is ignore it.
+                    if chunk_ref.is_primordial() {
+                        continue;
+                    }
+
                     let Ok(mesher_result) =
                         cm.neighbors(job.chunk_pos, LockStrategy::Blocking, |neighbors| {
                             let read_handle = chunk_ref
@@ -222,7 +229,15 @@ impl MeshBuilderPool {
                         ),
                     }
 
-                    todo!();
+                    chunk_ref
+                        .update_flags(LockStrategy::Blocking, |flags| {
+                            flags.remove(
+                                ChunkFlags::REMESH
+                                    | ChunkFlags::REMESH_NEIGHBORS
+                                    | ChunkFlags::FRESHLY_GENERATED,
+                            );
+                        })
+                        .unwrap();
                 }
             }))
         }
