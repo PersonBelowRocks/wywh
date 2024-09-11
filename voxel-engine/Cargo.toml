@@ -26,7 +26,7 @@ bracket-noise = "0.8.7"
 deser-hjson = "2.2.4"
 hashbrown = { version = "0.14.2" }
 indexmap = "2.1.0"
-itertools = "0.11.0"
+itertools = "0.13"
 noise = "0.8.2"
 num = "0.4.1"
 num-derive = "0.4.0"

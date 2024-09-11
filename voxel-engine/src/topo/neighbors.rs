@@ -1,4 +1,7 @@
+use std::{any::type_name, fmt};
+
 use bevy::math::{ivec3, IVec2, IVec3};
+use itertools::Itertools;
 
 use crate::{
     data::{registries::block::BlockVariantId, tile::Face},
@@ -7,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    error::NeighborReadError,
+    error::{InvalidNeighborPosition, NeighborReadError},
     fb_localspace_to_local_chunkspace, fb_localspace_wrap, mb_localspace_to_local_chunkspace,
     mb_localspace_wrap,
     world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
@@ -30,6 +33,119 @@ fn local_fb_to_neighbor_local_fb(pos: IVec3) -> IVec3 {
         pos.y.rem_euclid(Chunk::SIZE),
         pos.z.rem_euclid(Chunk::SIZE),
     )
+}
+
+/// A bitflag-like type for selecting neighbors of a chunk.
+/// Operations on a neighbor selection (and operations with neighbors in general) often require
+/// positions that are valid "neighbor positions".
+/// A neighbor position must be between `[-1, -1, -1]` and `[1, 1, 1]` (inclusive), but not `[0, 0, 0]`.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, dm::Debug)]
+#[debug("{name}({contents:#027b})", name=type_name::<Self>(), contents=self.0)]
+pub struct NeighborSelection(u32);
+
+impl NeighborSelection {
+    /// The number of neighboring chunks of a chunk.
+    /// You get this number by taking the volume of a `3x3x3` box (a box of chunks centered on a chunk)
+    /// and subtracting `1` (the chunk in the middle).
+    pub const NEIGHBOR_COUNT: u32 = (3 * 3 * 3) - 1;
+
+    /// Test if a position is a valid neighbor position (see type level documentation).
+    #[inline]
+    pub fn is_valid_neighbor_position(pos: IVec3) -> bool {
+        pos != IVec3::ZERO && pos.cmpge(-IVec3::ONE).all() && pos.cmple(IVec3::ONE).all()
+    }
+
+    /// Get the index of a neighbor position from a neighbor position.
+    /// Essentially "flattening" 3d space into a 1d index.
+    ///
+    /// Will return [`InvalidNeighborPosition`] if the given position is not a valid neighbor position.
+    #[inline]
+    pub fn ivec3_to_neighbor_index(pos: IVec3) -> Result<u32, InvalidNeighborPosition> {
+        if !Self::is_valid_neighbor_position(pos) {
+            return Err(InvalidNeighborPosition);
+        };
+
+        // Need to add one to place the minimum corner at [0, 0, 0], so that all components are positive.
+        let [x, y, z] = (pos + IVec3::ONE).as_uvec3().to_array();
+        let flattened = (z * 3 * 3) + (y * 3) + (x);
+
+        Ok(flattened)
+    }
+
+    /// Create an empty neighbor selection, with no neighbors selected.
+    #[inline]
+    #[must_use]
+    pub fn empty() -> Self {
+        Self(0)
+    }
+
+    /// Create a new neighbor selection where neighbors touching a face of the center are selected.
+    #[inline]
+    #[must_use]
+    pub fn all_faces() -> Self {
+        let mut new = Self::empty();
+
+        for face in Face::FACES {
+            new.set_face(face, true);
+        }
+
+        new
+    }
+
+    /// Get the number of neighbors selected.
+    #[inline]
+    #[must_use]
+    pub fn num_selected(&self) -> u32 {
+        self.0.count_ones()
+    }
+
+    /// Select/deselect the neighbor at the given face.
+    #[inline]
+    pub fn set_face(&mut self, face: Face, value: bool) {
+        self.set(face.normal(), value)
+            .expect("face normals should always be valid neighbor positions")
+    }
+
+    /// Select/deselect the neighbor at the given local chunk position.
+    ///
+    /// Will return [`InvalidNeighborPosition`] if the given position is not a valid neighbor position.
+    #[inline]
+    pub fn set(&mut self, pos: IVec3, value: bool) -> Result<(), InvalidNeighborPosition> {
+        let index = Self::ivec3_to_neighbor_index(pos)?;
+
+        match value {
+            true => self.0 |= 0b1 << index,
+            false => self.0 &= !(0b1 << index),
+        }
+
+        Ok(())
+    }
+
+    /// Get the selection status of the neighbor at the given local chunk position.
+    ///
+    /// Will return [`InvalidNeighborPosition`] if the given position is not a valid neighbor position.
+    #[inline]
+    pub fn get(&self, pos: IVec3) -> Result<bool, InvalidNeighborPosition> {
+        let index = Self::ivec3_to_neighbor_index(pos)?;
+        Ok(self.0 & (0b1 << index) != 0)
+    }
+
+    /// Get the selection status of the neighbor at the given face.
+    #[inline]
+    pub fn get_face(&self, face: Face) -> bool {
+        self.get(face.normal())
+            .expect("face normals should always be valid neighbor positions")
+    }
+
+    /// An iterator over all the selected neighbor positions.
+    #[inline]
+    pub fn selected(&self) -> impl Iterator<Item = IVec3> + '_ {
+        itertools::iproduct!(-1..=1, -1..=1, -1..=1)
+            .map(<[i32; 3]>::from)
+            .map(IVec3::from_array)
+            .filter(|&pos| pos != IVec3::ZERO)
+            .filter(|&pos| self.get(pos).unwrap())
+    }
 }
 
 // TODO: document what localspace, worldspace, chunkspace, and facespace are
@@ -237,5 +353,60 @@ impl<'a> NeighborsBuilder<'a> {
 
     pub fn build(self) -> Neighbors<'a> {
         self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_neighbor_selection() {
+        let mut sel = NeighborSelection::empty();
+
+        sel.set(ivec3(-1, -1, -1), true).unwrap();
+        sel.set(ivec3(0, 1, 0), true).unwrap();
+        sel.set(ivec3(-1, 0, 1), true).unwrap();
+        sel.set(ivec3(1, 1, 1), true).unwrap();
+
+        assert_eq!(4, sel.num_selected());
+
+        assert_eq!(Ok(true), sel.get(ivec3(-1, -1, -1)));
+        assert_eq!(Ok(true), sel.get(ivec3(0, 1, 0)));
+        assert_eq!(Ok(true), sel.get(ivec3(-1, 0, 1)));
+        assert_eq!(Ok(true), sel.get(ivec3(1, 1, 1)));
+
+        assert_eq!(Ok(false), sel.get(ivec3(-1, 1, -1)));
+        assert_eq!(Err(InvalidNeighborPosition), sel.get(ivec3(0, 0, 0)));
+        assert_eq!(Err(InvalidNeighborPosition), sel.get(ivec3(0, -2, 0)));
+        assert_eq!(Err(InvalidNeighborPosition), sel.get(ivec3(0, 2, 0)));
+
+        sel.set(ivec3(-1, -1, -1), false).unwrap();
+        sel.set(ivec3(1, 1, 1), false).unwrap();
+
+        assert_eq!(2, sel.num_selected());
+
+        assert_eq!(Ok(false), sel.get(ivec3(-1, -1, -1)));
+        assert_eq!(Ok(true), sel.get(ivec3(0, 1, 0)));
+        assert_eq!(Ok(true), sel.get(ivec3(-1, 0, 1)));
+        assert_eq!(Ok(false), sel.get(ivec3(1, 1, 1)));
+    }
+
+    #[test]
+    fn test_neighbor_selection_iter() {
+        let mut sel = NeighborSelection::empty();
+
+        sel.set(ivec3(-1, -1, -1), true).unwrap();
+        sel.set(ivec3(0, -1, -1), true).unwrap();
+        sel.set(ivec3(1, -1, -1), true).unwrap();
+        sel.set(ivec3(1, 1, 1), true).unwrap();
+
+        let mut iter = sel.selected();
+
+        assert_eq!(Some(ivec3(-1, -1, -1)), iter.next());
+        assert_eq!(Some(ivec3(0, -1, -1)), iter.next());
+        assert_eq!(Some(ivec3(1, -1, -1)), iter.next());
+        assert_eq!(Some(ivec3(1, 1, 1)), iter.next());
+        assert_eq!(None, iter.next());
     }
 }
