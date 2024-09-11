@@ -210,7 +210,6 @@ impl MeshBuilderPool {
                             greedy_mesher.build(read_handle, context)
                         })
                     else {
-                        // TODO: maybe warn here?
                         continue;
                     };
 
