@@ -88,13 +88,19 @@ impl WorldgenWorkerPool {
                 while !interrupt.load(Ordering::Relaxed) {
                     // Try getting the next job for the given timeout duration. We don't want to hang on the mutex for too long
                     // in case we are ordered to shut down.
-                    let queue_result = queue
-                        .try_lock_for(WORLDGEN_WORKER_JOB_QUEUE_LOCK_TIMEOUT)
-                        .and_then(|mut guard| guard.pop());
+                    let Some(mut queue_guard) =
+                        queue.try_lock_for(WORLDGEN_WORKER_JOB_QUEUE_LOCK_TIMEOUT)
+                    else {
+                        continue;
+                    };
 
-                    // FIXME: this will currently go into a busy loop if the queue is empty, we should sleep for a little
-                    // so that the queue has time to potentially refill and other stuff can run.
-                    let Some((next_chunk_pos, _)) = queue_result else {
+                    let Some((next_chunk_pos, _)) = queue_guard.pop() else {
+                        drop(queue_guard);
+
+                        // This isn't a great way to do this, since this is async code.
+                        // But since we're spawning one task per thread, this shouldn't cause any issues.
+                        std::thread::sleep(WORLDGEN_WORKER_JOB_QUEUE_LOCK_TIMEOUT);
+
                         continue;
                     };
 

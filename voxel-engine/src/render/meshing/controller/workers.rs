@@ -172,18 +172,25 @@ impl MeshBuilderPool {
                 let mut greedy_mesher = GreedyMesher::new();
 
                 while !interrupt.load(Ordering::Relaxed) {
-                    let queue_result = queues[DEFAULT_DEBUG_LOD]
-                        .try_lock_for(MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT)
-                        .and_then(|mut guard| guard.pop());
+                    // Try getting the next job for the given timeout duration. We don't want to hang on the mutex for too long
+                    // in case we are ordered to shut down.
+                    let Some(mut queue_guard) =
+                        queues[DEFAULT_DEBUG_LOD].try_lock_for(MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT)
+                    else {
+                        continue;
+                    };
 
-                    // FIXME: this will currently go into a busy loop if the queue is empty, we should sleep for a little
-                    // so that the queue has time to potentially refill and other stuff can run.
-                    let Some(job) = queue_result else {
+                    let Some(job) = queue_guard.pop() else {
+                        drop(queue_guard);
+
+                        // This isn't a great way to do this, since this is async code.
+                        // But since we're spawning one task per thread, this shouldn't cause any issues.
+                        std::thread::sleep(MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT);
+
                         continue;
                     };
 
                     let Ok(chunk_ref) = cm.loaded_chunk(job.chunk_pos) else {
-                        // TODO: maybe warn here?
                         continue;
                     };
 
