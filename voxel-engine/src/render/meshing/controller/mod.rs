@@ -10,7 +10,10 @@ use ecs::{
     batch_chunk_extraction, collect_solid_chunks_as_occluders,
     remove_chunk_meshes_from_extraction_bridge, send_mesh_removal_events_from_batch_removal_events,
 };
-use events::{BuildMeshEvent, MeshFinishedEvent, RemoveChunkMeshEvent};
+use events::{
+    BuildMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
+    RemoveChunkMeshEvent,
+};
 use workers::{start_mesh_builder_tasks, MeshBuilderTaskPool};
 
 use crate::{
@@ -246,8 +249,9 @@ impl Plugin for MeshController {
 
         app.add_plugins((
             AsyncEventPlugin::<BuildMeshEvent>::default(),
-            EventFunnelPlugin::<MeshFinishedEvent>::for_new(),
             AsyncEventPlugin::<RemoveChunkMeshEvent>::default(),
+            AsyncEventPlugin::<RecalculateMeshBuildingEventPrioritiesEvent>::default(),
+            EventFunnelPlugin::<MeshFinishedEvent>::for_new(),
         ))
         .insert_resource(mesh_builder_task_pool)
         .init_resource::<ChunkMeshExtractBridge>()
