@@ -35,15 +35,6 @@ pub struct MeshWorkerTaskPool(TaskPool);
 #[derive(Resource, Deref, Default)]
 pub struct OccluderChunks(Vec<ChunkPos>);
 
-#[derive(Event, Clone)]
-pub struct RemeshChunk {
-    pub pos: ChunkPos,
-    pub lod: LevelOfDetail,
-    pub remesh_type: RemeshType,
-    pub priority: RemeshPriority,
-    pub tick: u64,
-}
-
 pub fn collect_solid_chunks_as_occluders(realm: VoxelRealm, mut occluders: ResMut<OccluderChunks>) {
     occluders.0 = realm.cm().solid_chunks();
 }

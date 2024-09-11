@@ -11,7 +11,7 @@ use ecs::{
     remove_chunk_meshes_from_extraction_bridge, send_mesh_removal_events_from_batch_removal_events,
 };
 use events::{
-    BuildMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
+    BuildChunkMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
     RemoveChunkMeshEvent,
 };
 use workers::{start_mesh_builder_tasks, MeshBuilderTaskPool};
@@ -28,7 +28,7 @@ use crate::{
 
 use self::ecs::prepare_finished_meshes_for_extraction;
 
-pub use self::ecs::{OccluderChunks, RemeshChunk};
+pub use self::ecs::OccluderChunks;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RemeshType {
@@ -248,15 +248,14 @@ impl Plugin for MeshController {
         let mesh_builder_task_pool = MeshBuilderTaskPool::default();
 
         app.add_plugins((
-            AsyncEventPlugin::<BuildMeshEvent>::default(),
+            AsyncEventPlugin::<BuildChunkMeshEvent>::default(),
             AsyncEventPlugin::<RemoveChunkMeshEvent>::default(),
             AsyncEventPlugin::<RecalculateMeshBuildingEventPrioritiesEvent>::default(),
             EventFunnelPlugin::<MeshFinishedEvent>::for_new(),
         ))
         .insert_resource(mesh_builder_task_pool)
         .init_resource::<ChunkMeshExtractBridge>()
-        .init_resource::<OccluderChunks>()
-        .add_event::<RemeshChunk>();
+        .init_resource::<OccluderChunks>();
 
         app.add_systems(
             OnEnter(EngineState::Finished),

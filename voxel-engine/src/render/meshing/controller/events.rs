@@ -8,7 +8,7 @@ use super::{ChunkMeshData, ChunkMeshStatus};
 
 /// Event sent when a mesh for a chunk should be built.
 #[derive(Clone, Event, Debug)]
-pub struct BuildMeshEvent {
+pub struct BuildChunkMeshEvent {
     pub chunk_pos: ChunkPos,
     pub urgency: MeshJobUrgency,
     pub lod: LevelOfDetail,

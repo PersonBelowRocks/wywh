@@ -7,9 +7,6 @@ pub use intdiv::*;
 pub mod chunks;
 pub use chunks::*;
 
-pub mod keyed_ord;
-pub use keyed_ord::*;
-
 pub mod iteration;
 pub mod sync;
 
@@ -29,6 +26,38 @@ pub type CubicArray<const SIZE: usize, T> = [[[T; SIZE]; SIZE]; SIZE];
 #[derive(te::Error, Debug, PartialEq, Eq, Clone)]
 #[error("Could not convert vector {0}")]
 pub struct ConversionError(IVec3);
+
+/// Get the **distance** between `p` and the closest position in `points`.
+/// Returns `None` if `points` is empty.
+///
+/// See [`closest_distance_sq()`] for the squared distance.
+#[inline]
+pub fn closest_distance(p: Vec3, mut points: impl Iterator<Item = Vec3>) -> Option<f32> {
+    let mut min_distance = p.distance(points.next()?);
+
+    for point in points {
+        let distance = p.distance(point);
+        min_distance = f32::min(min_distance, distance);
+    }
+
+    Some(min_distance)
+}
+
+/// Get the **squared distance** between `p` and the closest position in `points`.
+/// Returns `None` if `points` is empty.
+///
+/// See [`closest_distance()`] for the distance.
+#[inline]
+pub fn closest_distance_sq(p: Vec3, mut points: impl Iterator<Item = Vec3>) -> Option<f32> {
+    let mut min_distance_sq = p.distance(points.next()?);
+
+    for point in points {
+        let distance_sq = p.distance(point);
+        min_distance_sq = f32::min(min_distance_sq, distance_sq);
+    }
+
+    Some(min_distance_sq)
+}
 
 pub fn notnan_arr<const SIZE: usize>(arr: [f32; SIZE]) -> Option<[NotNan<f32>; SIZE]> {
     if arr.iter().any(|f| f.is_nan()) {
@@ -296,71 +325,9 @@ impl<T: Debug> Debug for FaceMap<T> {
     }
 }
 
-pub fn circular_shift<T: Copy, const C: usize>(arr: [T; C], shift: isize) -> [T; C] {
-    let mut out = arr;
-
-    for (i, &e) in arr.iter().enumerate() {
-        let shifted_index = (i as isize + shift).rem_euclid(C as isize);
-
-        out[shifted_index as usize] = e;
-    }
-
-    out
-}
-
-pub trait ArrayExt {
-    fn circular_shift(self, shift: isize) -> Self;
-    fn reversed(self) -> Self;
-}
-
-impl<T: Copy, const SIZE: usize> ArrayExt for [T; SIZE] {
-    fn circular_shift(self, shift: isize) -> Self {
-        circular_shift(self, shift)
-    }
-
-    fn reversed(mut self) -> Self {
-        self.reverse();
-        self
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_circular_shift() {
-        let arr = [0, 1, 2, 3];
-
-        assert_eq!([3, 0, 1, 2], circular_shift(arr, 1));
-        assert_eq!([1, 2, 3, 0], circular_shift(arr, -1));
-        assert_eq!([2, 3, 0, 1], circular_shift(arr, 2));
-        assert_eq!([2, 3, 0, 1], circular_shift(arr, -2));
-        assert_eq!([1, 2, 3, 0], circular_shift(arr, 3));
-        assert_eq!([3, 0, 1, 2], circular_shift(arr, -3));
-    }
-
-    #[test]
-    fn test_circular_shift_modulo() {
-        let arr = [0, 1, 2, 3];
-
-        assert_eq!([2, 3, 0, 1], circular_shift(arr, 6));
-        assert_eq!([2, 3, 0, 1], circular_shift(arr, -6));
-
-        assert_eq!([1, 2, 3, 0], circular_shift(arr, 7));
-        assert_eq!([3, 0, 1, 2], circular_shift(arr, -7));
-    }
-
-    #[test]
-    fn test_circular_shift_unchanged() {
-        let arr = [0, 1, 2, 3];
-
-        assert_eq!(arr, circular_shift(arr, 4));
-        assert_eq!(arr, circular_shift(arr, -4));
-
-        assert_eq!(arr, circular_shift(arr, 0));
-        assert_eq!(arr, circular_shift(arr, -0));
-    }
 
     #[test]
     fn test_facemap_deserialize() {

@@ -8,7 +8,10 @@ use bevy::prelude::*;
 use bitflags::bitflags;
 use hb::HashSet;
 
-use observer_events::{dispatch_move_events, populate_loaded_chunks, update_observer_batches};
+use observer_events::{
+    build_populated_chunk_meshes, build_revived_chunk_meshes, dispatch_move_events,
+    populate_loaded_chunks, update_observer_batches,
+};
 
 use crate::data::registries::block::BlockVariantRegistry;
 use crate::data::registries::{Registries, Registry};
@@ -44,7 +47,6 @@ fn increase_voxel_world_tick(mut tick: ResMut<VoxelWorldTick>) {
     tick.0 += 1;
 }
 
-// TODO: use ints not floats!
 #[derive(Clone, Component, Debug)]
 pub struct ObserverSettings {
     pub horizontal_range: u32,
@@ -341,7 +343,12 @@ impl Plugin for WorldController {
             FixedPostUpdate,
             (
                 dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
-                populate_loaded_chunks.in_set(WorldControllerSystems::ObserverResponses),
+                (
+                    populate_loaded_chunks,
+                    build_revived_chunk_meshes,
+                    build_populated_chunk_meshes,
+                )
+                    .in_set(WorldControllerSystems::ObserverResponses),
             ),
         );
 

@@ -1,16 +1,22 @@
 use bevy::prelude::*;
 
 use crate::{
-    topo::world::{
-        chunk_manager::ChunkLoadResult, chunk_populator::events::PopulateChunk, ChunkPos,
+    render::{
+        lod::LevelOfDetail,
+        meshing::controller::events::{BuildChunkMeshEvent, MeshJobUrgency},
     },
-    util::ws_to_chunk_pos,
+    topo::world::{
+        chunk_manager::ChunkLoadResult,
+        chunk_populator::events::{ChunkPopulated, PopulateChunk},
+        ChunkPos,
+    },
+    util::{closest_distance_sq, ws_to_chunk_pos},
 };
 
 use super::{
     AddBatchChunks, ChunkBatch, CrossChunkBorder, LastPosition, LoadChunks, LoadReasons,
     LoadedChunkEvent, ObserverBatches, ObserverLoadshare, ObserverSettings, RemoveBatchChunks,
-    UnloadChunks, UpdateCachedChunkFlags,
+    UnloadChunks, UpdateCachedChunkFlags, VoxelWorldTick,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
@@ -161,6 +167,7 @@ pub fn update_observer_batches(
     }
 }
 
+/// System for dispatching population events for newly loaded chunks.
 pub fn populate_loaded_chunks(
     q_observers: Query<&Transform, With<ObserverSettings>>,
     mut loaded_chunk_events: EventReader<LoadedChunkEvent>,
@@ -168,25 +175,68 @@ pub fn populate_loaded_chunks(
 ) {
     for loaded in loaded_chunk_events.read() {
         // Don't send population events for revived chunks or chunks that don't want to be automatically populated.
+        // Revived chunks are handled by another system so that their meshes are built.
         if !loaded.auto_populate || matches!(loaded.load_result, ChunkLoadResult::Revived) {
-            // TODO: we still need to rebuild the mesh in this case
             continue;
         }
 
         let center = loaded.chunk_pos.worldspace_center();
-
-        let mut min_distance: f32 = 0.0;
-        for &observer_transform in &q_observers {
-            let pos = observer_transform.translation;
-            // TODO: maybe handle NaN values here?
-            let distance = pos.distance_squared(center);
-            min_distance = f32::min(min_distance, distance);
-        }
+        let observer_positions = q_observers.iter().map(|&transform| transform.translation);
+        let min_distance_sq = closest_distance_sq(center, observer_positions).unwrap_or(0.0);
 
         populate_chunk_events.send(PopulateChunk {
             chunk_pos: loaded.chunk_pos,
             // Closer chunk positions are higher priority, so we need to invert the distance.
-            priority: u32::MAX - (min_distance as u32),
+            priority: u32::MAX - (min_distance_sq.ceil() as u32),
+        });
+    }
+}
+
+/// System for dispatching mesh building events for revived chunks.
+pub fn build_revived_chunk_meshes(
+    q_observers: Query<&Transform, With<ObserverSettings>>,
+    mut loaded_chunk_events: EventReader<LoadedChunkEvent>,
+    mut mesh_build_events: EventWriter<BuildChunkMeshEvent>,
+    tick: Res<VoxelWorldTick>,
+) {
+    for loaded in loaded_chunk_events.read() {
+        if matches!(loaded.load_result, ChunkLoadResult::New) {
+            continue;
+        }
+
+        let center = loaded.chunk_pos.worldspace_center();
+        let observer_positions = q_observers.iter().map(|&transform| transform.translation);
+        let min_distance_sq = closest_distance_sq(center, observer_positions).unwrap_or(0.0);
+
+        let priority = u32::MAX - (min_distance_sq.ceil() as u32);
+
+        mesh_build_events.send(BuildChunkMeshEvent {
+            chunk_pos: loaded.chunk_pos,
+            urgency: MeshJobUrgency::P1(priority),
+            lod: LevelOfDetail::X16Subdiv,
+            tick: tick.get(),
+        });
+    }
+}
+
+pub fn build_populated_chunk_meshes(
+    q_observers: Query<&Transform, With<ObserverSettings>>,
+    mut populated_chunk_events: EventReader<ChunkPopulated>,
+    mut mesh_build_events: EventWriter<BuildChunkMeshEvent>,
+    tick: Res<VoxelWorldTick>,
+) {
+    for populated in populated_chunk_events.read() {
+        let center = populated.chunk_pos.worldspace_center();
+        let observer_positions = q_observers.iter().map(|&transform| transform.translation);
+        let min_distance_sq = closest_distance_sq(center, observer_positions).unwrap_or(0.0);
+
+        let priority = u32::MAX - (min_distance_sq.ceil() as u32);
+
+        mesh_build_events.send(BuildChunkMeshEvent {
+            chunk_pos: populated.chunk_pos,
+            urgency: MeshJobUrgency::P1(priority),
+            lod: LevelOfDetail::X16Subdiv,
+            tick: tick.get(),
         });
     }
 }

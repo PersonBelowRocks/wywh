@@ -146,11 +146,11 @@ pub fn broadcast_async_events<E: Event>(
     tx: Res<AsyncEventWriter<E>>,
     mut events: ResMut<Events<E>>,
 ) {
-    if tx.receivers() == 1 {
+    if tx.receivers() == 1 && !events.is_empty() {
         warn!("Broadcasting event {} with only one receiver, which is likely the one in the main world.", type_name::<E>());
     }
 
-    if tx.receivers() == 0 {
+    if tx.receivers() == 0 && !events.is_empty() {
         warn!(
             "Broadcasting event {} with no receiver, meaning the channel is likely closed.",
             type_name::<E>()

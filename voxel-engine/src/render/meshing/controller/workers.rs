@@ -28,7 +28,7 @@ use crate::{
 };
 
 use super::events::{
-    BuildMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
+    BuildChunkMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
     RemoveChunkMeshEvent,
 };
 
@@ -261,7 +261,7 @@ impl MeshBuilderEventProxyTaskState {
         }
     }
 
-    pub fn handle_build_mesh_event(&mut self, event: BuildMeshEvent) {
+    pub fn handle_build_mesh_event(&mut self, event: BuildChunkMeshEvent) {
         let MeshJobUrgency::P1(priority) = event.urgency else {
             todo!("Immediate mesh building is not supported yet");
         };
@@ -308,7 +308,7 @@ pub fn start_mesh_builder_tasks(
     mesh_builder_task_pool: Res<MeshBuilderTaskPool>,
     realm: VoxelRealm,
     registries: Res<Registries>,
-    build_mesh_events: Res<AsyncEventReader<BuildMeshEvent>>,
+    build_mesh_events: Res<AsyncEventReader<BuildChunkMeshEvent>>,
     recalc_priority_events: Res<AsyncEventReader<RecalculateMeshBuildingEventPrioritiesEvent>>,
     remove_chunk_mesh_events: Res<AsyncEventReader<RemoveChunkMeshEvent>>,
     mesh_finished_funnel: Res<EventFunnel<MeshFinishedEvent>>,
