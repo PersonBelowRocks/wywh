@@ -5,10 +5,13 @@ use crate::{
         lod::LevelOfDetail,
         meshing::controller::events::{BuildChunkMeshEvent, MeshJobUrgency},
     },
-    topo::world::{
-        chunk_manager::ChunkLoadResult,
-        chunk_populator::events::{ChunkPopulated, PopulateChunk},
-        ChunkPos,
+    topo::{
+        neighbors::NeighborSelection,
+        world::{
+            chunk_manager::ChunkLoadResult,
+            chunk_populator::events::{ChunkPopulated, PopulateChunk},
+            ChunkPos,
+        },
     },
     util::{closest_distance_sq, ws_to_chunk_pos},
 };
@@ -213,6 +216,7 @@ pub fn build_revived_chunk_meshes(
         mesh_build_events.send(BuildChunkMeshEvent {
             chunk_pos: loaded.chunk_pos,
             urgency: MeshJobUrgency::P1(priority),
+            neighbors: NeighborSelection::all_faces(),
             lod: LevelOfDetail::X16Subdiv,
             tick: tick.get(),
         });
@@ -235,6 +239,8 @@ pub fn build_populated_chunk_meshes(
         mesh_build_events.send(BuildChunkMeshEvent {
             chunk_pos: populated.chunk_pos,
             urgency: MeshJobUrgency::P1(priority),
+            // TODO: only select neighbors that we have permission to build meshes for
+            neighbors: NeighborSelection::all_faces(),
             lod: LevelOfDetail::X16Subdiv,
             tick: tick.get(),
         });

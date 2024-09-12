@@ -17,6 +17,7 @@ use super::{
     CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS,
 };
 
+// TODO: get rid of this
 fn local_fb_to_chunk_pos(pos: IVec3) -> IVec3 {
     // TODO: use bitwise math
     ivec3(
@@ -26,6 +27,7 @@ fn local_fb_to_chunk_pos(pos: IVec3) -> IVec3 {
     )
 }
 
+// TODO: get rid of this
 fn local_fb_to_neighbor_local_fb(pos: IVec3) -> IVec3 {
     // TODO: use bitwise math
     ivec3(

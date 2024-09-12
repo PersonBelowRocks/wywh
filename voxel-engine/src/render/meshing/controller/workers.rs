@@ -287,11 +287,20 @@ impl MeshBuilderEventProxyTaskState {
             todo!("Immediate mesh building is not supported yet");
         };
 
-        self.mesh_builder_pool.job_queues[event.lod].lock().push(
-            event.chunk_pos,
-            event.tick,
-            priority,
-        );
+        let mut guard = self.mesh_builder_pool.job_queues[event.lod].lock();
+
+        // Queue the center chunk
+        guard.push(event.chunk_pos, event.tick, priority);
+
+        // Queue the neighbors of the center chunk
+        // TODO: it might actually be better to only queue neighbor mesh jobs if the mesh already exists.
+        //  This is because when a chunk is populated or revived, its mesh must be built anyway, the only thing
+        //  neighbor remeshings (currently) correct for is when a chunk mesh updates in such a way that it creates a hole
+        //  somewhere on the border between it and its neighbor.
+        for selected_neighbor in event.neighbors.selected() {
+            let neighbor_chunk_pos = ChunkPos::from(event.chunk_pos.as_ivec3() + selected_neighbor);
+            guard.push(neighbor_chunk_pos, event.tick, priority);
+        }
     }
 
     pub fn handle_recalc_priorities_event(

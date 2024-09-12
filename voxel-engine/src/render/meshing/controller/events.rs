@@ -1,6 +1,9 @@
 use crate::{
     render::lod::{LODs, LevelOfDetail},
-    topo::world::{chunk_populator::events::PriorityCalcStrategy, ChunkPos},
+    topo::{
+        neighbors::NeighborSelection,
+        world::{chunk_populator::events::PriorityCalcStrategy, ChunkPos},
+    },
 };
 use bevy::prelude::*;
 
@@ -12,6 +15,8 @@ pub struct BuildChunkMeshEvent {
     pub chunk_pos: ChunkPos,
     pub urgency: MeshJobUrgency,
     pub lod: LevelOfDetail,
+    /// Which neighbors (if any) of this chunk should also have their meshes built.
+    pub neighbors: NeighborSelection,
     /// The tick that this job is from. The resulting chunk mesh will overwrite the existing chunk
     /// mesh if it's from an earlier tick. This is to ensure that the most up-to-date data is shown
     /// visually. The tick value should just be whatever the current tick is at the time that this event is sent.
