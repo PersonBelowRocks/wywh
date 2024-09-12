@@ -107,7 +107,11 @@ pub fn cursor_grab(
     btn: Res<ButtonInput<MouseButton>>,
     key: Res<ButtonInput<KeyCode>>,
 ) {
-    let mut window = q_window.single_mut();
+    let Ok(mut window) = q_window.get_single_mut() else {
+        // If there's no window, we're probably shutting down, so we skip everything
+        return;
+    };
+
     let mut controller = q_controller.single_mut();
 
     if btn.just_pressed(MouseButton::Left) {

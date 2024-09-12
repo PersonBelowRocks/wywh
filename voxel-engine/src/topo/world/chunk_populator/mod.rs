@@ -8,14 +8,19 @@ use std::sync::Arc;
 use async_bevy_events::{AsyncEventPlugin, AsyncEventReader, EventFunnel, EventFunnelPlugin};
 use bevy::{
     prelude::*,
-    tasks::{AsyncComputeTaskPool, Task, TaskPool},
+    tasks::{
+        available_parallelism, block_on, AsyncComputeTaskPool, Task, TaskPool, TaskPoolBuilder,
+    },
 };
 use default_generator::WorldGenerator;
 use events::{
     ChunkPopulated, PopulateChunk, PriorityCalcStrategy, RecalculatePopulateEventPriorities,
 };
 use futures_util::StreamExt;
-use worldgen::{WorldgenJobQueue, WorldgenTaskPool, WorldgenWorker, WorldgenWorkerPool};
+use worldgen::{
+    WorldgenJobQueue, WorldgenWorker, WorldgenWorkerPool, WORLDGEN_TASK_POOL,
+    WORLDGEN_TASK_POOL_THREAD_NAME,
+};
 
 use crate::{data::registries::Registries, CoreEngineSetup, EngineState};
 
@@ -27,14 +32,18 @@ impl Plugin for ChunkPopulatorController {
     fn build(&self, app: &mut App) {
         info!("Setting up chunk populator controller");
 
+        WORLDGEN_TASK_POOL.set(
+            TaskPoolBuilder::new()
+                .num_threads(available_parallelism())
+                .thread_name(WORLDGEN_TASK_POOL_THREAD_NAME.into())
+                .build(),
+        ).expect("build() should only be called once, and it's the only place where we initialize the pool");
+
         app.add_plugins((
             AsyncEventPlugin::<RecalculatePopulateEventPriorities>::default(),
             AsyncEventPlugin::<PopulateChunk>::default(),
             EventFunnelPlugin::<ChunkPopulated>::for_new(),
         ));
-
-        let worldgen_task_pool = WorldgenTaskPool::default();
-        app.insert_resource(worldgen_task_pool);
 
         app.add_systems(
             OnEnter(EngineState::Finished),
@@ -49,13 +58,22 @@ impl Plugin for ChunkPopulatorController {
 #[derive(Resource)]
 pub struct PopulatorTaskHandle {
     shutdown_tx: flume::Sender<()>,
-    task: Task<()>,
+    task: Option<Task<()>>,
+}
+
+impl Drop for PopulatorTaskHandle {
+    fn drop(&mut self) {
+        if self.shutdown_tx.send(()).is_err() {
+            warn!("Shutdown channel for chunk populator task was disconnected");
+        }
+
+        block_on(self.task.take().unwrap())
+    }
 }
 
 pub struct PopulatorTaskState {
     chunk_manager: Arc<ChunkManager>,
     registries: Registries,
-    worldgen_task_pool: Arc<TaskPool>,
     worldgen_worker_pool: WorldgenWorkerPool,
 }
 
@@ -88,12 +106,10 @@ impl PopulatorTaskState {
     pub fn new<F: Fn() -> Box<dyn WorldgenWorker>>(
         chunk_manager: Arc<ChunkManager>,
         registries: Registries,
-        worldgen_task_pool: Arc<TaskPool>,
         chunk_populated_funnel: EventFunnel<ChunkPopulated>,
         worldgen_worker_factory: F,
     ) -> Self {
         let worldgen_worker_pool = WorldgenWorkerPool::new(
-            &worldgen_task_pool,
             chunk_populated_funnel,
             chunk_manager.clone(),
             worldgen_worker_factory,
@@ -102,7 +118,6 @@ impl PopulatorTaskState {
         Self {
             chunk_manager,
             registries,
-            worldgen_task_pool,
             worldgen_worker_pool,
         }
     }
@@ -143,7 +158,6 @@ impl PopulatorTaskState {
 /// This system starts the [`PopulationEventBusTask`] task with the appropriate data and configuration.
 pub fn start_chunk_population_event_bus_task(
     mut cmds: Commands,
-    worldgen_task_pool: Res<WorldgenTaskPool>,
     realm: VoxelRealm,
     registries: Res<Registries>,
     populate_chunk_events: Res<AsyncEventReader<PopulateChunk>>,
@@ -158,7 +172,6 @@ pub fn start_chunk_population_event_bus_task(
     let mut task_state = PopulatorTaskState::new(
         realm.clone_cm(),
         registries.clone(),
-        worldgen_task_pool.clone(),
         chunk_populated_funnel.clone(),
         || Box::new(WorldGenerator::new(&registries)),
     );
@@ -197,5 +210,8 @@ pub fn start_chunk_population_event_bus_task(
         task_state.on_shutdown().await;
     });
 
-    cmds.insert_resource(PopulatorTaskHandle { shutdown_tx, task });
+    cmds.insert_resource(PopulatorTaskHandle {
+        shutdown_tx,
+        task: Some(task),
+    });
 }

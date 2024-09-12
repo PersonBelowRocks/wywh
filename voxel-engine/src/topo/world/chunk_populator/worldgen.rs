@@ -1,5 +1,6 @@
+use std::cell::OnceCell;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use async_bevy_events::{ChannelClosed, EventFunnel};
@@ -8,7 +9,7 @@ use bevy::prelude::*;
 use bevy::tasks::{available_parallelism, Task, TaskPool, TaskPoolBuilder};
 use flume::Sender;
 use futures_util::future::join_all;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, Once};
 use priority_queue::PriorityQueue;
 
 use crate::topo::world::chunk::ChunkFlags;
@@ -17,31 +18,12 @@ use crate::util::sync::LockStrategy;
 
 use super::events::{ChunkPopulated, PopulationSource};
 
+/// The task pool that world generation tasks are spawned in. These tasks are very CPU-heavy.
+pub(crate) static WORLDGEN_TASK_POOL: OnceLock<TaskPool> = OnceLock::new();
+
 /// The name of the threads in the worldgen task pool.
 /// See [`TaskPoolBuilder::thread_name()`] for some more information.
 pub static WORLDGEN_TASK_POOL_THREAD_NAME: &'static str = "World Generator Task Pool";
-
-/// The task pool that world generation tasks are spawned in. These tasks are very CPU-heavy.
-#[derive(Resource, Deref)]
-pub struct WorldgenTaskPool(Arc<TaskPool>);
-
-impl WorldgenTaskPool {
-    /// Creates a worldgen task pool with the given number of tasks.
-    pub fn new(tasks: usize) -> Self {
-        let task_pool = TaskPoolBuilder::new()
-            .num_threads(tasks)
-            .thread_name(WORLDGEN_TASK_POOL_THREAD_NAME.into())
-            .build();
-        Self(Arc::new(task_pool))
-    }
-}
-
-impl Default for WorldgenTaskPool {
-    fn default() -> Self {
-        let cores = available_parallelism();
-        Self::new(cores)
-    }
-}
 
 pub const WORLDGEN_WORKER_JOB_QUEUE_LOCK_TIMEOUT: Duration = Duration::from_millis(10);
 
@@ -63,11 +45,14 @@ impl WorldgenWorkerPool {
     /// You provide a factory closure to this function which will create the worldgen workers.
     /// Workers can send [`ChunkPopulated`] events through the provided funnel.
     pub fn new<F: Fn() -> Box<dyn WorldgenWorker>>(
-        task_pool: &TaskPool,
         chunk_populated_funnel: EventFunnel<ChunkPopulated>,
         chunk_manager: Arc<ChunkManager>,
         factory: F,
     ) -> Self {
+        let Some(task_pool) = WORLDGEN_TASK_POOL.get() else {
+            panic!("Worldgen task pool is not initialized");
+        };
+
         let shutdown_interrupt = Arc::new(AtomicBool::new(false));
         let mut tasks = Vec::with_capacity(task_pool.thread_num());
         let job_queue = Arc::new(Mutex::new(new_worldgen_job_queue()));
@@ -125,6 +110,7 @@ impl WorldgenWorkerPool {
 
     /// Shut down the workers in this pool and wait for them to finish.
     pub async fn shutdown(&mut self) {
+        info!("Shutting down worldgen worker pool");
         self.shutdown_interrupt.store(true, Ordering::Relaxed);
         join_all(self.tasks.drain(..)).await;
     }

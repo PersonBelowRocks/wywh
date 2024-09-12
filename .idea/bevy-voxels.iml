@@ -9,6 +9,7 @@
       <sourceFolder url="file://$MODULE_DIR$/bevy_renderdoc/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/octo/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/octo/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/async-bevy-events/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

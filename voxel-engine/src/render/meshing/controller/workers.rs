@@ -2,7 +2,7 @@ use std::{
     cmp::max,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, OnceLock,
     },
     time::Duration,
 };
@@ -10,7 +10,9 @@ use std::{
 use async_bevy_events::{AsyncEventReader, AsyncEventWriter, EventFunnel};
 use bevy::{
     prelude::*,
-    tasks::{available_parallelism, AsyncComputeTaskPool, Task, TaskPool, TaskPoolBuilder},
+    tasks::{
+        available_parallelism, block_on, AsyncComputeTaskPool, Task, TaskPool, TaskPoolBuilder,
+    },
 };
 use flume::Sender;
 use futures_util::{future::join_all, StreamExt};
@@ -32,32 +34,13 @@ use super::events::{
     RemoveChunkMeshEvent,
 };
 
+pub(crate) static MESH_BUILDER_TASK_POOL: OnceLock<TaskPool> = OnceLock::new();
+
 /// The name of the threads in the mesh builder task pool.
 /// See [`TaskPoolBuilder::thread_name()`] for some more information.
 pub static MESH_BUILDER_TASK_POOL_THREAD_NAME: &'static str = "Mesh Builder Task Pool";
 
 pub const MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT: Duration = Duration::from_millis(10);
-
-#[derive(Resource, Deref)]
-pub struct MeshBuilderTaskPool(Arc<TaskPool>);
-
-impl MeshBuilderTaskPool {
-    /// Creates a mesh builder task pool with the given number of tasks.
-    pub fn new(tasks: usize) -> Self {
-        let task_pool = TaskPoolBuilder::new()
-            .num_threads(tasks)
-            .thread_name(MESH_BUILDER_TASK_POOL_THREAD_NAME.into())
-            .build();
-        Self(Arc::new(task_pool))
-    }
-}
-
-impl Default for MeshBuilderTaskPool {
-    fn default() -> Self {
-        let cores = available_parallelism();
-        Self::new(cores / 2)
-    }
-}
 
 /// An item in the mesh building job queue. Ignores its `tick` field in equality checks and hashing.
 #[derive(Copy, Clone)]
@@ -147,11 +130,14 @@ const DEFAULT_DEBUG_LOD: LevelOfDetail = LevelOfDetail::X16Subdiv;
 
 impl MeshBuilderPool {
     pub fn new(
-        task_pool: &TaskPool,
         finished_meshes: EventFunnel<MeshFinishedEvent>,
         chunk_manager: Arc<ChunkManager>,
         registries: Registries,
     ) -> Self {
+        let Some(task_pool) = MESH_BUILDER_TASK_POOL.get() else {
+            panic!("Mesh builder task pool is not initialized");
+        };
+
         let shutdown_interrupt = Arc::new(AtomicBool::new(false));
         let mut tasks = Vec::<Task<()>>::with_capacity(task_pool.thread_num());
         let job_queues = new_lod_job_queues();
@@ -221,14 +207,18 @@ impl MeshBuilderPool {
                     };
 
                     match mesher_result {
-                        Ok(chunk_mesh_data) => finished
-                            .send(MeshFinishedEvent {
+                        #[allow(unused_must_use)]
+                        Ok(chunk_mesh_data) => {
+                            // We don't care about the result here. The most likely reason that we couldn't
+                            // send this event is that the app is shutting down, which means we will also shut
+                            // down due to the interrupt check.
+                            finished.send(MeshFinishedEvent {
                                 chunk_pos: job.chunk_pos,
                                 lod: DEFAULT_DEBUG_LOD,
                                 mesh: chunk_mesh_data,
                                 tick: job.tick,
-                            })
-                            .unwrap(),
+                            });
+                        }
                         Err(error) => error!(
                             "Mesh building job error (CHUNK_POS={} LOD={:?} TICK={}): {error}",
                             job.chunk_pos, DEFAULT_DEBUG_LOD, job.tick
@@ -256,6 +246,7 @@ impl MeshBuilderPool {
     }
 
     pub async fn shutdown(&mut self) {
+        info!("Shutting down mesh builder pool");
         self.shutdown_interrupt.store(true, Ordering::Relaxed);
         join_all(self.tasks.drain(..)).await;
     }
@@ -267,18 +258,12 @@ pub struct MeshBuilderEventProxyTaskState {
 
 impl MeshBuilderEventProxyTaskState {
     pub fn new(
-        mesh_builder_task_pool: &TaskPool,
         chunk_manager: Arc<ChunkManager>,
         registries: Registries,
         finished_meshes: EventFunnel<MeshFinishedEvent>,
     ) -> Self {
         Self {
-            mesh_builder_pool: MeshBuilderPool::new(
-                mesh_builder_task_pool,
-                finished_meshes,
-                chunk_manager,
-                registries,
-            ),
+            mesh_builder_pool: MeshBuilderPool::new(finished_meshes, chunk_manager, registries),
         }
     }
 
@@ -329,13 +314,22 @@ impl MeshBuilderEventProxyTaskState {
 #[derive(Resource)]
 pub struct MeshBuilderEventProxyTaskHandle {
     shutdown_tx: Sender<()>,
-    task: Task<()>,
+    task: Option<Task<()>>,
+}
+
+impl Drop for MeshBuilderEventProxyTaskHandle {
+    fn drop(&mut self) {
+        if self.shutdown_tx.send(()).is_err() {
+            warn!("Shutdown channel for mesh builder event proxy was disconnected");
+        }
+
+        block_on(self.task.take().unwrap())
+    }
 }
 
 /// This system starts the mesh builder pool and the proxy task that forwards events to the pool.
 pub fn start_mesh_builder_tasks(
     mut cmds: Commands,
-    mesh_builder_task_pool: Res<MeshBuilderTaskPool>,
     realm: VoxelRealm,
     registries: Res<Registries>,
     build_mesh_events: Res<AsyncEventReader<BuildChunkMeshEvent>>,
@@ -350,7 +344,6 @@ pub fn start_mesh_builder_tasks(
     let remove_chunk_mesh_events = remove_chunk_mesh_events.clone();
 
     let mut task_state = MeshBuilderEventProxyTaskState::new(
-        &mesh_builder_task_pool,
         realm.clone_cm(),
         registries.clone(),
         mesh_finished_funnel.clone(),
@@ -397,5 +390,8 @@ pub fn start_mesh_builder_tasks(
         task_state.on_shutdown().await;
     });
 
-    cmds.insert_resource(MeshBuilderEventProxyTaskHandle { shutdown_tx, task });
+    cmds.insert_resource(MeshBuilderEventProxyTaskHandle {
+        shutdown_tx,
+        task: Some(task),
+    });
 }

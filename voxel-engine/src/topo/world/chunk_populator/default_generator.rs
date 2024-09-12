@@ -88,6 +88,7 @@ impl WorldgenWorker for WorldGenerator {
             })
             .unwrap();
 
-        cx.notify_done(chunk_pos).unwrap();
+        // The error here is likely because the app is shutting down, in which case there's no handling to be done.
+        let _ = cx.notify_done(chunk_pos);
     }
 }

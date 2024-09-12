@@ -5,7 +5,10 @@ mod workers;
 use std::{cmp, fmt, sync::Arc};
 
 use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    tasks::{available_parallelism, TaskPoolBuilder},
+};
 use dashmap::DashMap;
 use ecs::{
     batch_chunk_extraction, collect_solid_chunks_as_occluders,
@@ -15,7 +18,9 @@ use events::{
     BuildChunkMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
     RemoveChunkMeshEvent,
 };
-use workers::{start_mesh_builder_tasks, MeshBuilderTaskPool};
+use workers::{
+    start_mesh_builder_tasks, MESH_BUILDER_TASK_POOL, MESH_BUILDER_TASK_POOL_THREAD_NAME,
+};
 
 use crate::{
     render::{
@@ -303,7 +308,12 @@ impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
         info!("Initializing mesh controller");
 
-        let mesh_builder_task_pool = MeshBuilderTaskPool::default();
+        MESH_BUILDER_TASK_POOL.set(
+            TaskPoolBuilder::new()
+                .num_threads(available_parallelism() / 2)
+                .thread_name(MESH_BUILDER_TASK_POOL_THREAD_NAME.into())
+                .build(),
+        ).expect("build() should only be called once, and it's the only place where we initialize the pool");
 
         app.add_plugins((
             AsyncEventPlugin::<BuildChunkMeshEvent>::default(),
@@ -311,7 +321,6 @@ impl Plugin for MeshController {
             AsyncEventPlugin::<RecalculateMeshBuildingEventPrioritiesEvent>::default(),
             EventFunnelPlugin::<MeshFinishedEvent>::for_new(),
         ))
-        .insert_resource(mesh_builder_task_pool)
         .init_resource::<ChunkMeshExtractBridge>()
         .init_resource::<OccluderChunks>();
 
