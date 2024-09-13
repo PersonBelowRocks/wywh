@@ -143,6 +143,12 @@ impl ChunkMeshStatusManager {
     ) -> Option<TimedChunkMeshStatus> {
         self.lods[lod].get(&chunk_pos).as_deref().copied()
     }
+
+    /// Returns `true` if this mesh status manager has a status for the given chunk at the given LOD.
+    #[inline]
+    pub fn contains(&self, lod: LevelOfDetail, chunk_pos: ChunkPos) -> bool {
+        self.lods[lod].contains_key(&chunk_pos)
+    }
 }
 
 /// Acts as a sort of bridge between the main world and render world for chunk meshes.

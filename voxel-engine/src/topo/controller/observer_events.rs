@@ -239,7 +239,6 @@ pub fn build_populated_chunk_meshes(
         mesh_build_events.send(BuildChunkMeshEvent {
             chunk_pos: populated.chunk_pos,
             urgency: MeshJobUrgency::P1(priority),
-            // TODO: only select neighbors that we have permission to build meshes for
             neighbors: NeighborSelection::all_faces(),
             lod: LevelOfDetail::X16Subdiv,
             tick: tick.get(),

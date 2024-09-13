@@ -29,9 +29,12 @@ use crate::{
     util::sync::LockStrategy,
 };
 
-use super::events::{
-    BuildChunkMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
-    RemoveChunkMeshEvent,
+use super::{
+    events::{
+        BuildChunkMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
+        RemoveChunkMeshEvent,
+    },
+    ChunkMeshExtractBridge, ChunkMeshStatusManager,
 };
 
 pub(crate) static MESH_BUILDER_TASK_POOL: OnceLock<TaskPool> = OnceLock::new();
@@ -130,9 +133,9 @@ const DEFAULT_DEBUG_LOD: LevelOfDetail = LevelOfDetail::X16Subdiv;
 
 impl MeshBuilderPool {
     pub fn new(
-        finished_meshes: EventFunnel<MeshFinishedEvent>,
-        chunk_manager: Arc<ChunkManager>,
         registries: Registries,
+        chunk_manager: Arc<ChunkManager>,
+        finished_meshes: EventFunnel<MeshFinishedEvent>,
     ) -> Self {
         let Some(task_pool) = MESH_BUILDER_TASK_POOL.get() else {
             panic!("Mesh builder task pool is not initialized");
@@ -254,16 +257,19 @@ impl MeshBuilderPool {
 
 pub struct MeshBuilderEventProxyTaskState {
     mesh_builder_pool: MeshBuilderPool,
+    status_manager: Arc<ChunkMeshStatusManager>,
 }
 
 impl MeshBuilderEventProxyTaskState {
     pub fn new(
-        chunk_manager: Arc<ChunkManager>,
         registries: Registries,
+        chunk_manager: Arc<ChunkManager>,
+        status_manager: Arc<ChunkMeshStatusManager>,
         finished_meshes: EventFunnel<MeshFinishedEvent>,
     ) -> Self {
         Self {
-            mesh_builder_pool: MeshBuilderPool::new(finished_meshes, chunk_manager, registries),
+            mesh_builder_pool: MeshBuilderPool::new(registries, chunk_manager, finished_meshes),
+            status_manager,
         }
     }
 
@@ -278,13 +284,15 @@ impl MeshBuilderEventProxyTaskState {
         guard.push(event.chunk_pos, event.tick, priority);
 
         // Queue the neighbors of the center chunk
-        // TODO: it might actually be better to only queue neighbor mesh jobs if the mesh already exists.
-        //  This is because when a chunk is populated or revived, its mesh must be built anyway, the only thing
-        //  neighbor remeshings (currently) correct for is when a chunk mesh updates in such a way that it creates a hole
-        //  somewhere on the border between it and its neighbor.
         for selected_neighbor in event.neighbors.selected() {
-            let neighbor_chunk_pos = ChunkPos::from(event.chunk_pos.as_ivec3() + selected_neighbor);
-            guard.push(neighbor_chunk_pos, event.tick, priority);
+            let nb_chunk_pos = ChunkPos::from(event.chunk_pos.as_ivec3() + selected_neighbor);
+
+            // The reason we even care about the neighboring chunks is in case their old mesh does not
+            // line up cleanly with this chunk's mesh. This obviously only happens if the neighboring chunks
+            // even have a mesh to begin with, so therefore we exclude all neighbors without a mesh.
+            if self.status_manager.contains(event.lod, nb_chunk_pos) {
+                guard.push(nb_chunk_pos, event.tick, priority);
+            }
         }
     }
 
@@ -332,6 +340,7 @@ pub fn start_mesh_builder_tasks(
     mut cmds: Commands,
     realm: VoxelRealm,
     registries: Res<Registries>,
+    extract_bridge: Res<ChunkMeshExtractBridge>,
     build_mesh_events: Res<AsyncEventReader<BuildChunkMeshEvent>>,
     recalc_priority_events: Res<AsyncEventReader<RecalculateMeshBuildingEventPrioritiesEvent>>,
     remove_chunk_mesh_events: Res<AsyncEventReader<RemoveChunkMeshEvent>>,
@@ -344,8 +353,9 @@ pub fn start_mesh_builder_tasks(
     let remove_chunk_mesh_events = remove_chunk_mesh_events.clone();
 
     let mut task_state = MeshBuilderEventProxyTaskState::new(
-        realm.clone_cm(),
         registries.clone(),
+        realm.clone_cm(),
+        extract_bridge.chunk_mesh_status_manager().clone(),
         mesh_finished_funnel.clone(),
     );
 

@@ -16,15 +16,13 @@ use crate::{
             BatchFlags, CachedBatchMembership, ChunkBatch, ChunkBatchLod, RemovedBatchChunks,
             VoxelWorldTick,
         },
-        world::{chunk::ChunkFlags, Chunk, ChunkPos, VoxelRealm},
-        ObserverSettings,
+        world::{ChunkPos, VoxelRealm},
     },
-    util::{sync::LockStrategy, ChunkSet},
 };
 
 use super::{
     events::{MeshFinishedEvent, RemoveChunkMeshEvent},
-    ChunkMeshExtractBridge, RemeshPriority, RemeshType,
+    ChunkMeshExtractBridge,
 };
 
 #[derive(Resource, Deref)]
