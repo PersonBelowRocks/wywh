@@ -10,7 +10,7 @@ use crate::{
         world::{
             chunk_manager::ChunkLoadResult,
             chunk_populator::events::{ChunkPopulated, PopulateChunk},
-            ChunkPos,
+            ChunkPos, VoxelRealm,
         },
     },
     util::{closest_distance_sq, ws_to_chunk_pos},
@@ -203,7 +203,13 @@ pub fn build_revived_chunk_meshes(
     tick: Res<VoxelWorldTick>,
 ) {
     for loaded in loaded_chunk_events.read() {
-        if matches!(loaded.load_result, ChunkLoadResult::New) {
+        // Don't send mesh building events for newly loaded chunks or revived primordial chunks, since
+        // they don't have any data and we should rather send mesh building events when we receive a
+        // ChunkPopulated event for them.
+        if matches!(
+            loaded.load_result,
+            ChunkLoadResult::New | ChunkLoadResult::RevivedPrimordial
+        ) {
             continue;
         }
 

@@ -82,6 +82,8 @@ pub struct ChunkStorageStructure<'a> {
 /// Describes details of how a chunk was loaded
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ChunkLoadResult {
+    /// The chunk was revived from purgatory but it was primordial (aka. had no data).
+    RevivedPrimordial,
     /// The chunk was revived from purgatory.
     Revived,
     /// The chunk was freshly loaded.
@@ -218,12 +220,17 @@ impl<'a> ChunkStorageStructure<'a> {
         let mut result = ChunkLoadResult::New;
 
         // Revive the chunk from purgatory if possible, otherwise create a new one.
-        // FIXME: it seems that reviving a chunk doesn't play nicely with meshes, we
-        //  should probably handle this a bit more elegantly
         let chunk = self
             .purgatory
             .remove(&chunk.chunk_pos())
-            .inspect(|_| result = ChunkLoadResult::Revived)
+            .inspect(|(_, chunk)| {
+                // If the revived chunk was primordial, then let event listeners know
+                result = if chunk.flags.read().contains(ChunkFlags::PRIMORDIAL) {
+                    ChunkLoadResult::RevivedPrimordial
+                } else {
+                    ChunkLoadResult::Revived
+                }
+            })
             .unwrap_or_else(|| (chunk.chunk_pos(), Arc::new(chunk)))
             .1;
 
