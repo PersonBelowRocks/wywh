@@ -3,7 +3,7 @@ use std::any::type_name;
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
 
-use crate::util::CartesianIterator3d;
+use crate::cartesian_grid;
 
 use super::world::Chunk;
 
@@ -66,8 +66,12 @@ impl BoundingBox {
         (x * y * z).unsigned_abs()
     }
 
-    pub fn cartesian_iter(self) -> CartesianIterator3d {
-        CartesianIterator3d::new(self.min, self.max).unwrap()
+    pub fn cartesian_iter(self) -> impl Iterator<Item = IVec3> {
+        cartesian_grid!(
+            self.min.x..self.max.x,
+            self.min.y..self.max.y,
+            self.min.z..self.max.z
+        )
     }
 }
 

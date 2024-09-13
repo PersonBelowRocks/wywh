@@ -1,4 +1,4 @@
-use bevy::math::ivec3;
+use bevy::{log::error, math::ivec3};
 use noise::Perlin;
 
 use crate::{
@@ -9,7 +9,10 @@ use crate::{
         },
         resourcepath::rpath,
     },
-    topo::world::{chunk::ChunkFlags, ChunkPos},
+    topo::world::{
+        chunk::{ChunkFlags, ChunkWriteHandle},
+        ChunkHandleError, ChunkPos,
+    },
     util::sync::LockStrategy,
 };
 
@@ -51,6 +54,13 @@ impl WorldGenerator {
             perlin_noise: Perlin::new(DEBUG_WORLDGEN_SEED),
         }
     }
+
+    pub fn write_to_chunk<'a>(
+        &self,
+        mut chunk: ChunkWriteHandle<'a>,
+    ) -> Result<(), ChunkHandleError> {
+        todo!()
+    }
 }
 
 impl WorldgenWorker for WorldGenerator {
@@ -66,29 +76,28 @@ impl WorldgenWorker for WorldGenerator {
             })
             .unwrap();
 
-        // Make an own scope for the write handle here so the borrowchecker is happy.
-        {
-            let mut write_handle = chunk_ref
-                .chunk()
-                .write_handle(LockStrategy::Blocking)
-                .unwrap();
-            write_handle
-                .set(ivec3(0, 0, 0), self.palette.stone)
-                .unwrap();
-        }
-
-        chunk_ref
-            .update_flags(LockStrategy::Blocking, |flags| {
-                flags.remove(ChunkFlags::PRIMORDIAL | ChunkFlags::GENERATING);
-                flags.insert(
-                    ChunkFlags::REMESH
-                        | ChunkFlags::REMESH_NEIGHBORS
-                        | ChunkFlags::FRESHLY_GENERATED,
-                )
-            })
+        let write_handle = chunk_ref
+            .chunk()
+            .write_handle(LockStrategy::Blocking)
             .unwrap();
 
-        // The error here is likely because the app is shutting down, in which case there's no handling to be done.
-        let _ = cx.notify_done(chunk_pos);
+        if let Err(error) = self.write_to_chunk(write_handle) {
+            error!("Error running worldgen for chunk {chunk_pos}: {error}");
+        } else {
+            // Only do this cleanup stuff if we didn't have any errors.
+            chunk_ref
+                .update_flags(LockStrategy::Blocking, |flags| {
+                    flags.remove(ChunkFlags::PRIMORDIAL | ChunkFlags::GENERATING);
+                    flags.insert(
+                        ChunkFlags::REMESH
+                            | ChunkFlags::REMESH_NEIGHBORS
+                            | ChunkFlags::FRESHLY_GENERATED,
+                    )
+                })
+                .unwrap();
+
+            // The error here is likely because the app is shutting down, in which case there's no handling to be done.
+            let _ = cx.notify_done(chunk_pos);
+        }
     }
 }
