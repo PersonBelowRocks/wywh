@@ -356,8 +356,6 @@ impl IndirectChunkData {
         });
 
         self.metadata = new_metadata;
-
-        debug!("Updated chunk metadata.")
     }
 
     fn update_bind_groups(&mut self, gpu: &RenderDevice) {
@@ -376,8 +374,6 @@ impl IndirectChunkData {
                 &BindGroupEntries::single(quad_buffer.as_entire_buffer_binding()),
             );
 
-            debug!("Rebuilt ICD quad bind group");
-
             self.bind_groups.quad_bg = Some(bg);
         }
 
@@ -394,8 +390,6 @@ impl IndirectChunkData {
                     instance_buffer.as_entire_binding(),
                 )),
             );
-
-            debug!("Rebuilt ICD preprocess metadata bind group");
 
             self.bind_groups.preprocess_metadata_bg = Some(bg);
         }
@@ -592,11 +586,8 @@ impl IndirectChunkData {
 
         let new_bounds = retained_bounds;
 
-        debug!("Uploading indices to the GPU.");
         self.raw.index.append(queue, gpu, &upload_indices);
-        debug!("Uploading quads to the GPU.");
         self.raw.quad.append(queue, gpu, &upload_quads);
-        debug!("Successfully uploaded indices and quads to the GPU.");
 
         self.update_metadata(gpu, new_bounds);
         self.update_bind_groups(gpu);
@@ -659,11 +650,8 @@ impl IndirectChunkData {
             }
         }
 
-        debug!("Removing indices from the GPU.");
         self.raw.index.remove(gpu, queue, &remove_indices);
-        debug!("Removing quads from the GPU.");
         self.raw.quad.remove(gpu, queue, &remove_quads);
-        debug!("Successfully removed indices and quads from the GPU.");
 
         self.update_metadata(gpu, chunks_to_retain);
         self.update_bind_groups(gpu);

@@ -91,7 +91,10 @@ pub fn remove_chunk_meshes_from_extraction_bridge(
     }
 }
 
-/// Batches chunks for extraction. Will allow extraction every 500ms (by default).
+/// The amount of time that passes before another batch of chunk meshes are made available for extraction.
+pub const CHUNK_EXTRACT_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Batches chunks for extraction. Will allow extraction every [`CHUNK_EXTRACT_INTERVAL`].
 pub fn batch_chunk_extraction(
     time: Res<Time<Real>>,
     mut bridge: ResMut<ChunkMeshExtractBridge>,
@@ -103,7 +106,7 @@ pub fn batch_chunk_extraction(
 
     let previous = *last_extract.get_or_insert(now);
 
-    if now - previous > Duration::from_millis(500) {
+    if now - previous > CHUNK_EXTRACT_INTERVAL {
         *last_extract = Some(now);
         bridge.should_extract = true;
     }
