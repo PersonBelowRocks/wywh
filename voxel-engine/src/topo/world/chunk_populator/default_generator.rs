@@ -1,7 +1,11 @@
-use bevy::{log::error, math::ivec3};
-use noise::Perlin;
+use bevy::{
+    log::error,
+    math::{ivec3, IVec3},
+};
+use noise::{NoiseFn, Perlin};
 
 use crate::{
+    cartesian_grid,
     data::{
         registries::{
             block::{BlockVariantId, BlockVariantRegistry},
@@ -9,9 +13,13 @@ use crate::{
         },
         resourcepath::rpath,
     },
-    topo::world::{
-        chunk::{ChunkFlags, ChunkWriteHandle},
-        ChunkHandleError, ChunkPos,
+    topo::{
+        chunkspace_to_mb_worldspace_min,
+        world::{
+            chunk::{ChunkFlags, ChunkWriteHandle},
+            ChunkHandleError, ChunkPos,
+        },
+        CHUNK_MICROBLOCK_DIMS,
     },
     util::sync::LockStrategy,
 };
@@ -57,9 +65,45 @@ impl WorldGenerator {
 
     pub fn write_to_chunk<'a>(
         &self,
+        chunk_pos: ChunkPos,
         mut chunk: ChunkWriteHandle<'a>,
     ) -> Result<(), ChunkHandleError> {
-        todo!()
+        const THRESHOLD: f64 = 0.5;
+
+        let ws_min = chunk_pos.worldspace_min();
+        let mb_ws_min = chunkspace_to_mb_worldspace_min(chunk_pos.as_ivec3());
+
+        let mut has_terrain = false;
+
+        // If no corners have any terrain, then we skip the rest of the generation because theres *probably* nothing in this chunk.
+        for corner in cartesian_grid!(IVec3::ZERO..=IVec3::ONE) {
+            let corner_mb = (corner * CHUNK_MICROBLOCK_DIMS as i32) - 1;
+            let mut noise_pos = (mb_ws_min + corner_mb).as_dvec3();
+            noise_pos *= 0.002;
+            let noise = self.perlin_noise.get(noise_pos.to_array());
+
+            if noise > THRESHOLD {
+                has_terrain = true;
+                break;
+            }
+        }
+
+        if has_terrain {
+            for mb_ls_pos in cartesian_grid!(IVec3::ZERO..IVec3::splat(CHUNK_MICROBLOCK_DIMS as _))
+            {
+                let mut noise_pos = (mb_ws_min + mb_ls_pos).as_dvec3();
+                noise_pos *= 0.002;
+                let noise = self.perlin_noise.get(noise_pos.to_array());
+
+                if noise > THRESHOLD {
+                    chunk.set_mb(mb_ls_pos, self.palette.stone)?;
+                }
+            }
+
+            chunk.deflate(Some(32));
+        }
+
+        Ok(())
     }
 }
 
@@ -81,7 +125,7 @@ impl WorldgenWorker for WorldGenerator {
             .write_handle(LockStrategy::Blocking)
             .unwrap();
 
-        if let Err(error) = self.write_to_chunk(write_handle) {
+        if let Err(error) = self.write_to_chunk(chunk_pos, write_handle) {
             error!("Error running worldgen for chunk {chunk_pos}: {error}");
         } else {
             // Only do this cleanup stuff if we didn't have any errors.

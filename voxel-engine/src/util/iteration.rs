@@ -14,6 +14,8 @@ use bevy::math::{ivec3, IVec3};
 #[macro_export]
 macro_rules! cartesian_grid {
     ($p_range:expr) => {{
+        use std::ops::RangeBounds;
+
         let start = match $p_range.start_bound() {
             std::ops::Bound::Included(&v) => v,
             std::ops::Bound::Excluded(&v) => v.saturating_add(IVec3::ONE),
