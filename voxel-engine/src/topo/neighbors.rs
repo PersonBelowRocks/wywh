@@ -195,6 +195,18 @@ impl<'a> Neighbors<'a> {
         }
     }
 
+    /// Returns `true` if all the given neighbors are present.
+    #[inline]
+    pub fn has_all(&self, neighbors: NeighborSelection) -> bool {
+        for neighbor in neighbors.selected() {
+            if self.get_neighbor_chunk(neighbor).unwrap().is_none() {
+                return false;
+            }
+        }
+
+        true
+    }
+
     /// Get a handle to a neighboring chunk from a local chunk position. Returns [`NeighborReadError::OutOfBounds`]
     /// if the given chunk position is either `[0, 0, 0]` or not inclusively between `[-1, -1, -1]..[1, 1, 1]`.
     ///
@@ -203,6 +215,7 @@ impl<'a> Neighbors<'a> {
     #[inline]
     pub fn get_neighbor_chunk(
         &self,
+        // TODO: make this a NeighborSelection (or something similar) instead maybe
         chunk_pos: IVec3,
     ) -> Result<Option<&ChunkReadHandle<'_>>, NeighborReadError> {
         if chunk_pos == IVec3::ZERO {

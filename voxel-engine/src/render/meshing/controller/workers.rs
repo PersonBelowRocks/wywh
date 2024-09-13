@@ -190,8 +190,10 @@ impl MeshBuilderPool {
                         continue;
                     }
 
+                    // Try to grab all the neighbors immediately, if we can't get a neighbor immediately then it's
+                    // being written to which means we'll get a separate mesh building event for it once the writing is done.
                     let Ok(mesher_result) =
-                        cm.neighbors(job.chunk_pos, LockStrategy::Blocking, |neighbors| {
+                        cm.neighbors(job.chunk_pos, LockStrategy::Immediate, |neighbors| {
                             let read_handle = chunk_ref
                                 .chunk()
                                 .read_handle(LockStrategy::Blocking)

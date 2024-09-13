@@ -246,7 +246,7 @@ impl<'a> ChunkStorageStructure<'a> {
         Ok(result)
     }
 
-    /// Purge a chunk. Returns [`CmStructuralError::NotLoaded`] if the chunk was not loaded or was already purged.
+    /// Purge a chunk. Returns [`CmStructuralError::NotLoaded`] if the chunk was not loaded.
     /// Will wipe this chunk from all loadshares.
     pub fn purge_chunk(&self, chunk_pos: ChunkPos) -> Result<(), CmStructuralError> {
         let purged_chunk = self
@@ -382,10 +382,6 @@ impl ChunkManager {
     pub fn neighbors<T, F>(
         &self,
         chunk_pos: ChunkPos,
-        // TODO: this should be a bit more clever,
-        //  we should be able to build meshes for a chunk while neighboring chunks are being populated.
-        //  currently this function will be really janky when calling with LockStrategy::Blocking, and might
-        //  panic with anything else.
         strategy: LockStrategy,
         callback: F,
     ) -> Result<T, ChunkGetError>
@@ -414,8 +410,10 @@ impl ChunkManager {
 
         let mut neighbor_builder = NeighborsBuilder::new(self.default_block);
         for (offset, chunk) in chunks.iter() {
-            // FIXME: don't unwrap here, rather allow the caller to decide what should happen if this fails
-            let read_handle = chunk.read_handle(strategy).unwrap();
+            // If we can't get this handle, it means that someone else has exclusive access
+            let Some(read_handle) = chunk.read_handle(strategy).ok() else {
+                continue;
+            };
             neighbor_builder.set_neighbor(*offset, read_handle).unwrap();
         }
 
