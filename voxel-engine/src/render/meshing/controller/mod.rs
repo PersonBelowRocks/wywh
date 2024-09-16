@@ -71,6 +71,21 @@ impl ChunkMeshData {
     pub fn is_empty(&self) -> bool {
         self.index_buffer.is_empty() || self.quad_buffer.is_empty()
     }
+
+    /// Get the correct initial status of this mesh data. When a chunk mesh
+    /// is queued for extraction it will have this status at first.
+    ///
+    /// Returns either:
+    /// - [`ChunkMeshStatus::Empty`]
+    /// - [`ChunkMeshStatus::Filled`]
+    #[inline]
+    pub fn status(&self) -> ChunkMeshStatus {
+        if self.is_empty() {
+            ChunkMeshStatus::Empty
+        } else {
+            ChunkMeshStatus::Filled
+        }
+    }
 }
 
 impl fmt::Debug for ChunkMeshData {
@@ -240,23 +255,33 @@ impl ChunkMeshExtractBridge {
         tick: u64,
         mesh_data: ChunkMeshData,
     ) {
+        let mut has_filled = false;
+
         // If we already have a newer chunk mesh, then we return early since we should never extract an
         // older version of a chunk mesh.
-        if let Some(status) = self.statuses.timed_status(lod, chunk_pos) {
-            if status.tick > tick {
+        if let Some(existing_status) = self.statuses.timed_status(lod, chunk_pos) {
+            if existing_status.tick > tick {
                 return;
             }
+
+            has_filled = matches!(
+                existing_status.status,
+                ChunkMeshStatus::Filled | ChunkMeshStatus::Extracted
+            );
         }
 
-        // If the mesh is empty, set its status to empty too so we don't extract it
-        let status = match mesh_data.is_empty() {
-            true => ChunkMeshStatus::Empty,
-            false => ChunkMeshStatus::Filled,
-        };
+        let status = mesh_data.status();
 
-        // Only queue the mesh for extraction if it's filled.
-        if status == ChunkMeshStatus::Filled {
-            self.add[lod].set(chunk_pos, mesh_data);
+        match status {
+            // If the mesh is empty, queue it for removal so that the previous mesh (if it exists) is removed.
+            ChunkMeshStatus::Empty if has_filled => {
+                self.remove[lod].set(chunk_pos);
+            }
+            // Only queue the mesh for extraction if it's filled.
+            ChunkMeshStatus::Filled => {
+                self.add[lod].set(chunk_pos, mesh_data);
+            }
+            _ => (),
         }
 
         // Even if we don't queue the mesh for extraction we still need to note down its status.
