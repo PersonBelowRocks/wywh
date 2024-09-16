@@ -24,11 +24,15 @@ use crate::{
     data::registries::Registries,
     render::{
         lod::{LevelOfDetail, LodMap},
-        meshing::{controller::events::MeshJobUrgency, greedy::algorithm::GreedyMesher, Context},
+        meshing::{
+            controller::{events::MeshJobUrgency, ChunkMeshData},
+            greedy::algorithm::GreedyMesher,
+            Context,
+        },
     },
     topo::world::{
         chunk::ChunkFlags, chunk_populator::events::PriorityCalcStrategy, ChunkManager, ChunkPos,
-        VoxelRealm,
+        ChunkRef, VoxelRealm,
     },
     util::{closest_distance, closest_distance_sq, sync::LockStrategy},
 };
@@ -135,6 +139,18 @@ fn new_lod_job_queues() -> Arc<LodMap<Mutex<TickedMeshJobQueue>>> {
 
 const DEFAULT_DEBUG_LOD: LevelOfDetail = LevelOfDetail::X16Subdiv;
 
+/// Remove [`ChunkFlags::REMESH`], [`ChunkFlags::REMESH_NEIGHBORS`], and [`ChunkFlags::FRESHLY_GENERATED`] from
+/// a chunk's flags.
+fn remove_remesh_related_flags(chunk_ref: &ChunkRef) {
+    chunk_ref
+        .update_flags(LockStrategy::Blocking, |flags| {
+            flags.remove(
+                ChunkFlags::REMESH | ChunkFlags::REMESH_NEIGHBORS | ChunkFlags::FRESHLY_GENERATED,
+            );
+        })
+        .unwrap();
+}
+
 impl MeshBuilderPool {
     pub fn new(
         registries: Registries,
@@ -194,6 +210,24 @@ impl MeshBuilderPool {
                         continue;
                     }
 
+                    // If the chunk is transparent we don't build the mesh for it since there's no contained data.
+                    // Instead we immediatelly send a finished mesh event.
+                    if chunk_ref
+                        .flags(LockStrategy::Blocking)
+                        .unwrap()
+                        .contains(ChunkFlags::TRANSPARENT)
+                    {
+                        let _ = finished.send(MeshFinishedEvent {
+                            chunk_pos: job.chunk_pos,
+                            lod: DEFAULT_DEBUG_LOD,
+                            mesh: ChunkMeshData::empty(),
+                            tick: job.tick,
+                        });
+
+                        remove_remesh_related_flags(&chunk_ref);
+                        continue;
+                    }
+
                     // Try to grab all the neighbors immediately, if we can't get a neighbor immediately then it's
                     // being written to which means we'll get a separate mesh building event for it once the writing is done.
                     let Ok(mesher_result) =
@@ -216,12 +250,11 @@ impl MeshBuilderPool {
                     };
 
                     match mesher_result {
-                        #[allow(unused_must_use)]
                         Ok(chunk_mesh_data) => {
                             // We don't care about the result here. The most likely reason that we couldn't
                             // send this event is that the app is shutting down, which means we will also shut
                             // down due to the interrupt check.
-                            finished.send(MeshFinishedEvent {
+                            let _ = finished.send(MeshFinishedEvent {
                                 chunk_pos: job.chunk_pos,
                                 lod: DEFAULT_DEBUG_LOD,
                                 mesh: chunk_mesh_data,
@@ -234,15 +267,7 @@ impl MeshBuilderPool {
                         ),
                     }
 
-                    chunk_ref
-                        .update_flags(LockStrategy::Blocking, |flags| {
-                            flags.remove(
-                                ChunkFlags::REMESH
-                                    | ChunkFlags::REMESH_NEIGHBORS
-                                    | ChunkFlags::FRESHLY_GENERATED,
-                            );
-                        })
-                        .unwrap();
+                    remove_remesh_related_flags(&chunk_ref);
                 }
             }))
         }

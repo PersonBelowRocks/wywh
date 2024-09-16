@@ -83,7 +83,7 @@ impl<'a> ChunkRef<'a> {
             self.stats.solid,
             self.chunk_pos(),
             new_flags,
-            ChunkFlags::SOLID
+            ChunkFlags::OPAQUE
         );
 
         Ok(())

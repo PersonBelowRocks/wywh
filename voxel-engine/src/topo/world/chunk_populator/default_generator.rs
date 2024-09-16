@@ -12,6 +12,7 @@ use crate::{
             Registries, Registry,
         },
         resourcepath::rpath,
+        tile::Transparency,
     },
     topo::{
         chunkspace_to_mb_worldspace_min,
@@ -67,7 +68,7 @@ impl WorldGenerator {
         &self,
         chunk_pos: ChunkPos,
         mut chunk: ChunkWriteHandle<'a>,
-    ) -> Result<(), ChunkHandleError> {
+    ) -> Result<Option<Transparency>, ChunkHandleError> {
         const THRESHOLD: f64 = 0.5;
 
         let ws_min = chunk_pos.worldspace_min();
@@ -101,9 +102,18 @@ impl WorldGenerator {
             }
 
             chunk.deflate(Some(32));
-        }
+            let all_stone = chunk
+                .inner_ref()
+                .all_full_blocks_and(|id| id == self.palette.stone);
 
-        Ok(())
+            if all_stone {
+                Ok(Some(Transparency::Opaque))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(Some(Transparency::Transparent))
+        }
     }
 }
 
@@ -125,23 +135,33 @@ impl WorldgenWorker for WorldGenerator {
             .write_handle(LockStrategy::Blocking)
             .unwrap();
 
-        if let Err(error) = self.write_to_chunk(chunk_pos, write_handle) {
-            error!("Error running worldgen for chunk {chunk_pos}: {error}");
-        } else {
-            // Only do this cleanup stuff if we didn't have any errors.
-            chunk_ref
-                .update_flags(LockStrategy::Blocking, |flags| {
-                    flags.remove(ChunkFlags::PRIMORDIAL | ChunkFlags::GENERATING);
-                    flags.insert(
-                        ChunkFlags::REMESH
-                            | ChunkFlags::REMESH_NEIGHBORS
-                            | ChunkFlags::FRESHLY_GENERATED,
-                    )
-                })
-                .unwrap();
+        match self.write_to_chunk(chunk_pos, write_handle) {
+            Ok(transparency) => {
+                // Only do this cleanup stuff if we didn't have any errors.
+                chunk_ref
+                    .update_flags(LockStrategy::Blocking, |flags| {
+                        flags.remove(ChunkFlags::PRIMORDIAL | ChunkFlags::GENERATING);
+                        flags.insert(
+                            ChunkFlags::REMESH
+                                | ChunkFlags::REMESH_NEIGHBORS
+                                | ChunkFlags::FRESHLY_GENERATED,
+                        );
 
-            // The error here is likely because the app is shutting down, in which case there's no handling to be done.
-            let _ = cx.notify_done(chunk_pos);
+                        // Hint that a chunk is transparent or opaque.
+                        match transparency {
+                            Some(Transparency::Opaque) => flags.insert(ChunkFlags::OPAQUE),
+                            Some(Transparency::Transparent) => {
+                                flags.insert(ChunkFlags::TRANSPARENT)
+                            }
+                            _ => (),
+                        }
+                    })
+                    .unwrap();
+
+                // The error here is likely because the app is shutting down, in which case there's no handling to be done.
+                let _ = cx.notify_done(chunk_pos);
+            }
+            Err(error) => error!("Error running worldgen for chunk {chunk_pos}: {error}"),
         }
     }
 }

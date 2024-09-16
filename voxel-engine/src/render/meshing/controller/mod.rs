@@ -68,6 +68,14 @@ pub struct ChunkMeshData {
 }
 
 impl ChunkMeshData {
+    /// Get an empty chunk mesh
+    pub fn empty() -> Self {
+        Self {
+            index_buffer: Vec::new(),
+            quad_buffer: Vec::new(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.index_buffer.is_empty() || self.quad_buffer.is_empty()
     }

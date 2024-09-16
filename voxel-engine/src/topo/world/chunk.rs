@@ -85,9 +85,18 @@ bitflags! {
         /// Chunks are not supposed to be primordial for long, primordial chunks are usually immediately
         /// queued for further processing by the engine to get them out of their primordial state.
         const PRIMORDIAL = 0b1 << 4;
-        /// Indicates that a chunk is entirely composed of solid blocks. Such chunks can be
+        /// Indicates that a chunk is entirely composed of opaque blocks. Such chunks can be
         /// used as occluders for occluder-based HZB culling.
-        const SOLID = 0b1 << 5;
+        ///
+        /// This flag is a potentially false negative hint, i.e.
+        /// a chunk can still be opaque despite NOT having this flag.
+        const OPAQUE = 0b1 << 5;
+        /// Indicates that a chunk is entirely composed of transparent blocks. Such chunks don't have to have
+        /// their mesh built.
+        ///
+        /// This flag is a potentially false negative hint, i.e.
+        /// a chunk can still be transparent despite NOT having this flag.
+        const TRANSPARENT = 0b1 << 6;
     }
 }
 
@@ -99,7 +108,7 @@ impl fmt::Debug for ChunkFlags {
             (Self::REMESH_NEIGHBORS, "REMESH_NEIGHBORS"),
             (Self::FRESHLY_GENERATED, "FRESHLY_GENERATED"),
             (Self::PRIMORDIAL, "PRIMORDIAL"),
-            (Self::SOLID, "SOLID"),
+            (Self::OPAQUE, "SOLID"),
         ];
 
         let mut list = f.debug_list();
