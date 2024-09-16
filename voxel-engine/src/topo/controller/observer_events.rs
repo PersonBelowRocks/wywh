@@ -1,15 +1,27 @@
-use bevy::prelude::*;
+use std::time::{Duration, Instant};
+
+use bevy::{
+    ecs::entity::{EntityHash, EntityHashMap, EntityHashSet, EntityHasher},
+    prelude::*,
+    time::Stopwatch,
+};
+use itertools::Itertools;
 
 use crate::{
     render::{
         lod::LevelOfDetail,
-        meshing::controller::events::{BuildChunkMeshEvent, MeshJobUrgency},
+        meshing::controller::events::{
+            BuildChunkMeshEvent, MeshJobUrgency, RecalculateMeshBuildingEventPrioritiesEvent,
+        },
     },
     topo::{
         neighbors::NeighborSelection,
         world::{
             chunk_manager::ChunkLoadResult,
-            chunk_populator::events::{ChunkPopulated, PopulateChunk},
+            chunk_populator::events::{
+                ChunkPopulated, PopulateChunk, PriorityCalcStrategy,
+                RecalculatePopulateEventPrioritiesEvent,
+            },
             ChunkPos, VoxelRealm,
         },
     },
@@ -250,4 +262,75 @@ pub fn build_populated_chunk_meshes(
             tick: tick.get(),
         });
     }
+}
+
+/// The distance an observer must have traveled for a priority recalculation to be forced.
+pub const FORCE_RECALC_PRIORITY_DISTANCE: f32 = 125.0;
+/// The distance an observer must have traveled for a priority recalculation to happen if [`RECALC_PRIORITY_INTERVAL`]
+/// time has elapsed since the last recalculation.
+pub const RECALC_PRIORITY_DISTANCE: f32 = 8.0;
+/// The time that must have elapsed in order for a priority recalculation to happen.
+pub const RECALC_PRIORITY_INTERVAL: Duration = Duration::from_millis(2000);
+
+pub fn send_priority_recalculation_events(
+    time: Res<Time<Real>>,
+    q_observers: Query<(Entity, &Transform), With<ObserverSettings>>,
+    mut population_events: EventWriter<RecalculatePopulateEventPrioritiesEvent>,
+    mut mesh_build_events: EventWriter<RecalculateMeshBuildingEventPrioritiesEvent>,
+    mut previous_observer_positions: Local<EntityHashMap<Vec3>>,
+    mut time_since_last_send: Local<Stopwatch>,
+) {
+    time_since_last_send.tick(time.delta());
+
+    // This is used to track the "active" observers so that we remove observers from 'previous_observer_positions'
+    // when they are no longer in the world.
+    let mut active = EntityHashSet::with_capacity_and_hasher(
+        previous_observer_positions.len(),
+        EntityHash::default(),
+    );
+
+    let mut observer_positions = Vec::<(Entity, Vec3)>::new();
+
+    let mut should_send = false;
+    for (observer_entity, &transform) in &q_observers {
+        let current_pos = transform.translation;
+        active.insert(observer_entity);
+
+        if let Some(&previous_pos) = previous_observer_positions.get(&observer_entity) {
+            let distance_sq = previous_pos.distance_squared(current_pos);
+
+            should_send |= time_since_last_send.elapsed() >= RECALC_PRIORITY_INTERVAL
+                && distance_sq >= RECALC_PRIORITY_DISTANCE.powi(2);
+
+            should_send |= distance_sq >= FORCE_RECALC_PRIORITY_DISTANCE.powi(2);
+        } else {
+            // Record this observer position as the previous one if there was none from before.
+            previous_observer_positions.insert(observer_entity, current_pos);
+        }
+
+        observer_positions.push((observer_entity, current_pos));
+    }
+
+    if should_send {
+        // Clear previous positions and reset the elapsed time.
+        // We'll insert the current positions as the previous ones once we've sent the events.
+        previous_observer_positions.clear();
+        time_since_last_send.reset();
+
+        population_events.send(RecalculatePopulateEventPrioritiesEvent {
+            strategy: PriorityCalcStrategy::ClosestDistanceSq(
+                observer_positions.iter().map(|(_, p)| *p).collect_vec(),
+            ),
+        });
+
+        mesh_build_events.send(RecalculateMeshBuildingEventPrioritiesEvent {
+            strategy: PriorityCalcStrategy::ClosestDistanceSq(
+                observer_positions.iter().map(|(_, p)| *p).collect_vec(),
+            ),
+        });
+
+        previous_observer_positions.extend(observer_positions.into_iter())
+    }
+
+    previous_observer_positions.retain(|observer, _| active.contains(observer));
 }

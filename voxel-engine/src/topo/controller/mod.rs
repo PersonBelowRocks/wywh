@@ -10,7 +10,7 @@ use hb::HashSet;
 
 use observer_events::{
     build_populated_chunk_meshes, build_revived_chunk_meshes, dispatch_move_events,
-    populate_loaded_chunks, update_observer_batches,
+    populate_loaded_chunks, send_priority_recalculation_events, update_observer_batches,
 };
 
 use crate::data::registries::block::BlockVariantRegistry;
@@ -340,10 +340,11 @@ impl Plugin for WorldController {
         );
 
         app.add_systems(
-            FixedPostUpdate,
+            PostUpdate,
             (
                 dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
                 (
+                    send_priority_recalculation_events,
                     populate_loaded_chunks,
                     build_revived_chunk_meshes,
                     build_populated_chunk_meshes,

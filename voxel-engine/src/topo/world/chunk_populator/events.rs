@@ -34,7 +34,7 @@ pub enum PopulationSource {
 /// based on the provided strategy. Often the event priority is based on the distance between the chunk
 /// and the closest chunk observer.
 #[derive(Clone, Debug, Event)]
-pub struct RecalculatePopulateEventPriorities {
+pub struct RecalculatePopulateEventPrioritiesEvent {
     pub strategy: PriorityCalcStrategy,
 }
 

@@ -15,9 +15,10 @@ pub use iteration::*;
 use bevy::prelude::*;
 use dashmap::DashMap;
 use ordered_float::NotNan;
-use std::{array, fmt::Debug, marker::PhantomData};
+use priority_queue::PriorityQueue;
+use std::{array, fmt::Debug, hash::BuildHasher, marker::PhantomData};
 
-use crate::data::tile::Face;
+use crate::{data::tile::Face, topo::world::ChunkPos};
 
 pub type SyncHashMap<K, V> = DashMap<K, V, ahash::RandomState>;
 pub type SquareArray<const SIZE: usize, T> = [[T; SIZE]; SIZE];

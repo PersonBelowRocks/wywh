@@ -1,5 +1,6 @@
 use std::{
     cmp::max,
+    hash::BuildHasher,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, OnceLock,
@@ -25,8 +26,11 @@ use crate::{
         lod::{LevelOfDetail, LodMap},
         meshing::{controller::events::MeshJobUrgency, greedy::algorithm::GreedyMesher, Context},
     },
-    topo::world::{chunk::ChunkFlags, ChunkManager, ChunkPos, VoxelRealm},
-    util::sync::LockStrategy,
+    topo::world::{
+        chunk::ChunkFlags, chunk_populator::events::PriorityCalcStrategy, ChunkManager, ChunkPos,
+        VoxelRealm,
+    },
+    util::{closest_distance, closest_distance_sq, sync::LockStrategy},
 };
 
 use super::{
@@ -257,6 +261,24 @@ impl MeshBuilderPool {
     }
 }
 
+/// Calculate new priorities for the items in the queue based on the distance returned by the distance function.
+/// The distance function's argument is the worldspace center position of a chunk (the chunk that's associated with the [`MeshBuilderJob`]).
+/// The priority will be higher the smaller the value returned by the distance function.
+/// Formula for the priority is roughly `u32::MAX - distance_fn(chunk_pos)`.
+#[inline]
+fn calculate_priorities_based_on_distance<H: BuildHasher, F: Fn(Vec3) -> f32>(
+    distance_fn: F,
+    queue: &mut PriorityQueue<MeshBuilderJob, u32, H>,
+) {
+    for (&mut job, priority) in queue.iter_mut() {
+        let center = job.chunk_pos.worldspace_center();
+        let min_distance = distance_fn(center);
+
+        // Closer chunk positions are higher priority, so we need to invert the distance.
+        *priority = u32::MAX - (min_distance as u32);
+    }
+}
+
 pub struct MeshBuilderEventProxyTaskState {
     mesh_builder_pool: MeshBuilderPool,
     status_manager: Arc<ChunkMeshStatusManager>,
@@ -305,7 +327,25 @@ impl MeshBuilderEventProxyTaskState {
         for lod in LevelOfDetail::LODS {
             let mut guard = self.mesh_builder_pool.job_queues[lod].lock();
 
-            todo!();
+            match &event.strategy {
+                PriorityCalcStrategy::ClosestDistanceSq(positions) => {
+                    calculate_priorities_based_on_distance(
+                        |chunk_center| {
+                            closest_distance_sq(chunk_center, positions.iter().cloned())
+                                .unwrap_or(0.0)
+                        },
+                        &mut guard.0,
+                    );
+                }
+                PriorityCalcStrategy::ClosestDistance(positions) => {
+                    calculate_priorities_based_on_distance(
+                        |chunk_center| {
+                            closest_distance(chunk_center, positions.iter().cloned()).unwrap_or(0.0)
+                        },
+                        &mut guard.0,
+                    );
+                }
+            }
         }
     }
 
