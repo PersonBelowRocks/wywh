@@ -174,7 +174,7 @@ pub type ChunkDataStorage = octo::SubdividedStorage<CHUNK_SIZE, BLOCK_SUBDIVISIO
 #[derive(Clone)]
 pub struct ChunkData {
     default_value: BlockVariantId,
-    storage: Option<ChunkDataStorage>,
+    storage: Option<Box<ChunkDataStorage>>,
 }
 
 impl ChunkData {
@@ -219,7 +219,9 @@ impl ChunkData {
     pub fn initialize(&mut self) -> bool {
         match self.storage {
             None => {
-                self.storage = Some(SubdividedStorage::new(self.default_value.as_u32()));
+                self.storage = Some(Box::new(SubdividedStorage::new(
+                    self.default_value.as_u32(),
+                )));
                 true
             }
             Some(_) => false,
@@ -307,7 +309,7 @@ impl ChunkData {
 
         let storage = self
             .storage
-            .get_or_insert_with(|| ChunkDataStorage::new(self.default_value.as_u32()));
+            .get_or_insert_with(|| Box::new(ChunkDataStorage::new(self.default_value.as_u32())));
 
         let index = ls_pos.to_array().map(|v| v as u8);
         Ok(storage.set(index, raw_value)?)
@@ -374,7 +376,7 @@ impl ChunkData {
 
         let storage = self
             .storage
-            .get_or_insert_with(|| ChunkDataStorage::new(self.default_value.as_u32()));
+            .get_or_insert_with(|| Box::new(ChunkDataStorage::new(self.default_value.as_u32())));
 
         let index = mb_pos.to_array().map(|v| v as u8);
         Ok(storage.set_mb(index, raw_value)?)
@@ -384,14 +386,14 @@ impl ChunkData {
     /// operations.
     #[inline]
     pub fn storage(&self) -> Option<&ChunkDataStorage> {
-        self.storage.as_ref()
+        self.storage.as_deref()
     }
 
     /// Returns a mutable reference to the underlying storage from `octo`, allowing for lower level
     /// operations.
     #[inline]
     pub fn storage_mut(&mut self) -> Option<&mut ChunkDataStorage> {
-        self.storage.as_mut()
+        self.storage.as_deref_mut()
     }
 
     /// Tests if all blocks in this chunk are full-blocks and that they all pass some test.

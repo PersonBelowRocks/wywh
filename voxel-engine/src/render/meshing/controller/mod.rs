@@ -2,7 +2,11 @@ mod ecs;
 pub mod events;
 mod workers;
 
-use std::{cmp, fmt, sync::Arc};
+use std::{
+    cmp::{self, max},
+    fmt,
+    sync::Arc,
+};
 
 use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
 use bevy::{
@@ -347,9 +351,11 @@ impl Plugin for MeshController {
     fn build(&self, app: &mut App) {
         info!("Initializing mesh controller");
 
+        let mesh_builder_threads = max(1, (available_parallelism() as f32 * 0.75).ceil() as usize);
+
         MESH_BUILDER_TASK_POOL.set(
             TaskPoolBuilder::new()
-                .num_threads(available_parallelism() / 2)
+                .num_threads(mesh_builder_threads)
                 .thread_name(MESH_BUILDER_TASK_POOL_THREAD_NAME.into())
                 .build(),
         ).expect("build() should only be called once, and it's the only place where we initialize the pool");

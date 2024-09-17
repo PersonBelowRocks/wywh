@@ -254,7 +254,7 @@ pub enum SubdivPaletteKind {
 #[derive(Clone)]
 pub struct SubdividedStorage<const D: usize, const SD: usize, T: SubdividableValue> {
     /// The indices into the palette, or the values themselves if they're not subdivided.
-    indices: Array3<SSIndexEntry<T>>,
+    indices: [[[SSIndexEntry<T>; D]; D]; D],
     /// The palette, may be inflated or deflated depending on [`Self::palette_kind`].
     sdiv_palette: Vec<SSPaletteEntry<SD, T>>,
     /// The kind of palette currently being used by this storage.
@@ -300,7 +300,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
         let initial_entry_index = SSIndexEntry::from_value(value);
 
         Self {
-            indices: Array3::from_elem((D, D, D), initial_entry_index),
+            indices: [[[initial_entry_index; D]; D]; D],
             sdiv_palette: Vec::new(),
             palette_kind: SubdivPaletteKind::Inflated,
             random_state: ahash::RandomState::new(),
@@ -321,7 +321,7 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
         let initial_entry_index = SSIndexEntry::from_value(value);
 
         Self {
-            indices: Array3::from_elem((D, D, D), initial_entry_index),
+            indices: [[[initial_entry_index; D]; D]; D],
             sdiv_palette: Vec::with_capacity(capacity),
             palette_kind: SubdivPaletteKind::Inflated,
             random_state: ahash::RandomState::new(),
@@ -402,14 +402,23 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
     /// Get an entry of the storage's indices, returning [`None`] if the provided index is out of bounds.
     #[inline]
     pub fn get_entry(&self, index: [u8; 3]) -> Option<SSIndexEntry<T>> {
-        self.indices.get(index.map(usize::from)).copied()
+        let [i0, i1, i2] = index;
+        self.indices
+            .get(i0 as usize)?
+            .get(i1 as usize)?
+            .get(i2 as usize)
+            .copied()
     }
 
     /// Get a mutable reference to an entry of the storage's indices,
     /// returning [`None`] if the provided index is out of bounds.
     #[inline]
     pub fn get_entry_mut(&mut self, index: [u8; 3]) -> Option<&mut SSIndexEntry<T>> {
-        self.indices.get_mut(index.map(usize::from))
+        let [i0, i1, i2] = index;
+        self.indices
+            .get_mut(i0 as usize)?
+            .get_mut(i1 as usize)?
+            .get_mut(i2 as usize)
     }
 
     /// Get an index-level value from this storage, returning an error if the provided index is out of
@@ -535,15 +544,13 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
     /// entry are combined into an index entry if they're all equal.
     #[inline]
     pub fn cleanup(&mut self) {
-        let dims = D as u8;
         let mut new_indices = self.indices.clone();
         let mut new_palette = Vec::with_capacity(self.sdiv_palette.len());
 
-        for i2 in 0..dims {
-            for i1 in 0..dims {
-                for i0 in 0..dims {
-                    let index = [i0, i1, i2];
-                    let entry = new_indices.get_mut(index.map(usize::from)).unwrap();
+        for i0 in 0..D {
+            for i1 in 0..D {
+                for i2 in 0..D {
+                    let entry = &mut new_indices[i0][i1][i2];
 
                     if entry.points_to_subdivided() {
                         let palette_entry = &self.sdiv_palette[entry.as_usize()];
@@ -597,11 +604,10 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
         type Buf = SmallVec<[bool; INFLATION_INSERTION_TRACKING_BUFFER_SIZE]>;
         let mut inserted: Buf = smallvec::smallvec![false; palette_length];
 
-        for i0 in 0..(D as u8) {
-            for i1 in 0..(D as u8) {
-                for i2 in 0..(D as u8) {
-                    let index = [i0, i1, i2];
-                    let entry = &mut indices[index.map(usize::from)];
+        for i0 in 0..D {
+            for i1 in 0..D {
+                for i2 in 0..D {
+                    let entry: &mut SSIndexEntry<_> = &mut indices[i0][i1][i2];
 
                     // Skip values that are not subdivided, since they don't have to touch the palette.
                     if !entry.points_to_subdivided() {
@@ -664,11 +670,10 @@ impl<const D: usize, const SD: usize, T: SubdividableValue> SubdividedStorage<D,
         let mut new_palette: Vec<SSPaletteEntry<SD, T>> =
             unique.map(Vec::with_capacity).unwrap_or_default();
 
-        for i0 in 0..(D as u8) {
-            for i1 in 0..(D as u8) {
-                for i2 in 0..(D as u8) {
-                    let index = [i0, i1, i2];
-                    let index_entry = &mut indices[index.map(usize::from)];
+        for i0 in 0..D {
+            for i1 in 0..D {
+                for i2 in 0..D {
+                    let index_entry = &mut indices[i0][i1][i2];
 
                     // Skip values that are not subdivided, since they don't have to touch the palette.
                     if !index_entry.points_to_subdivided() {
