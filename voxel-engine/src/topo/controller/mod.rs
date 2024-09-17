@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::sync::Arc;
 use std::{fmt, time::Duration};
 
@@ -5,6 +6,7 @@ use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
 use bevy::ecs::component::{ComponentHooks, StorageType};
 use bevy::math::ivec3;
 use bevy::prelude::*;
+use bevy::time::Stopwatch;
 use bitflags::bitflags;
 use hb::HashSet;
 
@@ -20,11 +22,13 @@ use crate::topo::world::chunk_manager::ecs::{
     start_async_chunk_load_task, start_async_chunk_purge_task,
 };
 use crate::topo::world::chunk_populator::ChunkPopulatorController;
+use crate::util::sync::LockStrategy;
+use crate::util::ChunkSet;
 use crate::{CoreEngineSetup, EngineState};
 
 use super::bounding_box::BoundingBox;
 use super::world::chunk_manager::ecs::{ChunkLifecycleTaskLockGranularity, ChunkManagerRes};
-use super::world::{ChunkManager, ChunkPos};
+use super::world::{ChunkManager, ChunkPos, VoxelRealm};
 
 mod error;
 mod events;
@@ -350,13 +354,14 @@ impl Plugin for WorldController {
                     build_populated_chunk_meshes,
                 )
                     .in_set(WorldControllerSystems::ObserverResponses),
+                unload_purged_chunks.in_set(WorldControllerSystems::CoreEvents),
             ),
         );
 
         app.add_systems(FixedLast, increase_voxel_world_tick);
 
         app.configure_sets(
-            FixedPostUpdate,
+            PostUpdate,
             (
                 WorldControllerSystems::ObserverMovement,
                 WorldControllerSystems::ObserverResponses,
@@ -368,7 +373,9 @@ impl Plugin for WorldController {
     }
 }
 
-fn initialize_chunk_manager(world: &mut World) {
+/// System for initializing the chunk manager and adding it as a resource.
+/// Must be ran after registries have been built.
+pub fn initialize_chunk_manager(world: &mut World) {
     let chunk_manager = {
         let registries = world.resource::<Registries>();
         let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
@@ -380,6 +387,74 @@ fn initialize_chunk_manager(world: &mut World) {
     };
 
     world.insert_resource(ChunkManagerRes(Arc::new(chunk_manager)));
+}
+
+pub const UNLOAD_BACKLOG_INTERVAL: Duration = Duration::from_millis(10);
+
+/// System for unloading purged chunks. Chunks exist in purgatory for a little before they are
+/// unloaded and their resources freed. Chunks are only unloaded when they have no more references to them.
+///
+/// This system is only really temporary until a more proper chunk unloading solution is implemented.
+/// Chunks are not saved to disk or anything in this system, they are just immediatelly dropped as soon as possible.
+pub fn unload_purged_chunks(
+    time: Res<Time<Real>>,
+    mut purged_events: EventReader<PurgedChunkEvent>,
+    mut backlog: Local<ChunkSet>,
+    mut time_since_last_backlog_unload: Local<Stopwatch>,
+    realm: VoxelRealm,
+) {
+    time_since_last_backlog_unload.tick(time.delta());
+
+    // Only unload if there are pending events or if we've waited long enough for our backlog.
+    if purged_events.is_empty()
+        || time_since_last_backlog_unload.elapsed() < UNLOAD_BACKLOG_INTERVAL
+    {
+        return;
+    }
+
+    // TODO: better locking policy
+    realm
+        .cm()
+        .structural_access(LockStrategy::Blocking, |access| {
+            backlog.retain(|&chunk_pos| {
+                let Some((_, arc_chunk)) = access.purgatory.remove(&chunk_pos) else {
+                    return false;
+                };
+
+                let removed_chunk = match Arc::try_unwrap(arc_chunk) {
+                    Ok(chunk) => chunk,
+                    Err(arc_chunk) => {
+                        access.purgatory.insert(chunk_pos, arc_chunk);
+
+                        return true;
+                    }
+                };
+
+                drop(removed_chunk);
+                false
+            });
+
+            for event in purged_events.read() {
+                let Some((_, arc_chunk)) = access.purgatory.remove(&event.chunk_pos) else {
+                    continue;
+                };
+
+                let removed_chunk = match Arc::try_unwrap(arc_chunk) {
+                    Ok(chunk) => chunk,
+                    Err(arc_chunk) => {
+                        access.purgatory.insert(event.chunk_pos, arc_chunk);
+                        backlog.set(event.chunk_pos);
+
+                        continue;
+                    }
+                };
+
+                drop(removed_chunk);
+            }
+
+            time_since_last_backlog_unload.reset();
+        })
+        .unwrap();
 }
 
 #[cfg(test)]
