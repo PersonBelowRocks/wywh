@@ -45,7 +45,7 @@ pub const MAX: IVec2 = IVec2::splat(Chunk::SIZE);
 pub type CqsResult<T> = Result<T, CqsError>;
 
 impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
-    #[inline]
+    #[inline(always)]
     pub fn new(
         face: Face,
         magnitude: i32,
@@ -66,6 +66,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         })
     }
 
+    #[inline(always)]
     fn face_texture_for_variant(
         &self,
         variant_id: <BlockVariantRegistry as Registry>::Id,
@@ -79,6 +80,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         Some(submodel.texture(self.face))
     }
 
+    #[inline(always)]
     pub fn reposition(&mut self, face: Face, magnitude: i32) -> Result<(), OutOfBounds> {
         if 0 > magnitude && magnitude > Chunk::SIZE {
             return Err(OutOfBounds);
@@ -90,6 +92,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn mag_at_block_edge(&self) -> bool {
         rem_euclid_2_pow_n(
             self.mag + i32::clamp(self.face.axis_direction(), -1, 0),
@@ -97,31 +100,35 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         ) == SubdividedBlock::SUBDIVISIONS - 1
     }
 
+    #[inline(always)]
     pub fn contains_mb(pos: IVec2) -> bool {
         Self::contains(microblock_to_full_block(pos))
     }
 
+    #[inline(always)]
     pub fn contains(pos: IVec2) -> bool {
         pos.cmplt(MAX).all() && pos.cmpge(IVec2::ZERO).all()
     }
 
+    #[inline(always)]
     pub fn contains_3d(pos: IVec3) -> bool {
         pos.cmplt(Chunk::VEC).all() && pos.cmpge(IVec3::ZERO).all()
     }
 
+    #[inline(always)]
     pub fn isometrize(&self, quad: PositionedQuad) -> IsometrizedQuad {
         let iso = QuadIsometry::new(quad.pos(), self.mag, self.face);
         IsometrizedQuad::new(iso, quad)
     }
 
     /// Transforms a position from micro-facespace to micro-localspace
-    #[inline]
+    #[inline(always)]
     pub fn pos_3d_mb(&self, pos: IVec2) -> IVec3 {
         ivec_project_to_3d(pos, self.face, self.mag)
     }
 
     /// Transforms a position from facespace to localspace
-    #[inline]
+    #[inline(always)]
     pub fn pos_3d(&self, pos: IVec2) -> IVec3 {
         ivec_project_to_3d(
             pos,
@@ -130,7 +137,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         )
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn pos_3d_sd(&self, pos: IVec2) -> IVec3 {
         ivec_project_to_3d(
             pos,
@@ -140,24 +147,24 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     /// Transforms a position from localspace to facespace
-    #[inline]
+    #[inline(always)]
     pub fn pos_2d(&self, pos: IVec3) -> IVec2 {
         ivec_project_to_2d(pos, self.face)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_3d(&self, pos: IVec3) -> CqsResult<Option<BlockVariantId>> {
         Ok(self.handle.get(pos)?)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_3d_mb(&self, pos_mb: IVec3) -> CqsResult<BlockVariantId> {
         Ok(self.handle.get_mb(pos_mb)?)
     }
 
     /// `pos` is in localspace and can exceed the regular chunk bounds by 1 for any component of the vector.
     /// In this case the `ChunkAccessOutput` is taken from a neighboring chunk.
-    #[inline]
+    #[inline(always)]
     pub fn auto_neighboring_get(&self, pos: IVec3) -> CqsResult<Option<BlockVariantId>> {
         if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
             self.get_3d(pos)
@@ -168,7 +175,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn auto_neighboring_get_mb(&self, pos_mb: IVec3) -> CqsResult<BlockVariantId> {
         let pos = microblock_to_full_block_3d(pos_mb);
 
@@ -181,7 +188,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get(&self, pos: IVec2) -> CqsResult<Option<BlockVariantId>> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
@@ -191,7 +198,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         self.get_3d(pos3d)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_mb(&self, pos_mb: IVec2) -> CqsResult<BlockVariantId> {
         if !Self::contains_mb(pos_mb) {
             return Err(CqsError::OutOfBounds);
@@ -201,7 +208,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         self.get_3d_mb(pos_mb_3d)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_above(&self, pos: IVec2) -> CqsResult<Option<BlockVariantId>> {
         if !Self::contains(pos) {
             return Err(CqsError::OutOfBounds);
@@ -211,7 +218,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         self.auto_neighboring_get(pos_above)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_mb_above(&self, mb_pos: IVec2) -> CqsResult<BlockVariantId> {
         if !Self::contains_mb(mb_pos) {
             return Err(CqsError::OutOfBounds);
@@ -225,7 +232,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     /// block for the provided `pos_mb` is at position `pos_mb / 4` in chunkspace.
     /// Returns `None` if the microblock at the position is obscured by a block "above" it
     /// or if the block at the position doesn't have a model.
-    #[inline]
+    #[inline(always)]
     pub fn get_quad_mb(&self, pos_mb: IVec2) -> CqsResult<Option<DataQuad>> {
         let microblock = self.get_mb(pos_mb)?;
         let microblock_above = self.get_mb_above(pos_mb)?;
