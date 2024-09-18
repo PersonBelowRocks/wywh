@@ -253,8 +253,7 @@ impl BlockVariantRegistry {
                     subdividable: false,
                 },
                 model: Some(BlockModel {
-                    directions: FaceMap::new(),
-                    model: BlockModelFaceMap::filled(FaceTexture::new(TextureRegistry::TEX1)),
+                    faces: FaceMap::filled(FaceTexture::new(TextureRegistry::TEX1)),
                 }),
             },
         );
@@ -267,8 +266,7 @@ impl BlockVariantRegistry {
                     subdividable: true,
                 },
                 model: Some(BlockModel {
-                    directions: FaceMap::new(),
-                    model: BlockModelFaceMap::filled(FaceTexture::new(TextureRegistry::TEX2)),
+                    faces: FaceMap::filled(FaceTexture::new(TextureRegistry::TEX2)),
                 }),
             },
         );

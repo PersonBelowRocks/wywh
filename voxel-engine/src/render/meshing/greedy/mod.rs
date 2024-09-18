@@ -70,14 +70,10 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     fn face_texture_for_variant(
         &self,
         variant_id: <BlockVariantRegistry as Registry>::Id,
-        rotation: Option<BlockModelRotation>,
     ) -> Option<FaceTexture> {
         let model = self.registry.get_by_id(variant_id).model?;
-        let submodel = rotation
-            .map(|r| model.submodel(r.front()))
-            .unwrap_or(model.default_submodel());
 
-        Some(submodel.texture(self.face))
+        Some(model.texture(self.face))
     }
 
     #[inline(always)]
@@ -250,10 +246,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
             return Ok(None);
         };
 
-        // TODO: get rid of submodels completely, we should register all possible rotations
-        // on startup and not calculate anything during runtime
-        let submodel = model.default_submodel();
-        let texture = submodel.texture(self.face);
+        let texture = model.texture(self.face);
 
         Ok(Some(DataQuad::new(Quad::ONE, texture)))
     }

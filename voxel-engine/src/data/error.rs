@@ -49,10 +49,6 @@ pub struct FaceParseError;
 pub struct FaceTextureDescParseError(String);
 
 #[derive(Clone, te::Error, Debug, PartialEq, dm::Constructor)]
-#[error("Error parsing {0} as submodel face texture descriptor")]
-pub struct SubmodelFaceTextureDescParseError(String);
-
-#[derive(Clone, te::Error, Debug, PartialEq, dm::Constructor)]
 #[error("Error parsing {0} block model face")]
 pub struct BlockModelFaceParseError(String);
 
@@ -60,8 +56,6 @@ pub struct BlockModelFaceParseError(String);
 pub enum BlockModelCreationError {
     #[error("Texture {0} not found in the provided texture registry")]
     TextureNotFound(ResourcePath),
-    #[error("Descriptor doesn't provide model face {0:?}")]
-    MissingModelFace(BlockModelFace),
-    #[error("Descriptor submodel for direction {0:?} is missing face {1:?}")]
-    MissingDirectionFace(Face, Face),
+    #[error("Descriptor doesn't provide texture for face {0:?}")]
+    MissingFace(Face),
 }

@@ -2,10 +2,10 @@
 transparency = "opaque"
 subdividable = false
 
-[model.root]
-up = "water"
-down = "water"
-left = "water"
-right = "water"
-front = "water"
-back = "water"
+[model.faces]
+top = "water"
+bottom = "water"
+west = "water"
+east = "water"
+north = "water"
+south = "water"
