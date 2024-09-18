@@ -5,7 +5,7 @@ use bevy::{
     render::{
         render_resource::{
             BindGroup, BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor,
-            BufferInitDescriptor, BufferUsages, ShaderType,
+            BufferInitDescriptor, BufferUsages, ShaderSize, ShaderType,
         },
         renderer::{RenderDevice, RenderQueue},
     },
@@ -20,7 +20,7 @@ use crate::{
             BindGroupProvider,
         },
         lod::LevelOfDetail,
-        meshing::controller::ChunkMeshData,
+        meshing::controller::{quads_in_byte_buffer, u32s_in_byte_buffer, ChunkMeshData},
         quad::GpuQuad,
     },
     topo::world::ChunkPos,
@@ -422,8 +422,9 @@ impl IndirectChunkData {
         // the existing mesh data with the provided (new) data. To do this we must remove the data from our existing
         // buffers and tie the existing chunk with the new data that we have uploaded.
         let mut updated_chunks = ChunkSet::default();
-        let mut upload_indices = Vec::<u32>::new();
-        let mut upload_quads = Vec::<GpuQuad>::new();
+
+        let mut upload_index_bytes = Vec::<u8>::new();
+        let mut upload_quad_bytes = Vec::<u8>::new();
 
         for (i, (chunk, mesh)) in chunks_to_upload.iter().enumerate() {
             let inspect = inspections.is_some_and(|insp| insp.contains(chunk));
@@ -444,15 +445,15 @@ impl IndirectChunkData {
                 updated_chunks.set(chunk);
             }
 
-            let indices_len = upload_indices.len() as u32;
-            let quads_len = upload_quads.len() as u32;
+            let indices_len: u32 = u32s_in_byte_buffer(upload_index_bytes.len() as u64);
+            let quads_len: u32 = quads_in_byte_buffer(upload_quad_bytes.len() as u64);
 
             let metadata = GpuChunkMetadata::new(
                 // We'll let this be our instance number for now. These will all be tacked on to the end of our existing metadata so we just
                 // increase this number accordingly when we get that far.
                 i as u32,
-                indices_len..(indices_len + mesh.index_buffer.len() as u32),
-                quads_len..(quads_len + mesh.quad_buffer.len() as u32),
+                indices_len..(indices_len + mesh.indices()),
+                quads_len..(quads_len + mesh.quads()),
             );
 
             if inspect {
@@ -462,16 +463,28 @@ impl IndirectChunkData {
             debug_assert!(metadata.start_index < metadata.end_index);
             debug_assert!(metadata.start_quad < metadata.end_quad);
 
-            debug_assert_eq!(upload_indices.len() as u32, metadata.start_index);
-            debug_assert_eq!(upload_quads.len() as u32, metadata.start_quad);
+            debug_assert_eq!(
+                u32s_in_byte_buffer(upload_index_bytes.len() as u64),
+                metadata.start_index
+            );
+            debug_assert_eq!(
+                quads_in_byte_buffer(upload_quad_bytes.len() as u64),
+                metadata.start_quad
+            );
 
             // After extending our data here the length of our data should match up
             // with the end bounds in the ChunkBufferBounds value that we made earlier.
-            upload_indices.extend(&mesh.index_buffer);
-            upload_quads.extend(&mesh.quad_buffer);
+            upload_index_bytes.extend(&mesh.index_buffer_data);
+            upload_quad_bytes.extend(&mesh.quad_buffer_data);
 
-            debug_assert_eq!(upload_indices.len() as u32, metadata.end_index);
-            debug_assert_eq!(upload_quads.len() as u32, metadata.end_quad);
+            debug_assert_eq!(
+                u32s_in_byte_buffer(upload_index_bytes.len() as u64),
+                metadata.end_index
+            );
+            debug_assert_eq!(
+                quads_in_byte_buffer(upload_quad_bytes.len() as u64),
+                metadata.end_quad
+            );
 
             upload_metadata.insert(chunk, metadata);
         }
@@ -586,8 +599,18 @@ impl IndirectChunkData {
 
         let new_bounds = retained_bounds;
 
-        self.raw.index.append(queue, gpu, &upload_indices);
-        self.raw.quad.append(queue, gpu, &upload_quads);
+        self.raw.index.append_raw(
+            queue,
+            gpu,
+            &upload_index_bytes,
+            u32s_in_byte_buffer(upload_index_bytes.len() as u64),
+        );
+        self.raw.quad.append_raw(
+            queue,
+            gpu,
+            &upload_quad_bytes,
+            quads_in_byte_buffer(upload_quad_bytes.len() as u64),
+        );
 
         self.update_metadata(gpu, new_bounds);
         self.update_bind_groups(gpu);

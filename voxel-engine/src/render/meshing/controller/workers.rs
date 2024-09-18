@@ -220,7 +220,7 @@ impl MeshBuilderPool {
                         let _ = finished.send(MeshFinishedEvent {
                             chunk_pos: job.chunk_pos,
                             lod: DEFAULT_DEBUG_LOD,
-                            mesh: ChunkMeshData::empty(),
+                            mesh: ChunkMeshData::empty(DEFAULT_DEBUG_LOD),
                             tick: job.tick,
                         });
 

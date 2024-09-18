@@ -4,13 +4,13 @@ mod workers;
 
 use std::{
     cmp::{self, max},
-    fmt,
     sync::Arc,
 };
 
 use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
 use bevy::{
     prelude::*,
+    render::render_resource::encase::StorageBuffer,
     tasks::{available_parallelism, TaskPoolBuilder},
 };
 use dashmap::DashMap;
@@ -64,24 +64,53 @@ impl PartialOrd for RemeshPriority {
     }
 }
 
+/// The number of [`GpuQuad`]s in a byte buffer of the given size.
+pub fn quads_in_byte_buffer(buffer_size: u64) -> u32 {
+    (buffer_size / GpuQuad::ARRAY_STRIDE).try_into().unwrap()
+}
+
+/// The number of `u32` values in a byte buffer of the given size.
+pub fn u32s_in_byte_buffer(buffer_size: u64) -> u32 {
+    use bevy::render::render_resource::encase::ShaderSize;
+    (buffer_size / u32::SHADER_SIZE.get()).try_into().unwrap()
+}
+
 // TODO: a ChunkMesh type that contains the mesh data, chunk position, and LOD
+/// Data for a chunk mesh, formatted to be uploaded to the GPU.
 #[derive(Clone)]
 pub struct ChunkMeshData {
-    pub index_buffer: Vec<u32>,
-    pub quad_buffer: Vec<GpuQuad>,
+    /// The index buffer of this chunk, binary format depends on the LOD of the mesh.
+    pub index_buffer_data: Vec<u8>,
+    /// The quad buffer of this chunk, binary format depends on the LOD of the mesh.
+    pub quad_buffer_data: Vec<u8>,
+    /// The LOD of the chunk mesh, determines the format of the data buffers.
+    pub lod: LevelOfDetail,
 }
 
 impl ChunkMeshData {
     /// Get an empty chunk mesh
-    pub fn empty() -> Self {
+    pub fn empty(lod: LevelOfDetail) -> Self {
         Self {
-            index_buffer: Vec::new(),
-            quad_buffer: Vec::new(),
+            index_buffer_data: Vec::new(),
+            quad_buffer_data: Vec::new(),
+            lod,
         }
     }
 
+    /// The number of indices in this mesh.
+    #[inline]
+    pub fn indices(&self) -> u32 {
+        u32s_in_byte_buffer(self.index_buffer_data.len() as u64)
+    }
+
+    /// The number of quads in this mesh.
+    #[inline]
+    pub fn quads(&self) -> u32 {
+        quads_in_byte_buffer(self.quad_buffer_data.len() as u64)
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.index_buffer.is_empty() || self.quad_buffer.is_empty()
+        self.index_buffer_data.is_empty() || self.quad_buffer_data.is_empty()
     }
 
     /// Get the correct initial status of this mesh data. When a chunk mesh
@@ -97,17 +126,6 @@ impl ChunkMeshData {
         } else {
             ChunkMeshStatus::Filled
         }
-    }
-}
-
-impl fmt::Debug for ChunkMeshData {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut map = f.debug_map();
-
-        map.entry(&"indices", &self.index_buffer.len());
-        map.entry(&"quads", &self.quad_buffer.len());
-
-        map.finish()
     }
 }
 

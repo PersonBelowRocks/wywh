@@ -3,6 +3,7 @@ use bevy::math::ivec2;
 use bevy::math::IVec2;
 use bevy::math::Vec2;
 
+use bevy::render::render_resource::encase::StorageBuffer;
 use itertools::Itertools;
 
 use crate::data::registries::block::BlockVariantRegistry;
@@ -181,11 +182,14 @@ impl GreedyMesher {
         Ok(())
     }
 
-    fn drain_quads(&mut self) -> (Vec<u32>, Vec<GpuQuad>) {
+    fn write_scratch_buffer(
+        &mut self,
+        index_bytes: &mut StorageBuffer<Vec<u8>>,
+        quad_bytes: &mut StorageBuffer<Vec<u8>>,
+    ) {
         const VERTEX_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
 
         let quads = self.quad_buffer_scratch.len();
-        let capacity_before = self.quad_buffer_scratch.capacity();
 
         let mut indices = Vec::<u32>::with_capacity(quads * 6);
         let mut current_idx: u32 = 0;
@@ -218,11 +222,8 @@ impl GreedyMesher {
             })
             .collect_vec();
 
-        if capacity_before != self.quad_buffer_scratch.capacity() {
-            panic!("Failed sanity check of quad buffer scratch memory capacity");
-        }
-
-        (indices, quads)
+        index_bytes.write(&indices);
+        quad_bytes.write(&quads);
     }
 
     pub fn build<'reg, 'chunk>(
@@ -245,11 +246,15 @@ impl GreedyMesher {
             }
         }
 
-        let (idx_buf, quad_buf) = self.drain_quads();
+        let mut index_buffer_data = StorageBuffer::new(Vec::new());
+        let mut quad_buffer_data = StorageBuffer::new(Vec::new());
+
+        self.write_scratch_buffer(&mut index_buffer_data, &mut quad_buffer_data);
 
         Ok(ChunkMeshData {
-            index_buffer: idx_buf,
-            quad_buffer: quad_buf,
+            index_buffer_data: index_buffer_data.into_inner(),
+            quad_buffer_data: quad_buffer_data.into_inner(),
+            lod: cx.lod,
         })
     }
 }

@@ -36,7 +36,7 @@ pub enum MeshJobUrgency {
 }
 
 /// Event sent when a chunk mesh at some LOD is done being built.
-#[derive(Clone, Event, Debug)]
+#[derive(Clone, Event)]
 pub struct MeshFinishedEvent {
     pub chunk_pos: ChunkPos,
     pub lod: LevelOfDetail,

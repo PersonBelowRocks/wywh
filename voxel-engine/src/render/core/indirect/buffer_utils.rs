@@ -99,17 +99,18 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
         &self.buffer
     }
 
-    /// Append a slice of data to the buffer on the gpu.
-    pub fn append(&mut self, queue: &RenderQueue, gpu: &RenderDevice, data: &[T]) {
-        // The encase crate (utilities for working on gpu data) seems to hate empty slices
-        // and keeps insisting they're bigger than they are, so we return early if we have
-        // an empty slice (there's nothing to do anyways, appending an empty slice is essentially no-op)
+    /// Append a pre-formatted slice of data to the buffer on the GPU.
+    /// The data must be correctly formatted as a WGSL array of `T`.
+    ///
+    /// - `data` is the raw formatted bytes ready to be uploaded.
+    /// - `len` is the number of elements of type `T` in `data`.
+    pub fn append_raw(&mut self, queue: &RenderQueue, gpu: &RenderDevice, data: &[u8], len: u32) {
         if data.is_empty() {
             return;
         }
 
         // calculate our new size after we append all the data
-        let size = self.vram_bytes() + (data.len() as u64 * Self::item_size());
+        let size = self.vram_bytes() + (data.len() as u64);
 
         // this buffer will replace our old one
         let buffer = self.create_buffer(gpu, size);
@@ -122,13 +123,25 @@ impl<T: ShaderType + ShaderSize + WriteInto> VramArray<T> {
         encoder.copy_buffer_to_buffer(&self.buffer, 0, &buffer, 0, self.vram_bytes());
         queue.submit([encoder.finish()]);
 
-        // then we format and append the provided data
-        let formatted = to_formatted_bytes(&data);
-        queue.write_buffer(&buffer, self.vram_bytes(), &formatted);
+        // no formatting needed since the data should already be formatted
+        queue.write_buffer(&buffer, self.vram_bytes(), data);
 
         // set the buffer and bump our length
         self.buffer = buffer;
-        self.buffer_len += data.len() as u32;
+        self.buffer_len += len;
+    }
+
+    /// Append a slice of data to the buffer on the GPU.
+    pub fn append(&mut self, queue: &RenderQueue, gpu: &RenderDevice, data: &[T]) {
+        // The encase crate (utilities for working on gpu data) seems to hate empty slices
+        // and keeps insisting they're bigger than they are, so we return early if we have
+        // an empty slice (there's nothing to do anyways, appending an empty slice is essentially no-op)
+        if data.is_empty() {
+            return;
+        }
+
+        let formatted = to_formatted_bytes(data);
+        self.append_raw(queue, gpu, &formatted, data.len() as u32);
     }
 
     /// Removes all the data between the different provided ranges. Think of this as copying all the data

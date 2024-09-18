@@ -6,13 +6,18 @@ pub mod isometric;
 use std::{fmt::Debug, mem::size_of};
 
 pub use anon::*;
-use bevy::{math::Vec2, render::render_resource::ShaderType};
+use bevy::{
+    math::Vec2,
+    render::render_resource::{ShaderSize, ShaderType},
+};
 pub use data::*;
 pub use error::*;
 pub use isometric::*;
 use num_traits::FromPrimitive;
 
 use crate::data::{texture::FaceTextureRotation, tile::Face};
+
+use super::wgsl;
 
 #[rustfmt::skip]
 pub mod consts {
@@ -30,6 +35,13 @@ pub struct GpuQuad {
     pub min: Vec2,
     pub max: Vec2,
     pub magnitude: i32,
+}
+
+impl GpuQuad {
+    /// Alignment calculated by hand using https://www.w3.org/TR/WGSL/#alignment-and-size.
+    pub const ALIGN: u64 = 8;
+    /// The stride of a quad in a WGSL array.
+    pub const ARRAY_STRIDE: u64 = wgsl::round_up(Self::ALIGN, Self::SHADER_SIZE.get());
 }
 
 #[derive(Copy, Clone, Debug, ShaderType, PartialEq, Eq)]
