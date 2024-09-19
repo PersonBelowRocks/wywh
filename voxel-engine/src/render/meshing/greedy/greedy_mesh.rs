@@ -59,29 +59,22 @@ impl ChunkSliceMask {
         true
     }
 
-    pub fn is_masked_mb(&self, pos: IVec2) -> Option<bool> {
-        if !Self::contains_mb(pos) {
-            return None;
-        }
-
-        Some(self.microblocks[pos.x as usize][pos.y as usize])
+    #[inline]
+    pub fn is_masked_mb(&self, pos: IVec2) -> bool {
+        self.microblocks[pos.x as usize][pos.y as usize]
     }
 
-    pub fn is_masked(&self, pos: IVec2) -> Option<bool> {
-        if !Self::contains(pos) {
-            return None;
-        }
-
+    pub fn is_masked(&self, pos: IVec2) -> bool {
         for x in 0..4 {
             for y in 0..4 {
                 let p = ivec2(x, y) + (pos * SubdividedBlock::SUBDIVISIONS);
                 if !self.microblocks[p.x as usize][p.y as usize] {
-                    return Some(false);
+                    return false;
                 }
             }
         }
 
-        Some(true)
+        true
     }
 }
 
@@ -117,13 +110,13 @@ mod tests {
         let mut mask = ChunkSliceMask::new();
 
         assert!(mask.mask_mb_region_inclusive(ivec2(2, 3), ivec2(13, 9)));
-        assert!(!mask.is_masked(ivec2(0, 1)).unwrap());
-        assert!(mask.is_masked(ivec2(1, 1)).unwrap());
-        assert!(mask.is_masked(ivec2(2, 1)).unwrap());
-        assert!(!mask.is_masked(ivec2(3, 1)).unwrap());
+        assert!(!mask.is_masked(ivec2(0, 1)));
+        assert!(mask.is_masked(ivec2(1, 1)));
+        assert!(mask.is_masked(ivec2(2, 1)));
+        assert!(!mask.is_masked(ivec2(3, 1)));
 
-        assert!(mask.is_masked_mb(ivec2(2, 3)).unwrap());
-        assert!(mask.is_masked_mb(ivec2(9, 6)).unwrap());
+        assert!(mask.is_masked_mb(ivec2(2, 3)));
+        assert!(mask.is_masked_mb(ivec2(9, 6)));
     }
 
     #[test]
@@ -131,9 +124,9 @@ mod tests {
         let mut mask = ChunkSliceMask::new();
         assert!(mask.mask_mb_region_inclusive(ivec2(8, 8), ivec2(8, 8)));
 
-        assert!(mask.is_masked_mb(ivec2(8, 8)).unwrap());
-        assert!(!mask.is_masked_mb(ivec2(8, 9)).unwrap());
-        assert!(!mask.is_masked_mb(ivec2(9, 9)).unwrap());
-        assert!(!mask.is_masked_mb(ivec2(9, 8)).unwrap());
+        assert!(mask.is_masked_mb(ivec2(8, 8)));
+        assert!(!mask.is_masked_mb(ivec2(8, 9)));
+        assert!(!mask.is_masked_mb(ivec2(9, 9)));
+        assert!(!mask.is_masked_mb(ivec2(9, 8)));
     }
 }

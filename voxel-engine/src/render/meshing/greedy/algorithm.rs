@@ -40,7 +40,7 @@ fn widen_quad<'reg, 'chunk>(
     for dx in 1..(Chunk::SUBDIVIDED_CHUNK_SIZE - fpos.x) {
         let candidate_pos = fpos + ivec2(dx, 0);
 
-        if mask.is_masked_mb(candidate_pos).unwrap() {
+        if mask.is_masked_mb(candidate_pos) {
             break;
         }
 
@@ -75,7 +75,7 @@ fn heighten_quad<'reg, 'chunk>(
         for hx in (quad.min().x)..=(quad.max().x) {
             let candidate_pos = ivec2(hx, dy + fpos.y);
 
-            if mask.is_masked_mb(candidate_pos).unwrap() {
+            if mask.is_masked_mb(candidate_pos) {
                 break 'heighten;
             }
 
@@ -135,7 +135,7 @@ impl GreedyMesher {
                     }
                 }
 
-                if mask.is_masked(cs_pos).unwrap() {
+                if mask.is_masked(cs_pos) {
                     continue;
                 }
 
@@ -143,7 +143,7 @@ impl GreedyMesher {
                     for sd_y in 0..SubdividedBlock::SUBDIVISIONS {
                         let fpos = ivec2(sd_x, sd_y) + (cs_pos * SubdividedBlock::SUBDIVISIONS);
 
-                        if mask.is_masked_mb(fpos).unwrap() {
+                        if mask.is_masked_mb(fpos) {
                             continue;
                         }
 
