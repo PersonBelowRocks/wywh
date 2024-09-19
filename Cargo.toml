@@ -19,7 +19,7 @@ voxel-engine.path = "./voxel-engine"
 mip-texture-array.path = "./mip-texture-array"
 
 # Regular dependencies
-bevy = "0.14.1"
+bevy = "0.14.2"
 flume = "0.11.0"
 thiserror = "1.0.63"
 dashmap = "6.1.0"
