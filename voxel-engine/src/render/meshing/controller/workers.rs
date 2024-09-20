@@ -12,11 +12,16 @@ use async_bevy_events::{AsyncEventReader, AsyncEventWriter, EventFunnel};
 use bevy::{
     prelude::*,
     tasks::{
-        available_parallelism, block_on, AsyncComputeTaskPool, Task, TaskPool, TaskPoolBuilder,
+        available_parallelism, block_on,
+        futures_lite::{future::pending, pin},
+        AsyncComputeTaskPool, Task, TaskPool, TaskPoolBuilder,
     },
 };
-use flume::Sender;
-use futures_util::{future::join_all, StreamExt};
+use flume::{Receiver, Sender};
+use futures_util::{
+    future::{join_all, ready},
+    FutureExt, StreamExt,
+};
 use parking_lot::Mutex;
 use priority_queue::PriorityQueue;
 
@@ -30,9 +35,12 @@ use crate::{
             Context,
         },
     },
-    topo::world::{
-        chunk::ChunkFlags, chunk_populator::events::PriorityCalcStrategy, ChunkManager, ChunkPos,
-        ChunkRef, VoxelRealm,
+    topo::{
+        world::{
+            chunk::ChunkFlags, chunk_populator::events::PriorityCalcStrategy, ChunkManager,
+            ChunkPos, ChunkRef, VoxelRealm,
+        },
+        ChunkJobQueue,
     },
     util::{closest_distance, closest_distance_sq, sync::LockStrategy},
 };
@@ -126,18 +134,12 @@ impl TickedMeshJobQueue {
 }
 
 pub struct MeshBuilderPool {
-    pub job_queues: Arc<LodMap<Mutex<TickedMeshJobQueue>>>,
-    shutdown_interrupt: Arc<AtomicBool>,
+    pub staging_chan_senders: LodMap<Sender<MeshBuilderJob>>,
     tasks: Vec<Task<()>>,
 }
 
-fn new_lod_job_queues() -> Arc<LodMap<Mutex<TickedMeshJobQueue>>> {
-    Arc::new(LodMap::from_fn(|_| {
-        Some(Mutex::new(TickedMeshJobQueue::new()))
-    }))
-}
-
 const DEFAULT_DEBUG_LOD: LevelOfDetail = LevelOfDetail::X16Subdiv;
+const MESH_BUILDER_JOB_STAGING_CHANNEL_SIZE: usize = 16;
 
 /// Remove [`ChunkFlags::REMESH`], [`ChunkFlags::REMESH_NEIGHBORS`], and [`ChunkFlags::FRESHLY_GENERATED`] from
 /// a chunk's flags.
@@ -151,6 +153,22 @@ fn remove_remesh_related_flags(chunk_ref: &ChunkRef) {
         .unwrap();
 }
 
+fn staging_channels() -> (
+    LodMap<Sender<MeshBuilderJob>>,
+    LodMap<Receiver<MeshBuilderJob>>,
+) {
+    let mut senders = LodMap::new();
+    let mut receivers = LodMap::new();
+
+    for lod in LevelOfDetail::LODS {
+        let (tx, rx) = flume::bounded(MESH_BUILDER_JOB_STAGING_CHANNEL_SIZE);
+        senders.insert(lod, tx);
+        receivers.insert(lod, rx);
+    }
+
+    (senders, receivers)
+}
+
 impl MeshBuilderPool {
     pub fn new(
         registries: Registries,
@@ -161,16 +179,14 @@ impl MeshBuilderPool {
             panic!("Mesh builder task pool is not initialized");
         };
 
-        let shutdown_interrupt = Arc::new(AtomicBool::new(false));
         let mut tasks = Vec::<Task<()>>::with_capacity(task_pool.thread_num());
-        let job_queues = new_lod_job_queues();
+        let (txs, rxs) = staging_channels();
 
         info!("Mesh builder pool size: {}", task_pool.thread_num());
 
         for _ in 0..task_pool.thread_num() {
             // Clone everything so it can be moved into the task.
-            let interrupt = shutdown_interrupt.clone();
-            let queues = job_queues.clone();
+            let receivers = rxs.clone();
             let cm = chunk_manager.clone();
             let reg = registries.clone();
             let finished = finished_meshes.clone();
@@ -180,22 +196,10 @@ impl MeshBuilderPool {
                 // Initialize the mesher and its scratch buffers here
                 let mut greedy_mesher = GreedyMesher::new();
 
-                while !interrupt.load(Ordering::Relaxed) {
+                loop {
                     // Try getting the next job for the given timeout duration. We don't want to hang on the mutex for too long
                     // in case we are ordered to shut down.
-                    let Some(mut queue_guard) =
-                        queues[DEFAULT_DEBUG_LOD].try_lock_for(MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT)
-                    else {
-                        continue;
-                    };
-
-                    let Some(job) = queue_guard.pop() else {
-                        drop(queue_guard);
-
-                        // This isn't a great way to do this, since this is async code.
-                        // But since we're spawning one task per thread, this shouldn't cause any issues.
-                        std::thread::sleep(MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT);
-
+                    let Ok(job) = receivers[DEFAULT_DEBUG_LOD].recv_async().await else {
                         continue;
                     };
 
@@ -268,21 +272,19 @@ impl MeshBuilderPool {
                     }
 
                     remove_remesh_related_flags(&chunk_ref);
-                }
+                } // Main loop
             }))
         }
 
         Self {
-            job_queues,
-            shutdown_interrupt,
+            staging_chan_senders: txs,
             tasks,
         }
     }
 
     pub async fn shutdown(&mut self) {
         info!("Shutting down mesh builder pool");
-        self.shutdown_interrupt.store(true, Ordering::Relaxed);
-        join_all(self.tasks.drain(..)).await;
+        join_all(self.tasks.drain(..).map(Task::cancel)).await;
     }
 }
 
@@ -291,21 +293,22 @@ impl MeshBuilderPool {
 /// The priority will be higher the smaller the value returned by the distance function.
 /// Formula for the priority is roughly `u32::MAX - distance_fn(chunk_pos)`.
 #[inline]
-fn calculate_priorities_based_on_distance<H: BuildHasher, F: Fn(Vec3) -> f32>(
+fn calculate_priorities_based_on_distance<F: Fn(Vec3) -> f32>(
     distance_fn: F,
-    queue: &mut PriorityQueue<MeshBuilderJob, u32, H>,
+    queue: &mut ChunkJobQueue<MeshBuilderJob>,
 ) {
-    for (&mut job, priority) in queue.iter_mut() {
-        let center = job.chunk_pos.worldspace_center();
+    queue.recalculate_priorities(|chunk_pos, _| {
+        let center = chunk_pos.worldspace_center();
         let min_distance = distance_fn(center);
 
         // Closer chunk positions are higher priority, so we need to invert the distance.
-        *priority = u32::MAX - (min_distance as u32);
-    }
+        u32::MAX - (min_distance as u32)
+    });
 }
 
 pub struct MeshBuilderEventProxyTaskState {
     mesh_builder_pool: MeshBuilderPool,
+    queues: LodMap<ChunkJobQueue<MeshBuilderJob>>,
     status_manager: Arc<ChunkMeshStatusManager>,
 }
 
@@ -318,8 +321,22 @@ impl MeshBuilderEventProxyTaskState {
     ) -> Self {
         Self {
             mesh_builder_pool: MeshBuilderPool::new(registries, chunk_manager, finished_meshes),
+            queues: LodMap::from_fn(|_| Some(ChunkJobQueue::new())),
             status_manager,
         }
+    }
+
+    fn queue_if_newer(&mut self, lod: LevelOfDetail, job: MeshBuilderJob, priority: u32) {
+        self.queues[lod].push_with(job.chunk_pos, |existing| match existing {
+            // Only add if the existing job is older or as old as this job, but use the highest priority of the two.
+            Some((ex_priority, ex_job)) if ex_job.tick <= job.tick => {
+                Some((max(ex_priority, priority), job))
+            }
+            // The job does not exist so we can safely add it
+            None => Some((priority, job)),
+            // Don't add anything if the existing job was younger.
+            _ => None,
+        });
     }
 
     pub fn handle_build_mesh_event(&mut self, event: BuildChunkMeshEvent) {
@@ -327,20 +344,27 @@ impl MeshBuilderEventProxyTaskState {
             todo!("Immediate mesh building is not supported yet");
         };
 
-        let mut guard = self.mesh_builder_pool.job_queues[event.lod].lock();
+        let job = MeshBuilderJob {
+            chunk_pos: event.chunk_pos,
+            tick: event.tick,
+        };
 
         // Queue the center chunk
-        guard.push(event.chunk_pos, event.tick, priority);
+        self.queue_if_newer(event.lod, job, priority);
 
         // Queue the neighbors of the center chunk
         for selected_neighbor in event.neighbors.selected() {
             let nb_chunk_pos = ChunkPos::from(event.chunk_pos.as_ivec3() + selected_neighbor);
+            let job = MeshBuilderJob {
+                chunk_pos: nb_chunk_pos,
+                tick: event.tick,
+            };
 
             // The reason we even care about the neighboring chunks is in case their old mesh does not
             // line up cleanly with this chunk's mesh. This obviously only happens if the neighboring chunks
             // even have a mesh to begin with, so therefore we exclude all neighbors without a mesh.
             if self.status_manager.contains(event.lod, nb_chunk_pos) {
-                guard.push(nb_chunk_pos, event.tick, priority);
+                self.queue_if_newer(event.lod, job, priority);
             }
         }
     }
@@ -350,8 +374,6 @@ impl MeshBuilderEventProxyTaskState {
         event: RecalculateMeshBuildingEventPrioritiesEvent,
     ) {
         for lod in LevelOfDetail::LODS {
-            let mut guard = self.mesh_builder_pool.job_queues[lod].lock();
-
             match &event.strategy {
                 PriorityCalcStrategy::ClosestDistanceSq(positions) => {
                     calculate_priorities_based_on_distance(
@@ -359,7 +381,7 @@ impl MeshBuilderEventProxyTaskState {
                             closest_distance_sq(chunk_center, positions.iter().cloned())
                                 .unwrap_or(0.0)
                         },
-                        &mut guard.0,
+                        &mut self.queues[lod],
                     );
                 }
                 PriorityCalcStrategy::ClosestDistance(positions) => {
@@ -367,7 +389,7 @@ impl MeshBuilderEventProxyTaskState {
                         |chunk_center| {
                             closest_distance(chunk_center, positions.iter().cloned()).unwrap_or(0.0)
                         },
-                        &mut guard.0,
+                        &mut self.queues[lod],
                     );
                 }
             }
@@ -376,8 +398,16 @@ impl MeshBuilderEventProxyTaskState {
 
     pub fn handle_remove_mesh_event(&mut self, event: RemoveChunkMeshEvent) {
         for lod in event.lods.contained_lods() {
-            let mut guard = self.mesh_builder_pool.job_queues[lod].lock();
-            guard.remove(event.chunk_pos, event.tick);
+            let Some(job) = self.queues[lod].get(event.chunk_pos) else {
+                continue;
+            };
+
+            // The existing job is newer than the removal event
+            if job.tick >= event.tick {
+                continue;
+            }
+
+            self.queues[lod].remove(event.chunk_pos);
         }
     }
 
@@ -434,12 +464,37 @@ pub fn start_mesh_builder_tasks(
         let mut recalc_priority_events_stream = recalc_priority_events.stream();
         let mut remove_chunk_mesh_events_stream = remove_chunk_mesh_events.stream();
         let mut shutdown_stream = shutdown_rx.stream();
+        let job_txs = task_state.mesh_builder_pool.staging_chan_senders.clone();
+
+        let mut next_job = None::<MeshBuilderJob>;
 
         'task_loop: loop {
+            if next_job.is_none() {
+                next_job = task_state.queues[DEFAULT_DEBUG_LOD]
+                    .pop()
+                    .map(|(_, job)| job);
+            }
+
+            let nv = next_job.clone();
+            let send_task = async {
+                match nv {
+                    Some(job) => job_txs[DEFAULT_DEBUG_LOD].send_async(job).await,
+                    None => pending().await,
+                }
+            }
+            .fuse();
+
+            pin!(send_task);
+
             futures_util::select! {
                 _ = shutdown_stream.next() => {
                     break 'task_loop;
                 },
+
+                _ = send_task => {
+                    next_job = None;
+                },
+
                 event = build_mesh_events_stream.next() => {
                     let Some(event) = event else {
                         continue;
@@ -460,7 +515,7 @@ pub fn start_mesh_builder_tasks(
                     };
 
                     task_state.handle_remove_mesh_event(event);
-                }
+                },
             };
         }
 
