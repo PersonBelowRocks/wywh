@@ -61,6 +61,44 @@ impl<T> ChunkJobQueue<T> {
         previous_item
     }
 
+    /// Add an item into the queue by calling a factory with the existing item (if it exists).
+    ///
+    /// The `factory` closure takes an optional pair of an item's priority and the item itself.
+    /// It returns an optional priority and item to be inserted (and in the process overwrite the existing item).
+    ///
+    /// For the parameter of the closure:
+    /// - `None` means that there was no item associated with the given chunk position.
+    /// - `Some(priority, item)` means that there was an item associated with the chunk position,
+    /// which the factory can read.
+    ///
+    /// For the return value of the closure:
+    /// - `None` means that nothing will be inserted or mutated in the queue.
+    /// - `Some(priority, item)` means that the item will be inserted at the chunk position with the priority.
+    ///
+    /// # Priority Behaviour
+    /// Unlike the regular `ChunkJobQueue::push()` method, this method will overwrite the existing item
+    /// regardless of its priority. Meaning you can use this method to decrease the priority of an existing item, whereas
+    /// regular `push()` only mutates the queue if the new priority is higher than the existing one.
+    #[inline]
+    pub fn push_with<F>(&mut self, chunk_pos: ChunkPos, factory: F)
+    where
+        F: FnOnce(Option<(u32, &T)>) -> Option<(u32, T)>,
+    {
+        // FIXME: this syntax really sucks
+        let pair = (self.get_priority(chunk_pos), self.get(chunk_pos));
+        let Some((priority, item)) = (match pair {
+            (Some(priority), Some(item)) => factory(Some((priority, item))),
+            (None, None) => factory(None),
+            _ => unreachable!("methods on this type guarantee that we never have a priority without an item, and vice-versa")
+        }) else {
+            // Factory produced nothing so we don't insert
+            return;
+        };
+
+        self.priorities.push(chunk_pos, priority);
+        self.items.insert(chunk_pos, item);
+    }
+
     /// Remove an item from the queue, returning it if it existed.
     #[inline]
     pub fn remove(&mut self, chunk_pos: ChunkPos) -> Option<T> {
