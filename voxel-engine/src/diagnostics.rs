@@ -114,11 +114,13 @@ fn collect_diagnostics(rx: Res<DiagnosticsRx>, mut diagnostics: ResMut<Diagnosti
 pub struct VoxelEngineDiagnostics {
     pub gpu_update_time: DiagnosticPath,
     pub mesh_extract_time: DiagnosticPath,
+    pub mesh_build_time: DiagnosticPath,
 }
 
 pub const ENGINE_DIAGNOSTICS: VoxelEngineDiagnostics = VoxelEngineDiagnostics {
     gpu_update_time: DiagnosticPath::const_new("gpu_update_time"),
     mesh_extract_time: DiagnosticPath::const_new("mesh_extract_time"),
+    mesh_build_time: DiagnosticPath::const_new("mesh_build_time"),
 };
 
 pub struct VoxelEngineDiagnosticsPlugin;
@@ -128,6 +130,7 @@ impl Plugin for VoxelEngineDiagnosticsPlugin {
         let (diag_tx, diag_rx) = create_channels(&[
             ENGINE_DIAGNOSTICS.gpu_update_time,
             ENGINE_DIAGNOSTICS.mesh_extract_time,
+            ENGINE_DIAGNOSTICS.mesh_build_time,
         ]);
 
         app.register_diagnostic(
@@ -139,6 +142,11 @@ impl Plugin for VoxelEngineDiagnosticsPlugin {
             Diagnostic::new(ENGINE_DIAGNOSTICS.mesh_extract_time)
                 .with_suffix("ms")
                 .with_max_history_length(10),
+        )
+        .register_diagnostic(
+            Diagnostic::new(ENGINE_DIAGNOSTICS.mesh_build_time)
+                .with_suffix("ms")
+                .with_max_history_length(20),
         );
 
         app.insert_resource(diag_tx.clone())

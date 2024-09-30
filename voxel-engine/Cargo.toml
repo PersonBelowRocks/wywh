@@ -46,8 +46,8 @@ rustc-hash = "2.0.0"
 nohash = "0.2.0"
 bytemuck = "1.16.1"
 priority-queue = "2.1.0"
-futures-util = "0.3.30"
 ordered-float = { version = "4.2.2", features = ["bytemuck", "serde"] }
+futures = "0.3.30"
 
 [dev-dependencies]
 criterion = "0.5.1"

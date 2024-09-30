@@ -75,6 +75,13 @@ pub fn update_debug_text(
         sections.push(format!("mesh extract time: {:.5}ms\n", mesh_extract_time));
     }
 
+    if let Some(mesh_build_time) = diagnostics
+        .get(&ENGINE_DIAGNOSTICS.mesh_build_time)
+        .and_then(Diagnostic::average)
+    {
+        sections.push(format!("mesh build time: {:.5}ms\n", mesh_build_time));
+    }
+
     sections.push("\n".to_string());
     sections.push(format!("chunk: {}\n", chunk_pos));
 

@@ -18,7 +18,7 @@ use bevy::{
     },
 };
 use flume::{Receiver, Sender};
-use futures_util::{
+use futures::{
     future::{join_all, ready},
     FutureExt, StreamExt,
 };
@@ -27,6 +27,7 @@ use priority_queue::PriorityQueue;
 
 use crate::{
     data::registries::Registries,
+    diagnostics::{DiagRecStatus, DiagnosticsTx, ENGINE_DIAGNOSTICS},
     render::{
         lod::{LevelOfDetail, LodMap},
         meshing::{
@@ -66,71 +67,6 @@ pub const MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT: Duration = Duration::from_millis(
 pub struct MeshBuilderJob {
     pub chunk_pos: ChunkPos,
     pub tick: u64,
-}
-
-impl std::hash::Hash for MeshBuilderJob {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.chunk_pos.hash(state)
-    }
-}
-
-impl std::cmp::PartialEq for MeshBuilderJob {
-    fn eq(&self, other: &Self) -> bool {
-        self.chunk_pos == other.chunk_pos
-    }
-}
-
-impl std::cmp::Eq for MeshBuilderJob {}
-
-/// A queue of mesh building jobs. Automatically handles logic around job recency and priority.
-pub struct TickedMeshJobQueue(PriorityQueue<MeshBuilderJob, u32, rustc_hash::FxBuildHasher>);
-
-impl TickedMeshJobQueue {
-    pub fn new() -> Self {
-        Self(PriorityQueue::with_hasher(
-            rustc_hash::FxBuildHasher::default(),
-        ))
-    }
-
-    pub fn push(&mut self, chunk_pos: ChunkPos, tick: u64, priority: u32) {
-        let job = MeshBuilderJob { chunk_pos, tick };
-
-        // If a job already existed for this chunk position, update it so that its as recent as this
-        // job and bump its priority if needed.
-        if let Some((existing, &priority)) = self.0.get_mut(&job) {
-            // Mutation here is okay since the tick field does not affect the hash result or equality.
-            existing.tick = max(tick, existing.tick);
-
-            // Set the priority to whichever was highest
-            self.0.change_priority_by(&job, |existing_priority| {
-                *existing_priority = max(priority, *existing_priority);
-            });
-        } else {
-            self.0.push(job, priority);
-        }
-    }
-
-    pub fn pop(&mut self) -> Option<MeshBuilderJob> {
-        self.0.pop().map(|pair| pair.0)
-    }
-
-    pub fn remove(&mut self, chunk_pos: ChunkPos, tick: u64) {
-        // The tick field is "hidden" for hashing and equality operations, so this is basically a chunk position key
-        let job = MeshBuilderJob {
-            chunk_pos,
-            // Doesn't matter, we just need the chunk position
-            tick: 0,
-        };
-
-        let Some((contained, _)) = self.0.get(&job) else {
-            return;
-        };
-
-        // Only remove the job if it's older than the removal operation
-        if contained.tick < tick {
-            self.0.remove(&job);
-        }
-    }
 }
 
 pub struct MeshBuilderPool {
@@ -174,6 +110,7 @@ impl MeshBuilderPool {
         registries: Registries,
         chunk_manager: Arc<ChunkManager>,
         finished_meshes: EventFunnel<MeshFinishedEvent>,
+        diag_tx: DiagnosticsTx,
     ) -> Self {
         let Some(task_pool) = MESH_BUILDER_TASK_POOL.get() else {
             panic!("Mesh builder task pool is not initialized");
@@ -190,6 +127,7 @@ impl MeshBuilderPool {
             let cm = chunk_manager.clone();
             let reg = registries.clone();
             let finished = finished_meshes.clone();
+            let diag = diag_tx.clone();
 
             // Add the task to our list of all tasks so we can gracefully shut them down.
             tasks.push(task_pool.spawn(async move {
@@ -235,19 +173,28 @@ impl MeshBuilderPool {
                     // Try to grab all the neighbors immediately, if we can't get a neighbor immediately then it's
                     // being written to which means we'll get a separate mesh building event for it once the writing is done.
                     let Ok(mesher_result) =
-                        cm.neighbors(job.chunk_pos, LockStrategy::Immediate, |neighbors| {
-                            let read_handle = chunk_ref
-                                .chunk()
-                                .read_handle(LockStrategy::Blocking)
-                                .unwrap();
+                        diag.measure(&ENGINE_DIAGNOSTICS.mesh_build_time, |rec| {
+                            let result =
+                                cm.neighbors(job.chunk_pos, LockStrategy::Immediate, |neighbors| {
+                                    let read_handle = chunk_ref
+                                        .chunk()
+                                        .read_handle(LockStrategy::Blocking)
+                                        .unwrap();
 
-                            let context = Context {
-                                lod: DEFAULT_DEBUG_LOD,
-                                neighbors,
-                                registries: &reg,
-                            };
+                                    let context = Context {
+                                        lod: DEFAULT_DEBUG_LOD,
+                                        neighbors,
+                                        registries: &reg,
+                                    };
 
-                            greedy_mesher.build(read_handle, context)
+                                    greedy_mesher.build(read_handle, context)
+                                });
+
+                            if result.is_err() {
+                                *rec = DiagRecStatus::Ignore;
+                            }
+
+                            result
                         })
                     else {
                         continue;
@@ -306,21 +253,27 @@ fn calculate_priorities_based_on_distance<F: Fn(Vec3) -> f32>(
     });
 }
 
-pub struct MeshBuilderEventProxyTaskState {
+pub struct MeshBuilderTaskState {
     mesh_builder_pool: MeshBuilderPool,
     queues: LodMap<ChunkJobQueue<MeshBuilderJob>>,
     status_manager: Arc<ChunkMeshStatusManager>,
 }
 
-impl MeshBuilderEventProxyTaskState {
+impl MeshBuilderTaskState {
     pub fn new(
         registries: Registries,
         chunk_manager: Arc<ChunkManager>,
         status_manager: Arc<ChunkMeshStatusManager>,
         finished_meshes: EventFunnel<MeshFinishedEvent>,
+        diag_tx: DiagnosticsTx,
     ) -> Self {
         Self {
-            mesh_builder_pool: MeshBuilderPool::new(registries, chunk_manager, finished_meshes),
+            mesh_builder_pool: MeshBuilderPool::new(
+                registries,
+                chunk_manager,
+                finished_meshes,
+                diag_tx,
+            ),
             queues: LodMap::from_fn(|_| Some(ChunkJobQueue::new())),
             status_manager,
         }
@@ -442,6 +395,7 @@ pub fn start_mesh_builder_tasks(
     recalc_priority_events: Res<AsyncEventReader<RecalculateMeshBuildingEventPrioritiesEvent>>,
     remove_chunk_mesh_events: Res<AsyncEventReader<RemoveChunkMeshEvent>>,
     mesh_finished_funnel: Res<EventFunnel<MeshFinishedEvent>>,
+    diag_tx: Res<DiagnosticsTx>,
 ) {
     info!("Starting background mesh builder pool and mesh event proxy task.");
 
@@ -449,11 +403,12 @@ pub fn start_mesh_builder_tasks(
     let recalc_priority_events = recalc_priority_events.clone();
     let remove_chunk_mesh_events = remove_chunk_mesh_events.clone();
 
-    let mut task_state = MeshBuilderEventProxyTaskState::new(
+    let mut task_state = MeshBuilderTaskState::new(
         registries.clone(),
         realm.clone_cm(),
         extract_bridge.chunk_mesh_status_manager().clone(),
         mesh_finished_funnel.clone(),
+        diag_tx.clone(),
     );
 
     // Shutdown one-shot channel
@@ -486,7 +441,7 @@ pub fn start_mesh_builder_tasks(
 
             pin!(send_task);
 
-            futures_util::select! {
+            futures::select! {
                 _ = shutdown_stream.next() => {
                     break 'task_loop;
                 },

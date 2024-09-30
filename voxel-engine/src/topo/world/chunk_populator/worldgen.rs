@@ -8,7 +8,7 @@ use bevy::prelude::*;
 
 use bevy::tasks::{available_parallelism, Task, TaskPool, TaskPoolBuilder};
 use flume::Sender;
-use futures_util::future::join_all;
+use futures::future::join_all;
 use parking_lot::{Mutex, Once};
 use priority_queue::PriorityQueue;
 

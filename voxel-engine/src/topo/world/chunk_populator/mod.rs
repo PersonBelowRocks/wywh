@@ -16,7 +16,7 @@ use default_generator::WorldGenerator;
 use events::{
     ChunkPopulated, PopulateChunk, PriorityCalcStrategy, RecalculatePopulateEventPrioritiesEvent,
 };
-use futures_util::StreamExt;
+use futures::StreamExt;
 use priority_queue::PriorityQueue;
 use worldgen::{
     WorldgenWorker, WorldgenWorkerPool, WORLDGEN_TASK_POOL, WORLDGEN_TASK_POOL_THREAD_NAME,
@@ -187,7 +187,7 @@ pub fn start_chunk_population_event_bus_task(
         let mut shutdown_stream = shutdown_rx.stream();
 
         'task_loop: loop {
-            futures_util::select! {
+            futures::select! {
                 // If we ever receive something on the shutdown channel, we stop the task.
                 _ = shutdown_stream.next() => {
                     break 'task_loop;
