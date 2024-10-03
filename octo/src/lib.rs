@@ -1,8 +1,10 @@
 extern crate ndarray as nda;
 
 pub mod octree;
+pub mod region;
 pub mod subdiv;
 pub mod voxelmap;
+pub use region::*;
 
 pub use subdiv::*;
 
