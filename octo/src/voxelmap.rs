@@ -378,8 +378,10 @@ impl<const D: usize, T> VoxelMap<T, D> {
     /// Split a position into a chunk position and a local position within that chunk.
     #[inline]
     fn chunk_and_local(p: IVec3) -> (IVec3, UVec3) {
-        let chunk: IVec3 = p.to_array().map(|k| div_2_pow_n(k, D as u32)).into();
-        let local: UVec3 = p.to_array().map(|k| rem_2_pow_n(k, D as u32) as u32).into();
+        let d_log2 = (D as i32).ilog2();
+
+        let chunk: IVec3 = p.to_array().map(|k| div_2_pow_n(k, d_log2)).into();
+        let local: UVec3 = p.to_array().map(|k| rem_2_pow_n(k, d_log2) as u32).into();
 
         (chunk, local)
     }
@@ -442,37 +444,55 @@ impl<const D: usize, T> VoxelMap<T, D> {
         old
     }
 
+    /// Remove an entire region at once from this voxel map.
     #[inline]
     pub fn remove_region(&mut self, region: Region) {
-        let chunk_min = div_ivec_ceil(region.min(), D as _);
-        let chunk_max = div_ivec_floor(region.max(), D as _);
-
-        let inner_chunk_region = Region::new(chunk_min, chunk_max);
-
-        for (x, y, z) in itertools::iproduct!(
-            chunk_min.x..=chunk_max.x,
-            chunk_min.y..=chunk_max.y,
-            chunk_min.z..=chunk_max.z
-        ) {
-            let chunk_pos = ivec3(x, y, z);
-            let Some(chunk_index) = self.chunks.remove(&chunk_pos) else {
-                continue;
-            };
-
-            self.slab.remove(chunk_index);
-        }
-
-        let outer_chunk_region = Region::new(
+        // All chunks that the removal region covers.
+        let outer_chunks_region = Region::new(
             div_ivec_floor(region.min(), D as _),
             div_ivec_ceil(region.max(), D as _),
         );
 
-        for outer_chunk in outer_chunk_region
-            .iter()
-            .filter(|&p| !inner_chunk_region.contains(p))
-        {}
+        for (x, y, z) in itertools::iproduct!(
+            outer_chunks_region.min().x..=outer_chunks_region.max().x,
+            outer_chunks_region.min().y..=outer_chunks_region.max().y,
+            outer_chunks_region.min().z..=outer_chunks_region.max().z
+        ) {
+            let chunk_pos = ivec3(x, y, z);
 
-        todo!()
+            // This is an outer chunk, so we need to carefully remove every relevant voxel from within the chunk.
+            let Some(&chunk_index) = self.chunks.get(&chunk_pos) else {
+                continue;
+            };
+
+            let chunk_min = chunk_pos * D as i32;
+            // Need to subtract one here since region operations are inclusive of the maximum positions.
+            let chunk_max = chunk_min + IVec3::splat(D as _) - IVec3::ONE;
+
+            let chunk_region = Region::new(chunk_min, chunk_max);
+            // This region defines the voxels we need to set at this chunk position.
+            let intersection = chunk_region.intersection(region).unwrap();
+
+            if intersection.volume() == (D as u64).pow(3) {
+                // If this is an inner chunk, we can remove the entire chunk.
+                self.chunks.remove(&chunk_pos);
+                self.slab.remove(chunk_index);
+
+                continue;
+            }
+
+            for global_voxel_pos in intersection.iter() {
+                let (_, local_voxel_pos) = Self::chunk_and_local(global_voxel_pos);
+                self.slab[chunk_index].remove(local_voxel_pos);
+
+                if self.slab[chunk_index].is_empty() {
+                    self.slab.remove(chunk_index);
+                    self.chunks.remove(&chunk_pos);
+
+                    break;
+                }
+            }
+        }
     }
 
     /// Get a reference to a value in the voxel map.
@@ -539,5 +559,30 @@ impl<const D: usize, T> VoxelMap<T, D> {
                 .and_modify(|index| *index = new_index);
             true
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // TODO: more tests!
+    #[test]
+    fn test_region_removal() {
+        let mut map = VoxelMap::<u32>::new();
+
+        map.insert(ivec3(0, 0, 0), 10);
+        map.insert(ivec3(0, 6, 6), 11);
+        map.insert(ivec3(0, 7, 6), 12);
+
+        assert_eq!(Some(&10), map.get(ivec3(0, 0, 0)));
+        assert_eq!(Some(&11), map.get(ivec3(0, 6, 6)));
+        assert_eq!(Some(&12), map.get(ivec3(0, 7, 6)));
+
+        map.remove_region(Region::new([0, 1, 1], [8, 6, 8]));
+
+        assert_eq!(Some(&10), map.get(ivec3(0, 0, 0)));
+        assert_eq!(None, map.get(ivec3(0, 6, 6)));
+        assert_eq!(Some(&12), map.get(ivec3(0, 7, 6)));
     }
 }

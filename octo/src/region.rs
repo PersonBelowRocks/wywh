@@ -21,7 +21,10 @@ impl Region {
     ///
     /// The region will include both of the given positions.
     #[inline]
-    pub fn new(a: IVec3, b: IVec3) -> Self {
+    pub fn new(a: impl Into<IVec3>, b: impl Into<IVec3>) -> Self {
+        let a: IVec3 = a.into();
+        let b: IVec3 = b.into();
+
         Self {
             min: a.min(b),
             max: a.max(b),
@@ -49,6 +52,27 @@ impl Region {
         (self.max - self.min).as_uvec3()
     }
 
+    /// Scale the region by some factor.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use octo::Region;
+    /// # use glam::{IVec3, ivec3};
+    ///
+    /// let region = Region::new([0, 0, 0], [1, 1, 1]);
+    /// assert_eq!(ivec3(0, 0, 0), region.scaled(16).min());
+    /// assert_eq!(ivec3(16, 16, 16), region.scaled(16).max());
+    ///
+    /// let region = Region::new([-1, -1, -1], [1, 2, 1]);
+    /// assert_eq!(ivec3(-16, -16, -16), region.scaled(16).min());
+    /// assert_eq!(ivec3(16, 32, 16), region.scaled(16).max());
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn scaled(self, scale: i32) -> Region {
+        Region::new(self.min() * scale, self.max() * scale)
+    }
+
     /// The volume of this region.
     ///
     /// # Examples
@@ -68,8 +92,7 @@ impl Region {
         self.dimensions().as_u64vec3().element_product()
     }
 
-    /// Returns `true` if the region contains the given value,
-    /// inclusive of the maximum position.
+    /// Returns `true` if the region contains the given value, inclusive of the maximum position.
     ///
     /// # Examples
     /// ```rust
@@ -99,7 +122,7 @@ impl Region {
         value.contained(self)
     }
 
-    /// Iterate over the positions in this region.
+    /// Iterate over the positions in this region, including the maximum positions.
     #[inline]
     #[must_use]
     pub fn iter(self) -> impl Iterator<Item = IVec3> {
@@ -111,9 +134,67 @@ impl Region {
         .map(IVec3::from)
     }
 
-    // TODO: implement
-    pub fn intersection(self, rhs: Self) -> Self {
-        todo!()
+    /// Iterate over the positions in this region, excluding the maximum positions.
+    #[inline]
+    #[must_use]
+    pub fn iter_exclude_max(self) -> impl Iterator<Item = IVec3> {
+        itertools::iproduct!(
+            self.min.x..self.max.x,
+            self.min.y..self.max.y,
+            self.min.z..self.max.z
+        )
+        .map(IVec3::from)
+    }
+
+    /// Find the region defined by the intersection of 2 other regions.
+    /// Returns `None` if the regions do not intersect or if the intersection has a volume of 0.
+    ///
+    /// # Examples
+    ///
+    /// Running `intersection()` for two regions that actually intersect:
+    /// ```rust
+    /// # use glam::{IVec3, ivec3};
+    /// # use octo::Region;
+    ///
+    /// let region_1 = Region::new([-8, -8, -8], [7, 7, 7]);
+    /// let region_2 = Region::new([-8, -10, -8], [-6, -6, -6]);
+    ///
+    /// let intersection = region_1.intersection(region_2).unwrap();
+    ///
+    /// assert_eq!(ivec3(-8, -8, -8), intersection.min());
+    /// assert_eq!(ivec3(-6, -6, -6), intersection.max());
+    /// ```
+    ///
+    /// Running `intersection()` for two regions that do not intersect:
+    /// ```rust
+    /// # use glam::{IVec3, ivec3};
+    /// # use octo::Region;
+    ///
+    /// let region_1 = Region::new([0, 0, 0], [6, 6, 6]);
+    /// let region_2 = Region::new([-2, -2, -2], [0, 0, 0]);
+    ///
+    /// let maybe_intersection = region_1.intersection(region_2);
+    /// assert!(maybe_intersection.is_none());
+    /// ```
+    /// Running `intersection()` for two regions that intersect with no volume:
+    /// ```rust
+    /// # use glam::{IVec3, ivec3};
+    /// # use octo::Region;
+    ///
+    /// let region_1 = Region::new([0, 0, 0], [6, 6, 6]);
+    /// let region_2 = Region::new([2, 2, 2], [4, 2, 4]);
+    ///
+    /// let maybe_intersection = region_1.intersection(region_2);
+    /// assert!(maybe_intersection.is_none());
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn intersection(self, rhs: Self) -> Option<Self> {
+        let a = self.max().min(rhs.max());
+        let b = self.min().max(rhs.min());
+
+        let region = Self::new(a, b);
+        (region.volume() != 0).then_some(region)
     }
 }
 
