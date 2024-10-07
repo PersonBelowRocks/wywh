@@ -453,25 +453,30 @@ impl<const D: usize, T> VoxelMap<T, D> {
             div_ivec_ceil(region.max(), D as _),
         );
 
-        for (x, y, z) in itertools::iproduct!(
+        for chunk_pos in itertools::iproduct!(
             outer_chunks_region.min().x..=outer_chunks_region.max().x,
             outer_chunks_region.min().y..=outer_chunks_region.max().y,
             outer_chunks_region.min().z..=outer_chunks_region.max().z
-        ) {
-            let chunk_pos = ivec3(x, y, z);
-
+        )
+        .map(IVec3::from)
+        {
             // This is an outer chunk, so we need to carefully remove every relevant voxel from within the chunk.
             let Some(&chunk_index) = self.chunks.get(&chunk_pos) else {
                 continue;
             };
 
             let chunk_min = chunk_pos * D as i32;
-            // Need to subtract one here since region operations are inclusive of the maximum positions.
-            let chunk_max = chunk_min + IVec3::splat(D as _) - IVec3::ONE;
+            let chunk_max = chunk_min + IVec3::splat(D as _);
 
             let chunk_region = Region::new(chunk_min, chunk_max);
             // This region defines the voxels we need to set at this chunk position.
-            let intersection = chunk_region.intersection(region).unwrap();
+            let Some(intersection) = chunk_region.intersection(region) else {
+                dbg!(region);
+                dbg!(chunk_region);
+                dbg!(chunk_pos);
+
+                panic!();
+            };
 
             if intersection.volume() == (D as u64).pow(3) {
                 // If this is an inner chunk, we can remove the entire chunk.
@@ -579,10 +584,41 @@ mod tests {
         assert_eq!(Some(&11), map.get(ivec3(0, 6, 6)));
         assert_eq!(Some(&12), map.get(ivec3(0, 7, 6)));
 
-        map.remove_region(Region::new([0, 1, 1], [8, 6, 8]));
+        map.remove_region(Region::new([0, 1, 1], [8, 7, 8]));
 
         assert_eq!(Some(&10), map.get(ivec3(0, 0, 0)));
         assert_eq!(None, map.get(ivec3(0, 6, 6)));
         assert_eq!(Some(&12), map.get(ivec3(0, 7, 6)));
+
+        let mut map = VoxelMap::<u32>::new();
+
+        for pos in itertools::iproduct!(0..4, 0..4, 0..4).map(IVec3::from) {
+            map.insert(pos, 10);
+        }
+
+        map.insert(ivec3(0, 4, 0), 11);
+
+        assert_eq!(Some(&11), map.get(ivec3(0, 4, 0)));
+        assert_eq!(Some(&10), map.get(ivec3(0, 3, 0)));
+        assert_eq!(None, map.get(ivec3(0, 5, 0)));
+
+        map.remove_region(Region::new([0, 0, 0], [0, 5, 0]));
+
+        assert_eq!(None, map.get(ivec3(0, 4, 0)));
+        assert_eq!(None, map.get(ivec3(0, 3, 0)));
+        assert_eq!(None, map.get(ivec3(0, 5, 0)));
+
+        assert_eq!(Some(&10), map.get(ivec3(1, 3, 0)));
+        assert_eq!(Some(&10), map.get(ivec3(1, 3, 1)));
+        assert_eq!(Some(&10), map.get(ivec3(0, 3, 1)));
+        assert_eq!(Some(&10), map.get(ivec3(1, 0, 0)));
+        assert_eq!(Some(&10), map.get(ivec3(1, 0, 1)));
+        assert_eq!(Some(&10), map.get(ivec3(0, 0, 1)));
+
+        map.remove_region(Region::new([0, 0, 0], [3, 3, 3]));
+
+        for pos in itertools::iproduct!(0..4, 0..4, 0..4).map(IVec3::from) {
+            assert_eq!(None, map.get(pos));
+        }
     }
 }

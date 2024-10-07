@@ -31,6 +31,13 @@ impl Region {
         }
     }
 
+    /// Returns `true` if this region is degenerate, i.e., it has no volume.
+    #[inline]
+    #[must_use]
+    pub fn is_degenerate(self) -> bool {
+        self.dimensions().cmpgt(UVec3::ZERO).all()
+    }
+
     /// The minimum position of the region.
     #[inline]
     #[must_use]
@@ -92,7 +99,7 @@ impl Region {
         self.dimensions().as_u64vec3().element_product()
     }
 
-    /// Returns `true` if the region contains the given value, inclusive of the maximum position.
+    /// Returns `true` if the region contains the given value, exclusive of the maximum position.
     ///
     /// # Examples
     /// ```rust
@@ -101,10 +108,12 @@ impl Region {
     /// let region = Region::new(ivec3(-1, -1, -1), ivec3(3, 3, 3));
     ///
     /// assert!(region.contains(ivec3(-1, -1, -1)));
-    /// assert!(region.contains(ivec3(3, 3, 3)));
     /// assert!(region.contains(ivec3(1, 1, 1)));
+    /// // These are on the maximum border(s) of the region, so they're not contained.
+    /// assert!(!region.contains(ivec3(3, 3, 3)));
+    /// assert!(!region.contains(ivec3(0, 3, 0)));
     ///
-    /// // A region always contains itself inclusively.
+    /// // A region always contains itself.
     /// assert!(region.contains(region));
     ///
     /// let smaller = Region::new(ivec3(0, 0, 0), ivec3(2, 2, 2));
@@ -122,22 +131,10 @@ impl Region {
         value.contained(self)
     }
 
-    /// Iterate over the positions in this region, including the maximum positions.
+    /// Iterate over all the positions contained within this region.
     #[inline]
     #[must_use]
     pub fn iter(self) -> impl Iterator<Item = IVec3> {
-        itertools::iproduct!(
-            self.min.x..=self.max.x,
-            self.min.y..=self.max.y,
-            self.min.z..=self.max.z
-        )
-        .map(IVec3::from)
-    }
-
-    /// Iterate over the positions in this region, excluding the maximum positions.
-    #[inline]
-    #[must_use]
-    pub fn iter_exclude_max(self) -> impl Iterator<Item = IVec3> {
         itertools::iproduct!(
             self.min.x..self.max.x,
             self.min.y..self.max.y,
@@ -147,7 +144,7 @@ impl Region {
     }
 
     /// Find the region defined by the intersection of 2 other regions.
-    /// Returns `None` if the regions do not intersect or if the intersection has a volume of 0.
+    /// Returns `None` if the regions do not intersect.
     ///
     /// # Examples
     ///
@@ -176,25 +173,40 @@ impl Region {
     /// let maybe_intersection = region_1.intersection(region_2);
     /// assert!(maybe_intersection.is_none());
     /// ```
-    /// Running `intersection()` for two regions that intersect with no volume:
-    /// ```rust
-    /// # use glam::{IVec3, ivec3};
-    /// # use octo::Region;
-    ///
-    /// let region_1 = Region::new([0, 0, 0], [6, 6, 6]);
-    /// let region_2 = Region::new([2, 2, 2], [4, 2, 4]);
-    ///
-    /// let maybe_intersection = region_1.intersection(region_2);
-    /// assert!(maybe_intersection.is_none());
-    /// ```
     #[inline]
     #[must_use]
     pub fn intersection(self, rhs: Self) -> Option<Self> {
-        let a = self.max().min(rhs.max());
-        let b = self.min().max(rhs.min());
+        if !self.overlaps(rhs) {
+            return None;
+        }
 
-        let region = Self::new(a, b);
-        (region.volume() != 0).then_some(region)
+        let min = IVec3::max(self.min(), rhs.min());
+        let max = IVec3::min(self.max(), rhs.max());
+
+        Some(Self::new(min, max))
+    }
+
+    // TODO: doctest degenerate intersection
+    /// Returns `true` if the two regions overlap.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use octo::Region;
+    /// # use glam::{ivec3, IVec3};
+    ///
+    /// let region = Region::new([-4, -4, -4], [4, 4, 4]);
+    /// assert!(region.overlaps(Region::new([0, 0, 0], [2, 2, 2])));
+    /// // These regions overlap, but one is not a subregion of the other.
+    /// assert!(region.overlaps(Region::new([-16, -16, -16], [0, 0, 0])));
+    /// // These regions are touching but not overlapping.
+    /// assert!(!region.overlaps(Region::new([-16, -16, -16], [-4, -4, -4])));
+    /// // These regions are nowhere near eachother
+    /// assert!(!region.overlaps(Region::new([100, 100, 100], [120, 120, 120])));
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn overlaps(self, rhs: Self) -> bool {
+        self.min().cmplt(rhs.max()).all() && self.max().cmpge(rhs.min()).all()
     }
 }
 
@@ -206,7 +218,9 @@ impl From<Range<IVec3>> for Region {
 
 impl RegionContained for Region {
     fn contained(&self, region: Region) -> bool {
-        region.contains(self.min()) && region.contains(self.max())
+        // Need to subtract one at the end here because the max position isn't even contained in its own region,
+        // but is rather the exclusive upper bound of the region.
+        region.contains(self.min()) && region.contains(self.max() - IVec3::ONE)
     }
 }
 
@@ -235,7 +249,7 @@ macro_rules! impl_region_bounded_vector {
                 let min = region.min();
                 let max = region.max();
 
-                pos.cmple(max).all() && pos.cmpge(min).all()
+                pos.cmplt(max).all() && pos.cmpge(min).all()
             }
         }
     };
