@@ -15,6 +15,10 @@ fn empty_3d_array<const D: usize, T>() -> [[[Option<T>; D]; D]; D] {
     array::from_fn(|_| array::from_fn(|_| array::from_fn(|_| None)))
 }
 
+fn filled_3d_array<const D: usize, T: Copy>(value: T) -> [[[Option<T>; D]; D]; D] {
+    [[[Some(value); D]; D]; D]
+}
+
 fn div_ivec_ceil(ivec: IVec3, n: i32) -> IVec3 {
     ivec3(
         Integer::div_ceil(&ivec.x, &n),
@@ -44,6 +48,7 @@ impl<const D: usize, T> Chunk<D, T> {
     /// # Panics
     /// Will panic if `D` is not a power of 2.
     #[inline]
+    #[track_caller]
     pub fn empty(pos: IVec3) -> Self {
         assert!(D.count_ones() == 1, "chunk dimensions must be a power of 2");
 
@@ -52,6 +57,31 @@ impl<const D: usize, T> Chunk<D, T> {
             data: empty_3d_array(),
             count: 0,
         }
+    }
+
+    /// Create a new chunk filled with the given value.
+    ///
+    /// # Panics
+    /// Will panic if `D` is not a power of 2.
+    #[inline]
+    #[track_caller]
+    pub fn filled(pos: IVec3, value: T) -> Self
+    where
+        T: Copy,
+    {
+        let mut chunk = Self::empty(pos);
+        chunk.fill(value);
+        chunk
+    }
+
+    /// Fill a chunk with a value, after this operation the chunk will only contain this value.
+    #[inline]
+    pub fn fill(&mut self, value: T)
+    where
+        T: Copy,
+    {
+        self.data = filled_3d_array(value);
+        self.count = D.pow(3);
     }
 
     /// Insert a value at the given position, returning the existing value if it existed.
@@ -444,9 +474,17 @@ impl<const D: usize, T> VoxelMap<T, D> {
         old
     }
 
-    /// Remove an entire region at once from this voxel map.
+    /// Remove an entire region at once from this voxel map, excluding the region's maximum bounds.
+    ///
+    /// # Panics
+    /// Will panic if `region` is degenerate.
     #[inline]
+    #[track_caller]
     pub fn remove_region(&mut self, region: Region) {
+        if region.is_degenerate() {
+            panic!("Cannot remove a degenerate region from a voxel map");
+        }
+
         // All chunks that the removal region covers.
         let outer_chunks_region = Region::new(
             div_ivec_floor(region.min(), D as _),
@@ -454,9 +492,9 @@ impl<const D: usize, T> VoxelMap<T, D> {
         );
 
         for chunk_pos in itertools::iproduct!(
-            outer_chunks_region.min().x..=outer_chunks_region.max().x,
-            outer_chunks_region.min().y..=outer_chunks_region.max().y,
-            outer_chunks_region.min().z..=outer_chunks_region.max().z
+            outer_chunks_region.min().x..outer_chunks_region.max().x,
+            outer_chunks_region.min().y..outer_chunks_region.max().y,
+            outer_chunks_region.min().z..outer_chunks_region.max().z
         )
         .map(IVec3::from)
         {
@@ -470,13 +508,7 @@ impl<const D: usize, T> VoxelMap<T, D> {
 
             let chunk_region = Region::new(chunk_min, chunk_max);
             // This region defines the voxels we need to set at this chunk position.
-            let Some(intersection) = chunk_region.intersection(region) else {
-                dbg!(region);
-                dbg!(chunk_region);
-                dbg!(chunk_pos);
-
-                panic!();
-            };
+            let intersection = chunk_region.intersection(region).unwrap();
 
             if intersection.volume() == (D as u64).pow(3) {
                 // If this is an inner chunk, we can remove the entire chunk.
@@ -496,6 +528,58 @@ impl<const D: usize, T> VoxelMap<T, D> {
 
                     break;
                 }
+            }
+        }
+    }
+
+    /// Insert a region of a value in this voxel map, excluding the region's maximum bounds.
+    ///
+    /// # Panics
+    /// Will panic if `region` is degenerate.
+    #[inline]
+    pub fn insert_region(&mut self, region: Region, value: T)
+    where
+        T: Copy,
+    {
+        if region.is_degenerate() {
+            panic!("Cannot insert a degenerate region to a voxel map");
+        }
+
+        // All chunks that the region covers.
+        let outer_chunks_region = Region::new(
+            div_ivec_floor(region.min(), D as _),
+            div_ivec_ceil(region.max(), D as _),
+        );
+
+        for chunk_pos in itertools::iproduct!(
+            outer_chunks_region.min().x..outer_chunks_region.max().x,
+            outer_chunks_region.min().y..outer_chunks_region.max().y,
+            outer_chunks_region.min().z..outer_chunks_region.max().z
+        )
+        .map(IVec3::from)
+        {
+            let chunk_index = *self.chunks.entry(chunk_pos).or_insert_with(|| {
+                let chunk = Chunk::empty(chunk_pos);
+                self.slab.insert(chunk)
+            });
+
+            let chunk_min = chunk_pos * D as i32;
+            let chunk_max = chunk_min + IVec3::splat(D as _);
+
+            let chunk_region = Region::new(chunk_min, chunk_max);
+            // This region defines the voxels we need to set at this chunk position.
+            let intersection = chunk_region.intersection(region).unwrap();
+
+            // If the intersection has the same volume as a chunk,
+            // we can fill the entire chunk at once.
+            if intersection.volume() == (D as u64).pow(3) {
+                self.slab[chunk_index].fill(value);
+                continue;
+            }
+
+            for global_voxel_pos in intersection.iter() {
+                let (_, local_voxel_pos) = Self::chunk_and_local(global_voxel_pos);
+                self.slab[chunk_index].insert(local_voxel_pos, value);
             }
         }
     }
@@ -571,7 +655,27 @@ impl<const D: usize, T> VoxelMap<T, D> {
 mod tests {
     use super::*;
 
-    // TODO: more tests!
+    // TODO: test weird edge cases, especially with negative numbers and around 0
+    #[test]
+    fn test_region_insertion() {
+        let mut map = VoxelMap::<u32>::new();
+
+        map.insert_region(Region::new([0, 0, 0], [4, 4, 4]), 10);
+
+        for pos in itertools::iproduct!(0..4, 0..4, 0..4).map(IVec3::from) {
+            assert_eq!(Some(&10), map.get(pos));
+        }
+
+        map.insert_region(Region::new([2, 0, 0], [13, 4, 4]), 11);
+
+        for pos in itertools::iproduct!(2..4, 0..4, 0..4).map(IVec3::from) {
+            assert_eq!(Some(&11), map.get(pos));
+        }
+
+        assert_eq!(Some(&11), map.get(ivec3(12, 3, 3)));
+        assert_eq!(None, map.get(ivec3(12, 4, 3)));
+    }
+
     #[test]
     fn test_region_removal() {
         let mut map = VoxelMap::<u32>::new();
@@ -602,7 +706,7 @@ mod tests {
         assert_eq!(Some(&10), map.get(ivec3(0, 3, 0)));
         assert_eq!(None, map.get(ivec3(0, 5, 0)));
 
-        map.remove_region(Region::new([0, 0, 0], [0, 5, 0]));
+        map.remove_region(Region::new([0, 0, 0], [1, 5, 1]));
 
         assert_eq!(None, map.get(ivec3(0, 4, 0)));
         assert_eq!(None, map.get(ivec3(0, 3, 0)));
@@ -615,7 +719,7 @@ mod tests {
         assert_eq!(Some(&10), map.get(ivec3(1, 0, 1)));
         assert_eq!(Some(&10), map.get(ivec3(0, 0, 1)));
 
-        map.remove_region(Region::new([0, 0, 0], [3, 3, 3]));
+        map.remove_region(Region::new([0, 0, 0], [4, 4, 4]));
 
         for pos in itertools::iproduct!(0..4, 0..4, 0..4).map(IVec3::from) {
             assert_eq!(None, map.get(pos));

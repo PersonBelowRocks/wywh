@@ -19,7 +19,7 @@ pub struct Region {
 impl Region {
     /// Create a new region bounded by the 2 given positions.
     ///
-    /// The region will include both of the given positions.
+    /// The region excludes the maximum position.
     #[inline]
     pub fn new(a: impl Into<IVec3>, b: impl Into<IVec3>) -> Self {
         let a: IVec3 = a.into();
@@ -31,11 +31,36 @@ impl Region {
         }
     }
 
+    /// Create a new region bounded by the 2 given positions.
+    ///
+    /// The region will include both of the given positions.
+    ///
+    /// # Panics
+    /// Will panic if either of the bounding positions has a component of `i32::MAX`.
+    #[inline]
+    #[track_caller]
+    pub fn new_inclusive(a: impl Into<IVec3>, b: impl Into<IVec3>) -> Self {
+        let a: IVec3 = a.into();
+        let b: IVec3 = b.into();
+
+        let max = a.max(b);
+        if max.cmpge(IVec3::MAX).any() {
+            panic!(
+                "Cannot create a region bounded inclusively by vectors with i32::MAX components"
+            );
+        }
+
+        Self {
+            min: a.min(b),
+            max: max + IVec3::ONE,
+        }
+    }
+
     /// Returns `true` if this region is degenerate, i.e., it has no volume.
     #[inline]
     #[must_use]
     pub fn is_degenerate(self) -> bool {
-        self.dimensions().cmpgt(UVec3::ZERO).all()
+        !self.dimensions().cmpgt(UVec3::ZERO).all()
     }
 
     /// The minimum position of the region.
