@@ -1,5 +1,4 @@
 pub mod default_generator;
-pub mod error;
 pub mod events;
 pub mod worldgen;
 

@@ -3,8 +3,8 @@ use octo::subdiv::SubdividedStorage;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+use std::hint::black_box;
 use std::time::Duration;
-use std::{cell::LazyCell, hint::black_box};
 
 type BenchSubdivStorage = SubdividedStorage<16, 4, u32>;
 const BSS_DIMS: u8 = 16 * 4;
@@ -54,23 +54,6 @@ fn seeded_rng() -> StdRng {
 fn get_single_mb(s: &BenchSubdivStorage, p: [u8; 3]) -> u32 {
     s.get_mb(p).unwrap()
 }
-
-#[allow(clippy::declare_interior_mutable_const)]
-const BOX_OFFSETS: LazyCell<[[i8; 3]; 28]> = LazyCell::new(|| {
-    let mut offsets = [[0; 3]; 28];
-    let mut i = 0;
-
-    for p0 in -1..=1i8 {
-        for p1 in -1..=1i8 {
-            for p2 in -1..=1i8 {
-                offsets[i] = [p0, p1, p2];
-                i += 1;
-            }
-        }
-    }
-
-    offsets
-});
 
 fn get_3x3x3_mb(storage: &BenchSubdivStorage, p: [u8; 3]) -> [u32; 28] {
     let [p0, p1, p2] = p;

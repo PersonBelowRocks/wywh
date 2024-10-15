@@ -34,7 +34,7 @@ fn random_node_pos<D: MaxDepth, R: Rng>(rng: &mut R) -> NPos {
 /// Read and assert that a value is 0 or 1.
 fn octree_read_0_or_1<D: MaxDepth>(octree: &Octree<D, u64>, npos: NPos) {
     let out = *black_box(octree).get(black_box(npos));
-    // assert!(out == 0 || out == 1);
+    assert!(out == 0 || out == 1);
 }
 
 fn octree_read_full_cartesian<D: MaxDepth>(octree: &Octree<D, u64>) {

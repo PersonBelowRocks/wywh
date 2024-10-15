@@ -17,9 +17,6 @@ enum AppState {
     Loaded,
 }
 
-#[derive(Component, Copy, Clone)]
-struct TestingTextureArray;
-
 fn main() -> AppExit {
     let mut app = App::new();
     app.add_plugins((

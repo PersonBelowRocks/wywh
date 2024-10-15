@@ -6,7 +6,6 @@ use crate::{
             block::{BlockVariantId, BlockVariantRegistry},
             Registry, RegistryRef,
         },
-        texture::FaceTexture,
         tile::Face,
     },
     render::quad::{
@@ -63,16 +62,6 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
             neighbors,
             registry,
         })
-    }
-
-    #[inline(always)]
-    fn face_texture_for_variant(
-        &self,
-        variant_id: <BlockVariantRegistry as Registry>::Id,
-    ) -> Option<FaceTexture> {
-        let model = self.registry.get_by_id(variant_id).model?;
-
-        Some(model.texture(self.face))
     }
 
     #[inline(always)]

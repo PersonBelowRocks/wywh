@@ -1,7 +1,6 @@
 use std::any::type_name;
 
-use bevy::math::{ivec3, IVec2, IVec3};
-use itertools::Itertools;
+use bevy::math::{IVec2, IVec3};
 
 use crate::{
     data::{registries::block::BlockVariantId, tile::Face},
@@ -12,30 +11,10 @@ use crate::{
 use super::{
     error::{InvalidNeighborPosition, NeighborReadError},
     fb_localspace_to_local_chunkspace, fb_localspace_wrap, mb_localspace_to_local_chunkspace,
-    mb_localspace_wrap,
+    mb_localspace_wrap, transformations,
     world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
     CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS,
 };
-
-// TODO: get rid of this
-fn local_fb_to_chunk_pos(pos: IVec3) -> IVec3 {
-    // TODO: use bitwise math
-    ivec3(
-        pos.x.div_euclid(Chunk::SIZE),
-        pos.y.div_euclid(Chunk::SIZE),
-        pos.z.div_euclid(Chunk::SIZE),
-    )
-}
-
-// TODO: get rid of this
-fn local_fb_to_neighbor_local_fb(pos: IVec3) -> IVec3 {
-    // TODO: use bitwise math
-    ivec3(
-        pos.x.rem_euclid(Chunk::SIZE),
-        pos.y.rem_euclid(Chunk::SIZE),
-        pos.z.rem_euclid(Chunk::SIZE),
-    )
-}
 
 /// A bitflag-like type for selecting neighbors of a chunk.
 /// Operations on a neighbor selection (and operations with neighbors in general) often require
@@ -166,7 +145,6 @@ impl NeighborSelection {
     }
 }
 
-// TODO: document what localspace, worldspace, chunkspace, and facespace are
 pub struct Neighbors<'a> {
     chunks: [Option<ChunkReadHandle<'a>>; NEIGHBOR_ARRAY_SIZE],
     default_block: BlockVariantId,
@@ -194,7 +172,9 @@ pub fn is_in_bounds_3d(pos: IVec3) -> bool {
     let min: IVec3 = -IVec3::ONE;
     let max: IVec3 = IVec3::splat(Chunk::SIZE) + IVec3::ONE;
 
-    pos.cmpge(min).all() && pos.cmplt(max).all() && local_fb_to_chunk_pos(pos) != IVec3::ZERO
+    pos.cmpge(min).all()
+        && pos.cmplt(max).all()
+        && transformations::fb_localspace_to_local_chunkspace(pos) != IVec3::ZERO
 }
 
 pub const NEIGHBOR_CUBIC_ARRAY_DIMENSIONS: usize = 3;
@@ -390,6 +370,7 @@ impl<'a> NeighborsBuilder<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::math::ivec3;
 
     #[test]
     fn test_neighbor_selection() {

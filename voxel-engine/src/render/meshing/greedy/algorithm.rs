@@ -222,8 +222,8 @@ impl GreedyMesher {
             })
             .collect_vec();
 
-        index_bytes.write(&indices);
-        quad_bytes.write(&quads);
+        index_bytes.write(&indices).unwrap();
+        quad_bytes.write(&quads).unwrap();
     }
 
     pub fn build<'reg, 'chunk>(

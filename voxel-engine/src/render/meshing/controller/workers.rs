@@ -1,7 +1,6 @@
 use std::{
     cmp::max,
     sync::{Arc, OnceLock},
-    time::Duration,
 };
 
 use async_bevy_events::{AsyncEventReader, EventFunnel};
@@ -50,8 +49,6 @@ pub(crate) static MESH_BUILDER_TASK_POOL: OnceLock<TaskPool> = OnceLock::new();
 /// The name of the threads in the mesh builder task pool.
 /// See [`TaskPoolBuilder::thread_name()`] for some more information.
 pub static MESH_BUILDER_TASK_POOL_THREAD_NAME: &'static str = "Mesh Builder Task Pool";
-
-pub const MESH_BUILDER_JOB_QUEUE_LOCK_TIMEOUT: Duration = Duration::from_millis(10);
 
 /// An item in the mesh building job queue. Ignores its `tick` field in equality checks and hashing.
 #[derive(Copy, Clone)]
