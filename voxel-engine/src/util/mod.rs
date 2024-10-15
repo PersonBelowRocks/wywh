@@ -10,15 +10,12 @@ pub use chunks::*;
 pub mod iteration;
 pub mod sync;
 
-pub use iteration::*;
-
 use bevy::prelude::*;
 use dashmap::DashMap;
 use ordered_float::NotNan;
-use priority_queue::PriorityQueue;
-use std::{array, fmt::Debug, hash::BuildHasher, marker::PhantomData};
+use std::{array, fmt::Debug, marker::PhantomData};
 
-use crate::{data::tile::Face, topo::world::ChunkPos};
+use crate::data::tile::Face;
 
 pub type SyncHashMap<K, V> = DashMap<K, V, ahash::RandomState>;
 pub type SquareArray<const SIZE: usize, T> = [[T; SIZE]; SIZE];

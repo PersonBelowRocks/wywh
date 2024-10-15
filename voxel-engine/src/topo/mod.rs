@@ -1,7 +1,4 @@
-use std::hash::BuildHasher;
-
-use bevy::math::{ivec2, ivec3, IVec2, IVec3, Vec3};
-use hb::hash_map::Entry;
+use bevy::math::{ivec2, ivec3, IVec2, IVec3};
 use priority_queue::PriorityQueue;
 use world::ChunkPos;
 
@@ -41,6 +38,12 @@ pub fn ivec_project_to_2d(pos: IVec3, face: Face) -> IVec2 {
 pub struct ChunkJobQueue<T> {
     priorities: PriorityQueue<ChunkPos, u32, rustc_hash::FxBuildHasher>,
     items: hb::HashMap<ChunkPos, T, rustc_hash::FxBuildHasher>,
+}
+
+impl<T> Default for ChunkJobQueue<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> ChunkJobQueue<T> {

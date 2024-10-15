@@ -1,7 +1,3 @@
-use std::ops::{Bound, Range, RangeBounds, RangeInclusive};
-
-use bevy::math::{ivec3, IVec3};
-
 /// Iterate over a 3d grid with the given dimensions.
 /// Iteration order is x < y < z, where z is the innermost "loop".
 ///
@@ -18,13 +14,13 @@ macro_rules! cartesian_grid {
 
         let start = match $p_range.start_bound() {
             std::ops::Bound::Included(&v) => v,
-            std::ops::Bound::Excluded(&v) => v.saturating_add(IVec3::ONE),
+            std::ops::Bound::Excluded(&v) => v.saturating_add(bevy::math::IVec3::ONE),
             std::ops::Bound::Unbounded => bevy::prelude::IVec3::splat(i32::MIN),
         };
 
         let end = match $p_range.end_bound() {
             std::ops::Bound::Included(&v) => v,
-            std::ops::Bound::Excluded(&v) => v.saturating_sub(IVec3::ONE),
+            std::ops::Bound::Excluded(&v) => v.saturating_sub(bevy::math::IVec3::ONE),
             std::ops::Bound::Unbounded => bevy::prelude::IVec3::splat(i32::MAX),
         };
 
@@ -69,7 +65,7 @@ macro_rules! cartesian_grid {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use bevy::math::{ivec3, IVec3};
 
     #[test]
     fn iteration_order_vector() {

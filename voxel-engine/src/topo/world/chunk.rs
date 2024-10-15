@@ -64,6 +64,13 @@ impl ChunkPos {
     pub fn as_vec3(self) -> Vec3 {
         self.0.as_vec3()
     }
+
+    /// Offset this chunk position by the given offset.
+    #[inline]
+    #[must_use]
+    pub fn offset(self, offset: IVec3) -> Self {
+        Self::from(self.as_ivec3() + offset)
+    }
 }
 
 bitflags! {
@@ -629,7 +636,6 @@ impl Chunk {
 
 #[cfg(test)]
 mod test {
-    use bevy::math::vec3;
 
     use super::*;
 

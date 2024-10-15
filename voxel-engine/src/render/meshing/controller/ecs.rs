@@ -1,32 +1,18 @@
-use std::{
-    cmp::max,
-    time::{Duration, Instant},
-};
+use bevy::prelude::*;
+use std::time::{Duration, Instant};
 
-use bevy::{
-    prelude::*,
-    tasks::{available_parallelism, TaskPool, TaskPoolBuilder},
-};
-
-use crate::{
-    data::{registries::Registries, tile::Face},
-    render::lod::{LODs, LevelOfDetail},
-    topo::{
-        controller::{
-            BatchFlags, CachedBatchMembership, ChunkBatch, ChunkBatchLod, RemovedBatchChunks,
-            VoxelWorldTick,
-        },
-        world::{ChunkPos, VoxelRealm},
+use crate::topo::{
+    controller::{
+        BatchFlags, CachedBatchMembership, ChunkBatch, ChunkBatchLod, RemovedBatchChunks,
+        VoxelWorldTick,
     },
+    world::{ChunkPos, VoxelRealm},
 };
 
 use super::{
     events::{MeshFinishedEvent, RemoveChunkMeshEvent},
     ChunkMeshExtractBridge,
 };
-
-#[derive(Resource, Deref)]
-pub struct MeshWorkerTaskPool(TaskPool);
 
 /// Chunks that act as occluders for HZB occlusion culling. Packaged into a vector
 /// for easy extraction to the render world.

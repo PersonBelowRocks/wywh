@@ -8,9 +8,7 @@ use std::{hash::BuildHasher, sync::Arc};
 use async_bevy_events::{AsyncEventPlugin, AsyncEventReader, EventFunnel, EventFunnelPlugin};
 use bevy::{
     prelude::*,
-    tasks::{
-        available_parallelism, block_on, AsyncComputeTaskPool, Task, TaskPool, TaskPoolBuilder,
-    },
+    tasks::{available_parallelism, block_on, AsyncComputeTaskPool, Task, TaskPoolBuilder},
 };
 use default_generator::WorldGenerator;
 use events::{

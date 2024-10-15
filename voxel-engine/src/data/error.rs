@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use super::{resourcepath::ResourcePath, tile::Face, voxel::rotations::BlockModelFace};
+use super::{resourcepath::ResourcePath, tile::Face};
 
 #[derive(te::Error, Debug)]
 #[error("TODO")]

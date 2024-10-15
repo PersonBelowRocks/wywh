@@ -1,5 +1,6 @@
 mod ecs;
 pub mod events;
+mod scheduler;
 mod workers;
 
 use std::{
@@ -10,7 +11,6 @@ use std::{
 use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
 use bevy::{
     prelude::*,
-    render::render_resource::encase::StorageBuffer,
     tasks::{available_parallelism, TaskPoolBuilder},
 };
 use dashmap::DashMap;
@@ -141,6 +141,16 @@ pub struct TimedChunkMeshStatus {
     pub status: ChunkMeshStatus,
 }
 
+impl TimedChunkMeshStatus {
+    /// Create a `ChunkMeshStatus::Unfulfilled` for the given tick.
+    pub fn unfulfilled(tick: u64) -> Self {
+        Self {
+            tick,
+            status: ChunkMeshStatus::Unfulfilled,
+        }
+    }
+}
+
 /// Describes the status that a chunk mesh is in. This reflects the behaviour elsewhere in the engine
 /// about how the chunk mesh should be treated.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -194,6 +204,20 @@ impl ChunkMeshStatusManager {
     pub fn contains(&self, lod: LevelOfDetail, chunk_pos: ChunkPos) -> bool {
         self.lods[lod].contains_key(&chunk_pos)
     }
+
+    /// Get the status of this chunk at different LODs.
+    pub fn get_statuses(&self, chunk_pos: ChunkPos) -> LodMap<TimedChunkMeshStatus> {
+        self.lods
+            .iter()
+            .filter_map(|(lod, chunks)| {
+                chunks
+                    .get(&chunk_pos)
+                    .as_deref()
+                    .copied()
+                    .map(|status| (lod, status))
+            })
+            .collect::<LodMap<_>>()
+    }
 }
 
 /// Acts as a sort of bridge between the main world and render world for chunk meshes.
@@ -239,17 +263,7 @@ impl ChunkMeshExtractBridge {
 
     /// Get the status of this chunk at different LODs.
     pub fn get_statuses(&self, chunk_pos: ChunkPos) -> LodMap<TimedChunkMeshStatus> {
-        self.statuses
-            .lods
-            .iter()
-            .filter_map(|(lod, chunks)| {
-                chunks
-                    .get(&chunk_pos)
-                    .as_deref()
-                    .copied()
-                    .map(|status| (lod, status))
-            })
-            .collect::<LodMap<_>>()
+        self.statuses.get_statuses(chunk_pos)
     }
 
     /// "Flush" the queued mesh data. This marks it as ready for extraction so it will be extracted

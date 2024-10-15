@@ -11,7 +11,7 @@ use crate::data::{
 
 #[cfg(test)]
 use crate::{
-    data::{resourcepath::rpath, texture::FaceTexture, voxel::rotations::BlockModelFaceMap},
+    data::{resourcepath::rpath, texture::FaceTexture},
     util::FaceMap,
 };
 

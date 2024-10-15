@@ -1,13 +1,7 @@
 use crate::util::FaceMap;
 
-use self::{
-    descriptor::BlockVariantDescriptor,
-    rotations::{BlockModelFace, BlockModelFaceMap, BlockModelRotation},
-};
-
 use super::{
-    registries::texture::TextureRegistry,
-    texture::{FaceTexture, FaceTextureRotation},
+    texture::FaceTexture,
     tile::{Face, Transparency},
 };
 

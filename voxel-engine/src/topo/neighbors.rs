@@ -1,4 +1,4 @@
-use std::{any::type_name, fmt};
+use std::any::type_name;
 
 use bevy::math::{ivec3, IVec2, IVec3};
 use itertools::Itertools;
@@ -89,6 +89,22 @@ impl NeighborSelection {
 
         for face in Face::FACES {
             new.set_face(face, true);
+        }
+
+        new
+    }
+
+    /// Create a new neighbor selection with all neighbors selected.
+    #[inline]
+    #[must_use]
+    pub fn all() -> Self {
+        let mut new = Self::empty();
+
+        for pos in itertools::iproduct!(-1..=1, -1..=1, -1..=1)
+            .map(IVec3::from)
+            .filter(|&v| v != IVec3::ZERO)
+        {
+            new.set(pos, true).unwrap();
         }
 
         new

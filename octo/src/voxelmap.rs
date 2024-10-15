@@ -2,14 +2,14 @@ use std::{array, mem};
 
 use glam::{ivec3, uvec3, IVec3, UVec3};
 use hashbrown::{
-    hash_map::{Entry, OccupiedEntry, VacantEntry},
+    hash_map::{Entry, OccupiedEntry},
     HashMap,
 };
 use num::Integer;
 use rustc_hash::FxBuildHasher;
 use slab::Slab;
 
-use crate::{div_2_pow_n, rem_2_pow_n, urem_2_pow_n, Region};
+use crate::{div_2_pow_n, rem_2_pow_n, Region};
 
 fn empty_3d_array<const D: usize, T>() -> [[[Option<T>; D]; D]; D] {
     array::from_fn(|_| array::from_fn(|_| array::from_fn(|_| None)))

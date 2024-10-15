@@ -1,4 +1,3 @@
-use std::cell::OnceCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -6,10 +5,9 @@ use std::time::Duration;
 use async_bevy_events::{ChannelClosed, EventFunnel};
 use bevy::prelude::*;
 
-use bevy::tasks::{available_parallelism, Task, TaskPool, TaskPoolBuilder};
-use flume::Sender;
+use bevy::tasks::{Task, TaskPool};
 use futures::future::join_all;
-use parking_lot::{Mutex, Once};
+use parking_lot::Mutex;
 use priority_queue::PriorityQueue;
 
 use crate::topo::world::chunk::ChunkFlags;

@@ -1,7 +1,6 @@
 use std::ops::Range;
 
 use glam::{IVec3, UVec3};
-use hashbrown::hash_map::IntoIter;
 
 /// A region of voxels.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

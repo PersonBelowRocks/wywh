@@ -8,7 +8,6 @@ use crate::{
         },
         texture::FaceTexture,
         tile::Face,
-        voxel::rotations::BlockModelRotation,
     },
     render::quad::{
         anon::Quad,

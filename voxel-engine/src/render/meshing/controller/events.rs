@@ -7,7 +7,7 @@ use crate::{
 };
 use bevy::prelude::*;
 
-use super::{ChunkMeshData, ChunkMeshStatus};
+use super::ChunkMeshData;
 
 /// Event sent when a mesh for a chunk should be built.
 #[derive(Clone, Event, Debug)]

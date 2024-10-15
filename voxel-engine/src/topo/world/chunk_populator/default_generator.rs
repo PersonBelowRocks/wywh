@@ -1,7 +1,4 @@
-use bevy::{
-    log::error,
-    math::{ivec3, IVec3},
-};
+use bevy::{log::error, math::IVec3};
 use noise::{NoiseFn, Perlin};
 
 use crate::{

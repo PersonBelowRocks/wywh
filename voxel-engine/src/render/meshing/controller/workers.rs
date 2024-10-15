@@ -1,29 +1,20 @@
 use std::{
     cmp::max,
-    hash::BuildHasher,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, OnceLock,
-    },
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 
-use async_bevy_events::{AsyncEventReader, AsyncEventWriter, EventFunnel};
+use async_bevy_events::{AsyncEventReader, EventFunnel};
 use bevy::{
     prelude::*,
     tasks::{
-        available_parallelism, block_on,
+        block_on,
         futures_lite::{future::pending, pin},
-        AsyncComputeTaskPool, Task, TaskPool, TaskPoolBuilder,
+        AsyncComputeTaskPool, Task, TaskPool,
     },
 };
 use flume::{Receiver, Sender};
-use futures::{
-    future::{join_all, ready},
-    FutureExt, StreamExt,
-};
-use parking_lot::Mutex;
-use priority_queue::PriorityQueue;
+use futures::{future::join_all, FutureExt, StreamExt};
 
 use crate::{
     data::registries::Registries,

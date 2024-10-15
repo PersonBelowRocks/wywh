@@ -1,7 +1,7 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::{
-    ecs::entity::{EntityHash, EntityHashMap, EntityHashSet, EntityHasher},
+    ecs::entity::{EntityHash, EntityHashMap, EntityHashSet},
     prelude::*,
     time::Stopwatch,
 };
@@ -22,7 +22,7 @@ use crate::{
                 ChunkPopulated, PopulateChunk, PriorityCalcStrategy,
                 RecalculatePopulateEventPrioritiesEvent,
             },
-            ChunkPos, VoxelRealm,
+            ChunkPos,
         },
     },
     util::{closest_distance_sq, ws_to_chunk_pos},

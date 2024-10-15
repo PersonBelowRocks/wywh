@@ -5,7 +5,7 @@ use bevy::{
     render::{
         render_resource::{
             BindGroup, BindGroupEntries, BindGroupLayout, Buffer, BufferDescriptor,
-            BufferInitDescriptor, BufferUsages, ShaderSize, ShaderType,
+            BufferInitDescriptor, BufferUsages, ShaderType,
         },
         renderer::{RenderDevice, RenderQueue},
     },
