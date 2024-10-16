@@ -397,11 +397,8 @@ impl ViewNode for PreprocessLightBatchesNode {
             let depth_texture = BindingResource::TextureView(&shadow_view.depth_attachment.view);
 
             // Bind group for the light's view
-            let light_view_bind_group = bg_provider.preprocess_light_view(
-                gpu,
-                view_light_uniforms_binding.clone(),
-                depth_texture,
-            );
+            let light_view_bind_group =
+                bg_provider.preprocess_light_view(gpu, view_light_uniforms_binding.clone());
 
             let Some(view_batches) = view_batches_store.get_batches(view_light) else {
                 continue;
@@ -439,7 +436,6 @@ impl ViewNode for PreprocessLightBatchesNode {
 
                 pass.set_bind_group(0, &mesh_metadata_bind_group, &[]);
                 // Uniform offset for the lights
-                // TODO: attach the correct bind group here (the one with the depth texture)
                 pass.set_bind_group(
                     1,
                     &light_view_bind_group,

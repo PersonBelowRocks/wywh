@@ -23,7 +23,6 @@ fn indirect_args_from_metadata(metadata: GpuChunkMetadata) -> IndexedIndirectArg
 
 // The view we're preprocessing the batch for
 @group(1) @binding(0) var<uniform> view: View;
-@group(1) @binding(1) var depth_texture: texture_depth_2d;
 
 // The batch data
 @group(2) @binding(0) var<storage, read> metadata_indices: array<u32>;
@@ -56,39 +55,8 @@ fn position_world_to_clip(world_pos: vec3<f32>) -> vec4<f32> {
     return clip_pos;
 }
 
-fn is_corner_visible(corner: vec3f) -> bool {
-    let clip_pos = position_world_to_clip(corner).xyz;
-    let corner_depth = view_z_to_depth_ndc(clip_pos.z);
-
-    let prepass_depth = textureLoad(depth_texture, vec2<i32>(clip_pos.xy), 0);
-
-    // Just return true for now so that shadows are at least enabled (albeit extremely slow)
-
-    // TODO: do we dare try implement this on our own?
-    //    https://github.com/bevyengine/bevy/pull/12899/commits/93b47fbd6e1c84c15c8db407bcc23931467da44e
-    return true;
-}
-
 // Chunk half extent
 const C: f32 = 16.0 / 2.0;
-
-fn any_corners_visible(center: vec3f) -> bool {
-    var visible = false;
-
-    // Bottom
-    visible |= is_corner_visible(center + vec3f(-C, -C, -C)); // min corner
-    visible |= is_corner_visible(center + vec3f( C, -C, -C));
-    visible |= is_corner_visible(center + vec3f(-C, -C,  C));
-    visible |= is_corner_visible(center + vec3f( C, -C,  C));
-
-    // Top
-    visible |= is_corner_visible(center + vec3f(-C,  C, -C));
-    visible |= is_corner_visible(center + vec3f( C,  C, -C));
-    visible |= is_corner_visible(center + vec3f(-C,  C,  C));
-    visible |= is_corner_visible(center + vec3f( C,  C,  C)); // max corner
-
-    return visible;
-}
 
 @compute @workgroup_size(1, 1, #{WORKGROUP_SIZE})
 fn preprocess_light_batch(
@@ -106,9 +74,7 @@ fn preprocess_light_batch(
     let metadata = all_metadata[metadata_index];
     let instance = all_instances[metadata.instance];
 
-    if any_corners_visible(instance.position + vec3f(C)) {
-        let args = indirect_args_from_metadata(metadata);
-        let arg_index = atomicAdd(&count, 1u);
-        indirect_args[arg_index] = args;
-    }
+    let args = indirect_args_from_metadata(metadata);
+    let arg_index = atomicAdd(&count, 1u);
+    indirect_args[arg_index] = args;
 }

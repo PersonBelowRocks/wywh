@@ -369,12 +369,9 @@ impl FromWorld for BindGroupProvider {
             ),
             preprocess_light_view_bg_layout: gpu.create_bind_group_layout(
                 Some("preprocess_light_view_bg_layout"),
-                &BindGroupLayoutEntries::sequential(
+                &BindGroupLayoutEntries::single(
                     ShaderStages::COMPUTE,
-                    (
-                        binding_types::uniform_buffer::<ViewUniform>(true),
-                        binding_types::texture_depth_2d(),
-                    ),
+                    binding_types::uniform_buffer::<ViewUniform>(true),
                 ),
             ),
             preprocess_batch_data_bg_layout: gpu.create_bind_group_layout(
@@ -447,12 +444,11 @@ impl BindGroupProvider {
         &self,
         gpu: &RenderDevice,
         view_lights_uniforms_binding: BindingResource,
-        depth_texture_binding: BindingResource,
     ) -> BindGroup {
         gpu.create_bind_group(
             Some("preprocess_light_view_bind_group"),
             &self.preprocess_light_view_bg_layout,
-            &BindGroupEntries::sequential((view_lights_uniforms_binding, depth_texture_binding)),
+            &BindGroupEntries::single(view_lights_uniforms_binding),
         )
     }
 
