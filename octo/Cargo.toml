@@ -29,6 +29,7 @@ itertools = "0.13.0"
 slab = "0.4.9"
 serde = { version = "1.0.210", features = ["derive"] }
 num = "0.4.3"
+rangemap = { version = "1.5.1", features = ["serde"] }
 
 [dev-dependencies]
 criterion = "0.5.1"

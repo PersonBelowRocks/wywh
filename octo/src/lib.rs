@@ -4,6 +4,7 @@ pub mod octree;
 pub mod region;
 pub mod subdiv;
 pub mod voxelmap;
+pub mod voxelset;
 pub use region::*;
 
 pub use subdiv::*;
