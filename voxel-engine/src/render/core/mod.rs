@@ -369,9 +369,13 @@ impl FromWorld for BindGroupProvider {
             ),
             preprocess_light_view_bg_layout: gpu.create_bind_group_layout(
                 Some("preprocess_light_view_bg_layout"),
-                &BindGroupLayoutEntries::single(
+                &BindGroupLayoutEntries::sequential(
                     ShaderStages::COMPUTE,
-                    binding_types::uniform_buffer::<ViewUniform>(true),
+                    (
+                        binding_types::uniform_buffer::<ViewUniform>(true),
+                        binding_types::texture_depth_2d(),
+                        binding_types::sampler(SamplerBindingType::NonFiltering),
+                    ),
                 ),
             ),
             preprocess_batch_data_bg_layout: gpu.create_bind_group_layout(
@@ -444,11 +448,20 @@ impl BindGroupProvider {
         &self,
         gpu: &RenderDevice,
         view_lights_uniforms_binding: BindingResource,
+        hzb_view: TextureView,
     ) -> BindGroup {
         gpu.create_bind_group(
             Some("preprocess_light_view_bind_group"),
             &self.preprocess_light_view_bg_layout,
-            &BindGroupEntries::single(view_lights_uniforms_binding),
+            &BindGroupEntries::sequential((
+                view_lights_uniforms_binding,
+                hzb_view.into_binding(),
+                gpu.create_sampler(&SamplerDescriptor {
+                    label: Some("preprocess_light_view_hzb_sampler"),
+                    ..default()
+                })
+                .into_binding(),
+            )),
         )
     }
 

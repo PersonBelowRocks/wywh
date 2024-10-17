@@ -26,6 +26,7 @@ use crate::{
 
 use super::{
     gpu_chunk::IndirectRenderDataStore,
+    occlusion::hzb::HzbCache,
     phase::DeferredBatch3d,
     pipelines::{
         ViewBatchLightPreprocessPipelineId, ViewBatchPreprocessPipelineId,
@@ -362,6 +363,7 @@ impl ViewNode for PreprocessLightBatchesNode {
         let view_batches_store = world.resource::<ViewBatchBuffersStore>();
         let chunk_mesh_store = world.resource::<IndirectRenderDataStore>();
         let light_meta = world.resource::<LightMeta>();
+        let hzb_cache = world.resource::<HzbCache>();
 
         let Some(preprocess_pipeline) = get_light_batch_preprocess_pipeline(world) else {
             error!("Couldn't get light batch preprocessing pipeline");
@@ -393,12 +395,18 @@ impl ViewNode for PreprocessLightBatchesNode {
                 continue;
             };
 
-            // Depth texture for this light. This is mega sketchy and im not sure bevy wants us to do this.
-            let depth_texture = BindingResource::TextureView(&shadow_view.depth_attachment.view);
+            let hzb_view = hzb_cache
+                .get_view_hzb(view_light)
+                .unwrap()
+                .mip_level_view(0)
+                .unwrap();
 
             // Bind group for the light's view
-            let light_view_bind_group =
-                bg_provider.preprocess_light_view(gpu, view_light_uniforms_binding.clone());
+            let light_view_bind_group = bg_provider.preprocess_light_view(
+                gpu,
+                view_light_uniforms_binding.clone(),
+                hzb_view,
+            );
 
             let Some(view_batches) = view_batches_store.get_batches(view_light) else {
                 continue;
