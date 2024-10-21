@@ -69,7 +69,7 @@ impl Region {
         self.min
     }
 
-    /// The maximum position of the region.
+    /// The maximum position of the region. The region does not contain this position.
     #[inline]
     #[must_use]
     pub fn max(self) -> IVec3 {
