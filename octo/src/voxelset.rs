@@ -1,8 +1,10 @@
-use glam::IVec3;
+use glam::{IVec3, UVec3};
+use hashbrown::hash_map::Entry;
 use hashbrown::HashMap;
 use slab::Slab;
 
-use crate::Region;
+use crate::voxelmap::Chunk;
+use crate::{div_2_pow_n, rem_2_pow_n, Region};
 
 /// Assert that a region bounded by a min and max position is valid to use in operations on a voxel set chunk.
 #[track_caller]
@@ -20,17 +22,22 @@ fn assert_valid_vsc_region(pmin: [u8; 3], pmax: [u8; 3]) {
 pub struct VoxelSetChunk([[u8; 8]; 8]);
 
 impl VoxelSetChunk {
+    /// An empty chunk. Created from [`VoxelSetChunk::empty()`]
+    pub const EMPTY: Self = Self::empty();
+    /// A filled chunk. Created from [`VoxelSetChunk::filled()`].
+    pub const FILLED: Self = Self::filled();
+
     /// Create an empty voxel set chunk.
     #[must_use]
     #[inline]
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self([[0; 8]; 8])
     }
 
     /// Create a filled voxel set chunk.
     #[must_use]
     #[inline]
-    pub fn filled() -> Self {
+    pub const fn filled() -> Self {
         Self([[0xFF; 8]; 8])
     }
 
@@ -217,6 +224,23 @@ impl VoxelSetChunk {
 
         count
     }
+
+    /// Check if this chunk is empty. Equivalent to `VoxelSetChunk::count() == 0`.
+    #[inline]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self == &Self::EMPTY
+    }
+}
+
+#[inline]
+fn chunk_and_local(p: IVec3) -> (IVec3, [u8; 3]) {
+    const DIMS_LOG2: u32 = 8u32.ilog2();
+
+    let chunk: IVec3 = p.to_array().map(|k| div_2_pow_n(k, DIMS_LOG2)).into();
+    let local = p.to_array().map(|k| rem_2_pow_n(k, DIMS_LOG2) as u8);
+
+    (chunk, local)
 }
 
 /// A set of voxel positions. Like a hashset but supports more specialized operations.
@@ -237,7 +261,21 @@ impl VoxelSet {
     /// Add a position to the set.
     #[inline]
     pub fn insert(&mut self, pos: IVec3) {
-        todo!()
+        let (chunk_pos, local_pos) = chunk_and_local(pos);
+
+        match self.chunks.entry(chunk_pos) {
+            Entry::Occupied(entry) => {
+                let chunk_index = *entry.get();
+                let chunk = self.slab.get_mut(chunk_index).unwrap();
+                chunk.insert(local_pos)
+            }
+            Entry::Vacant(entry) => {
+                let mut chunk = VoxelSetChunk::empty();
+                chunk.insert(local_pos);
+
+                entry.insert(self.slab.insert(chunk));
+            }
+        }
     }
 
     /// Add a region of voxels to the set.
@@ -251,7 +289,20 @@ impl VoxelSet {
     /// Remove a position from the set.
     #[inline]
     pub fn remove(&mut self, pos: IVec3) {
-        todo!()
+        let (chunk_pos, local_pos) = chunk_and_local(pos);
+
+        let Entry::Occupied(entry) = self.chunks.entry(chunk_pos) else {
+            return;
+        };
+
+        let chunk_index = *entry.get();
+        let chunk = self.slab.get_mut(chunk_index).unwrap();
+        chunk.remove(local_pos);
+
+        if chunk.is_empty() {
+            self.slab.remove(chunk_index);
+            entry.remove();
+        }
     }
 
     /// Remove a region of voxels from the set.
@@ -264,7 +315,12 @@ impl VoxelSet {
     #[inline]
     #[must_use]
     pub fn contains(&self, pos: IVec3) -> bool {
-        todo!()
+        let (chunk_pos, local_pos) = chunk_and_local(pos);
+
+        self.chunks
+            .get(&chunk_pos)
+            .map(|&chunk_index| &self.slab[chunk_index])
+            .is_some_and(|chunk| chunk.contains(local_pos))
     }
 
     /// Check if the entire region is fully contained within this set.
