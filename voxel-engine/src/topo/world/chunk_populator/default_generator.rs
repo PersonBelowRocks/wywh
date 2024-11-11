@@ -1,12 +1,14 @@
 use bevy::{log::error, math::IVec3};
 use noise::{NoiseFn, Perlin};
 
+use super::worldgen::{WorldgenContext, WorldgenWorker};
+use crate::data::registries::REGISTRY_MANAGER;
 use crate::{
     cartesian_grid,
     data::{
         registries::{
             block::{BlockVariantId, BlockVariantRegistry},
-            Registries, Registry,
+            Registry, RegistryManager,
         },
         resourcepath::rpath,
         tile::Transparency,
@@ -21,8 +23,6 @@ use crate::{
     },
     util::sync::LockStrategy,
 };
-
-use super::worldgen::{WorldgenContext, WorldgenWorker};
 
 /// Palette of blocks to be used by the default world generator.
 #[derive(Clone, Debug)]
@@ -45,8 +45,10 @@ pub const DEBUG_WORLDGEN_SEED: u32 = 0xff;
 impl WorldGenerator {
     /// Create a new world generator initialized from the registries.
     /// The noise function will use [`DEBUG_WORLDGEN_SEED`].
-    pub fn new(registries: &Registries) -> Self {
-        let registry = registries.get_registry::<BlockVariantRegistry>().unwrap();
+    pub fn new() -> Self {
+        let registry = REGISTRY_MANAGER
+            .get_registry::<BlockVariantRegistry>()
+            .unwrap();
 
         let palette = WorldGeneratorPalette {
             stone: registry.get_id(&rpath("stone")).unwrap(),

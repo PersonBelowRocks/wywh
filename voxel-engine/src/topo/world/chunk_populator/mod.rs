@@ -20,7 +20,7 @@ use worldgen::{
 };
 
 use crate::{
-    data::registries::Registries,
+    data::registries::RegistryManager,
     util::{closest_distance, closest_distance_sq},
     CoreEngineSetup, EngineState,
 };
@@ -74,7 +74,6 @@ impl Drop for PopulatorTaskHandle {
 
 pub struct PopulatorTaskState {
     chunk_manager: Arc<ChunkManager>,
-    registries: Registries,
     worldgen_worker_pool: WorldgenWorkerPool,
 }
 
@@ -99,7 +98,6 @@ fn calculate_priorities_based_on_distance<H: BuildHasher, F: Fn(Vec3) -> f32>(
 impl PopulatorTaskState {
     pub fn new<F: Fn() -> Box<dyn WorldgenWorker>>(
         chunk_manager: Arc<ChunkManager>,
-        registries: Registries,
         chunk_populated_funnel: EventFunnel<ChunkPopulated>,
         worldgen_worker_factory: F,
     ) -> Self {
@@ -111,7 +109,6 @@ impl PopulatorTaskState {
 
         Self {
             chunk_manager,
-            registries,
             worldgen_worker_pool,
         }
     }
@@ -158,7 +155,6 @@ impl PopulatorTaskState {
 pub fn start_chunk_population_event_bus_task(
     mut cmds: Commands,
     realm: VoxelRealm,
-    registries: Res<Registries>,
     populate_chunk_events: Res<AsyncEventReader<PopulateChunk>>,
     recalc_priority_events: Res<AsyncEventReader<RecalculatePopulateEventPrioritiesEvent>>,
     chunk_populated_funnel: Res<EventFunnel<ChunkPopulated>>,
@@ -168,12 +164,10 @@ pub fn start_chunk_population_event_bus_task(
     let populate_chunk_events = populate_chunk_events.clone();
     let recalc_priority_events = recalc_priority_events.clone();
 
-    let mut task_state = PopulatorTaskState::new(
-        realm.clone_cm(),
-        registries.clone(),
-        chunk_populated_funnel.clone(),
-        || Box::new(WorldGenerator::new(&registries)),
-    );
+    let mut task_state =
+        PopulatorTaskState::new(realm.clone_cm(), chunk_populated_funnel.clone(), || {
+            Box::new(WorldGenerator::new())
+        });
 
     // This is basically a oneshot channel. If we send a message through here we tell the chunk populator task to shut down.
     let (shutdown_tx, shutdown_rx) = flume::bounded::<()>(1);

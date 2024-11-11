@@ -15,8 +15,16 @@ use bevy::{
 use flume::{Receiver, Sender};
 use futures::{future::join_all, FutureExt, StreamExt};
 
+use super::{
+    events::{
+        BuildChunkMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
+        RemoveChunkMeshEvent,
+    },
+    ChunkMeshExtractBridge, ChunkMeshStatusManager,
+};
+use crate::data::registries::REGISTRY_MANAGER;
 use crate::{
-    data::registries::Registries,
+    data::registries::RegistryManager,
     diagnostics::{DiagRecStatus, DiagnosticsTx, ENGINE_DIAGNOSTICS},
     render::{
         lod::{LevelOfDetail, LodMap},
@@ -34,14 +42,6 @@ use crate::{
         ChunkJobQueue,
     },
     util::{closest_distance, closest_distance_sq, sync::LockStrategy},
-};
-
-use super::{
-    events::{
-        BuildChunkMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
-        RemoveChunkMeshEvent,
-    },
-    ChunkMeshExtractBridge, ChunkMeshStatusManager,
 };
 
 pub(crate) static MESH_BUILDER_TASK_POOL: OnceLock<TaskPool> = OnceLock::new();
@@ -95,7 +95,6 @@ fn staging_channels() -> (
 
 impl MeshBuilderPool {
     pub fn new(
-        registries: Registries,
         chunk_manager: Arc<ChunkManager>,
         finished_meshes: EventFunnel<MeshFinishedEvent>,
         diag_tx: DiagnosticsTx,
@@ -113,7 +112,6 @@ impl MeshBuilderPool {
             // Clone everything so it can be moved into the task.
             let receivers = rxs.clone();
             let cm = chunk_manager.clone();
-            let reg = registries.clone();
             let finished = finished_meshes.clone();
             let diag = diag_tx.clone();
 
@@ -172,7 +170,7 @@ impl MeshBuilderPool {
                                     let context = Context {
                                         lod: DEFAULT_DEBUG_LOD,
                                         neighbors,
-                                        registries: &reg,
+                                        registries: &REGISTRY_MANAGER,
                                     };
 
                                     greedy_mesher.build(read_handle, context)
@@ -249,19 +247,13 @@ pub struct MeshBuilderTaskState {
 
 impl MeshBuilderTaskState {
     pub fn new(
-        registries: Registries,
         chunk_manager: Arc<ChunkManager>,
         status_manager: Arc<ChunkMeshStatusManager>,
         finished_meshes: EventFunnel<MeshFinishedEvent>,
         diag_tx: DiagnosticsTx,
     ) -> Self {
         Self {
-            mesh_builder_pool: MeshBuilderPool::new(
-                registries,
-                chunk_manager,
-                finished_meshes,
-                diag_tx,
-            ),
+            mesh_builder_pool: MeshBuilderPool::new(chunk_manager, finished_meshes, diag_tx),
             queues: LodMap::from_fn(|_| Some(ChunkJobQueue::new())),
             status_manager,
         }
@@ -377,7 +369,6 @@ impl Drop for MeshBuilderEventProxyTaskHandle {
 pub fn start_mesh_builder_tasks(
     mut cmds: Commands,
     realm: VoxelRealm,
-    registries: Res<Registries>,
     extract_bridge: Res<ChunkMeshExtractBridge>,
     build_mesh_events: Res<AsyncEventReader<BuildChunkMeshEvent>>,
     recalc_priority_events: Res<AsyncEventReader<RecalculateMeshBuildingEventPrioritiesEvent>>,
@@ -392,7 +383,6 @@ pub fn start_mesh_builder_tasks(
     let remove_chunk_mesh_events = remove_chunk_mesh_events.clone();
 
     let mut task_state = MeshBuilderTaskState::new(
-        registries.clone(),
         realm.clone_cm(),
         extract_bridge.chunk_mesh_status_manager().clone(),
         mesh_finished_funnel.clone(),

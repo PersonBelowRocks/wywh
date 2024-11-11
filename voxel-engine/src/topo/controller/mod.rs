@@ -15,7 +15,7 @@ use observer_events::{
 };
 
 use crate::data::registries::block::BlockVariantRegistry;
-use crate::data::registries::{Registries, Registry};
+use crate::data::registries::{Registry, RegistryManager, REGISTRY_MANAGER};
 use crate::data::resourcepath::rpath;
 use crate::topo::world::chunk_manager::ecs::{
     start_async_chunk_load_task, start_async_chunk_purge_task,
@@ -376,8 +376,9 @@ impl Plugin for WorldController {
 /// Must be ran after registries have been built.
 pub fn initialize_chunk_manager(world: &mut World) {
     let chunk_manager = {
-        let registries = world.resource::<Registries>();
-        let varreg = registries.get_registry::<BlockVariantRegistry>().unwrap();
+        let varreg = REGISTRY_MANAGER
+            .get_registry::<BlockVariantRegistry>()
+            .unwrap();
         let void = varreg
             .get_id(&rpath(BlockVariantRegistry::RPATH_VOID))
             .unwrap();

@@ -1,12 +1,13 @@
+use anymap::any::Any;
+use bevy::ecs::system::Resource;
+use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
+use std::cell::{LazyCell, OnceCell};
+use std::sync::{LazyLock, OnceLock};
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
     sync::Arc,
 };
-
-use anymap::any::Any;
-use bevy::ecs::system::Resource;
-use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
 use super::resourcepath::ResourcePath;
 
@@ -35,17 +36,23 @@ pub enum RegistryStage<L, F> {
 
 type RegistriesAnymap = anymap::Map<dyn Any + Send + Sync>;
 
-#[derive(Clone, Resource)]
-pub struct Registries {
-    registries: Arc<RwLock<RegistriesAnymap>>,
+/// A collection of registries used by the game, engine, or addons.
+pub struct RegistryManager {
+    registries: RwLock<RegistriesAnymap>,
 }
+
+/// The global registry manager. All registries should exist in this registry manager if it's possible.
+///
+/// This registry manager will be initialized by the engine during startup. Modifying registries after
+/// the startup phase may lead to weird unintended behaviour, and should never be done.
+pub static REGISTRY_MANAGER: LazyLock<RegistryManager> = LazyLock::new(RegistryManager::new);
 
 pub type RegistryRef<'a, R> = MappedRwLockReadGuard<'a, R>;
 
-impl Registries {
-    pub fn new() -> Self {
+impl RegistryManager {
+    fn new() -> Self {
         Self {
-            registries: Arc::new(RwLock::new(anymap::Map::new())),
+            registries: RwLock::new(anymap::Map::new()),
         }
     }
 
