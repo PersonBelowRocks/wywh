@@ -3,6 +3,7 @@ pub mod controller;
 pub mod error;
 pub mod greedy;
 pub mod immediate;
+pub mod visibility_logic;
 
 use crate::{data::registries::Registries, topo::neighbors::Neighbors};
 

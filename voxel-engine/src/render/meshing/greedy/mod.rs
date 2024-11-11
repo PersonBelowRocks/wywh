@@ -51,7 +51,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         neighbors: &'a Neighbors<'chunk>,
         registry: &'a RegistryRef<'a, BlockVariantRegistry>,
     ) -> Result<Self, OutOfBounds> {
-        if 0 > magnitude && magnitude > Chunk::SUBDIVIDED_CHUNK_SIZE {
+        if 0 > magnitude || magnitude > Chunk::SUBDIVIDED_CHUNK_SIZE {
             return Err(OutOfBounds);
         }
 
@@ -66,7 +66,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
     #[inline(always)]
     pub fn reposition(&mut self, face: Face, magnitude: i32) -> Result<(), OutOfBounds> {
-        if 0 > magnitude && magnitude > Chunk::SIZE {
+        if 0 > magnitude || magnitude > Chunk::SUBDIVIDED_CHUNK_SIZE {
             return Err(OutOfBounds);
         }
 

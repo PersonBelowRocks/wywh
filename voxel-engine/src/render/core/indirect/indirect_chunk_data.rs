@@ -199,12 +199,12 @@ impl<'a> IcdCommit<'a> {
 /// we need to update the indirect arg buffer and instance buffer to reflect the change.
 ///
 /// The data looks something like this on the GPU:
-/// ```
+/// ```txt
 /// indices: ##########################################################################
 /// quads:   ##########################################################################
 /// ```
 /// Now consider how this data is split up between different chunks:
-/// ```
+/// ```txt
 /// instance:         0                         1           2           3                         4
 /// indices:   [######][########################][##########][##########][########################]
 /// quads:     [################][#########][########][###############][##########################]
@@ -219,7 +219,7 @@ impl<'a> IcdCommit<'a> {
 /// comes AFTER chunk B's share. All shares are therefore ordered by their owner's instance number.
 ///
 /// On the CPU side we maintain a chunk hashmap that looks a bit like this:
-/// ```
+/// ```txt
 /// buffer_bounds = {
 ///     chunk_0: {
 ///         instance: 0
