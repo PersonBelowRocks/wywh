@@ -217,7 +217,7 @@ impl FromWorld for HzbLevelPipeline {
         let layout = provider.construct_hzb_level_bg_layout.clone();
 
         let descriptor = RenderPipelineDescriptor {
-            label: Some(format!("construct_hzb_mip_level").into()),
+            label: Some("construct_hzb_mip_level".to_string().into()),
             push_constant_ranges: vec![],
             primitive: PrimitiveState {
                 unclipped_depth: true,

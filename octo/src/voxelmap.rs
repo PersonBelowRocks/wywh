@@ -50,7 +50,7 @@ impl<const D: usize, T> Chunk<D, T> {
     #[inline]
     #[track_caller]
     pub fn empty(pos: IVec3) -> Self {
-        assert!(D.count_ones() == 1, "chunk dimensions must be a power of 2");
+        assert_eq!(D.count_ones(), 1, "chunk dimensions must be a power of 2");
 
         Self {
             pos,

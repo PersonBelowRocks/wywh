@@ -46,24 +46,6 @@ pub enum RemeshType {
     Delayed,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord)]
-pub struct RemeshPriority(u32);
-
-impl RemeshPriority {
-    pub const HIGHEST: Self = Self(0);
-    pub const LOWEST: Self = Self(u32::MAX);
-
-    pub fn new(raw: u32) -> Self {
-        Self(raw)
-    }
-}
-
-impl PartialOrd for RemeshPriority {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        other.0.partial_cmp(&self.0)
-    }
-}
-
 /// The number of [`GpuQuad`]s in a byte buffer of the given size.
 pub fn quads_in_byte_buffer(buffer_size: u64) -> u32 {
     (buffer_size / GpuQuad::ARRAY_STRIDE).try_into().unwrap()
@@ -177,12 +159,16 @@ pub struct ChunkMeshStatusManager {
     lods: LodMap<DashMap<ChunkPos, TimedChunkMeshStatus, rustc_hash::FxBuildHasher>>,
 }
 
+impl Default for ChunkMeshStatusManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChunkMeshStatusManager {
     pub fn new() -> Self {
         Self {
-            lods: LodMap::from_fn(|_| {
-                Some(DashMap::with_hasher(rustc_hash::FxBuildHasher::default()))
-            }),
+            lods: LodMap::from_fn(|_| Some(DashMap::with_hasher(rustc_hash::FxBuildHasher))),
         }
     }
 

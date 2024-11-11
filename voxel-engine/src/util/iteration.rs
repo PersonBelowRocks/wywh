@@ -155,6 +155,7 @@ mod tests {
 
     #[test]
     #[should_panic]
+    #[allow(clippy::reversed_empty_ranges)] // shut clippy up
     fn greater_start() {
         let _ = cartesian_grid!(0..2, 5..2, 0..4);
     }

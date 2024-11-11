@@ -168,7 +168,7 @@ pub fn fps_text_update_system(
             text.sections = [format!("FPS: {value:>4.0}")].map(text_section).to_vec();
         } else {
             // display "N/A" if we can't get a FPS measurement
-            text.sections = [format!("N/A")].map(text_section).to_vec();
+            text.sections = ["N/A".to_string()].map(text_section).to_vec();
         }
     }
 }

@@ -1,3 +1,4 @@
+use std::f32::consts::FRAC_PI_2;
 use std::ops;
 
 use bevy::{log::info, render::render_resource::ShaderType};
@@ -38,7 +39,7 @@ impl std::str::FromStr for FaceTextureRotation {
 impl FaceTextureRotation {
     pub const TOTAL_ROTATIONS: i32 = 4;
     pub const ONE_TURN_DEG: i32 = 90;
-    pub const ONE_TURN_RAD: f32 = 1.57079633;
+    pub const ONE_TURN_RAD: f32 = FRAC_PI_2;
 
     pub fn new(value: i32) -> Self {
         let value: u32 = value.rem_euclid(Self::TOTAL_ROTATIONS) as _;

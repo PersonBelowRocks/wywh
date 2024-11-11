@@ -47,7 +47,7 @@ fn handle_load_chunk<'a>(
             .send(LoadReasonsAddedEvent {
                 chunk_pos,
                 reasons_added: load_reasons,
-                loadshare: loadshare,
+                loadshare,
                 was_loaded: false,
             })
             .unwrap();
@@ -64,7 +64,7 @@ fn handle_load_chunk<'a>(
             .send(LoadReasonsAddedEvent {
                 chunk_pos,
                 reasons_added: load_reasons,
-                loadshare: loadshare,
+                loadshare,
                 // These load reasons caused the chunk to be loaded
                 was_loaded: true,
             })
