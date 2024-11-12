@@ -1,3 +1,4 @@
+use crate::enum_implement_oob_error;
 use bevy::math::IVec3;
 
 /// Errors related to low-level chunk data reads and writes.
@@ -12,6 +13,8 @@ pub enum ChunkDataError {
     #[error("Value {0:#01x?} cannot be stored in a subdivided storage")]
     InvalidValue(u32),
 }
+
+enum_implement_oob_error!(ChunkDataError, ChunkDataError::OutOfBounds);
 
 impl From<octo::SubdivAccessError> for ChunkDataError {
     fn from(value: octo::SubdivAccessError) -> Self {
@@ -37,6 +40,11 @@ pub enum ChunkHandleError {
     #[error("Can't create block variant ID from raw value: {0:#01x}")]
     InvalidDataValue(u32),
 }
+
+enum_implement_oob_error!(
+    ChunkHandleError,
+    ChunkHandleError::FullBlockOutOfBounds(_) | ChunkHandleError::MicroblockOutOfBounds(_)
+);
 
 #[derive(te::Error, Debug, Clone)]
 pub enum ChunkFlagError {

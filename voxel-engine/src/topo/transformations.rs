@@ -295,6 +295,22 @@ where
     T::from_array(arr)
 }
 
+/// Minimum local microblock position from local full-block position.
+/// "Minimum" in this case means closest to `[0, 0, 0]`.
+/// ### In
+/// Local full-block position
+/// ### Out
+/// Minimum local microblock position
+#[inline(always)]
+pub fn fb_localspace_to_min_mb_localspace<const SIZE: usize, T>(input: T) -> T
+where
+    T: IntegerVector<{ SIZE }>,
+{
+    let mut arr = input.to_array();
+    arr = arr.map(|e| e * (FULL_BLOCK_MICROBLOCK_DIMS as i32));
+    T::from_array(arr)
+}
+
 #[cfg(test)]
 mod tests {
     use bevy::math::ivec3;

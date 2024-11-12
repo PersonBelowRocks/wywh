@@ -5,11 +5,18 @@
 //! - Part 1) https://tomcc.github.io/2014/08/31/visibility-1.html
 //! - Part 2) https://tomcc.github.io/2014/08/31/visibility-2.html
 
+use bevy::math::IVec3;
+use octo::voxelmap::VoxelMap;
 use std::array;
 
-use octo::voxelmap::VoxelMap;
-
-use crate::{data::tile::Face, util::FaceMap};
+use crate::data::registries::block::BlockVariantId;
+use crate::topo::generic_chunk::GenericChunkReadAccess;
+use crate::topo::{
+    fb_localspace_to_min_mb_localspace, transformations, CHUNK_MICROBLOCK_DIMS,
+    FULL_BLOCK_MICROBLOCK_DIMS,
+};
+use crate::util::cubic::Cubic;
+use crate::{cartesian_grid, data::tile::Face, util::FaceMap};
 
 /// Describes the connections between the different faces of a chunk.
 ///
@@ -27,6 +34,8 @@ pub struct ChunkConnectivityGraph {
 }
 
 impl ChunkConnectivityGraph {
+    const FACE_CONNECTIONS_MASK: u8 = 0xFF >> 2;
+
     /// Create an empty graph with no relationship between any faces.
     /// This would represent a completely solid chunk.
     #[inline]
@@ -44,7 +53,7 @@ impl ChunkConnectivityGraph {
     pub fn filled() -> Self {
         Self {
             // the top 2 bits are unused and should always be 0
-            graph: array::from_fn(|_| 0xFF >> 2),
+            graph: array::from_fn(|_| Self::FACE_CONNECTIONS_MASK),
         }
     }
 
@@ -90,6 +99,29 @@ impl ChunkConnectivityGraph {
             .into_iter()
             .filter(move |face| connections & (0b1 << face.as_u8()) != 0)
     }
+
+    /// Returns `true` if this graph is "filled" and every face is connected to every other face.
+    #[inline]
+    #[must_use]
+    pub fn is_filled(&self) -> bool {
+        self.graph.iter().all(|&f| f == Self::FACE_CONNECTIONS_MASK)
+    }
+}
+
+pub fn connectivity_graph_construction_impl<C, IsOpaque>(
+    chunk: &C,
+    is_opaque: IsOpaque,
+) -> Result<ChunkConnectivityGraph, C::Error>
+where
+    C: GenericChunkReadAccess,
+    IsOpaque: Fn(BlockVariantId) -> bool,
+{
+    let filling = Cubic::<{ CHUNK_MICROBLOCK_DIMS as usize }, u32>::new(0);
+    let regions = Vec::<u8>::new();
+
+    let mut graph = ChunkConnectivityGraph::empty();
+
+    todo!()
 }
 
 #[cfg(test)]
@@ -98,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_filled_graph() {
-        let mut graph = ChunkConnectivityGraph::filled();
+        let graph = ChunkConnectivityGraph::filled();
 
         for face1 in Face::FACES {
             for face2 in Face::FACES {

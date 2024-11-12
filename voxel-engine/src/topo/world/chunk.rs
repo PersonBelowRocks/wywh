@@ -496,6 +496,18 @@ macro_rules! impl_chunk_handle_reads {
                 self.blocks.deref()
             }
         }
+
+        impl<$lt> $crate::topo::generic_chunk::GenericChunkReadAccess for $name {
+            type Error = ChunkHandleError;
+
+            fn get(&self, ls_pos: IVec3) -> Result<Option<BlockVariantId>, Self::Error> {
+                self.get(ls_pos)
+            }
+
+            fn get_mb(&self, mb_pos: IVec3) -> Result<BlockVariantId, Self::Error> {
+                self.get_mb(mb_pos)
+            }
+        }
     };
 }
 

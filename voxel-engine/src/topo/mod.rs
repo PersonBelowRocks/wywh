@@ -7,6 +7,11 @@ pub mod block;
 pub mod bounding_box;
 pub mod controller;
 pub mod error;
+/// Utilities and traits for generalizing chunk behaviour across different specific types.
+pub mod generic_chunk;
+/// Mock chunk utilities for use in testing.
+#[cfg(test)]
+mod mock_chunk;
 pub mod neighbors;
 pub mod transformations;
 pub mod world;
