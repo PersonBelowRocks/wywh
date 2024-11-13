@@ -1,6 +1,7 @@
-use bevy::prelude::*;
-
 use crate::util::Axis3D;
+use bevy::prelude::*;
+use enum_map::Enum;
+use enumset::{EnumSet, EnumSetType};
 
 use super::error::FaceParseError;
 
@@ -34,11 +35,16 @@ impl Transparency {
     }
 }
 
+/// Type alias for an enum set of faces.
+pub type FaceSet = EnumSet<Face>;
+
 /// Faces of a cube
 #[allow(dead_code)]
 #[derive(
     FromPrimitive,
     ToPrimitive,
+    EnumSetType,
+    Enum,
     PartialEq,
     Eq,
     Hash,
@@ -48,6 +54,8 @@ impl Transparency {
     serde::Deserialize,
     serde::Serialize,
 )]
+#[enumset(no_super_impls)]
+#[enumset(repr = "u8")] // ensure that the enum set is as small as possible.
 pub enum Face {
     #[serde(rename(serialize = "t"))]
     #[serde(alias = "top")]

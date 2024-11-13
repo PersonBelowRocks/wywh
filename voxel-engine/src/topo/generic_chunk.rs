@@ -1,5 +1,6 @@
 use crate::data::registries::block::BlockVariantId;
 use bevy::math::IVec3;
+use std::fmt::Debug;
 
 /// This trait generalizes the behaviour of a chunk, allowing for data to be arranged in such a way
 /// that it can play the role of a chunk without actually being one.
@@ -7,7 +8,7 @@ use bevy::math::IVec3;
 /// This is mainly used for mocking chunks in testing, but can also be used in real code.
 pub trait GenericChunkReadAccess {
     /// The error to be returned by getters. Must be able to represent an out-of-bounds error.
-    type Error: OutOfBoundsError;
+    type Error: OutOfBoundsError + Debug;
 
     /// Get a full-block from the chunk. If the block at the requested position is not a full-block,
     /// [`None`] must be returned.

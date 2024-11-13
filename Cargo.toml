@@ -25,6 +25,7 @@ thiserror = "1.0.63"
 dashmap = "6.1.0"
 static_assertions = "1.1.0"
 parking_lot = "0.12.3"
+enumset = "1.1.5"
 
 [workspace.dependencies.derive_more]
 version = "1.0.0"

@@ -14,6 +14,7 @@ parking_lot.workspace = true
 derive_more.workspace = true
 async-bevy-events.workspace = true
 mip-texture-array.workspace = true
+enumset.workspace = true
 
 # Crate dependencies
 ahash = "0.8.3"
