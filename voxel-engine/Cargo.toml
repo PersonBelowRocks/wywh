@@ -21,7 +21,6 @@ ahash = "0.8.3"
 anyhow = "1.0.75"
 anymap = "0.12.1"
 octo = {path = "../octo"}
-bevy_rapier3d = "0.23.0"
 bitflags = "2.4.1"
 bracket-noise = "0.8.7"
 deser-hjson = "2.2.4"

@@ -11,7 +11,7 @@ pub mod error;
 pub mod generic_chunk;
 /// Mock chunk utilities for use in testing.
 #[cfg(test)]
-mod mock_chunk;
+pub mod mock_chunk;
 pub mod neighbors;
 pub mod transformations;
 pub mod world;

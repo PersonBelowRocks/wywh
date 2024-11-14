@@ -31,7 +31,7 @@ use std::array;
 /// the graph is a somewhat expensive operation and should be done sparingly.
 #[derive(Copy, Clone)]
 pub struct ChunkConnectivityGraph {
-    // matrix representation of the graph. top 2 bits in the rows are ignored.
+    // matrix representation of the graph
     graph: EnumMap<Face, FaceSet>,
 }
 
@@ -180,10 +180,11 @@ fn flood_fill<F: Fn(IVec3) -> bool>(
     Some(fill_map_regions[region_index])
 }
 
+/// Flood-fill based algorithm for constructing a chunk connectivity graph.
 pub fn connectivity_graph_construction_impl<C, IsOpaque>(
     chunk: &C,
     is_opaque: IsOpaque,
-) -> Result<ChunkConnectivityGraph, C::Error>
+) -> ChunkConnectivityGraph
 where
     C: GenericChunkReadAccess,
     IsOpaque: Fn(BlockVariantId) -> bool,
@@ -223,11 +224,30 @@ where
         }
     }
 
-    todo!()
+    graph
 }
 
 #[cfg(test)]
-mod tests {
+mod graph_construction {
+    use super::*;
+    use crate::topo::mock_chunk::MockChunk;
+
+    fn is_opaque(id: BlockVariantId) -> bool {
+        !matches!(id, MockChunk::VOID)
+    }
+
+    #[test]
+    fn construct_graph_for_transparent_chunk() {
+        // Will be filled with void blocks by default.
+        let chunk = MockChunk::new();
+
+        let graph = connectivity_graph_construction_impl(&chunk, is_opaque);
+        assert!(graph.is_filled());
+    }
+}
+
+#[cfg(test)]
+mod graph_logic {
     use super::*;
 
     #[test]

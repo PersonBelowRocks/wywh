@@ -157,7 +157,6 @@ impl Region {
 
     /// Iterate over all the positions contained within this region.
     #[inline]
-    #[must_use]
     pub fn iter(self) -> impl Iterator<Item = IVec3> {
         itertools::iproduct!(
             self.min.x..self.max.x,
@@ -258,6 +257,7 @@ pub trait RegionContained {
 
 macro_rules! impl_region_bounded_vector {
     ($vec:ty) => {
+        #[allow(irrefutable_let_patterns)] // makes clippy calm down a bit when calling the macro
         impl crate::RegionContained for $vec {
             #[inline]
             fn contained(&self, region: Region) -> bool {
@@ -279,9 +279,7 @@ macro_rules! impl_region_bounded_vector {
     };
 }
 
-impl_region_bounded_vector!(glam::I16Vec3);
 impl_region_bounded_vector!(glam::IVec3);
 impl_region_bounded_vector!(glam::I64Vec3);
-impl_region_bounded_vector!(glam::U16Vec3);
 impl_region_bounded_vector!(glam::UVec3);
 impl_region_bounded_vector!(glam::U64Vec3);

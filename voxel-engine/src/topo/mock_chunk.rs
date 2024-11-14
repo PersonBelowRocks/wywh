@@ -1,8 +1,10 @@
+use crate::cartesian_grid;
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::topo::generic_chunk::GenericChunkReadAccess;
 use crate::topo::world::chunk::ChunkData;
-use crate::topo::world::ChunkDataError;
+use crate::topo::world::{Chunk, ChunkDataError};
 use bevy::math::IVec3;
+use octo::{Region, RegionContained};
 
 /// A mock chunk that behaves like a regular chunk but can be trivially initialized and
 /// has no relationship to a chunk manager. In a way this is just a glorified 3D array.
@@ -31,6 +33,38 @@ impl MockChunk {
 
     pub fn set_mb(&mut self, mb_pos: IVec3, data: BlockVariantId) -> Result<(), ChunkDataError> {
         self.data.set_mb(mb_pos, data)
+    }
+
+    pub fn fill_region(
+        &mut self,
+        region: Region,
+        block: BlockVariantId,
+    ) -> Result<(), ChunkDataError> {
+        if !Region::new([0; 3], [Chunk::SIZE; 3]).contains(region) {
+            return Err(ChunkDataError::OutOfBounds);
+        }
+
+        for ls_pos in cartesian_grid!(region.min()..region.max()) {
+            self.set(ls_pos, block).unwrap();
+        }
+
+        Ok(())
+    }
+
+    pub fn fill_region_mb(
+        &mut self,
+        mb_region: Region,
+        block: BlockVariantId,
+    ) -> Result<(), ChunkDataError> {
+        if !Region::new([0; 3], [Chunk::SUBDIVIDED_CHUNK_SIZE; 3]).contains(mb_region) {
+            return Err(ChunkDataError::OutOfBounds);
+        }
+
+        for mb_pos in cartesian_grid!(mb_region.min()..mb_region.max()) {
+            self.set(mb_pos, block).unwrap();
+        }
+
+        Ok(())
     }
 
     pub fn get(&self, ls_pos: IVec3) -> Result<Option<BlockVariantId>, ChunkDataError> {

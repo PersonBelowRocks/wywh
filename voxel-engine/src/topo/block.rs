@@ -1,3 +1,5 @@
+// TODO: remove this entire module
+
 use core::fmt;
 use std::mem;
 
