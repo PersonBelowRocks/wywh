@@ -46,8 +46,8 @@ macro_rules! cartesian_grid {
             };
 
             assert!(
-                start < end,
-                "Range {range:?} must start with a value less than its end"
+                start <= end,
+                "Range {range:?} must start with a value less than or equal to its end"
             );
 
             start..=end
@@ -145,6 +145,14 @@ mod tests {
         let iterator = cartesian_grid!(-1..=1, -1..=1, -1..=1);
         let size = 3 * 3 * 3;
         assert_eq!((size, Some(size)), iterator.size_hint());
+    }
+
+    #[test]
+    fn single_size_grid() {
+        let mut grid = cartesian_grid!(ivec3(0, 0, 0)..ivec3(1, 1, 1));
+
+        assert_eq!(Some(ivec3(0, 0, 0)), grid.next());
+        assert_eq!(None, grid.next());
     }
 
     #[test]

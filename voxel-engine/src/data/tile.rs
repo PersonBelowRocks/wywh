@@ -229,3 +229,16 @@ impl Face {
         self.normal().dot(other.normal()) == 0
     }
 }
+
+impl std::fmt::Display for Face {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Top => write!(f, "top"),
+            Self::Bottom => write!(f, "bottom"),
+            Self::North => write!(f, "north"),
+            Self::East => write!(f, "east"),
+            Self::South => write!(f, "south"),
+            Self::West => write!(f, "west"),
+        }
+    }
+}

@@ -19,6 +19,7 @@ use enum_map::{enum_map, EnumMap};
 use itertools::Itertools;
 use octo::voxelmap::VoxelMap;
 use std::array;
+use std::collections::VecDeque;
 
 /// Describes the connections between the different faces of a chunk.
 ///
@@ -29,10 +30,23 @@ use std::array;
 ///
 /// This graph must be rebuilt every time an opaque block is changed in the chunk. Rebuilding
 /// the graph is a somewhat expensive operation and should be done sparingly.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct ChunkConnectivityGraph {
     // matrix representation of the graph
     graph: EnumMap<Face, FaceSet>,
+}
+
+impl std::fmt::Debug for ChunkConnectivityGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = f.debug_struct("ChunkConnectivityGraph");
+
+        for face in Face::FACES {
+            let connections = self.get_connections(face);
+            s.field(&format!("{face}"), &format!("{connections}"));
+        }
+
+        s.finish()
+    }
 }
 
 impl ChunkConnectivityGraph {
@@ -143,7 +157,7 @@ fn faceset_of_touched_faces(mb_pos: IVec3) -> FaceSet {
 
 fn flood_fill<F: Fn(IVec3) -> bool>(
     mb_pos: IVec3,
-    stack: &mut Vec<IVec3>,
+    queue: &mut VecDeque<IVec3>,
     fill_map: &mut FillGrid,
     fill_map_regions: &mut Vec<FaceSet>,
     is_opaque: F,
@@ -153,19 +167,21 @@ fn flood_fill<F: Fn(IVec3) -> bool>(
         return None;
     }
 
-    fill_map_regions.push(FaceSet::empty());
     let region_index = fill_map_regions.len();
+    fill_map_regions.push(FaceSet::empty());
 
-    stack.push(mb_pos);
+    queue.push_front(mb_pos);
 
-    while let Some(next_mb_pos) = stack.pop() {
-        if is_opaque(next_mb_pos) {
+    while let Some(next_mb_pos) = queue.pop_back() {
+        if is_opaque(next_mb_pos) || *fill_map.get(mb_pos.as_uvec3()).unwrap() != u32::MAX {
             continue;
         }
 
         *fill_map.get_mut(next_mb_pos.as_uvec3()).unwrap() = region_index as u32;
 
         let faceset = faceset_of_touched_faces(next_mb_pos);
+        dbg!(mb_pos);
+        dbg!(faceset);
         fill_map_regions[region_index] |= faceset;
 
         // Don't visit microblocks outside of this chunk.
@@ -173,7 +189,7 @@ fn flood_fill<F: Fn(IVec3) -> bool>(
             .into_iter()
             .filter(|&face| !faceset.contains(face))
         {
-            stack.push(mb_pos + face.normal());
+            queue.push_front(mb_pos + face.normal());
         }
     }
 
@@ -191,10 +207,11 @@ where
 {
     let mut graph = ChunkConnectivityGraph::empty();
 
-    let mut fill_map = FillGrid::new(u32::MAX);
+    // Boxing this so that it doesn't blow up the stack.
+    let mut fill_map = Box::new(FillGrid::new(u32::MAX));
     let mut fill_map_regions = Vec::<FaceSet>::new();
 
-    let mut stack = Vec::with_capacity(1024);
+    let mut queue = VecDeque::with_capacity(1024);
 
     for face in Face::FACES {
         let min_mb_face_pos = interior_chunk_face_mb_position(IVec2::ZERO, face);
@@ -205,7 +222,7 @@ where
         for mb_pos in cartesian_grid!(min_mb_face_pos..=max_mb_face_pos) {
             let flood_fill_result = flood_fill(
                 mb_pos,
-                &mut stack,
+                &mut queue,
                 &mut fill_map,
                 &mut fill_map_regions,
                 |mb_pos| {
@@ -214,7 +231,7 @@ where
                 },
             );
 
-            stack.clear();
+            queue.clear();
 
             if let Some(faceset) = flood_fill_result {
                 for faceset_face in faceset.iter() {
@@ -231,6 +248,7 @@ where
 mod graph_construction {
     use super::*;
     use crate::topo::mock_chunk::MockChunk;
+    use octo::Region;
 
     fn is_opaque(id: BlockVariantId) -> bool {
         !matches!(id, MockChunk::VOID)
@@ -242,7 +260,31 @@ mod graph_construction {
         let chunk = MockChunk::new();
 
         let graph = connectivity_graph_construction_impl(&chunk, is_opaque);
+        dbg!(graph);
         assert!(graph.is_filled());
+    }
+
+    #[test]
+    fn construct_graph_for_chunk_with_walls() {
+        let mut chunk = MockChunk::new();
+
+        // 1 wall
+        chunk
+            .fill_region(Region::new([8, 0, 0], [9, 16, 16]), MockChunk::EXAMPLE1)
+            .unwrap();
+        let graph = connectivity_graph_construction_impl(&chunk, is_opaque);
+        // Graph is not filled since the wall is blocking the chunk
+        assert!(!graph.is_filled());
+
+        assert!(graph.has_connection(Face::East, Face::West));
+        assert!(graph.has_connection(Face::Top, Face::Bottom));
+        // This direction is walled off
+        assert!(!graph.has_connection(Face::North, Face::South));
+        // But these aren't
+        assert!(graph.has_connection(Face::North, Face::Bottom));
+        assert!(graph.has_connection(Face::North, Face::Top));
+        assert!(graph.has_connection(Face::North, Face::West));
+        assert!(graph.has_connection(Face::North, Face::East));
     }
 }
 
