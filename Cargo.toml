@@ -31,13 +31,32 @@ enumset = "1.1.5"
 version = "1.0.0"
 features = ["full"]
 
+##########################################################
+# Release Profile
+##########################################################
 [profile.release]
 opt-level = 2
 debug = "full"
 strip = "none"
 
+##########################################################
+# Dev/Debug Profile
+##########################################################
 [profile.dev.package."*"]
 opt-level = 3
 
 [profile.dev]
+opt-level = 1
+
+##########################################################
+# Test Profile
+##########################################################
+[profile.test]
 opt-level = 0
+debug = "full"
+strip = "none"
+
+[profile.test.package."*"]
+opt-level = 0
+debug = "full"
+strip = "none"

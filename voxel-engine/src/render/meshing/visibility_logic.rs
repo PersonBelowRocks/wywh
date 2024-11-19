@@ -163,7 +163,11 @@ fn flood_fill<F: Fn(IVec3) -> bool>(
     is_opaque: F,
 ) -> Option<FaceSet> {
     // Skip this microblock if it's already been filled or if it's opaque.
-    if *fill_map.get(mb_pos.as_uvec3()).unwrap() != u32::MAX || is_opaque(mb_pos) {
+    let existing = *fill_map.get(mb_pos.as_uvec3()).unwrap();
+    if existing != u32::MAX {
+        // If this microblock has already been visited, return the faceset from that visit.
+        return Some(fill_map_regions[existing as usize]);
+    } else if is_opaque(mb_pos) {
         return None;
     }
 
@@ -173,23 +177,19 @@ fn flood_fill<F: Fn(IVec3) -> bool>(
     queue.push_front(mb_pos);
 
     while let Some(next_mb_pos) = queue.pop_back() {
-        if is_opaque(next_mb_pos) || *fill_map.get(mb_pos.as_uvec3()).unwrap() != u32::MAX {
+        if is_opaque(next_mb_pos) || *fill_map.get(next_mb_pos.as_uvec3()).unwrap() != u32::MAX {
             continue;
         }
 
         *fill_map.get_mut(next_mb_pos.as_uvec3()).unwrap() = region_index as u32;
 
         let faceset = faceset_of_touched_faces(next_mb_pos);
-        dbg!(mb_pos);
-        dbg!(faceset);
         fill_map_regions[region_index] |= faceset;
 
         // Don't visit microblocks outside of this chunk.
-        for face in Face::FACES
-            .into_iter()
-            .filter(|&face| !faceset.contains(face))
-        {
-            queue.push_front(mb_pos + face.normal());
+        for face in (!faceset).iter() {
+            let face_normal = face.normal();
+            queue.push_front(next_mb_pos + face_normal);
         }
     }
 
@@ -213,7 +213,7 @@ where
 
     let mut queue = VecDeque::with_capacity(1024);
 
-    for face in Face::FACES {
+    'face_loop: for face in Face::FACES {
         let min_mb_face_pos = interior_chunk_face_mb_position(IVec2::ZERO, face);
         // Need to subtract one from the maximum here since we're iterating inclusive of the maximum position.
         let max_mb_face_pos =
@@ -236,6 +236,13 @@ where
             if let Some(faceset) = flood_fill_result {
                 for faceset_face in faceset.iter() {
                     graph.add_connection(face, faceset_face);
+                }
+
+                // If this face is connected to every other face, adding a new face will be a no-op.
+                // We can only add faces through of flood-fill searches, never remove them.
+                // For this reason, it's safe to skip to the next face if this face has the max number of connections.
+                if graph.get_connections(face) == FaceSet::all() {
+                    continue 'face_loop;
                 }
             }
         }
