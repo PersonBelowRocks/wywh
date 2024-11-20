@@ -14,11 +14,12 @@ use crate::topo::{
 };
 use crate::util::cubic::Cubic;
 use crate::{cartesian_grid, data::tile::Face, util::FaceMap};
-use bevy::math::{IVec2, IVec3};
+use bevy::math::{ivec2, ivec3, IVec2, IVec3, Vec3Swizzles};
 use enum_map::{enum_map, EnumMap};
 use itertools::Itertools;
 use octo::voxelmap::VoxelMap;
 use std::array;
+use std::cell::RefCell;
 use std::collections::VecDeque;
 
 /// Describes the connections between the different faces of a chunk.
@@ -155,45 +156,98 @@ fn faceset_of_touched_faces(mb_pos: IVec3) -> FaceSet {
     faceset
 }
 
-fn flood_fill<F: Fn(IVec3) -> bool>(
-    mb_pos: IVec3,
+fn scan<IsFillable>(
+    lz: i32,
+    rz: i32,
+    aisle: IVec2,
+    is_fillable: &IsFillable,
+    stack: &mut VecDeque<IVec3>,
+) where
+    IsFillable: Fn(IVec3) -> bool,
+{
+    let mut span_added = false;
+
+    for z in lz..rz {
+        let pos = aisle.extend(z);
+        if is_fillable(pos) && !span_added {
+            stack.push_back(pos);
+            span_added = true;
+        }
+    }
+}
+
+#[inline]
+fn span_flood_fill<IsFillable, SetFilled>(
+    initial_pos: IVec3,
+    is_fillable: IsFillable,
+    mut set_filled: SetFilled,
+    stack: &mut VecDeque<IVec3>,
+) where
+    IsFillable: Fn(IVec3) -> bool,
+    SetFilled: FnMut(IVec3),
+{
+    assert!(
+        !stack.is_empty(),
+        "Stack must be empty to be used by the flood filler"
+    );
+    if !is_fillable(initial_pos) {
+        return;
+    }
+
+    stack.push_back(initial_pos);
+
+    while let Some(pos) = stack.pop_back() {
+        // These parameters define the aisle span we're going to fill
+        let mut z = pos.z;
+        let mut lz = pos.z;
+
+        // Widen down
+        while is_fillable(pos.with_z(lz - 1)) {
+            set_filled(pos.with_z(lz - 1));
+            lz -= 1;
+        }
+
+        // Widen up
+        while is_fillable(pos.with_z(z)) {
+            set_filled(pos.with_z(z));
+            z += 1;
+        }
+
+        // Directions to the aisles on the sides of another aisle
+        const AISLE_SPAN_SIDE_NORMALS: [IVec2; 4] =
+            [ivec2(-1, -1), ivec2(-1, 1), ivec2(1, -1), ivec2(1, 1)];
+
+        // Scan every aisle next to this one
+        for aisle_side in AISLE_SPAN_SIDE_NORMALS {
+            scan(lz, z - 1, pos.xy() + aisle_side, &is_fillable, stack);
+        }
+    }
+}
+
+#[inline]
+fn classic_flood_fill<IsFillable, SetFilled>(
+    initial_pos: IVec3,
+    is_fillable: IsFillable,
+    mut set_filled: SetFilled,
     queue: &mut VecDeque<IVec3>,
-    fill_map: &mut FillGrid,
-    fill_map_regions: &mut Vec<FaceSet>,
-    is_opaque: F,
-) -> Option<FaceSet> {
-    // Skip this microblock if it's already been filled or if it's opaque.
-    let existing = *fill_map.get(mb_pos.as_uvec3()).unwrap();
-    if existing != u32::MAX {
-        // If this microblock has already been visited, return the faceset from that visit.
-        return Some(fill_map_regions[existing as usize]);
-    } else if is_opaque(mb_pos) {
-        return None;
+) where
+    IsFillable: Fn(IVec3) -> bool,
+    SetFilled: FnMut(IVec3),
+{
+    if !is_fillable(initial_pos) {
+        return;
     }
+    queue.push_back(initial_pos);
 
-    let region_index = fill_map_regions.len();
-    fill_map_regions.push(FaceSet::empty());
+    while let Some(pos) = queue.pop_front() {
+        if is_fillable(pos) {
+            set_filled(pos);
 
-    queue.push_front(mb_pos);
-
-    while let Some(next_mb_pos) = queue.pop_back() {
-        if is_opaque(next_mb_pos) || *fill_map.get(next_mb_pos.as_uvec3()).unwrap() != u32::MAX {
-            continue;
-        }
-
-        *fill_map.get_mut(next_mb_pos.as_uvec3()).unwrap() = region_index as u32;
-
-        let faceset = faceset_of_touched_faces(next_mb_pos);
-        fill_map_regions[region_index] |= faceset;
-
-        // Don't visit microblocks outside of this chunk.
-        for face in (!faceset).iter() {
-            let face_normal = face.normal();
-            queue.push_front(next_mb_pos + face_normal);
+            for face_normal in Face::FACES.map(Face::normal) {
+                queue.push_back(pos + face_normal)
+            }
         }
     }
-
-    Some(fill_map_regions[region_index])
 }
 
 /// Flood-fill based algorithm for constructing a chunk connectivity graph.
@@ -208,7 +262,7 @@ where
     let mut graph = ChunkConnectivityGraph::empty();
 
     // Boxing this so that it doesn't blow up the stack.
-    let mut fill_map = Box::new(FillGrid::new(u32::MAX));
+    let fill_map = RefCell::new(FillGrid::new(u32::MAX));
     let mut fill_map_regions = Vec::<FaceSet>::new();
 
     let mut queue = VecDeque::with_capacity(1024);
@@ -220,20 +274,51 @@ where
             interior_chunk_face_mb_position(IVec2::splat(CHUNK_MICROBLOCK_DIMS as i32 - 1), face);
 
         for mb_pos in cartesian_grid!(min_mb_face_pos..=max_mb_face_pos) {
-            let flood_fill_result = flood_fill(
-                mb_pos,
-                &mut queue,
-                &mut fill_map,
-                &mut fill_map_regions,
-                |mb_pos| {
-                    let microblock = chunk.get_mb(mb_pos).unwrap();
-                    is_opaque(microblock)
-                },
-            );
+            let current_region_index = fill_map_regions.len() as u32;
+            let is_fillable = |mb_pos: IVec3| {
+                let Ok(is_unfilled) = fill_map
+                    .borrow()
+                    .get(mb_pos.as_uvec3())
+                    .map(|&region_index| region_index == u32::MAX)
+                else {
+                    return false;
+                };
+
+                let Ok(is_transparent) = chunk.get_mb(mb_pos).map(|block| !is_opaque(block)) else {
+                    return false;
+                };
+
+                is_unfilled && is_transparent
+            };
+
+            let set_filled = |mb_pos: IVec3| {
+                let mut borrow = fill_map.borrow_mut();
+                let mutable_region_index = borrow.get_mut(mb_pos.as_uvec3()).unwrap();
+                *mutable_region_index = current_region_index;
+
+                // Get or insert the faceset associated with this region
+                let faceset = match fill_map_regions.get_mut(current_region_index as usize) {
+                    Some(faceset) => faceset,
+                    None => {
+                        fill_map_regions.push(FaceSet::empty());
+                        &mut fill_map_regions[current_region_index as usize]
+                    }
+                };
+
+                // Add all the faces that we're touching to this faceset.
+                // FIXME: currently we seemingly skip doing flood fills for other faces if one face is
+                //  fully connected in the graph. dont do this!
+                *faceset |= faceset_of_touched_faces(mb_pos);
+            };
+
+            classic_flood_fill(mb_pos, is_fillable, set_filled, &mut queue);
 
             queue.clear();
 
-            if let Some(faceset) = flood_fill_result {
+            // Update the graph if this flood fill led to the discovery of another face.
+            let maybe_added_faceset: Option<FaceSet> =
+                fill_map_regions.get(current_region_index as usize).copied();
+            if let Some(faceset) = maybe_added_faceset {
                 for faceset_face in faceset.iter() {
                     graph.add_connection(face, faceset_face);
                 }
