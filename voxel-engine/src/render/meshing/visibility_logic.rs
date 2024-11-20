@@ -176,6 +176,9 @@ fn scan<IsFillable>(
     }
 }
 
+// TODO: test that this works and has identical observable behaviour to the recursive algorithm
+// TODO: benchmark and find the best order of the axes to iterate in
+/// A cache-friendly flood fill algorithm.
 #[inline]
 fn span_flood_fill<IsFillable, SetFilled>(
     initial_pos: IVec3,
@@ -224,6 +227,9 @@ fn span_flood_fill<IsFillable, SetFilled>(
     }
 }
 
+/// A simple recursive flood fill algorithm.
+/// Not actually recursive, but uses the provided [`VecDeque`] to queue positions.
+/// Make sure the queue is cleared before providing it to this function.
 #[inline]
 fn classic_flood_fill<IsFillable, SetFilled>(
     initial_pos: IVec3,
@@ -261,8 +267,7 @@ where
 {
     let mut graph = ChunkConnectivityGraph::empty();
 
-    // Boxing this so that it doesn't blow up the stack.
-    let fill_map = RefCell::new(FillGrid::new(u32::MAX));
+    let fill_grid = RefCell::new(FillGrid::new(u32::MAX));
     let mut fill_map_regions = Vec::<FaceSet>::new();
 
     let mut queue = VecDeque::with_capacity(1024);
@@ -274,51 +279,77 @@ where
             interior_chunk_face_mb_position(IVec2::splat(CHUNK_MICROBLOCK_DIMS as i32 - 1), face);
 
         for mb_pos in cartesian_grid!(min_mb_face_pos..=max_mb_face_pos) {
-            let current_region_index = fill_map_regions.len() as u32;
-            let is_fillable = |mb_pos: IVec3| {
-                let Ok(is_unfilled) = fill_map
-                    .borrow()
-                    .get(mb_pos.as_uvec3())
-                    .map(|&region_index| region_index == u32::MAX)
-                else {
-                    return false;
+            // Will be 'None' if this position is not associated with a region,
+            // and 'Some(region_index)' if it is associated with a region.
+            let maybe_region_index: Option<u32> =
+                match *fill_grid.borrow().get(mb_pos.as_uvec3()).unwrap() {
+                    u32::MAX => None,
+                    region_index @ _ => Some(region_index),
                 };
 
-                let Ok(is_transparent) = chunk.get_mb(mb_pos).map(|block| !is_opaque(block)) else {
-                    return false;
-                };
+            let target_faceset = match maybe_region_index {
+                None => {
+                    // If this position does not already belong to a region,
+                    // then we start a flood fill at this position to create a new region/faceset.
+                    let current_region_index = fill_map_regions.len() as u32;
 
-                is_unfilled && is_transparent
+                    // Predicate to test if a position is unfilled by this region.
+                    let is_fillable = |mb_pos: IVec3| {
+                        let Ok(is_unfilled) = fill_grid
+                            .borrow()
+                            .get(mb_pos.as_uvec3())
+                            .map(|&region_index| region_index == u32::MAX)
+                        else {
+                            return false;
+                        };
+
+                        let Ok(is_transparent) =
+                            chunk.get_mb(mb_pos).map(|block| !is_opaque(block))
+                        else {
+                            return false;
+                        };
+
+                        is_unfilled && is_transparent
+                    };
+
+                    // Closure to set a position as filled by this region.
+                    let set_filled = |mb_pos: IVec3| {
+                        let mut borrow = fill_grid.borrow_mut();
+                        let mutable_region_index = borrow.get_mut(mb_pos.as_uvec3()).unwrap();
+                        *mutable_region_index = current_region_index;
+
+                        // Get or insert the faceset associated with this region
+                        let faceset = match fill_map_regions.get_mut(current_region_index as usize)
+                        {
+                            Some(faceset) => faceset,
+                            None => {
+                                fill_map_regions.push(FaceSet::empty());
+                                &mut fill_map_regions[current_region_index as usize]
+                            }
+                        };
+
+                        // Add all the faces that we're touching to this faceset.
+                        *faceset |= faceset_of_touched_faces(mb_pos);
+                    };
+
+                    classic_flood_fill(mb_pos, is_fillable, set_filled, &mut queue);
+                    // Clear the queue here just in case, even though it should always be empty after
+                    // the flood fill has run.
+                    queue.clear();
+
+                    // If the flood fill started at an opaque position it won't have created a faceset
+                    // for this region!
+                    fill_map_regions.get(current_region_index as usize).copied()
+                }
+                // If this position already belongs to a region, then we just return that region's
+                // faceset so that we can copy its connections.
+                // Using the panicky index operator here is okay since we checked that this region-index
+                // can't be a max value (aka. unfilled) earlier!
+                Some(region_index) => Some(fill_map_regions[region_index as usize]),
             };
-
-            let set_filled = |mb_pos: IVec3| {
-                let mut borrow = fill_map.borrow_mut();
-                let mutable_region_index = borrow.get_mut(mb_pos.as_uvec3()).unwrap();
-                *mutable_region_index = current_region_index;
-
-                // Get or insert the faceset associated with this region
-                let faceset = match fill_map_regions.get_mut(current_region_index as usize) {
-                    Some(faceset) => faceset,
-                    None => {
-                        fill_map_regions.push(FaceSet::empty());
-                        &mut fill_map_regions[current_region_index as usize]
-                    }
-                };
-
-                // Add all the faces that we're touching to this faceset.
-                // FIXME: currently we seemingly skip doing flood fills for other faces if one face is
-                //  fully connected in the graph. dont do this!
-                *faceset |= faceset_of_touched_faces(mb_pos);
-            };
-
-            classic_flood_fill(mb_pos, is_fillable, set_filled, &mut queue);
-
-            queue.clear();
 
             // Update the graph if this flood fill led to the discovery of another face.
-            let maybe_added_faceset: Option<FaceSet> =
-                fill_map_regions.get(current_region_index as usize).copied();
-            if let Some(faceset) = maybe_added_faceset {
+            if let Some(faceset) = target_faceset {
                 for faceset_face in faceset.iter() {
                     graph.add_connection(face, faceset_face);
                 }
