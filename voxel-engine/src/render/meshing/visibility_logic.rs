@@ -190,7 +190,7 @@ fn span_flood_fill<IsFillable, SetFilled>(
     SetFilled: FnMut(IVec3),
 {
     assert!(
-        !stack.is_empty(),
+        stack.is_empty(),
         "Stack must be empty to be used by the flood filler"
     );
     if !is_fillable(initial_pos) {
@@ -284,7 +284,7 @@ where
             let maybe_region_index: Option<u32> =
                 match *fill_grid.borrow().get(mb_pos.as_uvec3()).unwrap() {
                     u32::MAX => None,
-                    region_index @ _ => Some(region_index),
+                    region_index => Some(region_index),
                 };
 
             let target_faceset = match maybe_region_index {
@@ -332,7 +332,7 @@ where
                         *faceset |= faceset_of_touched_faces(mb_pos);
                     };
 
-                    classic_flood_fill(mb_pos, is_fillable, set_filled, &mut queue);
+                    span_flood_fill(mb_pos, is_fillable, set_filled, &mut queue);
                     // Clear the queue here just in case, even though it should always be empty after
                     // the flood fill has run.
                     queue.clear();
@@ -377,6 +377,23 @@ mod graph_construction {
         !matches!(id, MockChunk::VOID)
     }
 
+    /// Asserts that a CCG is like a vertical "tunnel", where only the top and bottom faces are
+    /// connected to eachother, and all other paths are blocked off.
+    #[rustfmt::skip] // looks better this way
+    fn assert_graph_is_vertical_tunnel(graph: ChunkConnectivityGraph) {
+        // These faces are connected because of the "tunnel" between them
+        assert!(graph.has_connection(Face::Top, Face::Bottom));
+
+        assert_eq!(FaceSet::from(Face::North), graph.get_connections(Face::North));
+        assert_eq!(FaceSet::from(Face::East), graph.get_connections(Face::East));
+        assert_eq!(FaceSet::from(Face::South), graph.get_connections(Face::South));
+        assert_eq!(FaceSet::from(Face::West), graph.get_connections(Face::West));
+
+        // Top and bottom faces are connected to eachother (and to themselves obviously)
+        assert_eq!(FaceSet::from_iter([Face::Top, Face::Bottom]), graph.get_connections(Face::Top));
+        assert_eq!(FaceSet::from_iter([Face::Top, Face::Bottom]), graph.get_connections(Face::Bottom));
+    }
+
     #[test]
     fn construct_graph_for_transparent_chunk() {
         // Will be filled with void blocks by default.
@@ -408,6 +425,40 @@ mod graph_construction {
         assert!(graph.has_connection(Face::North, Face::Top));
         assert!(graph.has_connection(Face::North, Face::West));
         assert!(graph.has_connection(Face::North, Face::East));
+    }
+
+    #[rustfmt::skip]
+    #[test]
+    fn construct_graph_for_chunk_with_tunnel() {
+        let mut chunk = MockChunk::new();
+
+        // There's a vertical path through the chunk between the top and bottom faces, but all other
+        // sides of the chunk are walled off, creating a "tunnel" that can be traversed.
+        chunk.fill_region(Region::new([0, 0, 0],   [16, 16, 1]), MockChunk::EXAMPLE1).unwrap();
+        chunk.fill_region(Region::new([0, 0, 0],   [1, 16, 16]), MockChunk::EXAMPLE1).unwrap();
+        chunk.fill_region(Region::new([15, 0, 16], [16, 16, 0]), MockChunk::EXAMPLE1).unwrap();
+        chunk.fill_region(Region::new([16, 0, 15], [0, 16, 16]), MockChunk::EXAMPLE1).unwrap();
+
+        let graph = connectivity_graph_construction_impl(&chunk, is_opaque);
+    
+        assert_graph_is_vertical_tunnel(graph);
+    }
+
+    #[test]
+    fn construct_graph_with_chunk_with_1block_tunnel() {
+        let mut chunk = MockChunk::new();
+
+        chunk
+            .fill_region(Region::new([0, 0, 0], [16, 16, 16]), MockChunk::EXAMPLE1)
+            .unwrap();
+        // Tiny tunnel running between the top and bottom faces
+        chunk
+            .fill_region(Region::new([8, 0, 8], [9, 16, 9]), MockChunk::VOID)
+            .unwrap();
+
+        let graph = connectivity_graph_construction_impl(&chunk, is_opaque);
+
+        assert_graph_is_vertical_tunnel(graph);
     }
 }
 
