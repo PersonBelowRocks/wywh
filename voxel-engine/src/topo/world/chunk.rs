@@ -1,7 +1,7 @@
 use bevy::math::ivec3;
 use bevy::prelude::*;
 use bitflags::bitflags;
-use octo::SubdividedStorage;
+use octo::{Region, SubdividedStorage};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -9,10 +9,8 @@ use std::ops::{Deref, DerefMut};
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::data::registries::Registry;
 use crate::data::voxel::rotations::BlockModelRotation;
-use crate::topo::block::SubdividedBlock;
-use crate::topo::bounding_box::BoundingBox;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
-use crate::topo::CHUNK_FULL_BLOCK_DIMS;
+use crate::topo::{CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS};
 use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
 
 use super::{ChunkDataError, ChunkHandleError};
@@ -30,18 +28,18 @@ impl ChunkPos {
     /// The corner of this chunk closest to +infinity
     /// For a `ChunkPos` of `[0, 0, 0]` this would be `[15, 15, 15]`.
     pub fn worldspace_max(self) -> IVec3 {
-        (self.0 * Chunk::SIZE) + (Chunk::SIZE - 1)
+        (self.0 * (CHUNK_FULL_BLOCK_DIMS as i32)) + ((CHUNK_FULL_BLOCK_DIMS as i32) - 1)
     }
 
     /// The corner of this chunk closest to -infinity
     /// For a `ChunkPos` of `[0, 0, 0]` this would be `[0, 0, 0]`.
     pub fn worldspace_min(self) -> IVec3 {
-        self.0 * Chunk::SIZE
+        self.0 * (CHUNK_FULL_BLOCK_DIMS as i32)
     }
 
     /// The center of the chunk in worldspace.
     pub fn worldspace_center(self) -> Vec3 {
-        const HALF: f32 = (Chunk::SIZE as f32) / 2.0;
+        const HALF: f32 = (CHUNK_FULL_BLOCK_DIMS as f32) / 2.0;
         self.worldspace_min().as_vec3() + HALF
     }
 
@@ -190,7 +188,7 @@ impl ChunkData {
     /// [`ls_pos`] is in full-block localspace.
     #[inline]
     pub fn contains_full_block(ls_pos: IVec3) -> bool {
-        ls_pos.cmpge(IVec3::ZERO).all() && ls_pos.cmplt(IVec3::splat(CHUNK_SIZE as _)).all()
+        CHUNK_FULL_BLOCK_REGION.contains(ls_pos)
     }
 
     /// Checks if the chunk data contains the given microblock position.
@@ -198,10 +196,7 @@ impl ChunkData {
     /// [`mb_pos`] is in microblock localspace.
     #[inline]
     pub fn contains_microblock(mb_pos: IVec3) -> bool {
-        mb_pos.cmpge(IVec3::ZERO).all()
-            && mb_pos
-                .cmplt(IVec3::splat((CHUNK_SIZE * BLOCK_SUBDIVISIONS) as _))
-                .all()
+        CHUNK_MICROBLOCK_REGION.contains(mb_pos)
     }
 
     /// Create new chunk data with the provided default value. All reads from this data
@@ -583,6 +578,13 @@ impl<'a> ChunkWriteHandle<'a> {
     }
 }
 
+/// The dimensions of a chunk in full-block coordinates.
+pub const CHUNK_FULL_BLOCK_REGION: Region =
+    Region::const_new(IVec3::ZERO, IVec3::splat(CHUNK_FULL_BLOCK_DIMS as _));
+/// The dimensions of a chunk in microblock coordinates.
+pub const CHUNK_MICROBLOCK_REGION: Region =
+    Region::const_new(IVec3::ZERO, IVec3::splat(CHUNK_MICROBLOCK_DIMS as _));
+
 pub struct Chunk {
     chunk_pos: ChunkPos,
     pub flags: RwLock<ChunkFlags>,
@@ -591,20 +593,6 @@ pub struct Chunk {
 
 #[allow(dead_code)]
 impl Chunk {
-    pub const USIZE: usize = CHUNK_SIZE;
-    pub const SIZE: i32 = Self::USIZE as i32;
-    pub const SIZE_LOG2: u32 = Self::SIZE.ilog2();
-
-    pub const SUBDIVIDED_CHUNK_SIZE: i32 = SubdividedBlock::SUBDIVISIONS * Self::SIZE;
-    pub const SUBDIVIDED_CHUNK_USIZE: usize = Self::SUBDIVIDED_CHUNK_SIZE as usize;
-
-    pub const VEC: IVec3 = IVec3::splat(Self::SIZE);
-
-    pub const BOUNDING_BOX: BoundingBox = BoundingBox {
-        min: IVec3::splat(0),
-        max: IVec3::splat(Self::SIZE),
-    };
-
     #[inline]
     pub fn new(chunk_pos: ChunkPos, filling: BlockVariantId, initial_flags: ChunkFlags) -> Self {
         Self {

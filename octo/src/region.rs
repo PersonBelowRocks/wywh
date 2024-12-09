@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use glam::{IVec3, UVec3};
+use glam::{ivec3, IVec3, UVec3};
 
 /// A region of voxels.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -19,15 +19,34 @@ impl Region {
     /// Create a new region bounded by the 2 given positions.
     ///
     /// The region excludes the maximum position.
+    ///
+    /// This function works in a const context.
+    #[inline]
+    pub const fn const_new(a: IVec3, b: IVec3) -> Self {
+        let min = ivec3(
+            if a.x >= b.x { b.x } else { a.x },
+            if a.y >= b.y { b.y } else { a.y },
+            if a.z >= b.z { b.z } else { a.z },
+        );
+
+        let max = ivec3(
+            if a.x <= b.x { b.x } else { a.x },
+            if a.y <= b.y { b.y } else { a.y },
+            if a.z <= b.z { b.z } else { a.z },
+        );
+
+        Self { min, max }
+    }
+
+    /// Create a new region bounded by the 2 given positions.
+    ///
+    /// The region excludes the maximum position.
     #[inline]
     pub fn new(a: impl Into<IVec3>, b: impl Into<IVec3>) -> Self {
         let a: IVec3 = a.into();
         let b: IVec3 = b.into();
 
-        Self {
-            min: a.min(b),
-            max: a.max(b),
-        }
+        Self::const_new(a, b)
     }
 
     /// Create a new region bounded by the 2 given positions.

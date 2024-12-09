@@ -2,13 +2,15 @@ use bevy::{
     diagnostic::{Diagnostic, DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
+use ve::topo::world::ChunkPos;
+use ve::topo::{fb_worldspace_to_chunkspace, CHUNK_FULL_BLOCK_DIMS};
 use ve::{
     diagnostics::ENGINE_DIAGNOSTICS,
     render::meshing::controller::ChunkMeshExtractBridge,
     topo::{controller::LastPosition, world::VoxelRealm, ObserverSettings},
-    util::{sync::LockStrategy, ws_to_chunk_pos},
+    util::sync::LockStrategy,
 };
-use voxel_engine::{data::tile::Face, topo::world::Chunk};
+use voxel_engine::data::tile::Face;
 
 use crate::controls::PlayerCamController;
 
@@ -37,7 +39,7 @@ pub fn update_debug_text(
 ) {
     let player = player_q.single();
     let pos = player.translation;
-    let chunk_pos = ws_to_chunk_pos(pos.floor().as_ivec3());
+    let chunk_pos = ChunkPos::from(fb_worldspace_to_chunkspace(pos.floor().as_ivec3()));
 
     let mut sections = Vec::<String>::new();
 
@@ -145,9 +147,11 @@ pub fn get_cardinal_direction(dir: Dir3) -> Face {
 
 pub fn chunk_borders(mut giz: Gizmos, observers: Query<&LastPosition, With<ObserverSettings>>) {
     for last_pos in &observers {
-        let pos = last_pos.chunk_pos.worldspace_min().as_vec3() + (Chunk::SIZE as f32 / 2.0);
+        let pos =
+            last_pos.chunk_pos.worldspace_min().as_vec3() + (CHUNK_FULL_BLOCK_DIMS as f32 / 2.0);
 
-        let gizmo_tf = Transform::from_translation(pos).with_scale(Vec3::splat(Chunk::SIZE as _));
+        let gizmo_tf =
+            Transform::from_translation(pos).with_scale(Vec3::splat(CHUNK_FULL_BLOCK_DIMS as _));
         giz.cuboid(gizmo_tf, Color::srgb(1.0, 0.33, 0.33));
     }
 }

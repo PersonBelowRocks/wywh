@@ -3,10 +3,10 @@ use std::f32::consts::PI;
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 
-use bevy::window::CursorGrabMode;
-use ve::util::ws_to_chunk_pos;
-
 use crate::RenderCoreDebugSender;
+use bevy::window::CursorGrabMode;
+use ve::topo::fb_worldspace_to_chunkspace;
+use ve::topo::world::ChunkPos;
 
 #[derive(Component, Default, Copy, Clone)]
 pub struct PlayerCamController {
@@ -144,7 +144,7 @@ pub fn inspect(
     key: Res<ButtonInput<KeyCode>>,
 ) {
     let pos = q.single().translation;
-    let chunk_pos = ws_to_chunk_pos(pos.floor().as_ivec3());
+    let chunk_pos = ChunkPos::from(fb_worldspace_to_chunkspace(pos.floor().as_ivec3()));
 
     if key.just_pressed(KeyCode::Tab) {
         debug.clear_inspections.try_send(()).unwrap();

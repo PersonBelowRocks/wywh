@@ -1,8 +1,6 @@
 pub mod cubic;
-pub mod intdiv;
 pub mod notnan;
 pub mod result;
-pub use intdiv::*;
 
 pub mod chunks;
 pub use chunks::*;

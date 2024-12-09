@@ -1,8 +1,9 @@
 use crate::cartesian_grid;
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::topo::generic_chunk::GenericChunkReadAccess;
-use crate::topo::world::chunk::ChunkData;
+use crate::topo::world::chunk::{ChunkData, CHUNK_FULL_BLOCK_REGION, CHUNK_MICROBLOCK_REGION};
 use crate::topo::world::{Chunk, ChunkDataError};
+use crate::topo::CHUNK_MICROBLOCK_DIMS;
 use bevy::math::IVec3;
 use octo::{Region, RegionContained};
 
@@ -40,7 +41,7 @@ impl MockChunk {
         region: Region,
         block: BlockVariantId,
     ) -> Result<(), ChunkDataError> {
-        if !Region::new([0; 3], [Chunk::SIZE; 3]).contains(region) {
+        if !CHUNK_FULL_BLOCK_REGION.contains(region) {
             return Err(ChunkDataError::OutOfBounds);
         }
 
@@ -56,7 +57,7 @@ impl MockChunk {
         mb_region: Region,
         block: BlockVariantId,
     ) -> Result<(), ChunkDataError> {
-        if !Region::new([0; 3], [Chunk::SUBDIVIDED_CHUNK_SIZE; 3]).contains(mb_region) {
+        if !CHUNK_MICROBLOCK_REGION.contains(mb_region) {
             return Err(ChunkDataError::OutOfBounds);
         }
 

@@ -7,6 +7,12 @@ use bevy::{
 };
 use itertools::Itertools;
 
+use super::{
+    AddBatchChunks, ChunkBatch, CrossChunkBorder, LastPosition, LoadChunks, LoadReasons,
+    LoadedChunkEvent, ObserverBatches, ObserverLoadshare, ObserverSettings, RemoveBatchChunks,
+    UnloadChunks, UpdateCachedChunkFlags, VoxelWorldTick,
+};
+use crate::topo::fb_worldspace_to_chunkspace;
 use crate::{
     render::{
         lod::LevelOfDetail,
@@ -25,17 +31,13 @@ use crate::{
             ChunkPos,
         },
     },
-    util::{closest_distance_sq, ws_to_chunk_pos},
-};
-
-use super::{
-    AddBatchChunks, ChunkBatch, CrossChunkBorder, LastPosition, LoadChunks, LoadReasons,
-    LoadedChunkEvent, ObserverBatches, ObserverLoadshare, ObserverSettings, RemoveBatchChunks,
-    UnloadChunks, UpdateCachedChunkFlags, VoxelWorldTick,
+    util::closest_distance_sq,
 };
 
 fn transform_chunk_pos(trans: &Transform) -> ChunkPos {
-    ws_to_chunk_pos(trans.translation.floor().as_ivec3())
+    ChunkPos::from(fb_worldspace_to_chunkspace(
+        trans.translation.floor().as_ivec3(),
+    ))
 }
 
 pub fn dispatch_move_events(
@@ -157,8 +159,8 @@ pub fn update_observer_batches(
 
         in_range.extend(
             settings
-                .bounding_box()
-                .cartesian_iter()
+                .region()
+                .iter()
                 .map(|pos| pos + event.new_chunk.as_ivec3())
                 .map(ChunkPos::from)
                 .filter(|&cpos| !batch.chunks().contains(cpos))

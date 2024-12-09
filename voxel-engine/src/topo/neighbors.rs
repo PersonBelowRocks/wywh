@@ -1,19 +1,19 @@
 use std::any::type_name;
 
-use bevy::math::{IVec2, IVec3};
-
 use crate::{
     data::{registries::block::BlockVariantId, tile::Face},
-    topo::{bounding_box::BoundingBox, ivec_project_to_3d},
+    topo::ivec_project_to_3d,
     util::ivec3_to_1d,
 };
+use bevy::math::{IVec2, IVec3};
+use octo::Region;
 
 use super::{
     error::{InvalidNeighborPosition, NeighborReadError},
     fb_localspace_to_local_chunkspace, fb_localspace_wrap, mb_localspace_to_local_chunkspace,
     mb_localspace_wrap, transformations,
     world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
-    CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS,
+    CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS,
 };
 
 /// A bitflag-like type for selecting neighbors of a chunk.
@@ -153,7 +153,7 @@ pub struct Neighbors<'a> {
 /// Test if the provided facespace vector is in bounds
 pub fn is_in_bounds(pos: IVec2) -> bool {
     let min: IVec2 = -IVec2::ONE;
-    let max: IVec2 = IVec2::splat(Chunk::SIZE) + IVec2::ONE;
+    let max: IVec2 = IVec2::splat(CHUNK_FULL_BLOCK_DIMS as _) + IVec2::ONE;
 
     pos.cmpge(min).all() && pos.cmplt(max).all()
 }
@@ -170,7 +170,7 @@ pub fn is_in_bounds_mb(pos: IVec2) -> bool {
 /// Test if the provided localspace vector is in bounds
 pub fn is_in_bounds_3d(pos: IVec3) -> bool {
     let min: IVec3 = -IVec3::ONE;
-    let max: IVec3 = IVec3::splat(Chunk::SIZE) + IVec3::ONE;
+    let max: IVec3 = IVec3::splat(CHUNK_FULL_BLOCK_DIMS as _) + IVec3::ONE;
 
     pos.cmpge(min).all()
         && pos.cmplt(max).all()
@@ -291,7 +291,7 @@ impl<'a> Neighbors<'a> {
         let pos_3d = {
             let mut mag = face.axis_direction();
             if mag > 0 {
-                mag = Chunk::SIZE;
+                mag = CHUNK_FULL_BLOCK_DIMS as i32;
             }
 
             ivec_project_to_3d(face_pos, face, mag)
@@ -318,7 +318,7 @@ impl<'a> Neighbors<'a> {
         let mb_pos_3d = {
             let mut mag = face.axis_direction();
             if mag > 0 {
-                mag = Chunk::SIZE;
+                mag = CHUNK_FULL_BLOCK_DIMS as i32;
             }
 
             ivec_project_to_3d(mb_face_pos, face, mag)
@@ -329,12 +329,10 @@ impl<'a> Neighbors<'a> {
 }
 
 fn is_valid_neighbor_chunk_pos(pos: IVec3) -> bool {
-    const BB: BoundingBox = BoundingBox {
-        min: IVec3::splat(-1),
-        max: IVec3::ONE,
-    };
+    // upper bound must be 2 since .contains() excludes the maximum position!
+    const REGION: Region = Region::const_new(IVec3::splat(-1), IVec3::splat(2));
 
-    pos != IVec3::ZERO && BB.contains_inclusive(pos)
+    pos != IVec3::ZERO && REGION.contains(pos)
 }
 
 pub struct NeighborsBuilder<'a>(Neighbors<'a>);

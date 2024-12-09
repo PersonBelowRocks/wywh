@@ -1,5 +1,11 @@
 use bevy::math::{IVec2, IVec3};
 
+use self::error::CqsError;
+use crate::topo::world::chunk::CHUNK_FULL_BLOCK_REGION;
+use crate::topo::{
+    div_2_pow_n, mb_localspace_to_fb_localspace, rem_2_pow_n, CHUNK_FULL_BLOCK_DIMS,
+    CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS_LOG2,
+};
 use crate::{
     data::{
         registries::{
@@ -14,15 +20,11 @@ use crate::{
         isometric::{IsometrizedQuad, PositionedQuad, QuadIsometry},
     },
     topo::{
-        block::SubdividedBlock,
         ivec_project_to_2d, ivec_project_to_3d,
         neighbors::{self, Neighbors},
         world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
     },
-    util::{self, microblock_to_full_block, microblock_to_full_block_3d, rem_euclid_2_pow_n},
 };
-
-use self::error::CqsError;
 
 pub mod algorithm;
 pub mod error;
@@ -38,7 +40,7 @@ pub struct ChunkQuadSlice<'a, 'chunk> {
     registry: &'a RegistryRef<'a, BlockVariantRegistry>,
 }
 
-pub const MAX: IVec2 = IVec2::splat(Chunk::SIZE);
+pub const MAX: IVec2 = IVec2::splat(CHUNK_FULL_BLOCK_DIMS as _);
 
 pub type CqsResult<T> = Result<T, CqsError>;
 
@@ -51,7 +53,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         neighbors: &'a Neighbors<'chunk>,
         registry: &'a RegistryRef<'a, BlockVariantRegistry>,
     ) -> Result<Self, OutOfBounds> {
-        if 0 > magnitude || magnitude > Chunk::SUBDIVIDED_CHUNK_SIZE {
+        if 0 > magnitude || magnitude > (CHUNK_MICROBLOCK_DIMS as i32) {
             return Err(OutOfBounds);
         }
 
@@ -66,7 +68,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
     #[inline(always)]
     pub fn reposition(&mut self, face: Face, magnitude: i32) -> Result<(), OutOfBounds> {
-        if 0 > magnitude || magnitude > Chunk::SUBDIVIDED_CHUNK_SIZE {
+        if 0 > magnitude || magnitude > (CHUNK_MICROBLOCK_DIMS as i32) {
             return Err(OutOfBounds);
         }
 
@@ -78,15 +80,15 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
     #[inline(always)]
     pub fn mag_at_block_edge(&self) -> bool {
-        rem_euclid_2_pow_n(
+        rem_2_pow_n(
             self.mag + i32::clamp(self.face.axis_direction(), -1, 0),
-            SubdividedBlock::SUBDIVISIONS_LOG2,
-        ) == SubdividedBlock::SUBDIVISIONS - 1
+            FULL_BLOCK_MICROBLOCK_DIMS_LOG2,
+        ) == (FULL_BLOCK_MICROBLOCK_DIMS as i32) - 1
     }
 
     #[inline(always)]
     pub fn contains_mb(pos: IVec2) -> bool {
-        Self::contains(microblock_to_full_block(pos))
+        Self::contains(mb_localspace_to_fb_localspace(pos))
     }
 
     #[inline(always)]
@@ -95,8 +97,8 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
     }
 
     #[inline(always)]
-    pub fn contains_3d(pos: IVec3) -> bool {
-        pos.cmplt(Chunk::VEC).all() && pos.cmpge(IVec3::ZERO).all()
+    pub fn contains_3d(ls_pos: IVec3) -> bool {
+        CHUNK_FULL_BLOCK_REGION.contains(ls_pos)
     }
 
     #[inline(always)]
@@ -117,7 +119,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         ivec_project_to_3d(
             pos,
             self.face,
-            util::floored_div_2_pow_n(self.mag, SubdividedBlock::SUBDIVISIONS_LOG2),
+            div_2_pow_n(self.mag, FULL_BLOCK_MICROBLOCK_DIMS_LOG2),
         )
     }
 
@@ -126,7 +128,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
         ivec_project_to_3d(
             pos,
             self.face,
-            util::rem_euclid_2_pow_n(self.mag, SubdividedBlock::SUBDIVISIONS_LOG2),
+            rem_2_pow_n(self.mag, FULL_BLOCK_MICROBLOCK_DIMS_LOG2),
         )
     }
 
@@ -161,7 +163,7 @@ impl<'a, 'chunk> ChunkQuadSlice<'a, 'chunk> {
 
     #[inline(always)]
     pub fn auto_neighboring_get_mb(&self, pos_mb: IVec3) -> CqsResult<BlockVariantId> {
-        let pos = microblock_to_full_block_3d(pos_mb);
+        let pos = mb_localspace_to_fb_localspace(pos_mb);
 
         if Self::contains_3d(pos) && !neighbors::is_in_bounds_3d(pos) {
             self.get_3d_mb(pos_mb)

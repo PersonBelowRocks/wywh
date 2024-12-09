@@ -1,28 +1,30 @@
 use bevy::{math::ivec2, prelude::IVec2};
 
-use crate::{
-    topo::{block::SubdividedBlock, world::Chunk},
-    util::SquareArray,
+use crate::topo::{
+    mb_localspace_to_fb_localspace, CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS,
+    FULL_BLOCK_MICROBLOCK_DIMS,
 };
+use crate::util::SquareArray;
 
 #[derive(Clone)]
 pub(crate) struct ChunkSliceMask {
-    microblocks: SquareArray<{ Chunk::SUBDIVIDED_CHUNK_USIZE }, bool>,
+    microblocks: SquareArray<{ CHUNK_MICROBLOCK_DIMS as usize }, bool>,
 }
 
 impl ChunkSliceMask {
     pub fn new() -> Self {
         Self {
-            microblocks: [[false; Chunk::SUBDIVIDED_CHUNK_USIZE]; Chunk::SUBDIVIDED_CHUNK_USIZE],
+            microblocks: [[false; CHUNK_MICROBLOCK_DIMS as usize]; CHUNK_MICROBLOCK_DIMS as usize],
         }
     }
 
-    pub fn contains(pos: IVec2) -> bool {
-        pos.cmpge(ivec2(0, 0)).all() && pos.cmplt(ivec2(Chunk::SIZE, Chunk::SIZE)).all()
+    pub fn contains(ls_pos: IVec2) -> bool {
+        ls_pos.cmpge(ivec2(0, 0)).all()
+            && ls_pos.cmplt(IVec2::splat(CHUNK_FULL_BLOCK_DIMS as _)).all()
     }
 
-    pub fn contains_mb(pos: IVec2) -> bool {
-        Self::contains(pos.div_euclid(IVec2::splat(SubdividedBlock::SUBDIVISIONS)))
+    pub fn contains_mb(mb_pos: IVec2) -> bool {
+        Self::contains(mb_localspace_to_fb_localspace(mb_pos))
     }
 
     pub fn mask_region_inclusive(&mut self, pos1: IVec2, pos2: IVec2) -> bool {
@@ -30,8 +32,8 @@ impl ChunkSliceMask {
             return false;
         }
 
-        let min = IVec2::min(pos1, pos2) * SubdividedBlock::SUBDIVISIONS;
-        let max = (IVec2::max(pos1, pos2) + IVec2::ONE) * SubdividedBlock::SUBDIVISIONS;
+        let min = IVec2::min(pos1, pos2) * (FULL_BLOCK_MICROBLOCK_DIMS as i32);
+        let max = (IVec2::max(pos1, pos2) + IVec2::ONE) * (FULL_BLOCK_MICROBLOCK_DIMS as i32);
 
         for x in min.x..max.x {
             for y in min.y..max.y {
@@ -67,7 +69,7 @@ impl ChunkSliceMask {
     pub fn is_masked(&self, pos: IVec2) -> bool {
         for x in 0..4 {
             for y in 0..4 {
-                let p = ivec2(x, y) + (pos * SubdividedBlock::SUBDIVISIONS);
+                let p = ivec2(x, y) + (pos * FULL_BLOCK_MICROBLOCK_DIMS as i32);
                 if !self.microblocks[p.x as usize][p.y as usize] {
                     return false;
                 }

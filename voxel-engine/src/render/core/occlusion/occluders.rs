@@ -16,6 +16,7 @@ use bevy::{
 use bytemuck::{cast_slice, Pod, Zeroable};
 use dn::new;
 
+use crate::topo::CHUNK_FULL_BLOCK_DIMS;
 use crate::{
     render::{
         core::{shaders::OCCLUDER_DEPTH_HANDLE, BindGroupProvider},
@@ -24,7 +25,7 @@ use crate::{
     topo::world::{Chunk, ChunkPos},
 };
 
-pub const OCCLUDER_BOX_SIZE: f32 = Chunk::SIZE as f32;
+pub const OCCLUDER_BOX_SIZE: f32 = CHUNK_FULL_BLOCK_DIMS as f32;
 
 // Box model is from https://gist.github.com/MaikKlein/0b6d6bb58772c13593d0a0add6004c1c
 #[rustfmt::skip]

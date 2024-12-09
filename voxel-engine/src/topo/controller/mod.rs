@@ -25,7 +25,6 @@ use crate::util::sync::LockStrategy;
 use crate::util::ChunkSet;
 use crate::{CoreEngineSetup, EngineState};
 
-use super::bounding_box::BoundingBox;
 use super::world::chunk_manager::ecs::{ChunkLifecycleTaskLockGranularity, ChunkManagerRes};
 use super::world::{ChunkManager, ChunkPos, VoxelRealm};
 
@@ -36,6 +35,7 @@ pub use events::*;
 
 mod batch;
 pub use batch::*;
+use octo::Region;
 
 #[derive(Resource, Default)]
 pub struct VoxelWorldTick(u64);
@@ -80,7 +80,7 @@ impl ObserverSettings {
             && height_diff >= -(self.view_distance_below as i32)
     }
 
-    pub fn bounding_box(&self) -> BoundingBox {
+    pub fn region(&self) -> Region {
         let min = -ivec3(
             self.horizontal_range as i32,
             self.view_distance_below as i32,
@@ -92,7 +92,7 @@ impl ObserverSettings {
             self.horizontal_range as i32,
         );
 
-        BoundingBox::new(min, max)
+        Region::new_inclusive(min, max)
     }
 }
 

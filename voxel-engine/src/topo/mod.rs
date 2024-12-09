@@ -3,8 +3,6 @@ use priority_queue::PriorityQueue;
 use world::ChunkPos;
 
 use crate::{data::tile::Face, util::Axis3D};
-pub mod block;
-pub mod bounding_box;
 pub mod controller;
 pub mod error;
 /// Utilities and traits for generalizing chunk behaviour across different specific types.

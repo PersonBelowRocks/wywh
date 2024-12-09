@@ -20,10 +20,9 @@ use crate::render::quad::isometric::PositionedQuad;
 
 use crate::render::quad::GpuQuad;
 use crate::render::quad::GpuQuadBitfields;
-
-use crate::topo::block::SubdividedBlock;
 use crate::topo::world::chunk::ChunkReadHandle;
 use crate::topo::world::Chunk;
+use crate::topo::{CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS};
 
 use super::greedy_mesh::ChunkSliceMask;
 
@@ -37,7 +36,7 @@ fn widen_quad<'reg, 'chunk>(
     mask: &ChunkSliceMask,
 ) -> CqsResult<()> {
     let mut widen_by = 0;
-    for dx in 1..(Chunk::SUBDIVIDED_CHUNK_SIZE - fpos.x) {
+    for dx in 1..(CHUNK_MICROBLOCK_DIMS as i32 - fpos.x) {
         let candidate_pos = fpos + ivec2(dx, 0);
 
         if mask.is_masked_mb(candidate_pos) {
@@ -68,7 +67,7 @@ fn heighten_quad<'reg, 'chunk>(
     mask: &ChunkSliceMask,
 ) -> CqsResult<()> {
     let mut heighten_by = 0;
-    'heighten: for dy in 1..(Chunk::SUBDIVIDED_CHUNK_SIZE - fpos.y) {
+    'heighten: for dy in 1..(CHUNK_MICROBLOCK_DIMS as i32 - fpos.y) {
         // sweep the width of the quad to test if all quads at this Y are the same
         // if the sweep stumbles into a quad at this Y that doesn't equal the current quad, it
         // will terminate the outer loop since we've heightened by as much as we can
@@ -111,8 +110,8 @@ impl GreedyMesher {
     fn calculate_slice_quads<'chunk>(&mut self, cqs: &ChunkQuadSlice<'_, 'chunk>) -> CqsResult<()> {
         let mut mask = ChunkSliceMask::new();
 
-        for cs_x in 0..Chunk::SIZE {
-            for cs_y in 0..Chunk::SIZE {
+        for cs_x in 0..(CHUNK_FULL_BLOCK_DIMS as i32) {
+            for cs_y in 0..(CHUNK_FULL_BLOCK_DIMS as i32) {
                 let cs_pos = ivec2(cs_x, cs_y);
 
                 if let Some(block) = cqs.get(cs_pos)? {
@@ -139,9 +138,9 @@ impl GreedyMesher {
                     continue;
                 }
 
-                for sd_x in 0..SubdividedBlock::SUBDIVISIONS {
-                    for sd_y in 0..SubdividedBlock::SUBDIVISIONS {
-                        let fpos = ivec2(sd_x, sd_y) + (cs_pos * SubdividedBlock::SUBDIVISIONS);
+                for sd_x in 0..(FULL_BLOCK_MICROBLOCK_DIMS as i32) {
+                    for sd_y in 0..(FULL_BLOCK_MICROBLOCK_DIMS as i32) {
+                        let fpos = ivec2(sd_x, sd_y) + (cs_pos * FULL_BLOCK_MICROBLOCK_DIMS as i32);
 
                         if mask.is_masked_mb(fpos) {
                             continue;
@@ -239,7 +238,7 @@ impl GreedyMesher {
         let mut cqs = ChunkQuadSlice::new(Face::North, 0, &handle, &cx.neighbors, &varreg).unwrap();
 
         for face in Face::FACES {
-            for layer in 0..Chunk::SUBDIVIDED_CHUNK_SIZE {
+            for layer in 0..(CHUNK_MICROBLOCK_DIMS as i32) {
                 cqs.reposition(face, layer).unwrap();
 
                 self.calculate_slice_quads(&cqs)?;
