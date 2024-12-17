@@ -22,6 +22,8 @@ use std::array;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
+/// Abbreviated as CCG in many other places.
+///
 /// Describes the connections between the different faces of a chunk.
 ///
 /// Say you are standing above a chunk looking down at its top face.
@@ -176,7 +178,6 @@ fn scan<IsFillable>(
     }
 }
 
-// TODO: test that this works and has identical observable behaviour to the recursive algorithm
 // TODO: benchmark and find the best order of the axes to iterate in
 /// A cache-friendly flood fill algorithm.
 #[inline]
@@ -365,6 +366,26 @@ where
     }
 
     graph
+}
+
+/// Abbreviated as CCSG in many other places.
+///
+/// A "web" of multiple CCGs (chunk connectivity graph) stitched together.
+///
+/// Provides methods that calculate the visibility of chunks.
+/// The motivating use-case for this type is to perform the cave-culling algorithm.
+///
+/// In order to use the CCSG you must add all the CCGs that you want to consider in a visibility
+/// check, and then provide an initial position and frustum for the check itself.
+///
+/// When used over the span of multiple frames, the state of the CCSG should be maintained to reflect
+/// the state of chunks in the world. When the CCG of a chunk updates, ensure that the new CCG is added
+/// to the CCSG.
+// TODO: implement!
+// TODO: test!
+#[derive(Clone)]
+pub struct ChunkConnectivitySupergraph {
+    subgraphs: VoxelMap<ChunkConnectivityGraph>,
 }
 
 #[cfg(test)]
