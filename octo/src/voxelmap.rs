@@ -404,6 +404,12 @@ pub struct VoxelMap<T, const D: usize = 4> {
     chunks: HashMap<IVec3, usize, FxBuildHasher>,
 }
 
+impl<const D: usize, T> Default for VoxelMap<T, D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const D: usize, T> VoxelMap<T, D> {
     /// Split a position into a chunk position and a local position within that chunk.
     #[inline]

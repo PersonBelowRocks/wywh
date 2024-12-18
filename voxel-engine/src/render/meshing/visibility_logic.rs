@@ -8,6 +8,7 @@
 use crate::data::registries::block::BlockVariantId;
 use crate::data::tile::FaceSet;
 use crate::topo::generic_chunk::GenericChunkReadAccess;
+use crate::topo::world::ChunkPos;
 use crate::topo::{
     fb_localspace_to_min_mb_localspace, ivec_project_to_3d, transformations, CHUNK_MICROBLOCK_DIMS,
     FULL_BLOCK_MICROBLOCK_DIMS,
@@ -386,6 +387,34 @@ where
 #[derive(Clone)]
 pub struct ChunkConnectivitySupergraph {
     subgraphs: VoxelMap<ChunkConnectivityGraph>,
+}
+
+impl Default for ChunkConnectivitySupergraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ChunkConnectivitySupergraph {
+    /// Create a new empty CCSG.
+    #[must_use]
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            subgraphs: VoxelMap::new(),
+        }
+    }
+
+    /// Insert a CCG into this CCSG. Returns the previous CCG for this chunk.
+    #[must_use]
+    #[inline]
+    pub fn insert_connectivity_graph(
+        &mut self,
+        chunk_pos: ChunkPos,
+        graph: ChunkConnectivityGraph,
+    ) -> Option<ChunkConnectivityGraph> {
+        self.subgraphs.insert(chunk_pos.as_ivec3(), graph)
+    }
 }
 
 #[cfg(test)]
