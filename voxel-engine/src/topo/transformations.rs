@@ -40,6 +40,7 @@
 //! since we are addressing *microblocks* that are *local* to a chunk. Or we could do the same but for
 //! the entire world!
 
+use crate::util::SQRT_3;
 use bevy::math::{IVec2, IVec3, IVec4};
 
 /// Describes an integer vector like `IVec3` or `IVec2`.
@@ -84,6 +85,10 @@ pub const fn div_2_pow_n(x: i32, n: u32) -> i32 {
 /// `CHUNK_FULL_BLOCK_DIMS ^ 3`.
 pub const CHUNK_FULL_BLOCK_DIMS: u32 = 16u32;
 pub const CHUNK_FULL_BLOCK_DIMS_LOG2: u32 = CHUNK_FULL_BLOCK_DIMS.ilog2();
+
+/// The radius of a sphere at the center of a chunk which touches all its corners. For frustum culling
+/// (and other culling methods) chunks can be treated as spheres with this radius.
+pub const CHUNK_BOUNDING_SPHERE_RADIUS: f32 = SQRT_3 * (CHUNK_FULL_BLOCK_DIMS / 2) as f32;
 
 // We only want to deal with powers of two.
 static_assertions::const_assert_eq!(1, CHUNK_FULL_BLOCK_DIMS.count_ones());

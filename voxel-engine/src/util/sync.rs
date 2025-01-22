@@ -68,7 +68,10 @@ pub trait StrategicWriteLock {
 }
 
 impl<T> StrategicReadLock for parking_lot::RwLock<T> {
-    type RGuard<'a> = parking_lot::RwLockReadGuard<'a, T> where T: 'a;
+    type RGuard<'a>
+        = parking_lot::RwLockReadGuard<'a, T>
+    where
+        T: 'a;
 
     #[inline]
     fn strategic_read(
@@ -86,7 +89,10 @@ impl<T> StrategicReadLock for parking_lot::RwLock<T> {
 }
 
 impl<T> StrategicWriteLock for parking_lot::RwLock<T> {
-    type WGuard<'a> = parking_lot::RwLockWriteGuard<'a, T> where T: 'a;
+    type WGuard<'a>
+        = parking_lot::RwLockWriteGuard<'a, T>
+    where
+        T: 'a;
 
     #[inline]
     fn strategic_write(
@@ -104,7 +110,10 @@ impl<T> StrategicWriteLock for parking_lot::RwLock<T> {
 }
 
 impl<T> StrategicWriteLock for parking_lot::Mutex<T> {
-    type WGuard<'a> = parking_lot::MutexGuard<'a, T> where T: 'a;
+    type WGuard<'a>
+        = parking_lot::MutexGuard<'a, T>
+    where
+        T: 'a;
 
     #[inline]
     fn strategic_write(

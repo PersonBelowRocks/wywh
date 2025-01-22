@@ -15,6 +15,10 @@ use std::{array, fmt::Debug, marker::PhantomData};
 
 use crate::data::tile::Face;
 
+/// The square root of 3. Weirdly this is not provided by rust (or bevy).
+/// Constant value is taken from wikipedia (https://en.wikipedia.org/wiki/Square_root_of_3).
+pub const SQRT_3: f32 = 1.7320508075688772935;
+
 pub type SyncHashMap<K, V> = DashMap<K, V, ahash::RandomState>;
 pub type SquareArray<const SIZE: usize, T> = [[T; SIZE]; SIZE];
 pub type CubicArray<const SIZE: usize, T> = [[[T; SIZE]; SIZE]; SIZE];

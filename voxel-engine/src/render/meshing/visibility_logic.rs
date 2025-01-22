@@ -10,18 +10,22 @@ use crate::data::tile::FaceSet;
 use crate::topo::generic_chunk::GenericChunkReadAccess;
 use crate::topo::world::ChunkPos;
 use crate::topo::{
-    fb_localspace_to_min_mb_localspace, ivec_project_to_3d, transformations, CHUNK_MICROBLOCK_DIMS,
+    fb_localspace_to_min_mb_localspace, ivec_project_to_3d, transformations,
+    CHUNK_BOUNDING_SPHERE_RADIUS, CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS,
     FULL_BLOCK_MICROBLOCK_DIMS,
 };
 use crate::util::cubic::Cubic;
 use crate::{cartesian_grid, data::tile::Face, util::FaceMap};
-use bevy::math::{ivec2, ivec3, IVec2, IVec3, Vec3Swizzles};
+use bevy::math::{ivec2, ivec3, IVec2, IVec3, Vec3, Vec3Swizzles};
+use bevy::render::primitives::{Frustum, Sphere};
 use enum_map::{enum_map, EnumMap};
 use itertools::Itertools;
 use octo::voxelmap::VoxelMap;
+use std::any::type_name;
 use std::array;
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::fmt::{Debug, Formatter};
 
 /// Abbreviated as CCG in many other places.
 ///
@@ -395,6 +399,12 @@ impl Default for ChunkConnectivitySupergraph {
     }
 }
 
+impl Debug for ChunkConnectivitySupergraph {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct(type_name::<Self>()).finish()
+    }
+}
+
 impl ChunkConnectivitySupergraph {
     /// Create a new empty CCSG.
     #[must_use]
@@ -406,7 +416,6 @@ impl ChunkConnectivitySupergraph {
     }
 
     /// Insert a CCG into this CCSG. Returns the previous CCG for this chunk.
-    #[must_use]
     #[inline]
     pub fn insert_connectivity_graph(
         &mut self,
@@ -415,6 +424,137 @@ impl ChunkConnectivitySupergraph {
     ) -> Option<ChunkConnectivityGraph> {
         self.subgraphs.insert(chunk_pos.as_ivec3(), graph)
     }
+
+    /// Remove a CCG from this CCSG and return it.
+    #[inline]
+    pub fn remove_connectivity_graph(
+        &mut self,
+        chunk_pos: ChunkPos,
+    ) -> Option<ChunkConnectivityGraph> {
+        self.subgraphs.remove(chunk_pos.as_ivec3())
+    }
+
+    /// Get the CCG at the given chunk position. Returns `None` if there's no CCG there.
+    #[must_use]
+    #[inline]
+    pub fn get_connectivity_graph(&self, chunk_pos: ChunkPos) -> Option<ChunkConnectivityGraph> {
+        self.subgraphs.get(chunk_pos.as_ivec3()).copied()
+    }
+
+    // TODO: doc
+    #[inline]
+    pub fn run_visibility_check(
+        &self,
+        parameters: VisibilityCheckParameters,
+    ) -> VisibilityCheckPass {
+        let starting_chunk = ChunkPos::from(transformations::fb_worldspace_to_chunkspace(
+            parameters.position.floor().as_ivec3(),
+        ));
+
+        // first step is the initial chunk that we start in
+        let queue = VecDeque::<VisCheckStep>::from([VisCheckStep {
+            chunk_pos: starting_chunk,
+            entrance: None,
+        }]);
+
+        VisibilityCheckPass {
+            ccsg: self,
+            queue,
+            frustum: parameters.frustum,
+            view_vector: parameters.view_vector,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct VisCheckStep {
+    chunk_pos: ChunkPos,
+    entrance: Option<Face>,
+}
+
+/// An iterator/generator-like type that facilitates asynchronous chunk visibility checking with a CCSG.
+/// Users can "step" through each visible chunk, and this type will keep track of state so chunks are
+/// not visited repeatedly.
+///
+/// Use `VisibilityCheckPass::advance()` to advance the generator and get 1 visible chunk.
+#[derive(Debug)]
+pub struct VisibilityCheckPass<'a> {
+    ccsg: &'a ChunkConnectivitySupergraph,
+    queue: VecDeque<VisCheckStep>,
+    frustum: Frustum,
+    view_vector: Vec3,
+}
+
+impl<'a> VisibilityCheckPass<'a> {
+    // TODO: doc
+    // TODO: test
+    #[must_use]
+    #[inline]
+    pub fn advance(&mut self) -> Option<ChunkPos> {
+        // we return this step after running the visibility logic for it
+        let step = self.queue.pop_front()?;
+
+        for neighbor_face in Face::FACES {
+            let view_vector_dot = neighbor_face.normal().as_vec3().dot(self.view_vector);
+
+            // if the dot product between the neighboring face and our view vector is less than 0,
+            // then we're moving backwards, which we should not be doing!
+            if view_vector_dot < 0.0 {
+                continue;
+            }
+
+            if let Some(entrance) = step.entrance {
+                let ccg = self
+                    .ccsg
+                    .get_connectivity_graph(step.chunk_pos)
+                    .unwrap_or(ChunkConnectivityGraph::filled());
+
+                // if there's no connection between the face we entered this chunk from, and this neighboring face,
+                // then we skip this neighboring face.
+                if !ccg.has_connection(entrance, neighbor_face) {
+                    continue;
+                }
+            }
+
+            let neighbor_chunk_pos =
+                ChunkPos::from(step.chunk_pos.as_ivec3() + neighbor_face.normal());
+
+            // the bounding sphere for this neighboring chunk
+            let neighbor_bounding_sphere = Sphere {
+                center: neighbor_chunk_pos.worldspace_center().into(),
+                radius: CHUNK_BOUNDING_SPHERE_RADIUS,
+            };
+
+            // frustum culling
+            if !self
+                .frustum
+                .intersects_sphere(&neighbor_bounding_sphere, true)
+            {
+                continue;
+            }
+
+            // if all filters pass, then we queue this chunk to visit it later
+            self.queue.push_back(VisCheckStep {
+                chunk_pos: neighbor_chunk_pos,
+                // we EXITED our current chunk in the 'neighbor_face' direction, meaning that we
+                // ENTERED the neighbor chunk in the opposite direction.
+                entrance: Some(neighbor_face.opposite()),
+            });
+        }
+
+        Some(step.chunk_pos)
+    }
+}
+
+/// Parameters to be used in a chunk visibility check.
+#[derive(Copy, Clone, Debug)]
+pub struct VisibilityCheckParameters {
+    /// The camera's frustum
+    pub frustum: Frustum,
+    /// The camera's position
+    pub position: Vec3,
+    /// The view vector of the camera
+    pub view_vector: Vec3,
 }
 
 #[cfg(test)]
