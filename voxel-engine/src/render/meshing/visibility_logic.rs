@@ -464,6 +464,7 @@ impl ChunkConnectivitySupergraph {
         let queue = VecDeque::<VisCheckStep>::from([VisCheckStep {
             chunk_pos: starting_chunk,
             entrance: None,
+            history: FaceSet::empty(),
         }]);
 
         VisibilityCheckPass {
@@ -479,6 +480,7 @@ impl ChunkConnectivitySupergraph {
 struct VisCheckStep {
     chunk_pos: ChunkPos,
     entrance: Option<Face>,
+    history: FaceSet,
 }
 
 /// An iterator/generator-like type that facilitates asynchronous chunk visibility checking with a CCSG.
@@ -500,82 +502,80 @@ impl<'a> VisibilityCheckPass<'a> {
     #[must_use]
     #[inline]
     pub fn advance(&mut self) -> Option<ChunkPos> {
-        // we're doing this in a loop in case one of the steps in the queue is not supposed to be
-        // returned, so that we can try the next one instead
-        while let Some(step) = self.queue.pop_front() {
-            let step_ccg = self
-                .ccsg
-                .get_connectivity_graph(step.chunk_pos)
-                .unwrap_or(ChunkConnectivityGraph::filled());
-            let faces = step
-                .entrance
-                .map(|entrance_face| {
-                    step_ccg.get_connections(entrance_face) & !FaceSet::from(entrance_face)
-                })
-                .unwrap_or(FaceSet::all());
+        let step = self.queue.pop_front()?;
 
-            for neighbor_face in faces {
-                let neighbor_chunk_pos = step.chunk_pos.as_ivec3() + neighbor_face.normal();
-                // skip this neighbor if it's already been visited
-                if self.visited.contains(neighbor_chunk_pos) {
-                    continue;
-                }
+        let step_ccg = self
+            .ccsg
+            .get_connectivity_graph(step.chunk_pos)
+            .unwrap_or(ChunkConnectivityGraph::filled());
 
-                // if the dot product between the neighboring face and our view vector is less than 0,
-                // then we're moving backwards, which we should not be doing!
-                let view_vector_dot = neighbor_face
-                    .normal()
-                    .as_vec3()
-                    .dot(self.visibility_check_parameters.view_vector);
-                if view_vector_dot < 0.0 {
-                    continue;
-                }
+        // all the faces we should try to traverse this step
+        let faces = step
+            .entrance
+            .map(|entrance_face| {
+                // we don't want to traverse through the face we came from
+                step_ccg.get_connections(entrance_face) & !FaceSet::from(entrance_face)
+            })
+            .unwrap_or(FaceSet::all());
 
-                let neighbor_chunk_pos =
-                    ChunkPos::from(step.chunk_pos.as_ivec3() + neighbor_face.normal());
+        for neighbor_face in faces {
+            let neighbor_chunk_pos =
+                ChunkPos::from(step.chunk_pos.as_ivec3() + neighbor_face.normal());
 
-                // the bounding sphere for this neighboring chunk
-                let neighbor_bounding_sphere = Sphere {
-                    center: neighbor_chunk_pos.worldspace_center().into(),
-                    radius: CHUNK_BOUNDING_SPHERE_RADIUS,
-                };
-
-                // frustum culling
-                if !self
-                    .visibility_check_parameters
-                    .frustum
-                    .intersects_sphere(&neighbor_bounding_sphere, true)
-                {
-                    continue;
-                }
-
-                // if all filters pass, then we queue this chunk to visit it later
-                self.queue.push_back(VisCheckStep {
-                    chunk_pos: neighbor_chunk_pos,
-                    // we EXITED our current chunk in the 'neighbor_face' direction, meaning that we
-                    // ENTERED the neighbor chunk in the opposite direction.
-                    entrance: Some(neighbor_face.opposite()),
-                });
+            // skip this neighbor if it's already been visited
+            if self.visited.contains(neighbor_chunk_pos.into()) {
+                continue;
             }
 
-            self.visited.insert(step.chunk_pos.as_ivec3());
-
-            if !self.visibility_check_parameters.provide_chunks_without_ccg {
-                // if this chunk has a CCG, then return the position, if it doesn't then we
-                // continue to the next chunk in the queue and try that one; rinse and repeat!
-                if self.ccsg.has_connectivity_graph(step.chunk_pos) {
-                    return Some(step.chunk_pos);
-                } else {
-                    continue;
-                }
-            } else {
-                // no CCG presence check necessary so we just return the chunk position with no
-                // further thought
-                return Some(step.chunk_pos);
+            // don't revisit directions
+            if step.history.contains(neighbor_face.opposite()) {
+                continue;
             }
+
+            // the neighbor should not be part of the visibility check if it doesn't have a CCG
+            if !self.ccsg.has_connectivity_graph(neighbor_chunk_pos) {
+                continue;
+            }
+
+            // if the dot product between the neighboring face and our view vector is less than 0,
+            // then we're moving backwards, which we should not be doing!
+            let view_vector_dot = neighbor_face
+                .normal()
+                .as_vec3()
+                .dot(self.visibility_check_parameters.view_vector);
+            if view_vector_dot < 0.0 {
+                continue;
+            }
+
+            // the bounding sphere for this neighboring chunk
+            let neighbor_bounding_sphere = Sphere {
+                center: neighbor_chunk_pos.worldspace_center().into(),
+                radius: CHUNK_BOUNDING_SPHERE_RADIUS,
+            };
+
+            // frustum culling
+            if !self
+                .visibility_check_parameters
+                .frustum
+                .intersects_sphere(&neighbor_bounding_sphere, true)
+            {
+                continue;
+            }
+
+            // if all filters pass, then we queue this chunk to visit it later
+            self.visited.insert(neighbor_chunk_pos.as_ivec3());
+
+            self.queue.push_back(VisCheckStep {
+                chunk_pos: neighbor_chunk_pos,
+                // we EXITED our current chunk in the 'neighbor_face' direction, meaning that we
+                // ENTERED the neighbor chunk in the opposite direction.
+                entrance: Some(neighbor_face.opposite()),
+                history: FaceSet::from(neighbor_face) | step.history,
+            });
         }
 
-        None
+        // return this step
+        Some(step.chunk_pos)
     }
 }
 
@@ -588,9 +588,6 @@ pub struct VisibilityCheckParameters {
     pub position: Vec3,
     /// The view vector of the camera
     pub view_vector: Vec3,
-    /// Whether the [`VisibilityCheckPass`] should provide chunk positions even when there's no CCG
-    /// at the position.
-    pub provide_chunks_without_ccg: bool,
 }
 
 #[cfg(test)]
@@ -604,7 +601,10 @@ mod visibility_checking {
 
     /// Example frustum with for the given position and view vector, using bevy's default [`PerspectiveProjection`].
     fn test_frustum(pos: Vec3, view_vector: Vec3) -> Frustum {
-        let proj = PerspectiveProjection::default();
+        let proj = PerspectiveProjection {
+            far: 1000.0,
+            ..Default::default()
+        };
         let transform = Transform::from_translation(pos).looking_to(view_vector, Vec3::Y);
 
         proj.compute_frustum(&transform.into())
@@ -635,7 +635,6 @@ mod visibility_checking {
             frustum: test_frustum(position, view_vector),
             position,
             view_vector,
-            provide_chunks_without_ccg: false,
         };
 
         let mut pass = ccsg.visibility_check_pass(parameters);
@@ -646,6 +645,22 @@ mod visibility_checking {
         assert_eq!(Some(ChunkPos::new(0, 0, 3)), pass.advance());
         assert_eq!(Some(ChunkPos::new(0, 0, 4)), pass.advance()); // this is the chunk with the "wall"
         assert_eq!(None, pass.advance()); // the last chunk isn't visible since it's blocked by the one with the "wall"!
+    }
+
+    #[test]
+    fn traverse_around_box() {
+        let mut ccsg = ChunkConnectivitySupergraph::new();
+
+        // start with a fully empty chunk
+        for chunk_pos in cartesian_grid!(-2..=2, -2..=2, 0..=12).map(ChunkPos::from) {
+            ccsg.insert_connectivity_graph(chunk_pos, ChunkConnectivityGraph::filled());
+        }
+
+        for chunk_pos in cartesian_grid!(-1..=1, -1..=1, -1..=1).map(ChunkPos::from) {
+            // TODO: build a "box" in the ccsg
+        }
+
+        todo!()
     }
 }
 
