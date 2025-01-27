@@ -490,7 +490,6 @@ struct VisCheckStep {
 /// Use `VisibilityCheckPass::advance()` to advance the generator and get 1 visible chunk.
 pub struct VisibilityCheckPass<'a> {
     ccsg: &'a ChunkConnectivitySupergraph,
-    // TODO: perhaps a keyed priority queue is better?
     queue: VecDeque<VisCheckStep>,
     visited: VoxelSet,
     visibility_check_parameters: VisibilityCheckParameters,
@@ -498,7 +497,6 @@ pub struct VisibilityCheckPass<'a> {
 
 impl<'a> VisibilityCheckPass<'a> {
     // TODO: doc
-    // TODO: test
     #[must_use]
     #[inline]
     pub fn advance(&mut self) -> Option<ChunkPos> {
@@ -597,6 +595,7 @@ mod visibility_checking {
     use bevy::math::{vec3, Mat4};
     use bevy::prelude::{Camera, GlobalTransform, PerspectiveProjection, Transform};
     use bevy::render::camera::CameraProjection;
+    use hb::HashSet;
     use octo::Region;
 
     /// Example frustum with for the given position and view vector, using bevy's default [`PerspectiveProjection`].
@@ -656,11 +655,60 @@ mod visibility_checking {
             ccsg.insert_connectivity_graph(chunk_pos, ChunkConnectivityGraph::filled());
         }
 
+        // create a "box" of solid chunks around one transparent chunk (this transparent chunk will
+        // not be visible no matter where we view from)
         for chunk_pos in cartesian_grid!(-1..=1, -1..=1, -1..=1).map(ChunkPos::from) {
-            // TODO: build a "box" in the ccsg
+            if chunk_pos == ChunkPos::ZERO {
+                continue;
+            }
+
+            let chunk_pos = ChunkPos::from(chunk_pos.as_ivec3() + ivec3(0, 0, 10));
+
+            ccsg.insert_connectivity_graph(chunk_pos, ChunkConnectivityGraph::empty());
         }
 
-        todo!()
+        let position = vec3(0.0, 0.0, 0.0);
+        let view_vector = vec3(0.0, 0.0, 1.0); // looking in the direction of the box
+
+        let parameters = VisibilityCheckParameters {
+            frustum: test_frustum(position, view_vector),
+            position,
+            view_vector,
+        };
+
+        let mut pass = ccsg.visibility_check_pass(parameters);
+        let mut visible_chunks = HashSet::new();
+
+        while let Some(visible_chunk) = pass.advance() {
+            visible_chunks.insert(visible_chunk);
+        }
+
+        // ensure we didn't pick up the chunk inside the box
+        assert!(!visible_chunks.contains(&ChunkPos::new(0, 0, 10)));
+
+        // ensure we saw the entire side of the box that's facing us
+        let z = 9;
+        assert!(visible_chunks.contains(&ChunkPos::new(-1, 1, z)));
+        assert!(visible_chunks.contains(&ChunkPos::new(0, 1, z)));
+        assert!(visible_chunks.contains(&ChunkPos::new(1, 1, z)));
+        assert!(visible_chunks.contains(&ChunkPos::new(-1, 0, z)));
+        assert!(visible_chunks.contains(&ChunkPos::new(0, 0, z)));
+        assert!(visible_chunks.contains(&ChunkPos::new(1, 0, z)));
+        assert!(visible_chunks.contains(&ChunkPos::new(-1, -1, z)));
+        assert!(visible_chunks.contains(&ChunkPos::new(0, -1, z)));
+        assert!(visible_chunks.contains(&ChunkPos::new(1, -1, z)));
+
+        // ensure we don't see the side of the box facing away from us
+        let z = 11;
+        assert!(!visible_chunks.contains(&ChunkPos::new(-1, 1, z)));
+        assert!(!visible_chunks.contains(&ChunkPos::new(0, 1, z)));
+        assert!(!visible_chunks.contains(&ChunkPos::new(1, 1, z)));
+        assert!(!visible_chunks.contains(&ChunkPos::new(-1, 0, z)));
+        assert!(!visible_chunks.contains(&ChunkPos::new(0, 0, z)));
+        assert!(!visible_chunks.contains(&ChunkPos::new(1, 0, z)));
+        assert!(!visible_chunks.contains(&ChunkPos::new(-1, -1, z)));
+        assert!(!visible_chunks.contains(&ChunkPos::new(0, -1, z)));
+        assert!(!visible_chunks.contains(&ChunkPos::new(1, -1, z)));
     }
 }
 
