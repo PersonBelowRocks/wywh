@@ -6,6 +6,7 @@
 //! - Part 2) https://tomcc.github.io/2014/08/31/visibility-2.html
 
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
+use crate::data::registries::{Registry, REGISTRY_MANAGER};
 use crate::data::tile::FaceSet;
 use crate::topo::generic_chunk::GenericChunkReadAccess;
 use crate::topo::world::ChunkPos;
@@ -27,7 +28,6 @@ use std::array;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
-use crate::data::registries::{Registry, REGISTRY_MANAGER};
 
 /// Abbreviated as CCG in many other places.
 ///
@@ -79,13 +79,15 @@ impl ChunkConnectivityGraph {
             graph: enum_map::enum_map! { _ => FaceSet::all() },
         }
     }
-    
+
     #[must_use]
     #[inline]
     pub fn build<C: GenericChunkReadAccess>(chunk: &C) -> Self {
-        let registry = REGISTRY_MANAGER.get_registry::<BlockVariantRegistry>().unwrap();
+        let registry = REGISTRY_MANAGER
+            .get_registry::<BlockVariantRegistry>()
+            .unwrap();
         let is_opaque = |id| registry.get_by_id(id).options.transparency.is_opaque();
-        
+
         connectivity_graph_construction_impl(chunk, is_opaque)
     }
 
