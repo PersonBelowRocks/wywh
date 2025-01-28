@@ -63,10 +63,10 @@ impl WorldGenerator {
         }
     }
 
-    pub fn write_to_chunk<'a>(
+    pub fn write_to_chunk(
         &self,
         chunk_pos: ChunkPos,
-        mut chunk: ChunkWriteHandle<'a>,
+        mut chunk: ChunkWriteHandle,
     ) -> Result<Option<Transparency>, ChunkHandleError> {
         const THRESHOLD: f64 = 0.5;
 
@@ -117,7 +117,7 @@ impl WorldGenerator {
 }
 
 impl WorldgenWorker for WorldGenerator {
-    fn run<'a>(&mut self, chunk_pos: ChunkPos, cx: WorldgenContext<'a>) {
+    fn run(&mut self, chunk_pos: ChunkPos, cx: WorldgenContext) {
         let Some(chunk_ref) = cx.loaded_primordial_chunk(chunk_pos) else {
             // If we can't get a chunk reference we return early and just ignore this event.
             return;
@@ -129,10 +129,7 @@ impl WorldgenWorker for WorldGenerator {
             })
             .unwrap();
 
-        let write_handle = chunk_ref
-            .chunk()
-            .write_handle(LockStrategy::Blocking)
-            .unwrap();
+        let write_handle = chunk_ref.write_handle(LockStrategy::Blocking).unwrap();
 
         match self.write_to_chunk(chunk_pos, write_handle) {
             Ok(transparency) => {

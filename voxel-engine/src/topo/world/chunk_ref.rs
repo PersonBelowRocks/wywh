@@ -1,9 +1,8 @@
+use super::chunk::{Chunk, ChunkFlags, ChunkPos, ChunkReadHandle, ChunkWriteHandle};
+use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
+use flume::Sender;
 use std::ops::Deref;
 use std::sync::Arc;
-
-use super::chunk::{Chunk, ChunkFlags, ChunkPos};
-use super::chunk_manager::ChunkStatuses;
-use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
 
 macro_rules! update_status_for_flag {
     ($field:expr, $chunk_pos:expr, $new_flags:expr, $flag:expr) => {
@@ -22,7 +21,7 @@ macro_rules! update_status_for_flag {
 /// also update the map of all updated chunks accordingly.
 pub struct ChunkRef<'a> {
     pub(super) chunk: Arc<Chunk>,
-    pub(super) stats: &'a ChunkStatuses,
+    pub(super) notify_changed: &'a Sender<ChunkPos>,
 }
 
 impl<'a> ChunkRef<'a> {
@@ -72,20 +71,6 @@ impl<'a> ChunkRef<'a> {
 
         *old_flags = new_flags;
 
-        update_status_for_flag!(
-            self.stats.remesh,
-            self.chunk_pos(),
-            new_flags,
-            ChunkFlags::REMESH
-        );
-
-        update_status_for_flag!(
-            self.stats.solid,
-            self.chunk_pos(),
-            new_flags,
-            ChunkFlags::OPAQUE
-        );
-
         Ok(())
     }
 
@@ -102,5 +87,38 @@ impl<'a> ChunkRef<'a> {
 
         self.set_flags(strategy, new_flags)?;
         Ok(())
+    }
+
+    /// Get a read handle for this chunk with the given [lock strategy].
+    /// The returned error depends on the lock strategy, see [`StrategySyncError`] for more information.
+    ///
+    /// [lock strategy]: LockStrategy
+    pub fn read_handle(
+        &self,
+        strategy: LockStrategy,
+    ) -> Result<ChunkReadHandle<'_>, StrategySyncError> {
+        let chunk = self.chunk();
+
+        Ok(ChunkReadHandle {
+            blocks: chunk.blocks.strategic_read(strategy)?,
+        })
+    }
+
+    /// Get a write handle for this chunk with the given [lock strategy].
+    /// The returned error depends on the lock strategy, see [`StrategySyncError`] for more information.
+    ///
+    /// [lock strategy]: LockStrategy
+    pub fn write_handle(
+        &self,
+        strategy: LockStrategy,
+    ) -> Result<ChunkWriteHandle<'_>, StrategySyncError> {
+        let chunk = self.chunk();
+
+        Ok(ChunkWriteHandle {
+            blocks: chunk.blocks.strategic_write(strategy)?,
+            flags: chunk.flags.strategic_write(strategy)?,
+            chunk_pos: self.chunk_pos(),
+            notify: &self.notify_changed,
+        })
     }
 }

@@ -3,6 +3,7 @@ use std::{ops::Range, sync::Arc};
 use bevy::math::{ivec3, IVec3};
 use dashmap::{mapref::entry::Entry as DashMapEntry, DashMap, DashSet};
 use error::{ChunkGetError, CmStructuralError};
+use flume::{Receiver, Sender};
 use hb::{hash_map::Entry, HashMap};
 use inner_storage::{ChunkStorageHasher, InnerChunkStorage, LoadedChunk};
 use itertools::Itertools;
@@ -43,20 +44,12 @@ pub fn chunk_pos_in_bounds(chunk_pos: ChunkPos) -> bool {
         && WORLD_VERTICAL_DIMENSIONS.contains(&y)
 }
 
-/// Sets of loaded chunks with certain properties.
-#[derive(Default)]
-pub struct ChunkStatuses {
-    /// Chunks that need remeshing.
-    pub remesh: DashSet<ChunkPos, ChunkStorageHasher>,
-    /// Chunks that are completely solid.
-    pub solid: DashSet<ChunkPos, ChunkStorageHasher>,
-}
-
 /// The chunk manager stores and manages the lifecycle of chunks.
 pub struct ChunkManager {
     default_block: BlockVariantId,
     storage: InnerChunkStorage,
-    statuses: ChunkStatuses,
+    chunk_change_rx: Receiver<ChunkPos>,
+    chunk_change_tx: Sender<ChunkPos>,
     loadshares: ChunkLoadshareTable,
     structural_lock: Mutex<()>,
 }
@@ -287,11 +280,14 @@ impl<'a> ChunkStorageStructure<'a> {
 impl ChunkManager {
     /// Create a new chunk manager with a default block.
     pub fn new(default_block: BlockVariantId) -> Self {
+        let (tx, rx) = flume::unbounded::<ChunkPos>();
+
         Self {
             structural_lock: Mutex::default(),
             default_block,
             storage: InnerChunkStorage::default(),
-            statuses: ChunkStatuses::default(),
+            chunk_change_rx: rx,
+            chunk_change_tx: tx,
             loadshares: ChunkLoadshareTable::default(),
         }
     }
@@ -330,26 +326,6 @@ impl ChunkManager {
         self.storage.is_loaded(chunk_pos)
     }
 
-    /// Get all the solid chunks in this manager.
-    #[inline]
-    pub fn solid_chunks(&self) -> Vec<ChunkPos> {
-        self.statuses
-            .solid
-            .iter()
-            .map(|chunk_pos| chunk_pos.clone())
-            .collect_vec()
-    }
-
-    /// Get all the chunks marked for remeshing/mesh-building in this manager.
-    #[inline]
-    pub fn remesh_chunks(&self) -> Vec<ChunkPos> {
-        self.statuses
-            .remesh
-            .iter()
-            .map(|chunk_pos| chunk_pos.clone())
-            .collect_vec()
-    }
-
     /// Get the chunk loaded at the given position.
     #[inline(never)] // Never inline this function so that it shows up when debugging.
     pub fn loaded_chunk(&self, chunk_pos: ChunkPos) -> Result<ChunkRef<'_>, ChunkGetError> {
@@ -364,7 +340,7 @@ impl ChunkManager {
 
         Ok(ChunkRef {
             chunk,
-            stats: &self.statuses,
+            notify_changed: &self.chunk_change_tx,
         })
     }
 

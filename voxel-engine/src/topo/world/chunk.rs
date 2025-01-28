@@ -1,17 +1,17 @@
-use bevy::math::ivec3;
-use bevy::prelude::*;
-use bitflags::bitflags;
-use octo::{Region, SubdividedStorage};
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use std::fmt;
-use std::ops::{Deref, DerefMut};
-
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::data::registries::Registry;
 use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
 use crate::topo::{CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS};
 use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
+use bevy::math::ivec3;
+use bevy::prelude::*;
+use bitflags::bitflags;
+use flume::Sender;
+use octo::{Region, SubdividedStorage};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::fmt;
+use std::ops::{Deref, DerefMut};
 
 use super::{ChunkDataError, ChunkHandleError};
 
@@ -508,17 +508,32 @@ macro_rules! impl_chunk_handle_reads {
 
 /// Read-only handle to a chunk's data. Essentially a read guard for the chunk's data lock.
 pub struct ChunkReadHandle<'a> {
-    blocks: RwLockReadGuard<'a, ChunkData>,
+    pub(super) blocks: RwLockReadGuard<'a, ChunkData>,
 }
 
 impl_chunk_handle_reads!('a, ChunkReadHandle<'a>);
 
 /// Read/Write handle to a chunk's data. Essentially a write guard for the chunk's data lock.
 pub struct ChunkWriteHandle<'a> {
-    blocks: RwLockWriteGuard<'a, ChunkData>,
+    pub(super) blocks: RwLockWriteGuard<'a, ChunkData>,
+    pub(super) flags: RwLockWriteGuard<'a, ChunkFlags>,
+    pub(super) chunk_pos: ChunkPos,
+    pub(super) notify: &'a Sender<ChunkPos>,
 }
 
 impl_chunk_handle_reads!('a, ChunkWriteHandle<'a>);
+
+impl<'a> Drop for ChunkWriteHandle<'a> {
+    fn drop(&mut self) {
+        self.flags
+            .insert(ChunkFlags::REMESH | ChunkFlags::REMESH_NEIGHBORS);
+
+        // notify the engine about changes when dropping the write handle
+        if let Err(_error) = self.notify.send(self.chunk_pos) {
+            error!("Could not notify modification for chunk {}", self.chunk_pos);
+        }
+    }
+}
 
 impl<'a> ChunkWriteHandle<'a> {
     /// Set the value at the given full-block position.
@@ -609,6 +624,7 @@ impl Chunk {
 
     /// Get a read handle for this chunk with the given [lock strategy].
     /// The returned error depends on the lock strategy, see [`StrategySyncError`] for more information.
+    /// This method is more or less identical to the method of the same name on [`ChunkRef`].
     ///
     /// [lock strategy]: LockStrategy
     pub fn read_handle(
@@ -617,19 +633,6 @@ impl Chunk {
     ) -> Result<ChunkReadHandle<'_>, StrategySyncError> {
         Ok(ChunkReadHandle {
             blocks: self.blocks.strategic_read(strategy)?,
-        })
-    }
-
-    /// Get a write handle for this chunk with the given [lock strategy].
-    /// The returned error depends on the lock strategy, see [`StrategySyncError`] for more information.
-    ///
-    /// [lock strategy]: LockStrategy
-    pub fn write_handle(
-        &self,
-        strategy: LockStrategy,
-    ) -> Result<ChunkWriteHandle<'_>, StrategySyncError> {
-        Ok(ChunkWriteHandle {
-            blocks: self.blocks.strategic_write(strategy)?,
         })
     }
 }

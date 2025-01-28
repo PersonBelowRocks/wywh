@@ -20,7 +20,8 @@ use super::{
 pub struct OccluderChunks(Vec<ChunkPos>);
 
 pub fn collect_solid_chunks_as_occluders(realm: VoxelRealm, mut occluders: ResMut<OccluderChunks>) {
-    occluders.0 = realm.cm().solid_chunks();
+    // occluders.0 = realm.cm().solid_chunks();
+    todo!()
 }
 
 /// This system makes finished chunk meshes available for extraction by the renderer.
