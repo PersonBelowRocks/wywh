@@ -1,14 +1,9 @@
 mod ecs;
 pub mod events;
 mod scheduler;
-mod workers;
-
-use std::{
-    cmp::{self, max},
-    sync::Arc,
-};
 
 use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
+use bevy::tasks::TaskPool;
 use bevy::{
     prelude::*,
     tasks::{available_parallelism, TaskPoolBuilder},
@@ -18,12 +13,11 @@ use ecs::{
     batch_chunk_extraction, collect_solid_chunks_as_occluders,
     remove_chunk_meshes_from_extraction_bridge, send_mesh_removal_events_from_batch_removal_events,
 };
-use events::{
-    BuildChunkMeshEvent, MeshFinishedEvent, RecalculateMeshBuildingEventPrioritiesEvent,
-    RemoveChunkMeshEvent,
-};
-use workers::{
-    start_mesh_builder_tasks, MESH_BUILDER_TASK_POOL, MESH_BUILDER_TASK_POOL_THREAD_NAME,
+use events::{BuildChunkMeshEvent, MeshFinishedEvent, RemoveChunkMeshEvent};
+use std::sync::OnceLock;
+use std::{
+    cmp::{self, max},
+    sync::Arc,
 };
 
 use crate::{
@@ -363,6 +357,12 @@ impl ChunkMeshExtractBridge {
     }
 }
 
+pub(crate) static MESH_BUILDER_TASK_POOL: OnceLock<TaskPool> = OnceLock::new();
+
+/// The name of the threads in the mesh builder task pool.
+/// See [`TaskPoolBuilder::thread_name()`] for some more information.
+pub static MESH_BUILDER_TASK_POOL_THREAD_NAME: &'static str = "Mesh Builder Task Pool";
+
 pub struct MeshController;
 
 impl Plugin for MeshController {
@@ -381,16 +381,10 @@ impl Plugin for MeshController {
         app.add_plugins((
             AsyncEventPlugin::<BuildChunkMeshEvent>::default(),
             AsyncEventPlugin::<RemoveChunkMeshEvent>::default(),
-            AsyncEventPlugin::<RecalculateMeshBuildingEventPrioritiesEvent>::default(),
             EventFunnelPlugin::<MeshFinishedEvent>::for_new(),
         ))
         .init_resource::<ChunkMeshExtractBridge>()
         .init_resource::<OccluderChunks>();
-
-        app.add_systems(
-            OnEnter(EngineState::Finished),
-            start_mesh_builder_tasks.in_set(CoreEngineSetup::Initialize),
-        );
 
         app.add_systems(
             PreUpdate,

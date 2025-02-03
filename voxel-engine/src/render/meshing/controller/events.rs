@@ -44,12 +44,6 @@ pub struct MeshFinishedEvent {
     pub tick: u64,
 }
 
-/// Event sent to recalculate the priorities of pending mesh building tasks based on the provided strategy.
-#[derive(Clone, Event, Debug)]
-pub struct RecalculateMeshBuildingEventPrioritiesEvent {
-    pub strategy: PriorityCalcStrategy,
-}
-
 /// Event sent to remove chunk meshes at LODs from the render world and the mesh builder job queue.
 #[derive(Clone, Event, Debug)]
 pub struct RemoveChunkMeshEvent {

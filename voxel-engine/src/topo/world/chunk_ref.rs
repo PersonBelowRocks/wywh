@@ -1,4 +1,5 @@
 use super::chunk::{Chunk, ChunkFlags, ChunkPos, ChunkReadHandle, ChunkWriteHandle};
+use crate::topo::world::chunk_manager::ChunkNotification;
 use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
 use flume::Sender;
 use std::ops::Deref;
@@ -21,7 +22,7 @@ macro_rules! update_status_for_flag {
 /// also update the map of all updated chunks accordingly.
 pub struct ChunkRef<'a> {
     pub(super) chunk: Arc<Chunk>,
-    pub(super) notify_changed: &'a Sender<ChunkPos>,
+    pub(super) notify_changed: &'a Sender<ChunkNotification>,
 }
 
 impl<'a> ChunkRef<'a> {

@@ -10,8 +10,8 @@ use bitflags::bitflags;
 use hb::HashSet;
 
 use observer_events::{
-    build_populated_chunk_meshes, build_revived_chunk_meshes, dispatch_move_events,
-    populate_loaded_chunks, send_priority_recalculation_events, update_observer_batches,
+    dispatch_move_events, populate_loaded_chunks, send_priority_recalculation_events,
+    update_observer_batches,
 };
 
 use crate::data::registries::block::BlockVariantRegistry;
@@ -34,7 +34,9 @@ mod observer_events;
 pub use events::*;
 
 mod batch;
+use crate::topo::world::chunk_manager::ChunkNotification;
 pub use batch::*;
+use octo::voxelset::VoxelSet;
 use octo::Region;
 
 #[derive(Resource, Default)]
@@ -346,14 +348,10 @@ impl Plugin for WorldController {
             PostUpdate,
             (
                 dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
-                (
-                    send_priority_recalculation_events,
-                    populate_loaded_chunks,
-                    build_revived_chunk_meshes,
-                    build_populated_chunk_meshes,
-                )
+                (send_priority_recalculation_events, populate_loaded_chunks)
                     .in_set(WorldControllerSystems::ObserverResponses),
-                unload_purged_chunks.in_set(WorldControllerSystems::CoreEvents),
+                (forward_chunk_notifications, unload_purged_chunks)
+                    .in_set(WorldControllerSystems::CoreEvents),
             ),
         );
 
@@ -372,8 +370,25 @@ impl Plugin for WorldController {
     }
 }
 
+/// System for forwarding chunk notifications to bevy events that can be used by other systems.
+pub fn forward_chunk_notifications(
+    realm: VoxelRealm,
+    mut events: EventWriter<ChunkNotification>,
+    mut last_num_notifications: Local<usize>,
+) {
+    let bus = realm.cm().notification_bus();
+    let mut notifications = Vec::with_capacity(*last_num_notifications);
+
+    while let Ok(notification) = bus.receiver().try_recv() {
+        notifications.push(notification);
+    }
+
+    *last_num_notifications = notifications.len();
+    events.send_batch(notifications);
+}
+
 /// System for initializing the chunk manager and adding it as a resource.
-/// Must be ran after registries have been built.
+/// Must be run after registries have been built.
 pub fn initialize_chunk_manager(world: &mut World) {
     let chunk_manager = {
         let varreg = REGISTRY_MANAGER

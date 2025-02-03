@@ -16,9 +16,7 @@ use crate::topo::fb_worldspace_to_chunkspace;
 use crate::{
     render::{
         lod::LevelOfDetail,
-        meshing::controller::events::{
-            BuildChunkMeshEvent, MeshJobUrgency, RecalculateMeshBuildingEventPrioritiesEvent,
-        },
+        meshing::controller::events::{BuildChunkMeshEvent, MeshJobUrgency},
     },
     topo::{
         neighbors::NeighborSelection,
@@ -209,63 +207,6 @@ pub fn populate_loaded_chunks(
     }
 }
 
-/// System for dispatching mesh building events for revived chunks.
-pub fn build_revived_chunk_meshes(
-    q_observers: Query<&Transform, With<ObserverSettings>>,
-    mut loaded_chunk_events: EventReader<LoadedChunkEvent>,
-    mut mesh_build_events: EventWriter<BuildChunkMeshEvent>,
-    tick: Res<VoxelWorldTick>,
-) {
-    for loaded in loaded_chunk_events.read() {
-        // Don't send mesh building events for newly loaded chunks or revived primordial chunks, since
-        // they don't have any data and we should rather send mesh building events when we receive a
-        // ChunkPopulated event for them.
-        if matches!(
-            loaded.load_result,
-            ChunkLoadResult::New | ChunkLoadResult::RevivedPrimordial
-        ) {
-            continue;
-        }
-
-        let center = loaded.chunk_pos.worldspace_center();
-        let observer_positions = q_observers.iter().map(|&transform| transform.translation);
-        let min_distance_sq = closest_distance_sq(center, observer_positions).unwrap_or(0.0);
-
-        let priority = u32::MAX - (min_distance_sq.ceil() as u32);
-
-        mesh_build_events.send(BuildChunkMeshEvent {
-            chunk_pos: loaded.chunk_pos,
-            urgency: MeshJobUrgency::P1(priority),
-            neighbors: NeighborSelection::all_faces(),
-            lod: LevelOfDetail::X16Subdiv,
-            tick: tick.get(),
-        });
-    }
-}
-
-pub fn build_populated_chunk_meshes(
-    q_observers: Query<&Transform, With<ObserverSettings>>,
-    mut populated_chunk_events: EventReader<ChunkPopulated>,
-    mut mesh_build_events: EventWriter<BuildChunkMeshEvent>,
-    tick: Res<VoxelWorldTick>,
-) {
-    for populated in populated_chunk_events.read() {
-        let center = populated.chunk_pos.worldspace_center();
-        let observer_positions = q_observers.iter().map(|&transform| transform.translation);
-        let min_distance_sq = closest_distance_sq(center, observer_positions).unwrap_or(0.0);
-
-        let priority = u32::MAX - (min_distance_sq.ceil() as u32);
-
-        mesh_build_events.send(BuildChunkMeshEvent {
-            chunk_pos: populated.chunk_pos,
-            urgency: MeshJobUrgency::P1(priority),
-            neighbors: NeighborSelection::all_faces(),
-            lod: LevelOfDetail::X16Subdiv,
-            tick: tick.get(),
-        });
-    }
-}
-
 /// The distance an observer must have traveled for a priority recalculation to be forced.
 pub const FORCE_RECALC_PRIORITY_DISTANCE: f32 = 125.0;
 /// The distance an observer must have traveled for a priority recalculation to happen if [`RECALC_PRIORITY_INTERVAL`]
@@ -278,7 +219,6 @@ pub fn send_priority_recalculation_events(
     time: Res<Time<Real>>,
     q_observers: Query<(Entity, &Transform), With<ObserverSettings>>,
     mut population_events: EventWriter<RecalculatePopulateEventPrioritiesEvent>,
-    mut mesh_build_events: EventWriter<RecalculateMeshBuildingEventPrioritiesEvent>,
     mut previous_observer_positions: Local<EntityHashMap<Vec3>>,
     mut time_since_last_send: Local<Stopwatch>,
 ) {
@@ -320,12 +260,6 @@ pub fn send_priority_recalculation_events(
         time_since_last_send.reset();
 
         population_events.send(RecalculatePopulateEventPrioritiesEvent {
-            strategy: PriorityCalcStrategy::ClosestDistanceSq(
-                observer_positions.iter().map(|(_, p)| *p).collect_vec(),
-            ),
-        });
-
-        mesh_build_events.send(RecalculateMeshBuildingEventPrioritiesEvent {
             strategy: PriorityCalcStrategy::ClosestDistanceSq(
                 observer_positions.iter().map(|(_, p)| *p).collect_vec(),
             ),

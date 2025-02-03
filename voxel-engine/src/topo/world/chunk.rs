@@ -1,7 +1,9 @@
+use super::{ChunkDataError, ChunkHandleError};
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::data::registries::Registry;
 use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
+use crate::topo::world::chunk_manager::ChunkNotification;
 use crate::topo::{CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS};
 use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
 use bevy::math::ivec3;
@@ -12,8 +14,6 @@ use octo::{Region, SubdividedStorage};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
-
-use super::{ChunkDataError, ChunkHandleError};
 
 #[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
 pub struct ChunkPos(IVec3);
@@ -518,7 +518,7 @@ pub struct ChunkWriteHandle<'a> {
     pub(super) blocks: RwLockWriteGuard<'a, ChunkData>,
     pub(super) flags: RwLockWriteGuard<'a, ChunkFlags>,
     pub(super) chunk_pos: ChunkPos,
-    pub(super) notify: &'a Sender<ChunkPos>,
+    pub(super) notify: &'a Sender<ChunkNotification>,
 }
 
 impl_chunk_handle_reads!('a, ChunkWriteHandle<'a>);
@@ -529,7 +529,11 @@ impl<'a> Drop for ChunkWriteHandle<'a> {
             .insert(ChunkFlags::REMESH | ChunkFlags::REMESH_NEIGHBORS);
 
         // notify the engine about changes when dropping the write handle
-        if let Err(_error) = self.notify.send(self.chunk_pos) {
+        let notif = ChunkNotification {
+            chunk_pos: self.chunk_pos,
+        };
+
+        if let Err(_error) = self.notify.send(notif) {
             error!("Could not notify modification for chunk {}", self.chunk_pos);
         }
     }

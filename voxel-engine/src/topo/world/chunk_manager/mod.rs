@@ -9,6 +9,8 @@ use inner_storage::{ChunkStorageHasher, InnerChunkStorage, LoadedChunk};
 use itertools::Itertools;
 use parking_lot::{Mutex, MutexGuard};
 
+use super::{chunk::ChunkFlags, Chunk, ChunkPos, ChunkRef};
+use crate::topo::world::chunk_manager::notification::NotificationBus;
 use crate::{
     data::registries::block::BlockVariantId,
     topo::{
@@ -21,12 +23,12 @@ use crate::{
     },
 };
 
-use super::{chunk::ChunkFlags, Chunk, ChunkPos, ChunkRef};
-
 pub mod ecs;
 /// Errors related to chunk management.
 pub mod error;
 mod inner_storage;
+mod notification;
+pub use notification::*;
 
 /// The vertical bounds of the world. Chunk positions must have their Y within this range.
 pub const WORLD_VERTICAL_DIMENSIONS: Range<i32> = -2048..2048;
@@ -48,8 +50,7 @@ pub fn chunk_pos_in_bounds(chunk_pos: ChunkPos) -> bool {
 pub struct ChunkManager {
     default_block: BlockVariantId,
     storage: InnerChunkStorage,
-    chunk_change_rx: Receiver<ChunkPos>,
-    chunk_change_tx: Sender<ChunkPos>,
+    notification_bus: NotificationBus,
     loadshares: ChunkLoadshareTable,
     structural_lock: Mutex<()>,
 }
@@ -286,10 +287,16 @@ impl ChunkManager {
             structural_lock: Mutex::default(),
             default_block,
             storage: InnerChunkStorage::default(),
-            chunk_change_rx: rx,
-            chunk_change_tx: tx,
+            notification_bus: NotificationBus::default(),
             loadshares: ChunkLoadshareTable::default(),
         }
+    }
+
+    /// Get the chunk notification bus for the chunk manager.
+    #[must_use]
+    #[inline]
+    pub fn notification_bus(&self) -> &NotificationBus {
+        &self.notification_bus
     }
 
     /// Get a handle to perform structural changes to the chunk storage (i.e., loading and purging chunks).
@@ -340,7 +347,7 @@ impl ChunkManager {
 
         Ok(ChunkRef {
             chunk,
-            notify_changed: &self.chunk_change_tx,
+            notify_changed: self.notification_bus.sender_ref(),
         })
     }
 
