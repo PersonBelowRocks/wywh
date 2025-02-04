@@ -374,6 +374,7 @@ impl Plugin for WorldController {
 pub fn forward_chunk_notifications(
     realm: VoxelRealm,
     mut events: EventWriter<ChunkNotification>,
+    // for batching the notifications so we allocate memory slightly more efficiently
     mut last_num_notifications: Local<usize>,
 ) {
     let bus = realm.cm().notification_bus();

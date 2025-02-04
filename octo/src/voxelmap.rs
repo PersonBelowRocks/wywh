@@ -440,8 +440,8 @@ impl<const D: usize, T> VoxelMap<T, D> {
 
     /// Insert a value at the given position, returning the old value if it exists.
     #[inline]
-    pub fn insert(&mut self, p: IVec3, value: T) -> Option<T> {
-        let (chunk_pos, local_pos) = Self::chunk_and_local(p);
+    pub fn insert(&mut self, p: impl Into<IVec3>, value: T) -> Option<T> {
+        let (chunk_pos, local_pos) = Self::chunk_and_local(p.into());
 
         match self.chunks.entry(chunk_pos) {
             Entry::Occupied(entry) => {
@@ -461,8 +461,8 @@ impl<const D: usize, T> VoxelMap<T, D> {
 
     /// Remove a value from the voxel map and return it.
     #[inline]
-    pub fn remove(&mut self, p: IVec3) -> Option<T> {
-        let (chunk_pos, local_pos) = Self::chunk_and_local(p);
+    pub fn remove(&mut self, p: impl Into<IVec3>) -> Option<T> {
+        let (chunk_pos, local_pos) = Self::chunk_and_local(p.into());
 
         let Entry::Occupied(entry) = self.chunks.entry(chunk_pos) else {
             return None;
@@ -592,24 +592,20 @@ impl<const D: usize, T> VoxelMap<T, D> {
 
     /// Get a reference to a value in the voxel map.
     #[inline]
-    pub fn get(&self, p: IVec3) -> Option<&T> {
-        let (chunk_pos, local_pos) = Self::chunk_and_local(p);
+    pub fn get(&self, p: impl Into<IVec3>) -> Option<&T> {
+        let (chunk_pos, local_pos) = Self::chunk_and_local(p.into());
 
-        let Some(&chunk_index) = self.chunks.get(&chunk_pos) else {
-            return None;
-        };
+        let &chunk_index = self.chunks.get(&chunk_pos)?;
 
         self.slab[chunk_index].get(local_pos)
     }
 
     /// Get a mutable reference to a value in the voxel map.
     #[inline]
-    pub fn get_mut(&mut self, p: IVec3) -> Option<&mut T> {
-        let (chunk_pos, local_pos) = Self::chunk_and_local(p);
+    pub fn get_mut(&mut self, p: impl Into<IVec3>) -> Option<&mut T> {
+        let (chunk_pos, local_pos) = Self::chunk_and_local(p.into());
 
-        let Some(&chunk_index) = self.chunks.get(&chunk_pos) else {
-            return None;
-        };
+        let &chunk_index = self.chunks.get(&chunk_pos)?;
 
         self.slab[chunk_index].get_mut(local_pos)
     }
@@ -617,14 +613,14 @@ impl<const D: usize, T> VoxelMap<T, D> {
     /// Returns `true` if this map has a value at the given position.
     #[inline]
     #[must_use]
-    pub fn contains(&self, p: IVec3) -> bool {
+    pub fn contains(&self, p: impl Into<IVec3>) -> bool {
         self.get(p).is_some()
     }
 
     /// Hashmap-like entry API but for the voxel map.
     #[inline]
-    pub fn entry(&mut self, p: IVec3) -> VmEntry<'_, D, T> {
-        let (chunk_pos, local_pos) = Self::chunk_and_local(p);
+    pub fn entry(&mut self, p: impl Into<IVec3> + Copy) -> VmEntry<'_, D, T> {
+        let (chunk_pos, local_pos) = Self::chunk_and_local(p.into());
 
         if self.contains(p) {
             let Entry::Occupied(entry) = self.chunks.entry(chunk_pos) else {
