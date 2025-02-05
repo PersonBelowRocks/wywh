@@ -1,42 +1,45 @@
 use crate::render::lod::{LODs, LevelOfDetail, LodMap};
 use crate::render::meshing::controller::ChunkMeshData;
 use crate::render::meshing::visibility_logic::ChunkConnectivitySupergraph;
+use crate::topo::controller::VoxelWorldTick;
+use crate::topo::world::chunk_manager::ChunkNotification;
 use crate::topo::world::ChunkPos;
 use crate::util::{ChunkMap, ChunkSet};
-use bevy::prelude::Resource;
+use bevy::prelude::{EventReader, Res, ResMut, Resource};
 use bevy::tasks::futures_lite::StreamExt;
 use octo::voxelmap::VoxelMap;
 use std::sync::Arc;
 
-/// The status of a chunk mesh, and the tick that the build event was sent at.
+/// The state of a chunk mesh, and the tick that the build event was sent at.
 #[derive(Copy, Clone, Debug)]
-pub struct TimedChunkMeshStatus {
+pub struct ChunkMeshTimestate {
     /// The tick that the build event for this mesh was sent on. This is not the same
     /// as the age of the chunk mesh, but it is always older than, or the same as, the chunk mesh's age.
     /// We keep track of this age so that the most up-to-date chunk mesh is used, and we want to ignore
     /// requests to remove chunk meshes if those requests are older than the chunk mesh.
     pub tick: u64,
     /// The status of the chunk mesh.
-    pub status: ChunkMeshStatus,
+    pub status: ChunkMeshState,
 }
 
-impl TimedChunkMeshStatus {
-    /// Create a `ChunkMeshStatus::Unfulfilled` for the given tick.
-    pub fn unfulfilled(tick: u64) -> Self {
+impl ChunkMeshTimestate {
+    /// Create a `ChunkMeshStatus::Absent` for the given tick.
+    pub fn absent(tick: u64) -> Self {
         Self {
             tick,
-            status: ChunkMeshStatus::Unfulfilled,
+            status: ChunkMeshState::Absent,
         }
     }
 }
 
-/// Describes the status that a chunk mesh is in. This reflects the behaviour elsewhere in the engine
+/// Describes the state that a chunk mesh is in. This reflects the behaviour elsewhere in the engine
 /// about how the chunk mesh should be treated.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ChunkMeshStatus {
-    /// The chunk mesh is not built, but it's queued to be built. Not all queued chunk
-    /// meshes will have a status, so this status is not particularly useful if you need very strict logic.
-    Unfulfilled,
+pub enum ChunkMeshState {
+    /// An updated chunk mesh is absent, but there might be an outdated one present. This status is
+    /// assigned to a chunk mesh when the underlying chunk is changed in some way. Chunks will lose their
+    /// absent status once a mesh has been built (or the chunk is determined to be empty).
+    Absent,
     /// The chunk mesh is built, but is empty (i.e., has no geometry).
     /// This can happen if the chunk is only void or if the chunk is encased by solid blocks and
     /// thus all faces are culled. Empty chunk meshes will not be extracted
@@ -52,7 +55,7 @@ pub enum ChunkMeshStatus {
 /// Tracks and manages the state of chunk meshes and provides visibility checks.
 #[derive(Resource)]
 pub struct ChunkMeshManager {
-    state_in_lods: LodMap<VoxelMap<TimedChunkMeshStatus>>,
+    state_in_lods: LodMap<VoxelMap<ChunkMeshTimestate>>,
     ccsg: ChunkConnectivitySupergraph,
 }
 
@@ -64,27 +67,23 @@ impl ChunkMeshManager {
         }
     }
 
-    /// Get the status and tick of a chunk mesh at the given LOD.
+    /// Get the state and tick of a chunk mesh at the given LOD.
     /// Returns `None` if this chunk mesh does not exist at the given LOD.
     ///
-    /// See [`TimedChunkMeshStatus`] for more information.
+    /// See [`ChunkMeshTimestate`] for more information.
     #[inline]
-    pub fn timed_status(
-        &self,
-        lod: LevelOfDetail,
-        chunk_pos: ChunkPos,
-    ) -> Option<TimedChunkMeshStatus> {
+    pub fn timestate(&self, lod: LevelOfDetail, chunk_pos: ChunkPos) -> Option<ChunkMeshTimestate> {
         self.state_in_lods[lod].get(chunk_pos).as_deref().copied()
     }
 
-    /// Returns `true` if this mesh status manager has a status for the given chunk at the given LOD.
+    /// Returns `true` if this mesh state manager has a state for the given chunk at the given LOD.
     #[inline]
     pub fn contains(&self, lod: LevelOfDetail, chunk_pos: ChunkPos) -> bool {
         self.state_in_lods[lod].contains(chunk_pos)
     }
 
-    /// Get the status of this chunk at different LODs.
-    pub fn get_states(&self, chunk_pos: ChunkPos) -> LodMap<TimedChunkMeshStatus> {
+    /// Get the states of this chunk at different LODs.
+    pub fn get_states(&self, chunk_pos: ChunkPos) -> LodMap<ChunkMeshTimestate> {
         self.state_in_lods
             .iter()
             .filter_map(|(lod, chunks)| {
@@ -123,12 +122,7 @@ impl Default for ChunkMeshExtractBridge {
 }
 
 impl ChunkMeshExtractBridge {
-    fn set_status(
-        &mut self,
-        chunk_pos: ChunkPos,
-        lod: LevelOfDetail,
-        status: TimedChunkMeshStatus,
-    ) {
+    fn set_status(&mut self, chunk_pos: ChunkPos, lod: LevelOfDetail, status: ChunkMeshTimestate) {
         self.statuses.lods[lod].insert(chunk_pos, status);
     }
 
@@ -138,7 +132,7 @@ impl ChunkMeshExtractBridge {
     }
 
     /// Get the status of this chunk at different LODs.
-    pub fn get_statuses(&self, chunk_pos: ChunkPos) -> LodMap<TimedChunkMeshStatus> {
+    pub fn get_statuses(&self, chunk_pos: ChunkPos) -> LodMap<ChunkMeshTimestate> {
         self.statuses.get_statuses(chunk_pos)
     }
 
@@ -186,7 +180,7 @@ impl ChunkMeshExtractBridge {
 
             has_filled = matches!(
                 existing_status.status,
-                ChunkMeshStatus::Filled | ChunkMeshStatus::Extracted
+                ChunkMeshState::Filled | ChunkMeshState::Extracted
             );
         }
 
@@ -194,18 +188,18 @@ impl ChunkMeshExtractBridge {
 
         match status {
             // If the mesh is empty, queue it for removal so that the previous mesh (if it exists) is removed.
-            ChunkMeshStatus::Empty if has_filled => {
+            ChunkMeshState::Empty if has_filled => {
                 self.remove[lod].set(chunk_pos);
             }
             // Only queue the mesh for extraction if it's filled.
-            ChunkMeshStatus::Filled => {
+            ChunkMeshState::Filled => {
                 self.add[lod].set(chunk_pos, mesh_data);
             }
             _ => (),
         }
 
         // Even if we don't queue the mesh for extraction we still need to note down its status.
-        self.set_status(chunk_pos, lod, TimedChunkMeshStatus { tick, status });
+        self.set_status(chunk_pos, lod, ChunkMeshTimestate { tick, status });
     }
 
     /// Queue a chunk at a given LOD for removal from the render world.
@@ -247,8 +241,29 @@ impl ChunkMeshExtractBridge {
                 self.statuses.lods[lod]
                     .get_mut(&chunk_pos)
                     .expect("All chunk positions queued for addition should have a status")
-                    .status = ChunkMeshStatus::Extracted;
+                    .status = ChunkMeshState::Extracted;
             }
+        }
+    }
+}
+
+pub fn invalidate_updated_chunks(
+    mut notifications: EventReader<ChunkNotification>,
+    mut mesh_manager: ResMut<ChunkMeshManager>,
+    tick: Res<VoxelWorldTick>,
+) {
+    let current_tick = tick.get();
+
+    for &notification in notifications.read() {
+        mesh_manager
+            .ccsg
+            .remove_connectivity_graph(notification.chunk_pos);
+
+        for lod in LevelOfDetail::LODS {
+            mesh_manager.state_in_lods[lod].insert(
+                notification.chunk_pos,
+                ChunkMeshTimestate::absent(current_tick),
+            );
         }
     }
 }

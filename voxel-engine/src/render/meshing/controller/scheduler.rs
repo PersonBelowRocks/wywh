@@ -11,8 +11,7 @@ use crate::{
 };
 
 use super::{
-    events::BuildChunkMeshEvent, ChunkMeshExtractBridge, ChunkMeshStatusManager,
-    TimedChunkMeshStatus,
+    events::BuildChunkMeshEvent, ChunkMeshExtractBridge, ChunkMeshStatusManager, ChunkMeshTimestate,
 };
 
 /// A helper type to find which LOD (if any) a chunk mesh should have.
@@ -69,7 +68,7 @@ pub fn schedule_populated_chunks(
     job_tx: Res<MeshWorkerChannel>,
     tick: Res<VoxelWorldTick>,
 ) {
-    let status = TimedChunkMeshStatus::unfulfilled(tick.get());
+    let status = ChunkMeshTimestate::absent(tick.get());
     let lod_finder = lod_finder_from_observer_query(&observers);
 
     // Queue newly populated chunks that are surrounded by previously populated chunks.

@@ -22,7 +22,9 @@ use std::{
 };
 
 use self::ecs::prepare_finished_meshes_for_extraction;
-use crate::render::meshing::controller::state_tracking::{ChunkMeshStatus, TimedChunkMeshStatus};
+use crate::render::meshing::controller::state_tracking::{
+    ChunkMeshExtractBridge, ChunkMeshState, ChunkMeshTimestate,
+};
 use crate::{
     render::{
         lod::{LODs, LevelOfDetail, LodMap},
@@ -94,14 +96,14 @@ impl ChunkMeshData {
     /// is queued for extraction it will have this status at first.
     ///
     /// Returns either:
-    /// - [`ChunkMeshStatus::Empty`]
-    /// - [`ChunkMeshStatus::Filled`]
+    /// - [`ChunkMeshState::Empty`]
+    /// - [`ChunkMeshState::Filled`]
     #[inline]
-    pub fn status(&self) -> ChunkMeshStatus {
+    pub fn status(&self) -> ChunkMeshState {
         if self.is_empty() {
-            ChunkMeshStatus::Empty
+            ChunkMeshState::Empty
         } else {
-            ChunkMeshStatus::Filled
+            ChunkMeshState::Filled
         }
     }
 }
@@ -263,7 +265,7 @@ impl ChunkMeshData {
 //     }
 // }
 
-pub(crate) static MESH_BUILDER_TASK_POOL: OnceLock<TaskPool> = OnceLock::new();
+pub(crate) static CHUNK_RENDER_TASK_POOL: OnceLock<TaskPool> = OnceLock::new();
 
 /// The name of the threads in the mesh builder task pool.
 /// See [`TaskPoolBuilder::thread_name()`] for some more information.
@@ -277,7 +279,7 @@ impl Plugin for MeshController {
 
         let mesh_builder_threads = max(1, (available_parallelism() as f32 * 0.75).ceil() as usize);
 
-        MESH_BUILDER_TASK_POOL.set(
+        CHUNK_RENDER_TASK_POOL.set(
             TaskPoolBuilder::new()
                 .num_threads(mesh_builder_threads)
                 .thread_name(MESH_BUILDER_TASK_POOL_THREAD_NAME.into())
