@@ -1,4 +1,7 @@
-use glam::{IVec3, UVec3};
+use bitvec::array::BitArray;
+use bitvec::order::Lsb0;
+use bitvec::view::BitView;
+use glam::{ivec3, IVec3, UVec3};
 use hashbrown::hash_map::Entry;
 use hashbrown::HashMap;
 use slab::Slab;
@@ -330,13 +333,123 @@ impl VoxelSet {
     pub fn contains_region(&self, region: Region) -> bool {
         todo!()
     }
+
+    /// Iterate through all voxels in this set in a random order. If the order of iteration matters
+    /// it's better to manually loop through positions and read from the set.
+    #[inline]
+    #[must_use]
+    pub fn iter(&self) -> impl Iterator<Item = IVec3> + use<'_> {
+        self.chunks.iter().flat_map(|(&chunk_pos, &chunk_index)| {
+            let chunk = &self.slab[chunk_index];
+
+            // (0..8usize).into_iter().flat_map(|i| {(0..8usize).into_iter().zip()}).flat_map()
+            
+            itertools::iproduct!(0..8usize, 0..8usize).flat_map(|(i, j)| {
+                chunk.0[i][j]
+                    .view_bits::<Lsb0>()
+                    .iter_ones()
+                    .map(|y| (8 * chunk_pos) + ivec3(i as _, y as _, j as _))
+            })
+        })
+    }
+}
+
+pub struct VoxelSetIter<'a> {
+    chunks: hashbrown::hash_map::Iter<'a, IVec3, usize>,
+    slab: &'a Slab<VoxelSetChunk>,
+    current_chunk: Option<(IVec3, usize)>,
+    intrachunk: Option<(usize, usize, BitArray<u8>)>
+}
+
+impl VoxelSetIter<'_> {
+    /// Set the current chunk to `self.chunks.next()` and return it.
+    /// `self.current_chunk` should be set to `None` in order to advance to the next chunk when
+    /// calling this method.
+    /// 
+    /// Will return `None` if the chunk iterator is exhausted.
+    fn next_chunk(&mut self) -> Option<(IVec3, usize)> {
+        match self.current_chunk {
+            Some(current) => Some(current),
+            None => {
+                let (&n_chunk_pos, &n_chunk_index) = self.chunks.next()?;
+                self.current_chunk = Some((n_chunk_pos, n_chunk_index));
+                self.current_chunk
+            }
+        }
+    }
+    
+    /// Advance the current intrachunk state and return the position of that state.
+    /// 
+    /// # Panics
+    /// Will panic if `self.current_chunk` is not set. 
+    fn next_intrachunk(&mut self) -> Option<[u8; 3]> {
+        let (i, j, bitarr) = match &mut self.intrachunk {
+            Some(intrachunk) => intrachunk,
+            None => {
+                let (_, chunk_index) = self.current_chunk.unwrap();
+                let chunk = &self.slab[chunk_index];
+                let bitarr = BitArray::new(chunk.0[0][0]);
+                
+                self.intrachunk = Some((0, 0, bitarr));
+                self.intrachunk.as_mut().unwrap()
+            }
+        };
+        
+        todo!()
+    }
+}
+
+impl Iterator for VoxelSetIter<'_> {
+    type Item = IVec3;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        let (current_chunk_pos, current_chunk_index) = self.next_chunk()?;
+        let chunk = &self.slab[current_chunk_index];
+        
+        
+        todo!()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use glam::ivec3;
+    use hashbrown::HashSet;
 
+    #[test]
+    fn test_iter() {
+        let mut hashset = HashSet::<IVec3>::new();
+        let mut voxelset = VoxelSet::new();
+        
+        let mut insert = |pos: IVec3| {
+            hashset.insert(pos);
+            voxelset.insert(pos);
+        };
+        
+        insert(ivec3(0, 0, 0));
+        insert(ivec3(0, 1, 0));
+        insert(ivec3(0, 0, 1));
+        insert(ivec3(1, 0, 0));
+        insert(ivec3(1, 1, 1));
+        insert(ivec3(8, 8, 8));
+        insert(ivec3(0, 0, 8));
+        insert(ivec3(0, 8, 0));
+        insert(ivec3(12, 0, 0));
+        insert(ivec3(0, 0, 100));
+        insert(ivec3(0, 1, 0));
+        insert(ivec3(0, 2, 0));
+        insert(ivec3(0, 3, 0));
+        insert(ivec3(0, 6, 0));
+        
+        for pos in voxelset.iter() {
+            assert!(hashset.contains(&pos));
+            hashset.remove(&pos);
+        }
+        
+        assert!(hashset.is_empty());
+    }
+    
     #[test]
     fn test_single() {
         let mut set = VoxelSet::new();

@@ -95,6 +95,7 @@ pub fn dispatch_move_events(
     }
 }
 
+/// Update the batches when an observer crosses a chunk border.
 pub fn update_observer_batches(
     trigger: Trigger<CrossChunkBorder>,
     q_observers: Query<(
