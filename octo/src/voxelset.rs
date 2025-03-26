@@ -234,6 +234,108 @@ impl VoxelSetChunk {
     pub fn is_empty(&self) -> bool {
         self == &Self::EMPTY
     }
+
+    #[inline]
+    #[must_use]
+    pub fn iter(&self) -> VoxelSetChunkIter<'_> {
+        // we start iterating at this column
+        let first_col = VoxelSetChunkColIter {
+            col_y: 0,
+            bits: BitArray::new(self.0[0][0]),
+        };
+
+        VoxelSetChunkIter {
+            lx: 0,
+            lz: 0,
+            column: first_col,
+            chunk: self,
+        }
+    }
+}
+
+/// Represents a column of a chunk in a voxel set which can be iterated through.
+#[derive(Debug)]
+struct VoxelSetChunkColIter {
+    /// the current Y position in the column, used for indexing the bits
+    col_y: u8,
+    /// bits of the column
+    bits: BitArray<u8>,
+}
+
+impl Iterator for VoxelSetChunkColIter {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.col_y < 8 && !self.bits[self.col_y as usize] {
+            self.col_y += 1;
+        }
+
+        let out = match self.col_y {
+            ..8 => Some(self.col_y),
+            _ => None,
+        }?;
+
+        // this column Y was present, so next iteration we need to check the Y after this one
+        self.col_y += 1;
+
+        Some(out)
+    }
+}
+
+/// An iterator over positions in a [`VoxelSetChunk`]
+pub struct VoxelSetChunkIter<'a> {
+    /// local X of the column inside the chunk
+    lx: u8,
+    /// local Z of the column inside the chunk
+    lz: u8,
+    /// The current column inside the chunk
+    column: VoxelSetChunkColIter,
+    /// The chunk we're iterating through
+    chunk: &'a VoxelSetChunk,
+}
+
+impl VoxelSetChunkIter<'_> {
+    /// Advance to the next column in the chunk, returning its iterator.
+    ///
+    /// Returns [`None`] if no more columns are left.
+    #[inline]
+    fn advance_column(&mut self) -> Option<&mut VoxelSetChunkColIter> {
+        self.lx += 1;
+        if self.lx >= 8 {
+            self.lx = 0;
+            self.lz += 1;
+
+            if self.lz >= 8 {
+                self.lz = 0;
+                return None;
+            }
+        }
+
+        let bits = self.chunk.0[self.lx as usize][self.lz as usize];
+        self.column = VoxelSetChunkColIter {
+            col_y: 0,
+            bits: BitArray::new(bits),
+        };
+
+        Some(&mut self.column)
+    }
+}
+
+impl Iterator for VoxelSetChunkIter<'_> {
+    type Item = [u8; 3];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ly = loop {
+            let Some(ly) = self.column.next() else {
+                self.advance_column()?;
+                continue;
+            };
+
+            break ly;
+        };
+
+        Some([self.lx, ly, self.lz])
+    }
 }
 
 #[inline]
@@ -334,80 +436,59 @@ impl VoxelSet {
         todo!()
     }
 
-    /// Iterate through all voxels in this set in a random order. If the order of iteration matters
-    /// it's better to manually loop through positions and read from the set.
+    /// Iterate over all voxels present in this set in a random order.
     #[inline]
     #[must_use]
-    pub fn iter(&self) -> impl Iterator<Item = IVec3> + use<'_> {
-        self.chunks.iter().flat_map(|(&chunk_pos, &chunk_index)| {
-            let chunk = &self.slab[chunk_index];
-
-            // (0..8usize).into_iter().flat_map(|i| {(0..8usize).into_iter().zip()}).flat_map()
-            
-            itertools::iproduct!(0..8usize, 0..8usize).flat_map(|(i, j)| {
-                chunk.0[i][j]
-                    .view_bits::<Lsb0>()
-                    .iter_ones()
-                    .map(|y| (8 * chunk_pos) + ivec3(i as _, y as _, j as _))
-            })
-        })
+    pub fn iter(&self) -> VoxelSetIter<'_> {
+        VoxelSetIter {
+            chunks: self.chunks.iter(),
+            slab: &self.slab,
+            current_chunk: None,
+        }
     }
 }
 
 pub struct VoxelSetIter<'a> {
     chunks: hashbrown::hash_map::Iter<'a, IVec3, usize>,
     slab: &'a Slab<VoxelSetChunk>,
-    current_chunk: Option<(IVec3, usize)>,
-    intrachunk: Option<(usize, usize, BitArray<u8>)>
+    current_chunk: Option<(IVec3, VoxelSetChunkIter<'a>)>,
 }
 
 impl VoxelSetIter<'_> {
-    /// Set the current chunk to `self.chunks.next()` and return it.
-    /// `self.current_chunk` should be set to `None` in order to advance to the next chunk when
-    /// calling this method.
-    /// 
+    /// Set the current chunk to `self.chunks.next()` and return its position.
+    ///
     /// Will return `None` if the chunk iterator is exhausted.
-    fn next_chunk(&mut self) -> Option<(IVec3, usize)> {
-        match self.current_chunk {
-            Some(current) => Some(current),
-            None => {
-                let (&n_chunk_pos, &n_chunk_index) = self.chunks.next()?;
-                self.current_chunk = Some((n_chunk_pos, n_chunk_index));
-                self.current_chunk
-            }
-        }
-    }
-    
-    /// Advance the current intrachunk state and return the position of that state.
-    /// 
-    /// # Panics
-    /// Will panic if `self.current_chunk` is not set. 
-    fn next_intrachunk(&mut self) -> Option<[u8; 3]> {
-        let (i, j, bitarr) = match &mut self.intrachunk {
-            Some(intrachunk) => intrachunk,
-            None => {
-                let (_, chunk_index) = self.current_chunk.unwrap();
-                let chunk = &self.slab[chunk_index];
-                let bitarr = BitArray::new(chunk.0[0][0]);
-                
-                self.intrachunk = Some((0, 0, bitarr));
-                self.intrachunk.as_mut().unwrap()
-            }
-        };
-        
-        todo!()
+    fn advance_chunk(&mut self) -> Option<IVec3> {
+        let (&next_chunk_pos, &next_chunk_index) = self.chunks.next()?;
+
+        let chunk_iter = self.slab[next_chunk_index].iter();
+        self.current_chunk = Some((next_chunk_pos, chunk_iter));
+        Some(next_chunk_pos)
     }
 }
 
 impl Iterator for VoxelSetIter<'_> {
     type Item = IVec3;
-    
+
     fn next(&mut self) -> Option<Self::Item> {
-        let (current_chunk_pos, current_chunk_index) = self.next_chunk()?;
-        let chunk = &self.slab[current_chunk_index];
-        
-        
-        todo!()
+        let (chunk_pos, local_pos) = loop {
+            let Some((chunk_pos, chunk_iter)) = &mut self.current_chunk else {
+                // this branch will only happen once per iterator, and will just initialize the first chunk iterator.
+                self.advance_chunk()?;
+                continue;
+            };
+
+            let Some(local_pos) = chunk_iter.next() else {
+                // nothing left in the current chunk so we advance to the next one.
+                self.advance_chunk()?;
+                continue;
+            };
+
+            break (*chunk_pos, local_pos);
+        };
+
+        let local_pos: IVec3 = local_pos.map(i32::from).into();
+        Some((chunk_pos * 8) + local_pos)
     }
 }
 
@@ -421,12 +502,12 @@ mod tests {
     fn test_iter() {
         let mut hashset = HashSet::<IVec3>::new();
         let mut voxelset = VoxelSet::new();
-        
+
         let mut insert = |pos: IVec3| {
             hashset.insert(pos);
             voxelset.insert(pos);
         };
-        
+
         insert(ivec3(0, 0, 0));
         insert(ivec3(0, 1, 0));
         insert(ivec3(0, 0, 1));
@@ -441,15 +522,15 @@ mod tests {
         insert(ivec3(0, 2, 0));
         insert(ivec3(0, 3, 0));
         insert(ivec3(0, 6, 0));
-        
+
         for pos in voxelset.iter() {
             assert!(hashset.contains(&pos));
             hashset.remove(&pos);
         }
-        
+
         assert!(hashset.is_empty());
     }
-    
+
     #[test]
     fn test_single() {
         let mut set = VoxelSet::new();

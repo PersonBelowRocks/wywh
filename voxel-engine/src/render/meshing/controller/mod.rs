@@ -14,9 +14,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::render::meshing::controller::state_tracking::{
-    ChunkMeshState, ChunkMeshTimestate,
-};
+use crate::render::meshing::controller::state_tracking::{ChunkMeshState, ChunkMeshTimestate};
 use crate::{
     render::{
         lod::{LODs, LevelOfDetail, LodMap},
@@ -26,7 +24,6 @@ use crate::{
     util::{ChunkMap, ChunkSet},
     CoreEngineSetup, EngineState,
 };
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RemeshType {
