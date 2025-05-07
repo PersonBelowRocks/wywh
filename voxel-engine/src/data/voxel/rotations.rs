@@ -3,7 +3,7 @@ use std::{
     f32::consts::{FRAC_PI_2, PI},
 };
 
-use bevy::math::{vec2, IVec3};
+use bevy::math::{IVec3, vec2};
 
 use crate::data::{error::BlockModelFaceParseError, tile::Face};
 

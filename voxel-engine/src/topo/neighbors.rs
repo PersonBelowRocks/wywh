@@ -9,11 +9,11 @@ use bevy::math::{IVec2, IVec3};
 use octo::Region;
 
 use super::{
+    CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS,
     error::{InvalidNeighborPosition, NeighborReadError},
     fb_localspace_to_local_chunkspace, fb_localspace_wrap, mb_localspace_to_local_chunkspace,
     mb_localspace_wrap, transformations,
-    world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
-    CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS,
+    world::{Chunk, OutOfBounds, chunk::ChunkReadHandle},
 };
 
 /// A bitflag-like type for selecting neighbors of a chunk.

@@ -3,10 +3,10 @@ use bevy::{
     prelude::*,
 };
 use ve::topo::world::ChunkPos;
-use ve::topo::{fb_worldspace_to_chunkspace, CHUNK_FULL_BLOCK_DIMS};
+use ve::topo::{CHUNK_FULL_BLOCK_DIMS, fb_worldspace_to_chunkspace};
 use ve::{
     diagnostics::ENGINE_DIAGNOSTICS,
-    topo::{controller::LastPosition, world::VoxelRealm, ObserverSettings},
+    topo::{ObserverSettings, controller::LastPosition, world::VoxelRealm},
     util::sync::LockStrategy,
 };
 use voxel_engine::data::tile::Face;

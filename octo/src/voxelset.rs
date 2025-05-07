@@ -1,13 +1,13 @@
 use bitvec::array::BitArray;
 use bitvec::order::Lsb0;
 use bitvec::view::BitView;
-use glam::{ivec3, IVec3, UVec3};
-use hashbrown::hash_map::Entry;
+use glam::{IVec3, UVec3, ivec3};
 use hashbrown::HashMap;
+use hashbrown::hash_map::Entry;
 use slab::Slab;
 
 use crate::voxelmap::Chunk;
-use crate::{div_2_pow_n, rem_2_pow_n, Region};
+use crate::{Region, div_2_pow_n, rem_2_pow_n};
 
 /// Assert that a region bounded by a min and max position is valid to use in operations on a voxel set chunk.
 #[track_caller]

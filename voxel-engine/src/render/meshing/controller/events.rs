@@ -2,7 +2,7 @@ use crate::{
     render::lod::{LODs, LevelOfDetail},
     topo::{
         neighbors::NeighborSelection,
-        world::{chunk_populator::events::PriorityCalcStrategy, ChunkPos},
+        world::{ChunkPos, chunk_populator::events::PriorityCalcStrategy},
     },
 };
 use bevy::prelude::*;

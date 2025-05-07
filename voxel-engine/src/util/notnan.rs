@@ -1,4 +1,4 @@
-use bevy::math::{vec2, Vec2};
+use bevy::math::{Vec2, vec2};
 use ordered_float::{FloatIsNan, NotNan};
 
 #[derive(

@@ -1,6 +1,6 @@
 use std::{fmt::Write, path::Path};
 
-use super::{error::FromPathError, ResourcePath};
+use super::{ResourcePath, error::FromPathError};
 
 impl<'a> TryFrom<&'a Path> for ResourcePath {
     type Error = FromPathError;

@@ -7,7 +7,7 @@ use std::{hash::BuildHasher, sync::Arc};
 use async_bevy_events::{AsyncEventPlugin, AsyncEventReader, EventFunnel, EventFunnelPlugin};
 use bevy::{
     prelude::*,
-    tasks::{available_parallelism, block_on, AsyncComputeTaskPool, Task, TaskPoolBuilder},
+    tasks::{AsyncComputeTaskPool, Task, TaskPoolBuilder, available_parallelism, block_on},
 };
 use default_generator::WorldGenerator;
 use events::{
@@ -16,13 +16,13 @@ use events::{
 use futures::StreamExt;
 use priority_queue::PriorityQueue;
 use worldgen::{
-    WorldgenWorker, WorldgenWorkerPool, WORLDGEN_TASK_POOL, WORLDGEN_TASK_POOL_THREAD_NAME,
+    WORLDGEN_TASK_POOL, WORLDGEN_TASK_POOL_THREAD_NAME, WorldgenWorker, WorldgenWorkerPool,
 };
 
 use crate::{
+    CoreEngineSetup, EngineState,
     data::registries::RegistryManager,
     util::{closest_distance, closest_distance_sq},
-    CoreEngineSetup, EngineState,
 };
 
 use super::{ChunkManager, ChunkPos, VoxelRealm};

@@ -21,12 +21,12 @@ use crate::{
     topo::{
         neighbors::NeighborSelection,
         world::{
+            ChunkPos,
             chunk_manager::ChunkLoadResult,
             chunk_populator::events::{
                 ChunkPopulated, PopulateChunk, PriorityCalcStrategy,
                 RecalculatePopulateEventPrioritiesEvent,
             },
-            ChunkPos,
         },
     },
     util::closest_distance_sq,

@@ -1,15 +1,15 @@
 use std::{array, mem};
 
-use glam::{ivec3, uvec3, IVec3, UVec3};
+use glam::{IVec3, UVec3, ivec3, uvec3};
 use hashbrown::{
-    hash_map::{Entry, OccupiedEntry},
     HashMap,
+    hash_map::{Entry, OccupiedEntry},
 };
 use num::Integer;
 use rustc_hash::FxBuildHasher;
 use slab::Slab;
 
-use crate::{div_2_pow_n, rem_2_pow_n, Region};
+use crate::{Region, div_2_pow_n, rem_2_pow_n};
 
 fn empty_3d_array<const D: usize, T>() -> [[[Option<T>; D]; D]; D] {
     array::from_fn(|_| array::from_fn(|_| array::from_fn(|_| None)))
@@ -624,7 +624,9 @@ impl<const D: usize, T> VoxelMap<T, D> {
 
         if self.contains(p) {
             let Entry::Occupied(entry) = self.chunks.entry(chunk_pos) else {
-                unreachable!("we just tested that we contained a value here, which means there must be a chunk at this position");
+                unreachable!(
+                    "we just tested that we contained a value here, which means there must be a chunk at this position"
+                );
             };
 
             VmEntry::Occupied(VmOccupiedEntry {

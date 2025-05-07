@@ -6,20 +6,20 @@
 //! - Part 2) https://tomcc.github.io/2014/08/31/visibility-2.html
 
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
-use crate::data::registries::{Registry, REGISTRY_MANAGER};
+use crate::data::registries::{REGISTRY_MANAGER, Registry};
 use crate::data::tile::FaceSet;
 use crate::topo::generic_chunk::GenericChunkReadAccess;
 use crate::topo::world::ChunkPos;
 use crate::topo::{
-    fb_localspace_to_min_mb_localspace, ivec_project_to_3d, transformations,
     CHUNK_BOUNDING_SPHERE_RADIUS, CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS,
-    FULL_BLOCK_MICROBLOCK_DIMS,
+    FULL_BLOCK_MICROBLOCK_DIMS, fb_localspace_to_min_mb_localspace, ivec_project_to_3d,
+    transformations,
 };
 use crate::util::cubic::Cubic;
 use crate::{cartesian_grid, data::tile::Face, util::FaceMap};
-use bevy::math::{ivec2, ivec3, IVec2, IVec3, Vec3, Vec3Swizzles};
+use bevy::math::{IVec2, IVec3, Vec3, Vec3Swizzles, ivec2, ivec3};
 use bevy::render::primitives::{Frustum, Sphere};
-use enum_map::{enum_map, EnumMap};
+use enum_map::{EnumMap, enum_map};
 use itertools::Itertools;
 use octo::voxelmap::VoxelMap;
 use octo::voxelset::VoxelSet;
@@ -604,7 +604,7 @@ pub struct VisibilityCheckParameters {
 mod visibility_checking {
     use super::*;
     use crate::topo::mock_chunk::MockChunk;
-    use bevy::math::{vec3, Mat4};
+    use bevy::math::{Mat4, vec3};
     use bevy::prelude::{Camera, GlobalTransform, PerspectiveProjection, Transform};
     use bevy::render::camera::CameraProjection;
     use hb::HashSet;

@@ -42,7 +42,7 @@ impl Octet {
     }
 
     pub fn indices(&self) -> Range<NodeIdx> {
-        self.0..NodeIdx::new(8 + (self.0 .0))
+        self.0..NodeIdx::new(8 + (self.0.0))
     }
 
     pub fn indices_usize(&self) -> Range<usize> {

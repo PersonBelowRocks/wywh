@@ -10,8 +10,8 @@ use crate::topo::controller::{
 };
 
 use super::{
-    chunk_manager::{ecs::ChunkManagerRes, ChunkManager},
     ChunkPos,
+    chunk_manager::{ChunkManager, ecs::ChunkManagerRes},
 };
 
 #[derive(SystemParam)]

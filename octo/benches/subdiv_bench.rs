@@ -1,8 +1,8 @@
-use criterion::{criterion_group, criterion_main, BatchSize, Bencher, Criterion};
+use criterion::{BatchSize, Bencher, Criterion, criterion_group, criterion_main};
 use octo::subdiv::SubdividedStorage;
-use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use std::hint::black_box;
 use std::time::Duration;
 

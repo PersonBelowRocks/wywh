@@ -15,14 +15,14 @@ use observer_events::{
 };
 
 use crate::data::registries::block::BlockVariantRegistry;
-use crate::data::registries::{Registry, RegistryManager, REGISTRY_MANAGER};
+use crate::data::registries::{REGISTRY_MANAGER, Registry, RegistryManager};
 use crate::data::resourcepath::rpath;
 use crate::topo::world::chunk_manager::ecs::{
     start_async_chunk_load_task, start_async_chunk_purge_task,
 };
 use crate::topo::world::chunk_populator::ChunkPopulatorController;
-use crate::util::sync::LockStrategy;
 use crate::util::ChunkSet;
+use crate::util::sync::LockStrategy;
 use crate::{CoreEngineSetup, EngineState};
 
 use super::world::chunk_manager::ecs::{ChunkLifecycleTaskLockGranularity, ChunkManagerRes};
@@ -36,8 +36,8 @@ pub use events::*;
 mod batch;
 use crate::topo::world::chunk_manager::ChunkNotification;
 pub use batch::*;
-use octo::voxelset::VoxelSet;
 use octo::Region;
+use octo::voxelset::VoxelSet;
 
 #[derive(Resource, Default)]
 pub struct VoxelWorldTick(u64);

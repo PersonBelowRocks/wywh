@@ -1,15 +1,15 @@
 use std::{ops::Range, sync::Arc};
 
-use bevy::math::{ivec3, IVec3};
-use dashmap::{mapref::entry::Entry as DashMapEntry, DashMap, DashSet};
+use bevy::math::{IVec3, ivec3};
+use dashmap::{DashMap, DashSet, mapref::entry::Entry as DashMapEntry};
 use error::{ChunkGetError, CmStructuralError};
 use flume::{Receiver, Sender};
-use hb::{hash_map::Entry, HashMap};
+use hb::{HashMap, hash_map::Entry};
 use inner_storage::{ChunkStorageHasher, InnerChunkStorage, LoadedChunk};
 use itertools::Itertools;
 use parking_lot::{Mutex, MutexGuard};
 
-use super::{chunk::ChunkFlags, Chunk, ChunkPos, ChunkRef};
+use super::{Chunk, ChunkPos, ChunkRef, chunk::ChunkFlags};
 use crate::topo::world::chunk_manager::notification::NotificationBus;
 use crate::{
     data::registries::block::BlockVariantId,
@@ -18,8 +18,8 @@ use crate::{
         neighbors::{Neighbors, NeighborsBuilder},
     },
     util::{
-        sync::{LockStrategy, StrategicWriteLock, StrategySyncError},
         ChunkSet,
+        sync::{LockStrategy, StrategicWriteLock, StrategySyncError},
     },
 };
 

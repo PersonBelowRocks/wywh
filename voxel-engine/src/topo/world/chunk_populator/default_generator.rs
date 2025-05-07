@@ -7,19 +7,18 @@ use crate::{
     cartesian_grid,
     data::{
         registries::{
-            block::{BlockVariantId, BlockVariantRegistry},
             Registry, RegistryManager,
+            block::{BlockVariantId, BlockVariantRegistry},
         },
         resourcepath::rpath,
         tile::Transparency,
     },
     topo::{
-        chunkspace_to_mb_worldspace_min,
+        CHUNK_MICROBLOCK_DIMS, chunkspace_to_mb_worldspace_min,
         world::{
-            chunk::{ChunkFlags, ChunkWriteHandle},
             ChunkHandleError, ChunkPos,
+            chunk::{ChunkFlags, ChunkWriteHandle},
         },
-        CHUNK_MICROBLOCK_DIMS,
     },
     util::sync::LockStrategy,
 };

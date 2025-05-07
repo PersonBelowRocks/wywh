@@ -1,8 +1,8 @@
 use bevy::ecs::entity::{Entity, EntityHashMap};
 
 use dashmap::{
-    mapref::{entry::Entry as DashMapEntry, one::Ref as DashMapRef},
     DashMap,
+    mapref::{entry::Entry as DashMapEntry, one::Ref as DashMapRef},
 };
 
 use hb::hash_map::{Drain, Entry as HashbrownEntry};

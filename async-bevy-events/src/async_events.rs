@@ -2,9 +2,9 @@ use std::{any::type_name, marker::PhantomData, time::Duration};
 
 use bevy::ecs::event::EventUpdates;
 use bevy::prelude::*;
-use flume::{r#async::RecvStream, Receiver, RecvTimeoutError, Sender, TryRecvError};
+use flume::{Receiver, RecvTimeoutError, Sender, TryRecvError, r#async::RecvStream};
 
-use crate::{funnel::EventFunnel, generic_system_set, ChannelClosed};
+use crate::{ChannelClosed, funnel::EventFunnel, generic_system_set};
 
 generic_system_set!(AsyncEventBroadcastSystem);
 
@@ -147,7 +147,10 @@ pub fn broadcast_async_events<E: Event>(
     mut events: ResMut<Events<E>>,
 ) {
     if tx.receivers() == 1 && !events.is_empty() {
-        warn!("Broadcasting event {} with only one receiver, which is likely the one in the main world.", type_name::<E>());
+        warn!(
+            "Broadcasting event {} with only one receiver, which is likely the one in the main world.",
+            type_name::<E>()
+        );
     }
 
     if tx.receivers() == 0 && !events.is_empty() {

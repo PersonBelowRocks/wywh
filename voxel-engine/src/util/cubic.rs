@@ -5,7 +5,7 @@ use slice_of_array::SliceFlatExt;
 
 use crate::topo::world::OutOfBounds;
 
-use super::{uvec_to_usize_arr, CubicArray};
+use super::{CubicArray, uvec_to_usize_arr};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Cubic<const S: usize, T>(CubicArray<S, T>);

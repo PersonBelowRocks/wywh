@@ -11,10 +11,10 @@ use mip_texture_array::asset::{GpuMippedArrayTex, MippedArrayTexture};
 use super::{
     error::TextureAtlasesGetAssetError,
     registries::{
+        RegistryManager,
         block::{BlockOptions, BlockVariantRegistry, BlockVariantRegistryLoader},
         error::{BlockVariantRegistryLoadError, TextureRegistryError},
         texture::{TexregFaces, TextureRegistry},
-        RegistryManager,
     },
     resourcepath::rpath,
     tile::Transparency,
@@ -22,8 +22,8 @@ use super::{
 };
 use crate::data::registries::REGISTRY_MANAGER;
 use crate::{
-    data::{registries::texture::TextureRegistryLoader, resourcepath::ResourcePath},
     EngineState,
+    data::{registries::texture::TextureRegistryLoader, resourcepath::ResourcePath},
 };
 
 pub static TEXTURE_FOLDER_NAME: &'static str = "textures";

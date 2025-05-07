@@ -1,9 +1,9 @@
 use crate::cartesian_grid;
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
-use crate::topo::generic_chunk::GenericChunkReadAccess;
-use crate::topo::world::chunk::{ChunkData, CHUNK_FULL_BLOCK_REGION, CHUNK_MICROBLOCK_REGION};
-use crate::topo::world::{Chunk, ChunkDataError};
 use crate::topo::CHUNK_MICROBLOCK_DIMS;
+use crate::topo::generic_chunk::GenericChunkReadAccess;
+use crate::topo::world::chunk::{CHUNK_FULL_BLOCK_REGION, CHUNK_MICROBLOCK_REGION, ChunkData};
+use crate::topo::world::{Chunk, ChunkDataError};
 use bevy::math::IVec3;
 use octo::{Region, RegionContained};
 

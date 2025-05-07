@@ -6,7 +6,7 @@ use crate::data::{
     error::BlockVariantFileLoaderError,
     resourcepath::ResourcePath,
     tile::Transparency,
-    voxel::{descriptor::BlockVariantDescriptor, BlockModel},
+    voxel::{BlockModel, descriptor::BlockVariantDescriptor},
 };
 
 #[cfg(test)]
@@ -15,7 +15,7 @@ use crate::{
     util::FaceMap,
 };
 
-use super::{error::BlockVariantRegistryLoadError, texture::TextureRegistry, Registry};
+use super::{Registry, error::BlockVariantRegistryLoadError, texture::TextureRegistry};
 
 pub const MAX_RECURSION_DEPTH: usize = 8;
 pub static BLOCK_VARIANT_FILE_EXTENSION: &'static str = "block";

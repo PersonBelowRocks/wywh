@@ -4,7 +4,7 @@ use bevy::ecs::event::EventUpdates;
 use bevy::prelude::*;
 use flume::Sender;
 
-use crate::{generic_system_set, ChannelClosed};
+use crate::{ChannelClosed, generic_system_set};
 
 generic_system_set!(FunnelCollectionSystem);
 

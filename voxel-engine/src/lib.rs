@@ -22,7 +22,7 @@ pub mod topo;
 pub mod util;
 
 use crate::{
-    data::systems::{build_registries, check_textures, load_textures, VariantFolders},
+    data::systems::{VariantFolders, build_registries, check_textures, load_textures},
     render::meshing::controller::MeshController,
 };
 

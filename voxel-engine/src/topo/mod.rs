@@ -1,4 +1,4 @@
-use bevy::math::{ivec2, ivec3, IVec2, IVec3};
+use bevy::math::{IVec2, IVec3, ivec2, ivec3};
 use priority_queue::PriorityQueue;
 use world::ChunkPos;
 
@@ -95,7 +95,9 @@ impl<T> ChunkJobQueue<T> {
         let Some((priority, item)) = (match pair {
             (Some(priority), Some(item)) => factory(Some((priority, item))),
             (None, None) => factory(None),
-            _ => unreachable!("methods on this type guarantee that we never have a priority without an item, and vice-versa")
+            _ => unreachable!(
+                "methods on this type guarantee that we never have a priority without an item, and vice-versa"
+            ),
         }) else {
             // Factory produced nothing so we don't insert
             return;

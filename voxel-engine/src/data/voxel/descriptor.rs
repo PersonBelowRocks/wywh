@@ -3,7 +3,7 @@ use std::str::FromStr;
 use crate::{
     data::{
         error::{BlockModelCreationError, FaceTextureDescParseError},
-        registries::{block::BlockOptions, texture::TextureRegistry, Registry},
+        registries::{Registry, block::BlockOptions, texture::TextureRegistry},
         resourcepath::ResourcePath,
         texture::{FaceTexture, FaceTextureRotation},
         tile::Face,

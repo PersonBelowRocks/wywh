@@ -5,7 +5,7 @@ use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
 use bevy::tasks::TaskPool;
 use bevy::{
     prelude::*,
-    tasks::{available_parallelism, TaskPoolBuilder},
+    tasks::{TaskPoolBuilder, available_parallelism},
 };
 use events::{BuildChunkMeshEvent, MeshFinishedEvent, RemoveChunkMeshEvent};
 use std::sync::OnceLock;
@@ -16,13 +16,13 @@ use std::{
 
 use crate::render::meshing::controller::state_tracking::{ChunkMeshState, ChunkMeshTimestate};
 use crate::{
+    CoreEngineSetup, EngineState,
     render::{
         lod::{LODs, LevelOfDetail, LodMap},
         quad::GpuQuad,
     },
     topo::world::ChunkPos,
     util::{ChunkMap, ChunkSet},
-    CoreEngineSetup, EngineState,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

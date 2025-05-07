@@ -11,17 +11,17 @@ use crate::data::registries::block::BlockVariantRegistry;
 use crate::data::registries::Registry;
 use crate::data::tile::Face;
 
+use crate::render::meshing::Context;
 use crate::render::meshing::controller::ChunkMeshData;
 use crate::render::meshing::error::MesherResult;
-use crate::render::meshing::Context;
 
 use crate::render::quad::isometric::IsometrizedQuad;
 use crate::render::quad::isometric::PositionedQuad;
 
 use crate::render::quad::GpuQuad;
 use crate::render::quad::GpuQuadBitfields;
-use crate::topo::world::chunk::ChunkReadHandle;
 use crate::topo::world::Chunk;
+use crate::topo::world::chunk::ChunkReadHandle;
 use crate::topo::{CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS};
 
 use super::greedy_mesh::ChunkSliceMask;

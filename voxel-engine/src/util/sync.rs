@@ -44,7 +44,7 @@ pub trait StrategicReadLock {
     /// The returned error depends on the `strategy`.
     /// See documentation on [`LockStrategy`] and [`StrategySyncError`] for more information.
     fn strategic_read(&self, strategy: LockStrategy)
-        -> Result<Self::RGuard<'_>, StrategySyncError>;
+    -> Result<Self::RGuard<'_>, StrategySyncError>;
 }
 
 /// Implemented for types (locks) that can return a read/write guard with respect to a given

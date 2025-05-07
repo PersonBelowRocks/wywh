@@ -1,4 +1,4 @@
-use bevy::math::{ivec2, vec2, vec3, IVec2, IVec3, Vec2, Vec3};
+use bevy::math::{IVec2, IVec3, Vec2, Vec3, ivec2, vec2, vec3};
 
 use crate::{data::tile::Face, topo::ivec_project_to_3d, util::Axis3D};
 
@@ -248,7 +248,7 @@ impl IsometrizedQuad {
 mod tests {
     use crate::{
         data::{
-            registries::{texture::TextureRegistry, Registry},
+            registries::{Registry, texture::TextureRegistry},
             texture::FaceTexture,
         },
         render::quad::anon::Quad,

@@ -5,7 +5,7 @@ use bevy::{log::info, render::render_resource::ShaderType};
 
 use super::{
     error::FaceTextureRotationParseError,
-    registries::{texture::TextureRegistry, Registry},
+    registries::{Registry, texture::TextureRegistry},
 };
 
 #[derive(

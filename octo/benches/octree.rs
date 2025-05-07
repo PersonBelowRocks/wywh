@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use glam::uvec3;
 use octo::octree::{MaxDepth, NPos, Octree, X1, X2, X3, X4, X5, X6};
 use rand::Rng;

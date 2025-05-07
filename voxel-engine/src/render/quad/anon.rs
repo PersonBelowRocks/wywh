@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use bevy::math::{ivec2, IVec2, UVec2};
+use bevy::math::{IVec2, UVec2, ivec2};
 
 use super::error::QuadError;
 

@@ -1,8 +1,8 @@
 use bevy::{math::ivec2, prelude::IVec2};
 
 use crate::topo::{
-    mb_localspace_to_fb_localspace, CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS,
-    FULL_BLOCK_MICROBLOCK_DIMS,
+    CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS,
+    mb_localspace_to_fb_localspace,
 };
 use crate::util::SquareArray;
 

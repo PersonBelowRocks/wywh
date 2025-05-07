@@ -1,7 +1,7 @@
 [package]
 name = "voxel-engine"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 # Workspace dependencies
@@ -17,37 +17,37 @@ mip-texture-array.workspace = true
 enumset.workspace = true
 
 # Crate dependencies
-ahash = "0.8.3"
-anyhow = "1.0.75"
+ahash = "0.8.11"
+anyhow = "1.0.98"
 anymap = "0.12.1"
 octo = {path = "../octo"}
-bitflags = "2.4.1"
+bitflags = "2.9.0"
 bracket-noise = "0.8.7"
 deser-hjson = "2.2.4"
-hashbrown = { version = "0.14.2" }
-indexmap = "2.1.0"
-itertools = "0.13"
-noise = "0.8.2"
-num = "0.4.1"
-num-derive = "0.4.0"
-num-traits = "0.2.16"
-rand = "0.8.5"
-serde = { version = "1.0.152", features = ["serde_derive"] }
-serde_json = "1.0.1"
+hashbrown = "0.15.3"
+indexmap = "2.9.0"
+itertools = "0.14.0"
+noise = "0.9.0"
+num = "0.4.3"
+num-derive = "0.4.2"
+num-traits = "0.2.19"
+rand = "0.9.1"
+serde = { version = "1.0.219", features = ["serde_derive"] }
+serde_json = "1.0.140"
 slice-of-array = "0.3.2"
-smallvec = "1.11.1"
-derive-new = "0.6.0"
-toml = "0.8.10"
+smallvec = "1.15.0"
+derive-new = "0.7.0"
+toml = "0.8.22"
 walkdir = "2.5.0"
-indoc = "2.0.5"
+indoc = "2.0.6"
 rangemap = "1.5.1"
 enum-map = "2.7.3"
-rustc-hash = "2.0.0"
+rustc-hash = "2.1.1"
 nohash = "0.2.0"
-bytemuck = "1.16.1"
-priority-queue = "2.1.0"
-ordered-float = { version = "4.2.2", features = ["bytemuck", "serde"] }
-futures = "0.3.30"
+bytemuck = "1.23.0"
+priority-queue = "2.3.1"
+ordered-float = { version = "5.0.0", features = ["bytemuck", "serde"] }
+futures = "0.3.31"
 
 [dev-dependencies]
 criterion = "0.5.1"

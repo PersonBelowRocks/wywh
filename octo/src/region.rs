@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use glam::{ivec3, IVec3, UVec3};
+use glam::{IVec3, UVec3, ivec3};
 
 /// A region of voxels.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

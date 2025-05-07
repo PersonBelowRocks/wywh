@@ -8,7 +8,7 @@ use mip_texture_array::TextureArrayBuilderError;
 
 use crate::data::{
     error::{BlockModelCreationError, BlockVariantFileLoaderError},
-    resourcepath::{error::FromPathError, ResourcePath},
+    resourcepath::{ResourcePath, error::FromPathError},
     systems::{VoxelNormalMapFolder, VoxelTextureFolder},
 };
 

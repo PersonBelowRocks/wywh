@@ -1,6 +1,6 @@
 use super::{ChunkDataError, ChunkHandleError};
-use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::data::registries::Registry;
+use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
 use crate::topo::world::chunk_manager::ChunkNotification;
@@ -452,7 +452,7 @@ macro_rules! impl_chunk_handle_reads {
                 let variant_id = match self.blocks.get(ls_pos) {
                     Ok(id) => id,
                     Err(ChunkDataError::OutOfBounds) => {
-                        return Err(ChunkHandleError::FullBlockOutOfBounds(ls_pos))
+                        return Err(ChunkHandleError::FullBlockOutOfBounds(ls_pos));
                     }
                     Err(ChunkDataError::NonFullBlock) => return Ok(None),
                     Err(ChunkDataError::InvalidValue(_)) => {
@@ -472,7 +472,7 @@ macro_rules! impl_chunk_handle_reads {
                 let variant_id = match self.blocks.get_mb(mb_pos) {
                     Ok(id) => id,
                     Err(ChunkDataError::OutOfBounds) => {
-                        return Err(ChunkHandleError::MicroblockOutOfBounds(mb_pos))
+                        return Err(ChunkHandleError::MicroblockOutOfBounds(mb_pos));
                     }
                     Err(ChunkDataError::NonFullBlock) => unreachable!(
                         "reading microblocks from a subdivided block is okay and intended"

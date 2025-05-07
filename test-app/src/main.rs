@@ -13,19 +13,19 @@ use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 
 use bevy::ecs::entity::EntityHashSet;
 use bevy::log::{self, LogPlugin};
-use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::pbr::ScreenSpaceAmbientOcclusionBundle;
+use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::prelude::*;
 
-use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
+use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy_renderdoc::RenderDocPlugin;
 use debug_info::{DebugText, FpsText};
 use flume::Sender;
 use ve::render::lod::LevelOfDetail;
+use ve::topo::ObserverSettings;
 use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle, VisibleBatches};
 use ve::topo::world::ChunkPos;
-use ve::topo::ObserverSettings;
 use ve::{CoreEngineSetup, EngineState};
 
 #[derive(Resource)]

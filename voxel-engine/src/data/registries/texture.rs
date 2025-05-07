@@ -6,15 +6,15 @@ use bevy::{
     render::texture::Image,
 };
 use indexmap::IndexMap;
-use mip_texture_array::asset::MippedArrayTexture;
 use mip_texture_array::MipArrayTextureBuilder;
+use mip_texture_array::asset::MippedArrayTexture;
 
 use crate::data::{resourcepath::ResourcePath, texture::GpuFaceTexture};
 
 #[cfg(test)]
 use crate::data::resourcepath::rpath;
 
-use super::{error::TextureRegistryError, Registry};
+use super::{Registry, error::TextureRegistryError};
 
 pub const TEXTURE_DIMENSIONS: u32 = 16;
 

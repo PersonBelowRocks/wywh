@@ -3,14 +3,14 @@ use bevy::math::{IVec2, IVec3};
 use self::error::CqsError;
 use crate::topo::world::chunk::CHUNK_FULL_BLOCK_REGION;
 use crate::topo::{
-    div_2_pow_n, mb_localspace_to_fb_localspace, rem_2_pow_n, CHUNK_FULL_BLOCK_DIMS,
-    CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS_LOG2,
+    CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS, FULL_BLOCK_MICROBLOCK_DIMS,
+    FULL_BLOCK_MICROBLOCK_DIMS_LOG2, div_2_pow_n, mb_localspace_to_fb_localspace, rem_2_pow_n,
 };
 use crate::{
     data::{
         registries::{
-            block::{BlockVariantId, BlockVariantRegistry},
             Registry, RegistryRef,
+            block::{BlockVariantId, BlockVariantRegistry},
         },
         tile::Face,
     },
@@ -22,7 +22,7 @@ use crate::{
     topo::{
         ivec_project_to_2d, ivec_project_to_3d,
         neighbors::{self, Neighbors},
-        world::{chunk::ChunkReadHandle, Chunk, OutOfBounds},
+        world::{Chunk, OutOfBounds, chunk::ChunkReadHandle},
     },
 };
 

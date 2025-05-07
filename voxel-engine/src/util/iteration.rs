@@ -65,7 +65,7 @@ macro_rules! cartesian_grid {
 
 #[cfg(test)]
 mod tests {
-    use bevy::math::{ivec3, IVec3};
+    use bevy::math::{IVec3, ivec3};
 
     #[test]
     fn iteration_order_vector() {
