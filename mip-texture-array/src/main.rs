@@ -81,27 +81,27 @@ fn insert_example(
         .unwrap();
 
     for mip in 0..4 {
-        cmds.spawn(MaterialMeshBundle::<TestingMaterial> {
-            transform: Transform::from_translation(vec3(0.0, 0.0, (mip as f32) * 2.1)),
-            mesh: meshes.add(Rectangle::new(2.0, 2.0)),
-            material: materials.add(TestingMaterial {
+        cmds.spawn((
+            Transform::from_translation(vec3(0.0, 0.0, (mip as f32) * 2.1))
+                .looking_to(vec3(0.0, -1.0, 0.0), Vec3::Y),
+            Mesh3d(meshes.add(Rectangle::new(2.0, 2.0))),
+            MeshMaterial3d(materials.add(TestingMaterial {
                 tex: texarr_handle.clone().untyped().typed_unchecked::<Image>(),
-                array_idx: 0,
+                array_idx: 0, // switch between 0 and 1 to test both textures
                 mip_level: mip,
-            }),
-            ..default()
-        });
+            })),
+        ));
     }
 
-    cmds.spawn(Camera3dBundle {
-        transform: Transform::from_translation(vec3(0.0, 10.0, 4.0))
-            .looking_at(vec3(0.0, 0.0, 4.0), Vec3::X),
-        ..default()
-    });
+    cmds.spawn((
+        Transform::from_translation(vec3(0.0, 10.0, 4.0)).looking_at(vec3(0.0, 0.0, 4.0), Vec3::X),
+        Camera3d::default(),
+    ));
 
     cmds.insert_resource(AmbientLight {
         color: Color::WHITE,
         brightness: 0.5,
+        affects_lightmapped_meshes: true,
     })
 }
 

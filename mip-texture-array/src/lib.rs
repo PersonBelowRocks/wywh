@@ -3,11 +3,12 @@ extern crate thiserror as te;
 use asset::{GpuMippedArrayTex, MippedArrayTexture};
 use bevy::{
     asset::load_internal_asset,
+    image::TextureFormatPixelInfo,
     prelude::*,
     render::{
         render_asset::{RenderAssetPlugin, RenderAssetUsages, RenderAssets},
         render_resource::{Extent3d, SpecializedComputePipelines, TextureDimension, TextureFormat},
-        texture::{GpuImage, TextureFormatPixelInfo},
+        texture::GpuImage,
         Render, RenderApp, RenderSet,
     },
 };
@@ -194,6 +195,16 @@ impl MipArrayTextureBuilder {
         source: &Image,
         idx: u32,
     ) -> Result<(), TextureArrayBuilderError> {
+        let arr_texture_data = arr_texture.data.as_mut().unwrap();
+
+        let source_data = match source.data.as_ref() {
+            Some(data) => data,
+            None => panic!(
+                "cannot copy dataless image '{:?}' to array texture",
+                source.texture_descriptor.label
+            ),
+        };
+
         let extent = source.texture_descriptor.size;
         if extent.width != self.dims || extent.height != self.dims {
             return Err(TextureArrayBuilderError::IncorrectImageDimensions {
@@ -220,7 +231,7 @@ impl MipArrayTextureBuilder {
             let texture_begin = texture_y * rect_width * format_size;
             let texture_end = texture_begin + rect_width * format_size;
 
-            arr_texture.data[begin..end].copy_from_slice(&source.data[texture_begin..texture_end]);
+            arr_texture_data[begin..end].copy_from_slice(&source_data[texture_begin..texture_end]);
         }
 
         Ok(())

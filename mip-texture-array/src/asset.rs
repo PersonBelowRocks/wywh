@@ -5,10 +5,10 @@ use bevy::{
         render_asset::{PrepareAssetError, RenderAsset, RenderAssetUsages},
         render_resource::{
             AddressMode, BindGroupEntries, CachedPipelineState, CommandEncoderDescriptor,
-            ComputePassDescriptor, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout,
-            Origin3d, Pipeline, PipelineCache, Sampler, SamplerDescriptor, Texture, TextureAspect,
-            TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
-            TextureViewDescriptor, TextureViewDimension,
+            ComputePassDescriptor, Extent3d, FilterMode, Origin3d, Pipeline, PipelineCache,
+            Sampler, SamplerDescriptor, TexelCopyBufferLayout, TexelCopyTextureInfo, Texture,
+            TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+            TextureView, TextureViewDescriptor, TextureViewDimension,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
@@ -59,7 +59,11 @@ impl GpuMippedArrayTex {
             texture: self.texture.clone(),
             sampler: self.sampler.clone(),
             texture_view: self.view.clone(),
-            size: self.size,
+            size: Extent3d {
+                width: self.size.x,
+                height: self.size.y,
+                depth_or_array_layers: 0,
+            },
             mip_level_count: self.mip_levels,
             texture_format: self.format,
         }
@@ -71,6 +75,11 @@ fn create_array_texture_with_filled_mip_level_0(
     gpu: &RenderDevice,
     queue: &RenderQueue,
 ) -> Texture {
+    let image_data = match &asset.image.data {
+        Some(data) => data,
+        None => panic!("cannot create an array texture from CPU image with no data"),
+    };
+
     let desc = TextureDescriptor {
         label: asset.label,
         size: asset.extent(),
@@ -80,7 +89,8 @@ fn create_array_texture_with_filled_mip_level_0(
         format: STORAGE_TEXTURE_FORMAT,
         usage: TextureUsages::COPY_DST
             | TextureUsages::STORAGE_BINDING
-            | TextureUsages::TEXTURE_BINDING,
+            | TextureUsages::TEXTURE_BINDING
+            | TextureUsages::COPY_SRC,
         view_formats: &[TEXTURE_FORMAT, STORAGE_TEXTURE_FORMAT],
     };
 
@@ -108,7 +118,7 @@ fn create_array_texture_with_filled_mip_level_0(
         let end_offset = binary_offset + data_size as usize;
 
         queue.write_texture(
-            ImageCopyTexture {
+            TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
                 origin: Origin3d {
@@ -118,8 +128,8 @@ fn create_array_texture_with_filled_mip_level_0(
                 },
                 aspect: TextureAspect::All,
             },
-            &asset.image.data[binary_offset..end_offset],
-            ImageDataLayout {
+            &image_data[binary_offset..end_offset],
+            TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(bytes_per_row),
                 rows_per_image: Some(height_blocks),
@@ -158,6 +168,7 @@ fn create_mip_views(mip_levels: u32, texture: &Texture, array_layers: u32) -> Ve
             mip_level_count: Some(1),
             base_array_layer: 0,
             array_layer_count: Some(array_layers),
+            usage: Some(TextureUsages::TEXTURE_BINDING),
         }))
     }
 
@@ -181,6 +192,7 @@ fn create_mip_storage_views(
             mip_level_count: Some(1),
             base_array_layer: 0,
             array_layer_count: Some(array_layers),
+            usage: Some(TextureUsages::STORAGE_BINDING),
         }))
     }
 
@@ -202,11 +214,12 @@ impl RenderAsset for GpuMippedArrayTex {
     );
 
     fn asset_usage(_: &Self::SourceAsset) -> RenderAssetUsages {
-        RenderAssetUsages::all()
+        RenderAssetUsages::all() // TODO: unload from CPU side
     }
 
     fn prepare_asset(
         src: Self::SourceAsset,
+        _asset_id: AssetId<Self::SourceAsset>,
         param: &mut SystemParamItem<Self::Param>,
     ) -> Result<Self, PrepareAssetError<Self::SourceAsset>> {
         let (gpu, queue, pipeline_meta, pipeline_cache) = param;
@@ -299,6 +312,7 @@ impl RenderAsset for GpuMippedArrayTex {
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: None,
+            usage: Some(TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_SRC),
         });
 
         Ok(Self {

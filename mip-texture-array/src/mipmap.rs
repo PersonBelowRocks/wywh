@@ -1,4 +1,5 @@
 use bevy::{
+    asset::weak_handle,
     prelude::*,
     render::{
         render_resource::{
@@ -15,7 +16,7 @@ use bevy::{
 use crate::STORAGE_TEXTURE_FORMAT;
 
 pub const MIPMAP_COMPUTE_SHADER_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(147253048844306429480044375066837132481);
+    weak_handle!("7c2e2074-98f8-42df-84fd-756eb8c3080e");
 
 pub const WORKGROUP_SIZE_PER_DIM: u32 = 8;
 #[derive(Clone, Resource)]
@@ -84,6 +85,7 @@ impl SpecializedComputePipeline for MipGeneratorPipeline {
             entry_point: "compute_mipmap".into(),
             layout: vec![self.layout.clone()],
             shader_defs: defs,
+            zero_initialize_workgroup_memory: true,
         }
     }
 }
