@@ -1,14 +1,10 @@
-use crate::render::lod::{LODs, LevelOfDetail, LodMap};
-use crate::render::meshing::controller::ChunkMeshData;
+use crate::render::lod::{LevelOfDetail, LodMap};
 use crate::render::meshing::visibility_logic::ChunkConnectivitySupergraph;
 use crate::topo::controller::VoxelWorldTick;
 use crate::topo::world::ChunkPos;
 use crate::topo::world::chunk_manager::ChunkNotification;
-use crate::util::{ChunkMap, ChunkSet};
 use bevy::prelude::{EventReader, Res, ResMut, Resource};
-use bevy::tasks::futures_lite::StreamExt;
 use octo::voxelmap::VoxelMap;
-use std::sync::Arc;
 
 /// The state of a chunk mesh, and the tick that the build event was sent at.
 #[derive(Copy, Clone, Debug)]

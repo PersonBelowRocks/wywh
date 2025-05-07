@@ -8,22 +8,11 @@ use bevy::{
     tasks::{TaskPoolBuilder, available_parallelism},
 };
 use events::{BuildChunkMeshEvent, MeshFinishedEvent, RemoveChunkMeshEvent};
+use std::cmp::max;
 use std::sync::OnceLock;
-use std::{
-    cmp::{self, max},
-    sync::Arc,
-};
 
-use crate::render::meshing::controller::state_tracking::{ChunkMeshState, ChunkMeshTimestate};
-use crate::{
-    CoreEngineSetup, EngineState,
-    render::{
-        lod::{LODs, LevelOfDetail, LodMap},
-        quad::GpuQuad,
-    },
-    topo::world::ChunkPos,
-    util::{ChunkMap, ChunkSet},
-};
+use crate::render::meshing::controller::state_tracking::ChunkMeshState;
+use crate::render::{lod::LevelOfDetail, quad::GpuQuad};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RemeshType {

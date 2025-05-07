@@ -1,12 +1,9 @@
 use anymap::any::Any;
-use bevy::ecs::system::Resource;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
-use std::cell::{LazyCell, OnceCell};
-use std::sync::{LazyLock, OnceLock};
+use std::sync::LazyLock;
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
-    sync::Arc,
 };
 
 use super::resourcepath::ResourcePath;

@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_bevy_events::{AsyncEventReader, EventFunnel};
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
-use itertools::Itertools;
 
 use crate::{
     topo::{

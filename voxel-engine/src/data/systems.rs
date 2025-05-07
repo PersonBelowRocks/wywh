@@ -11,7 +11,6 @@ use mip_texture_array::asset::{GpuMippedArrayTex, MippedArrayTexture};
 use super::{
     error::TextureAtlasesGetAssetError,
     registries::{
-        RegistryManager,
         block::{BlockOptions, BlockVariantRegistry, BlockVariantRegistryLoader},
         error::{BlockVariantRegistryLoadError, TextureRegistryError},
         texture::{TexregFaces, TextureRegistry},

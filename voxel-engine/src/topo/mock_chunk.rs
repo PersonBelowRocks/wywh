@@ -1,11 +1,10 @@
 use crate::cartesian_grid;
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
-use crate::topo::CHUNK_MICROBLOCK_DIMS;
 use crate::topo::generic_chunk::GenericChunkReadAccess;
+use crate::topo::world::ChunkDataError;
 use crate::topo::world::chunk::{CHUNK_FULL_BLOCK_REGION, CHUNK_MICROBLOCK_REGION, ChunkData};
-use crate::topo::world::{Chunk, ChunkDataError};
 use bevy::math::IVec3;
-use octo::{Region, RegionContained};
+use octo::Region;
 
 /// A mock chunk that behaves like a regular chunk but can be trivially initialized and
 /// has no relationship to a chunk manager. In a way this is just a glorified 3D array.

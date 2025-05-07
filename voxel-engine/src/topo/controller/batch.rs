@@ -150,7 +150,8 @@ impl ChunkBatch {
 
     pub fn manually_register_hooks(hooks: &mut ComponentHooks) {
         // Add this batch entity to its owner when the component is added
-        hooks.on_insert(|mut world, batch_entity, _id| {
+        hooks.on_insert(|mut world, ctx| {
+        let batch_entity = ctx.entity;
         let tick = world.resource::<VoxelWorldTick>().get();
 
         // Set the tick to the current tick upon insertion. The default value in this field is
@@ -170,7 +171,8 @@ impl ChunkBatch {
     });
 
         // Remove this batch entity from its owner when the component is removed
-        hooks.on_remove(|mut world, batch_entity, _id| {
+        hooks.on_remove(|mut world, ctx| {
+            let batch_entity = ctx.entity;
             let owner = world.get::<Self>(batch_entity).unwrap().owner;
 
             let Some(mut observer_batches) = world.get_mut::<ObserverBatches>(owner) else {
@@ -210,7 +212,7 @@ pub fn add_batch_chunks(
     mut membership: ResMut<CachedBatchMembership>,
     mut cmds: Commands,
 ) {
-    let batch_entity = trigger.entity();
+    let batch_entity = trigger.target();
     let event = trigger.event();
 
     if event.0.is_empty() {
@@ -247,7 +249,7 @@ pub fn remove_batch_chunks(
     mut writer: EventWriter<RemovedBatchChunks>,
     mut cmds: Commands,
 ) {
-    let batch_entity = trigger.entity();
+    let batch_entity = trigger.target();
     let event = trigger.event();
 
     if event.0.is_empty() {
@@ -269,7 +271,7 @@ pub fn remove_batch_chunks(
         membership.remove(chunk, batch_entity);
     }
 
-    writer.send(RemovedBatchChunks {
+    writer.write(RemovedBatchChunks {
         chunks: event.0.clone(),
         batch: batch_entity,
     });

@@ -5,7 +5,7 @@ use crate::data::voxel::rotations::BlockModelRotation;
 use crate::topo::controller::{LoadReasons, LoadshareMap};
 use crate::topo::world::chunk_manager::ChunkNotification;
 use crate::topo::{CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS};
-use crate::util::sync::{LockStrategy, StrategicReadLock, StrategicWriteLock, StrategySyncError};
+use crate::util::sync::{LockStrategy, StrategicReadLock, StrategySyncError};
 use bevy::math::ivec3;
 use bevy::prelude::*;
 use bitflags::bitflags;

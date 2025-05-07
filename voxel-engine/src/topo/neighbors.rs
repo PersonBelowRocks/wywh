@@ -13,7 +13,7 @@ use super::{
     error::{InvalidNeighborPosition, NeighborReadError},
     fb_localspace_to_local_chunkspace, fb_localspace_wrap, mb_localspace_to_local_chunkspace,
     mb_localspace_wrap, transformations,
-    world::{Chunk, OutOfBounds, chunk::ChunkReadHandle},
+    world::{OutOfBounds, chunk::ChunkReadHandle},
 };
 
 /// A bitflag-like type for selecting neighbors of a chunk.

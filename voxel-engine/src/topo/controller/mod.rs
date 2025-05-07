@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::{fmt, time::Duration};
 
 use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
-use bevy::ecs::component::{ComponentHooks, StorageType};
+use bevy::ecs::component::{ComponentHooks, Mutable, StorageType};
 use bevy::math::ivec3;
 use bevy::prelude::*;
 use bevy::time::Stopwatch;
@@ -15,7 +15,7 @@ use observer_events::{
 };
 
 use crate::data::registries::block::BlockVariantRegistry;
-use crate::data::registries::{REGISTRY_MANAGER, Registry, RegistryManager};
+use crate::data::registries::{REGISTRY_MANAGER, Registry};
 use crate::data::resourcepath::rpath;
 use crate::topo::world::chunk_manager::ecs::{
     start_async_chunk_load_task, start_async_chunk_purge_task,
@@ -143,11 +143,13 @@ impl ObserverLoadshare {
 }
 
 impl Component for ObserverLoadshare {
+    type Mutability = Mutable;
     const STORAGE_TYPE: StorageType = StorageType::Table;
 
     fn register_component_hooks(hooks: &mut ComponentHooks) {
         // Automatically create a loadshare if this component is marked as auto
-        hooks.on_insert(|mut world, entity, _id| {
+        hooks.on_insert(|mut world, ctx| {
+            let entity = ctx.entity;
             let loadshare_type = world.get_mut::<Self>(entity).unwrap().0;
 
             if loadshare_type == ObserverLoadshareType::Auto {
@@ -328,9 +330,9 @@ impl Plugin for WorldController {
         let chunk_batch_hooks = app.world_mut().register_component_hooks::<ChunkBatch>();
         ChunkBatch::manually_register_hooks(chunk_batch_hooks);
 
-        app.observe(update_observer_batches)
-            .observe(add_batch_chunks)
-            .observe(remove_batch_chunks);
+        app.add_observer(update_observer_batches)
+            .add_observer(add_batch_chunks)
+            .add_observer(remove_batch_chunks);
 
         app.add_systems(
             OnEnter(EngineState::Finished),

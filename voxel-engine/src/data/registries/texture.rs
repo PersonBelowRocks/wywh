@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use bevy::{
     asset::{AssetId, Assets, Handle},
-    ecs::system::Resource,
-    render::texture::Image,
+    ecs::resource::Resource,
+    image::Image,
 };
 use indexmap::IndexMap;
 use mip_texture_array::MipArrayTextureBuilder;

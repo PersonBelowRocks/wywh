@@ -7,7 +7,7 @@ use crate::{
     cartesian_grid,
     data::{
         registries::{
-            Registry, RegistryManager,
+            Registry,
             block::{BlockVariantId, BlockVariantRegistry},
         },
         resourcepath::rpath,

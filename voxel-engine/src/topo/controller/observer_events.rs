@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bevy::{
-    ecs::entity::{EntityHash, EntityHashMap, EntityHashSet},
+    ecs::entity::{EntityHashMap, EntityHashSet},
     prelude::*,
     time::Stopwatch,
 };
@@ -10,23 +10,15 @@ use itertools::Itertools;
 use super::{
     AddBatchChunks, ChunkBatch, CrossChunkBorder, LastPosition, LoadChunks, LoadReasons,
     LoadedChunkEvent, ObserverBatches, ObserverLoadshare, ObserverSettings, RemoveBatchChunks,
-    UnloadChunks, UpdateCachedChunkFlags, VoxelWorldTick,
+    UnloadChunks, UpdateCachedChunkFlags,
 };
 use crate::topo::fb_worldspace_to_chunkspace;
 use crate::{
-    render::{
-        lod::LevelOfDetail,
-        meshing::controller::events::{BuildChunkMeshEvent, MeshJobUrgency},
-    },
-    topo::{
-        neighbors::NeighborSelection,
-        world::{
-            ChunkPos,
-            chunk_manager::ChunkLoadResult,
-            chunk_populator::events::{
-                ChunkPopulated, PopulateChunk, PriorityCalcStrategy,
-                RecalculatePopulateEventPrioritiesEvent,
-            },
+    topo::world::{
+        ChunkPos,
+        chunk_manager::ChunkLoadResult,
+        chunk_populator::events::{
+            PopulateChunk, PriorityCalcStrategy, RecalculatePopulateEventPrioritiesEvent,
         },
     },
     util::closest_distance_sq,
@@ -108,7 +100,7 @@ pub fn update_observer_batches(
     mut unload_chunks: EventWriter<UnloadChunks>,
     mut cmds: Commands,
 ) {
-    let observer_entity = trigger.entity();
+    let observer_entity = trigger.target();
     let event = trigger.event();
     let (observer_batches, loadshare, settings) = q_observers.get(observer_entity).unwrap();
 
@@ -144,7 +136,7 @@ pub fn update_observer_batches(
         );
 
         if !out_of_range.is_empty() {
-            unload_chunks.send(UnloadChunks {
+            unload_chunks.write(UnloadChunks {
                 loadshare: loadshare_id,
                 reasons: LoadReasons::RENDER,
                 chunks: out_of_range.clone(),
@@ -167,7 +159,7 @@ pub fn update_observer_batches(
         );
 
         if !in_range.is_empty() {
-            load_chunks.send(LoadChunks {
+            load_chunks.write(LoadChunks {
                 loadshare: loadshare_id,
                 reasons: LoadReasons::RENDER,
                 auto_populate: true,
@@ -200,7 +192,7 @@ pub fn populate_loaded_chunks(
         let observer_positions = q_observers.iter().map(|&transform| transform.translation);
         let min_distance_sq = closest_distance_sq(center, observer_positions).unwrap_or(0.0);
 
-        populate_chunk_events.send(PopulateChunk {
+        populate_chunk_events.write(PopulateChunk {
             chunk_pos: loaded.chunk_pos,
             // Closer chunk positions are higher priority, so we need to invert the distance.
             priority: u32::MAX - (min_distance_sq.ceil() as u32),
@@ -227,10 +219,7 @@ pub fn send_priority_recalculation_events(
 
     // This is used to track the "active" observers so that we remove observers from 'previous_observer_positions'
     // when they are no longer in the world.
-    let mut active = EntityHashSet::with_capacity_and_hasher(
-        previous_observer_positions.len(),
-        EntityHash::default(),
-    );
+    let mut active = EntityHashSet::with_capacity(previous_observer_positions.len());
 
     let mut observer_positions = Vec::<(Entity, Vec3)>::new();
 
@@ -260,7 +249,7 @@ pub fn send_priority_recalculation_events(
         previous_observer_positions.clear();
         time_since_last_send.reset();
 
-        population_events.send(RecalculatePopulateEventPrioritiesEvent {
+        population_events.write(RecalculatePopulateEventPrioritiesEvent {
             strategy: PriorityCalcStrategy::ClosestDistanceSq(
                 observer_positions.iter().map(|(_, p)| *p).collect_vec(),
             ),

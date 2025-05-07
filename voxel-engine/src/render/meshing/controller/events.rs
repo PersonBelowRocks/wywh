@@ -1,9 +1,6 @@
 use crate::{
     render::lod::{LODs, LevelOfDetail},
-    topo::{
-        neighbors::NeighborSelection,
-        world::{ChunkPos, chunk_populator::events::PriorityCalcStrategy},
-    },
+    topo::{neighbors::NeighborSelection, world::ChunkPos},
 };
 use bevy::prelude::*;
 

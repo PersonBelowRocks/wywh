@@ -1,9 +1,8 @@
 use std::{ops::Range, sync::Arc};
 
 use bevy::math::{IVec3, ivec3};
-use dashmap::{DashMap, DashSet, mapref::entry::Entry as DashMapEntry};
+use dashmap::{DashMap, mapref::entry::Entry as DashMapEntry};
 use error::{ChunkGetError, CmStructuralError};
-use flume::{Receiver, Sender};
 use hb::{HashMap, hash_map::Entry};
 use inner_storage::{ChunkStorageHasher, InnerChunkStorage, LoadedChunk};
 use itertools::Itertools;

@@ -20,7 +20,7 @@ static_assertions.workspace = true
 thiserror.workspace = true
 ahash = "0.8.11"
 derive-new = "0.7.0"
-glam = { version = "0.30.3", features = ["serde"] }
+glam = { version = "0.29.3", features = ["serde"] }
 hashbrown = "0.15.3"
 ndarray = "0.16.1"
 smallvec = "1.15.0"
