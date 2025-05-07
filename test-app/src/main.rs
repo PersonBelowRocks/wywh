@@ -22,9 +22,7 @@ use bevy::render::RenderPlugin;
 use bevy_renderdoc::RenderDocPlugin;
 use debug_info::{DebugText, FpsText};
 use flume::Sender;
-use ve::render::core::RenderCoreDebug;
 use ve::render::lod::LevelOfDetail;
-use ve::render::ChunkHzbOcclusionCulling;
 use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle, VisibleBatches};
 use ve::topo::world::ChunkPos;
 use ve::topo::ObserverSettings;
@@ -77,10 +75,6 @@ fn main() {
             TemporalAntiAliasPlugin,
             ve::VoxelPlugin {
                 variant_folders: Arc::new(vec!["test-app/assets/variants".into()]),
-                render_core_debug: Some(RenderCoreDebug {
-                    clear_inspection: ci_rx,
-                    inspect_chunks: insp_rx,
-                }),
             },
             FrameTimeDiagnosticsPlugin,
         ))
@@ -156,25 +150,22 @@ fn setup(
 
     // light
     let directional_light = commands
-        .spawn((
-            DirectionalLightBundle {
-                directional_light: DirectionalLight {
-                    color: Color::WHITE,
-                    illuminance: 10000.0,
-                    shadows_enabled: true,
+        .spawn((DirectionalLightBundle {
+            directional_light: DirectionalLight {
+                color: Color::WHITE,
+                illuminance: 10000.0,
+                shadows_enabled: true,
 
-                    ..default()
-                },
-                transform: Transform::from_rotation(Quat::from_euler(
-                    EulerRot::ZYX,
-                    0.0,
-                    PI * -0.15,
-                    PI * -0.15,
-                )),
                 ..default()
             },
-            ChunkHzbOcclusionCulling,
-        ))
+            transform: Transform::from_rotation(Quat::from_euler(
+                EulerRot::ZYX,
+                0.0,
+                PI * -0.15,
+                PI * -0.15,
+            )),
+            ..default()
+        },))
         .id();
 
     commands.insert_resource(Msaa::Off);

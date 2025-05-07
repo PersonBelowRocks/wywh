@@ -13,7 +13,6 @@ use bevy::prelude::*;
 use diagnostics::VoxelEngineDiagnosticsPlugin;
 use mip_texture_array::MippedArrayTexturePlugin;
 
-use render::core::RenderCoreDebug;
 use topo::controller::{WorldController, WorldControllerSettings};
 
 pub mod data;
@@ -24,13 +23,12 @@ pub mod util;
 
 use crate::{
     data::systems::{build_registries, check_textures, load_textures, VariantFolders},
-    render::{core::RenderCore, meshing::controller::MeshController},
+    render::meshing::controller::MeshController,
 };
 
 #[derive(Default)]
 pub struct VoxelPlugin {
     pub variant_folders: Arc<Vec<PathBuf>>,
-    pub render_core_debug: Option<RenderCoreDebug>,
 }
 
 #[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
@@ -63,9 +61,6 @@ impl Plugin for VoxelPlugin {
                 },
             });
         app.add_plugins(MeshController);
-        app.add_plugins(RenderCore {
-            debug: self.render_core_debug.clone(),
-        });
         app.add_plugins(MippedArrayTexturePlugin::default());
 
         app.init_state::<EngineState>();

@@ -6,7 +6,6 @@ use ve::topo::world::ChunkPos;
 use ve::topo::{fb_worldspace_to_chunkspace, CHUNK_FULL_BLOCK_DIMS};
 use ve::{
     diagnostics::ENGINE_DIAGNOSTICS,
-    render::meshing::controller::ChunkMeshExtractBridge,
     topo::{controller::LastPosition, world::VoxelRealm, ObserverSettings},
     util::sync::LockStrategy,
 };
@@ -33,7 +32,6 @@ pub fn text_section(string: impl Into<String>) -> TextSection {
 pub fn update_debug_text(
     diagnostics: Res<DiagnosticsStore>,
     realm: VoxelRealm,
-    meshes: Res<ChunkMeshExtractBridge>,
     mut q: Query<&mut Text, With<DebugText>>,
     player_q: Query<&Transform, With<PlayerCamController>>,
 ) {
@@ -108,18 +106,6 @@ pub fn update_debug_text(
         .unwrap_or_else(|| "NONE".to_string());
 
     sections.push(format!("Chunk flags: {hr_chunk_flags}\n"));
-
-    let statuses = meshes.get_statuses(chunk_pos);
-
-    if !statuses.is_empty() {
-        sections.push("Chunk mesh statuses:\n".to_string());
-
-        for (lod, status) in statuses.iter() {
-            sections.push(format!(" - {lod:?} : {:?}\n", status.status));
-        }
-    } else {
-        sections.push("No LODs where this chunk has a mesh status\n".to_string())
-    }
 
     sections.push("\n".to_string());
     sections.push(format!("Tick: {}\n", realm.tick()));
