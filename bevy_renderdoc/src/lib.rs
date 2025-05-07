@@ -22,7 +22,7 @@ use std::error::Error;
 
 use bevy::{prelude::*, render::renderer::RenderDevice, winit::WinitWindows};
 use renderdoc::*;
-use sysinfo::{Pid, ProcessRefreshKind};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate};
 
 pub use renderdoc;
 
@@ -107,8 +107,11 @@ fn trigger_capture(
     // this could get mismatched.
     if key.just_pressed(KeyCode::F12) {
         // Avoid launching multiple instances of the replay ui
-        if system
-            .refresh_process_specifics(Pid::from(*replay_pid), ProcessRefreshKind::new().with_cpu())
+        if system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[Pid::from(*replay_pid)]),
+            false,
+            ProcessRefreshKind::nothing().with_cpu(),
+        ) == 1
         {
             return;
         }
