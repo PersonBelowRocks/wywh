@@ -46,7 +46,7 @@ pub(crate) fn mouse_controls(
 ) {
     const SENSITIVITY: f32 = 0.05;
 
-    let (mut trans, controller) = player.single_mut();
+    let (mut trans, controller) = player.single_mut().unwrap();
 
     if !controller.controlled {
         return;
@@ -76,7 +76,7 @@ pub fn kb_controls(
 ) {
     const BASE_MOVEMENT: f32 = 25.0;
 
-    let (mut tfm, controller) = q.single_mut();
+    let (mut tfm, controller) = q.single_mut().unwrap();
 
     if !controller.controlled {
         return;
@@ -85,7 +85,7 @@ pub fn kb_controls(
     let fwd = tfm.forward();
     let right = tfm.right();
 
-    let travel = t.delta_seconds() * BASE_MOVEMENT;
+    let travel = t.delta_secs() * BASE_MOVEMENT;
 
     for code in input.get_pressed() {
         match code {
@@ -107,19 +107,19 @@ pub fn cursor_grab(
     btn: Res<ButtonInput<MouseButton>>,
     key: Res<ButtonInput<KeyCode>>,
 ) {
-    let Ok(mut window) = q_window.get_single_mut() else {
+    let Ok(mut window) = q_window.single_mut() else {
         // If there's no window, we're probably shutting down, so we skip everything
         return;
     };
 
-    let mut controller = q_controller.single_mut();
+    let mut controller = q_controller.single_mut().unwrap();
 
     if btn.just_pressed(MouseButton::Left) {
         // if you want to use the cursor, but not let it leave the window,
         // use `Confined` mode:
         info!("Locking cursor");
-        window.cursor.grab_mode = CursorGrabMode::Locked;
-        window.cursor.visible = false;
+        window.cursor_options.grab_mode = CursorGrabMode::Locked;
+        window.cursor_options.visible = false;
         controller.controlled = true;
         // window.set_cursor_grab_mode(CursorGrabMode::Confined);
 
@@ -132,8 +132,8 @@ pub fn cursor_grab(
 
     if key.just_pressed(KeyCode::Escape) {
         info!("Unlocking cursor");
-        window.cursor.grab_mode = CursorGrabMode::None;
-        window.cursor.visible = true;
+        window.cursor_options.grab_mode = CursorGrabMode::None;
+        window.cursor_options.visible = true;
         controller.controlled = false;
     }
 }
@@ -143,7 +143,7 @@ pub fn inspect(
     debug: Res<RenderCoreDebugSender>,
     key: Res<ButtonInput<KeyCode>>,
 ) {
-    let pos = q.single().translation;
+    let pos = q.single().unwrap().translation;
     let chunk_pos = ChunkPos::from(fb_worldspace_to_chunkspace(pos.floor().as_ivec3()));
 
     if key.just_pressed(KeyCode::Tab) {

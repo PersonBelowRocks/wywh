@@ -19,23 +19,15 @@ pub struct DebugText;
 #[derive(Component)]
 pub struct FpsText;
 
-pub fn text_section(string: impl Into<String>) -> TextSection {
-    let default_style = TextStyle {
-        font_size: 35.0,
-        color: Color::WHITE,
-        ..default()
-    };
-
-    TextSection::new(string, default_style)
-}
-
 pub fn update_debug_text(
     diagnostics: Res<DiagnosticsStore>,
     realm: VoxelRealm,
-    mut q: Query<&mut Text, With<DebugText>>,
+    mut debug_text_q: Query<&mut Text, With<DebugText>>,
     player_q: Query<&Transform, With<PlayerCamController>>,
 ) {
-    let player = player_q.single();
+    let player = player_q.single().unwrap();
+    let mut debug_text = debug_text_q.single_mut().unwrap();
+
     let pos = player.translation;
     let chunk_pos = ChunkPos::from(fb_worldspace_to_chunkspace(pos.floor().as_ivec3()));
 
@@ -83,6 +75,7 @@ pub fn update_debug_text(
     }
 
     sections.push("\n".to_string());
+
     sections.push(format!("chunk: {}\n", chunk_pos));
 
     // let hr_load_reasons = realm
@@ -110,9 +103,7 @@ pub fn update_debug_text(
     sections.push("\n".to_string());
     sections.push(format!("Tick: {}\n", realm.tick()));
 
-    for mut text in &mut q {
-        text.sections = sections.clone().into_iter().map(text_section).collect();
-    }
+    *debug_text = Text(sections.join(""));
 }
 
 pub fn get_cardinal_direction(dir: Dir3) -> Face {
@@ -155,10 +146,10 @@ pub fn fps_text_update_system(
             // Format the number as to leave space for 4 digits, just in case,
             // right-aligned and rounded. This helps readability when the
             // number changes rapidly.
-            text.sections = [format!("FPS: {value:>4.0}")].map(text_section).to_vec();
+            *text = Text(format!("FPS: {value:>4.0}"));
         } else {
             // display "N/A" if we can't get a FPS measurement
-            text.sections = ["N/A".to_string()].map(text_section).to_vec();
+            *text = Text("N/A".to_string());
         }
     }
 }

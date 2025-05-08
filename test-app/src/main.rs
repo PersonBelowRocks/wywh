@@ -7,13 +7,13 @@ use std::env;
 use std::f32::consts::PI;
 use std::sync::Arc;
 
-use bevy::core_pipeline::experimental::taa::{TemporalAntiAliasBundle, TemporalAntiAliasPlugin};
+use bevy::core_pipeline::experimental::taa::{TemporalAntiAliasPlugin, TemporalAntiAliasing};
 use bevy::core_pipeline::prepass::DeferredPrepass;
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 
 use bevy::ecs::entity::EntityHashSet;
 use bevy::log::{self, LogPlugin};
-use bevy::pbr::ScreenSpaceAmbientOcclusionBundle;
+use bevy::pbr::ScreenSpaceAmbientOcclusion;
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::prelude::*;
 
@@ -61,6 +61,7 @@ fn main() {
                     }
                     .into(),
                     synchronous_pipeline_compilation: true,
+                    ..default()
                 })
                 .set(AssetPlugin {
                     mode: AssetMode::Unprocessed,
@@ -71,12 +72,12 @@ fn main() {
                     level: log::Level::DEBUG,
                     ..default()
                 }),
-            WireframePlugin,
+            WireframePlugin::default(),
             TemporalAntiAliasPlugin,
             ve::VoxelPlugin {
                 variant_folders: Arc::new(vec!["test-app/assets/variants".into()]),
             },
-            FrameTimeDiagnosticsPlugin,
+            FrameTimeDiagnosticsPlugin::default(),
         ))
         .add_systems(Startup, setup.after(CoreEngineSetup::Initialize))
         .add_systems(
@@ -110,81 +111,80 @@ fn setup(
     debug!("Setting up test-app");
 
     commands.spawn((
-        TextBundle::default()
-            .with_text_justify(JustifyText::Left)
-            .with_style(Style {
-                position_type: PositionType::Absolute,
-                bottom: Val::Percent(2.0),
-                left: Val::Percent(2.0),
-                flex_direction: FlexDirection::Row,
-                ..default()
-            }),
+        TextColor(Color::WHITE),
+        TextLayout::new_with_justify(JustifyText::Left),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Percent(2.0),
+            left: Val::Percent(2.0),
+            flex_direction: FlexDirection::Row,
+            ..default()
+        },
         DebugText,
     ));
 
     commands.spawn((
-        TextBundle::default()
-            .with_text_justify(JustifyText::Left)
-            .with_style(Style {
-                position_type: PositionType::Absolute,
-                top: Val::Percent(2.0),
-                left: Val::Percent(2.0),
-                flex_direction: FlexDirection::Row,
-                ..default()
-            }),
+        TextColor(Color::WHITE),
+        TextLayout::new_with_justify(JustifyText::Left),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Percent(2.0),
+            left: Val::Percent(2.0),
+            flex_direction: FlexDirection::Row,
+            ..default()
+        },
         FpsText,
     ));
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Rectangle::from_size(Vec2::splat(2.0))),
-        material: materials.add(Color::srgb(0.3, 0.5, 0.3)),
-        ..default()
-    });
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::from_size(Vec2::splat(2.0)))),
+        MeshMaterial3d(materials.add(Color::srgb(0.3, 0.5, 0.3))),
+    ));
     // cube
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::from_size(Vec3::ONE)),
-        material: materials.add(Color::srgb(0.8, 0.7, 0.6)),
-        transform: Transform::from_xyz(-1.0, 0.5, -1.0),
-        ..default()
-    });
+    commands.spawn((
+        Mesh3d(meshes.add(Cuboid::from_size(Vec3::ONE))),
+        MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+        Transform::from_xyz(-1.0, 0.5, -1.0),
+    ));
 
     // light
     let directional_light = commands
-        .spawn((DirectionalLightBundle {
-            directional_light: DirectionalLight {
+        .spawn((
+            DirectionalLight {
                 color: Color::WHITE,
                 illuminance: 10000.0,
                 shadows_enabled: true,
 
                 ..default()
             },
-            transform: Transform::from_rotation(Quat::from_euler(
-                EulerRot::ZYX,
-                0.0,
-                PI * -0.15,
-                PI * -0.15,
-            )),
-            ..default()
-        },))
+            Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, 0.0, PI * -0.15, PI * -0.15)),
+        ))
         .id();
 
-    commands.insert_resource(Msaa::Off);
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
         brightness: 200.0,
+        affects_lightmapped_meshes: true,
     });
 
     // camera
     let observer_entity = commands
         .spawn((
-            Camera3dBundle {
-                transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-                projection: Projection::Perspective(PerspectiveProjection {
-                    fov: 100.0 * (PI / 180.0),
-                    ..default()
-                }),
+            Msaa::Off,
+            Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            Camera3d::default(),
+            Projection::Perspective(PerspectiveProjection {
+                fov: 100.0 * (PI / 180.0),
                 ..default()
-            },
+            }),
+            // Camera3dBundle {
+            //     transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            //     projection: Projection::Perspective(PerspectiveProjection {
+            //         fov: 100.0 * (PI / 180.0),
+            //         ..default()
+            //     }),
+            //     ..default()
+            // },
             controls::PlayerCamController::default(),
             ObserverBundle {
                 settings: ObserverSettings {
@@ -194,24 +194,19 @@ fn setup(
                 },
                 ..default()
             },
-            VisibilityBundle::default(),
-            ScreenSpaceAmbientOcclusionBundle::default(),
+            ScreenSpaceAmbientOcclusion::default(),
+            TemporalAntiAliasing::default(),
             DeferredPrepass,
         ))
-        .insert(TemporalAntiAliasBundle { ..default() })
         .with_children(|builder| {
             builder.spawn((
-                SpotLightBundle {
-                    spot_light: SpotLight {
-                        color: Color::WHITE,
-                        intensity: 10000000.0,
-                        shadows_enabled: true,
-                        inner_angle: PI / 8.0 * 0.85,
-                        outer_angle: PI / 8.0,
-                        range: 10000.0,
-
-                        ..default()
-                    },
+                SpotLight {
+                    color: Color::WHITE,
+                    intensity: 10000000.0,
+                    shadows_enabled: true,
+                    inner_angle: PI / 8.0 * 0.85,
+                    outer_angle: PI / 8.0,
+                    range: 10000.0,
 
                     ..default()
                 },
@@ -228,10 +223,10 @@ fn setup(
         .id();
 
     commands
-        .get_or_spawn(observer_entity)
+        .entity(observer_entity)
         .insert(VisibleBatches(EntityHashSet::from_iter([batch_entity])));
 
     commands
-        .get_or_spawn(directional_light)
+        .entity(directional_light)
         .insert(VisibleBatches(EntityHashSet::from_iter([batch_entity])));
 }
