@@ -113,6 +113,7 @@ fn setup(
     commands.spawn((
         TextColor(Color::WHITE),
         TextLayout::new_with_justify(JustifyText::Left),
+        Text::default(),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Percent(2.0),
@@ -126,6 +127,7 @@ fn setup(
     commands.spawn((
         TextColor(Color::WHITE),
         TextLayout::new_with_justify(JustifyText::Left),
+        Text::default(),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Percent(2.0),
