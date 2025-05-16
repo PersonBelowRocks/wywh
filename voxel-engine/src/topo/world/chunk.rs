@@ -15,7 +15,12 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 
-#[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
+/// The position of a chunk. Commonly used as a key to various map-like structures throughout the engine.
+/// Behaves largely like an integer vector, supporting easy conversions to and from [`IVec3`].
+///
+/// Used as a component to make an entity into a "chunk entity", representing a chunk and (some of) its associated data.
+/// When inserted into an entity as a component, a component hook will "link" that entity and the inserted chunk position in the [`ChunkEntityLink`](super::ecs::ChunkEntityLink).
+#[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct ChunkPos(IVec3);
 
 impl ChunkPos {

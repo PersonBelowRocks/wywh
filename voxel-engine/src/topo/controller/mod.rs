@@ -37,7 +37,6 @@ mod batch;
 use crate::topo::world::chunk_manager::ChunkNotification;
 pub use batch::*;
 use octo::Region;
-use octo::voxelset::VoxelSet;
 
 #[derive(Resource, Default)]
 pub struct VoxelWorldTick(u64);
