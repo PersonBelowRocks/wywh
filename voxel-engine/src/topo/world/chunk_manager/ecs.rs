@@ -6,8 +6,8 @@ use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 use crate::{
     topo::{
         controller::{
-            LoadChunks, LoadReasons, LoadReasonsAddedEvent, LoadReasonsRemovedEvent,
-            LoadedChunkEvent, LoadshareId, PurgedChunkEvent, UnloadChunks,
+            LoadChunksEvent, LoadReasons, LoadReasonsAddedEvent, LoadReasonsRemovedEvent,
+            LoadedChunkEvent, LoadshareId, PurgedChunkEvent, UnloadChunksEvent,
         },
         world::ChunkPos,
     },
@@ -80,7 +80,7 @@ fn handle_load_chunk<'a>(
 }
 
 pub fn start_async_chunk_load_task(
-    load_chunks: Res<AsyncEventReader<LoadChunks>>,
+    load_chunks: Res<AsyncEventReader<LoadChunksEvent>>,
     loaded_chunk_funnel: Res<EventFunnel<LoadedChunkEvent>>,
     added_load_reasons_funnel: Res<EventFunnel<LoadReasonsAddedEvent>>,
     chunk_manager: Res<ChunkManagerRes>,
@@ -171,7 +171,7 @@ fn handle_purge_chunk<'a>(
 }
 
 pub fn start_async_chunk_purge_task(
-    unload_chunks: Res<AsyncEventReader<UnloadChunks>>,
+    unload_chunks: Res<AsyncEventReader<UnloadChunksEvent>>,
     purged_chunk_funnel: Res<EventFunnel<PurgedChunkEvent>>,
     removed_load_reasons_funnel: Res<EventFunnel<LoadReasonsRemovedEvent>>,
     chunk_manager: Res<ChunkManagerRes>,

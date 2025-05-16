@@ -123,6 +123,33 @@ impl Region {
         Region::new(self.min() * scale, self.max() * scale)
     }
 
+    /// Offset the region by the given vector, adding the vector to this region's [`min()`](Region::min) and [`max()`](Region::max)
+    ///
+    /// # Maximum Values
+    /// The addition of the provided offset to this region's min and max is saturating.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use octo::Region;
+    /// # use glam::{IVec3, ivec3};
+    ///
+    /// let region = Region::new([-2, -2, -2], [2, 2, 2]);
+    /// assert!(region.contains(ivec3(-1, -2, -1)));
+    /// assert!(!region.contains(ivec3(5, 5, 0))); // this is outside the region
+    ///
+    /// let offset = region.offset(ivec3(4, 4, 0));
+    /// assert!(!offset.contains(ivec3(-1, -2, -1))); // we moved away from this position
+    /// assert!(offset.contains(ivec3(5, 5, 0))); // but this is not contained
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn offset(self, offset: IVec3) -> Region {
+        Region {
+            min: self.min.saturating_add(offset),
+            max: self.max.saturating_add(offset),
+        }
+    }
+
     /// The volume of this region.
     ///
     /// # Examples

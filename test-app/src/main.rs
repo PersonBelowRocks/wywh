@@ -23,7 +23,7 @@ use bevy_renderdoc::RenderDocPlugin;
 use debug_info::{DebugText, FpsText};
 use flume::Sender;
 use ve::render::lod::LevelOfDetail;
-use ve::topo::ObserverSettings;
+use ve::topo::ActorLoadRegion;
 use ve::topo::controller::{BatchFlags, ChunkBatch, ChunkBatchLod, ObserverBundle, VisibleBatches};
 use ve::topo::world::ChunkPos;
 use ve::{CoreEngineSetup, EngineState};
@@ -189,11 +189,7 @@ fn setup(
             // },
             controls::PlayerCamController::default(),
             ObserverBundle {
-                settings: ObserverSettings {
-                    horizontal_range: 10,
-                    view_distance_above: 5,
-                    view_distance_below: 5,
-                },
+                settings: ActorLoadRegion::default(),
                 ..default()
             },
             ScreenSpaceAmbientOcclusion::default(),

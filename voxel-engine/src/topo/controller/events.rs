@@ -1,9 +1,7 @@
 use bevy::prelude::*;
 
+use crate::topo::world::ChunkPos;
 use crate::topo::world::chunk_manager::ChunkLoadResult;
-use crate::{render::lod::LevelOfDetail, topo::world::ChunkPos};
-
-use super::{LoadReasons, LoadshareId};
 
 #[derive(Clone, Event, Debug)]
 pub struct CrossChunkBorder {
@@ -16,47 +14,32 @@ pub struct CrossChunkBorder {
     pub new_chunk: ChunkPos,
 }
 
-/// These chunks should be loaded for the given reasons.
-/// Chunks will be loaded under the provided reasons if they aren't already loaded, or they will
-/// receive the given load reasons in addition to their existing ones.
+/// Load these chunks for the given `actor`.
 #[derive(Clone, Event, Debug)]
-pub struct LoadChunks {
-    pub loadshare: LoadshareId,
-    pub reasons: LoadReasons,
+pub struct LoadChunksEvent {
+    pub actor: Entity,
+    /// Whether the chunks should be populated by the chunk populator.
     pub auto_populate: bool,
     pub chunks: Vec<ChunkPos>,
 }
 
 /// Event triggered when a chunk is loaded. This event is "downstream" from [`LoadChunksEvent`] in that
-/// `LoadChunkEvent`'s handler system in the engine also triggers this event. But this event is dispatched
-/// AFTER a chunk is loaded, whereas `LoadChunkEvent` is dispatched TO LOAD a chunk.
-/// This event is not triggered when load reasons are updated, only when a new chunk is loaded.
+/// `LoadChunkEvent`'s handler system in the engine also sends this event. But this event is dispatched
+/// AFTER a chunk is loaded, whereas [`LoadChunksEvent`] is dispatched TO LOAD chunks.
+/// This event is not triggered when an already loaded chunk is loaded by another actor, only when a new chunk is loaded.
 #[derive(Copy, Clone, Event, Debug)]
 pub struct LoadedChunkEvent {
     pub chunk_pos: ChunkPos,
+    /// Whether the chunks should be populated by the chunk populator.
     pub auto_populate: bool,
     pub load_result: ChunkLoadResult,
 }
 
-/// Event triggered when the load reasons for a chunk are updated.
-#[derive(Copy, Clone, Event, Debug)]
-pub struct LoadReasonsAddedEvent {
-    pub chunk_pos: ChunkPos,
-    /// The load reasons added to the chunk for this loadshare.
-    pub reasons_added: LoadReasons,
-    /// The load reasons' loadshare.
-    pub loadshare: LoadshareId,
-    /// Whether the chunk was just loaded and these load reasons were the ones first added.
-    pub was_loaded: bool,
-}
-
-/// This chunk should be unloaded for the given reasons.
-/// Will remove the provided reasons from an already loaded chunk, and if that chunk ends up having
-/// no load reasons left it will be unloaded.
+/// These chunks should be unloaded for the given actor.
+/// If the chunk is not loaded by any actors after this event is handled, it will be purged.
 #[derive(Clone, Event, Debug)]
-pub struct UnloadChunks {
-    pub loadshare: LoadshareId,
-    pub reasons: LoadReasons,
+pub struct UnloadChunksEvent {
+    pub actor: Entity,
     pub chunks: Vec<ChunkPos>,
 }
 
@@ -66,33 +49,5 @@ pub struct UnloadChunks {
 pub struct PurgedChunkEvent {
     pub chunk_pos: ChunkPos,
 }
-
-/// Event triggered when load reasons are removed from a chunk.
-#[derive(Copy, Clone, Event, Debug)]
-pub struct LoadReasonsRemovedEvent {
-    pub chunk_pos: ChunkPos,
-    /// The load reasons that were removed from the chunk for this loadshare.
-    pub reasons_removed: LoadReasons,
-    /// The loadshare that had load reasons removed.
-    pub loadshare: LoadshareId,
-    /// Whether the removal of the load reasons caused the chunk to be purged.
-    pub was_purged: bool,
-}
-
-#[derive(Clone, Event, Debug)]
-pub struct AddBatchChunks(pub Vec<ChunkPos>);
-
-#[derive(Clone, Event, Debug)]
-pub struct RemoveBatchChunks(pub Vec<ChunkPos>);
-
-///
-#[derive(Clone, Event, Debug)]
-pub struct RemovedBatchChunks {
-    pub chunks: Vec<ChunkPos>,
-    pub batch: Entity,
-}
-
-#[derive(Clone, Event, Debug)]
-pub struct AddBatch(pub Option<LevelOfDetail>);
 
 // TODO: loadshare remove event

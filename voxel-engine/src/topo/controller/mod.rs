@@ -1,17 +1,16 @@
 use std::sync::Arc;
-use std::{fmt, time::Duration};
+use std::time::Duration;
 
 use async_bevy_events::{AsyncEventPlugin, EventFunnelPlugin};
-use bevy::ecs::component::{ComponentHooks, Mutable, StorageType};
+use bevy::ecs::component::{ComponentHooks, HookContext, Mutable, StorageType};
+use bevy::ecs::entity::EntityHashSet;
+use bevy::ecs::world::DeferredWorld;
 use bevy::math::ivec3;
 use bevy::prelude::*;
 use bevy::time::Stopwatch;
-use bitflags::bitflags;
-use hb::HashSet;
 
-use observer_events::{
-    dispatch_move_events, populate_loaded_chunks, send_priority_recalculation_events,
-    update_observer_batches,
+use actor_events::{
+    populate_loaded_chunks, send_priority_recalculation_events, trigger_actor_chunk_border_events,
 };
 
 use crate::data::registries::block::BlockVariantRegistry;
@@ -28,14 +27,12 @@ use crate::{CoreEngineSetup, EngineState};
 use super::world::chunk_manager::ecs::{ChunkLifecycleTaskLockGranularity, ChunkManagerRes};
 use super::world::{ChunkManager, ChunkPos, VoxelRealm};
 
+mod actor_events;
 mod error;
 mod events;
-mod observer_events;
 pub use events::*;
 
-mod batch;
 use crate::topo::world::chunk_manager::ChunkNotification;
-pub use batch::*;
 use octo::Region;
 
 #[derive(Resource, Default)]
@@ -51,180 +48,30 @@ fn increase_voxel_world_tick(mut tick: ResMut<VoxelWorldTick>) {
     tick.0 += 1;
 }
 
-#[derive(Clone, Component, Debug)]
-pub struct ObserverSettings {
-    pub horizontal_range: u32,
-    pub view_distance_above: u32,
-    pub view_distance_below: u32,
-}
+/// The region (in chunkspace) around a chunk actor which will be loaded automatically.
+/// `[0, 0, 0]` in the region corresponds to the chunk the actor is currently in.
+#[derive(Clone, Component, Debug, dm::Into, dm::Deref, dm::DerefMut)]
+pub struct ActorLoadRegion(pub Region);
 
-impl Default for ObserverSettings {
+impl Default for ActorLoadRegion {
     fn default() -> Self {
-        Self {
-            horizontal_range: 4,
-            view_distance_above: 2,
-            view_distance_below: 2,
-        }
+        const MIN: IVec3 = ivec3(-4, -2, -4);
+        const MAX: IVec3 = ivec3(4, 2, 4);
+        Self(Region::new_inclusive(MIN, MAX))
     }
 }
 
-impl ObserverSettings {
-    pub fn within_range(&self, opos: ChunkPos, cpos: ChunkPos) -> bool {
-        let diff = cpos.as_ivec3() - opos.as_ivec3();
+/// A component attached to chunks, listing all the actor entities that have this chunk loaded.
+#[derive(Clone, Component, Debug, dm::Deref, dm::DerefMut, Default)]
+pub struct ChunkActors(EntityHashSet);
 
-        let max_hor_diff = i32::max(diff.x.abs(), diff.z.abs()) as u32;
-        // Positive if chunk is above the observer, negative if it's below
-        let height_diff = diff.y;
-
-        max_hor_diff <= self.horizontal_range
-            && height_diff <= (self.view_distance_above as i32)
-            && height_diff >= -(self.view_distance_below as i32)
-    }
-
-    pub fn region(&self) -> Region {
-        let min = -ivec3(
-            self.horizontal_range as i32,
-            self.view_distance_below as i32,
-            self.horizontal_range as i32,
-        );
-        let max = ivec3(
-            self.horizontal_range as i32,
-            self.view_distance_above as i32,
-            self.horizontal_range as i32,
-        );
-
-        Region::new_inclusive(min, max)
-    }
-}
-
-/// How an observer should treat its loadshare
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
-pub(crate) enum ObserverLoadshareType {
-    /// Automatically create a new and unique loadshare for this observer. Upon having one created
-    /// the loadshare type will be updated to `ObserverLoadshareType::Observer` with the created
-    /// loadshare ID
-    #[default]
-    Auto,
-    /// Manually given loadshare to the observer. In this case the observer shouldn't clear the
-    /// entire loadshare if it's removed.
-    Manual(LoadshareId),
-    /// The loadshare is owned and controlled by the observer, this variant should never be constructed
-    /// manually and should only be created from the engine giving an `Auto` observer a loadshare.
-    Observer(LoadshareId),
-}
-
-/// The loadshare of an observer.
-#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
-pub struct ObserverLoadshare(pub(crate) ObserverLoadshareType);
-
-impl ObserverLoadshare {
-    /// Manually track the given loadshare ID. The observer will not clear the entire loadshare if
-    /// it's removed
-    pub fn manual(id: LoadshareId) -> Self {
-        Self(ObserverLoadshareType::Manual(id))
-    }
-
-    /// Automatically grant a unique loadshare to this observer and clear the entire loadshare if
-    /// the observer is removed.
-    pub fn auto() -> Self {
-        Self(ObserverLoadshareType::default())
-    }
-
-    /// Get the loadshare ID if there is one. Will return `None` if the loadshare type is auto
-    /// and hasn't been granted a loadshare ID yet.
-    pub fn get(&self) -> Option<LoadshareId> {
-        match self.0 {
-            ObserverLoadshareType::Auto => None,
-            ObserverLoadshareType::Observer(id) => Some(id),
-            ObserverLoadshareType::Manual(id) => Some(id),
-        }
-    }
-}
-
-impl Component for ObserverLoadshare {
-    type Mutability = Mutable;
-    const STORAGE_TYPE: StorageType = StorageType::Table;
-
-    fn register_component_hooks(hooks: &mut ComponentHooks) {
-        // Automatically create a loadshare if this component is marked as auto
-        hooks.on_insert(|mut world, ctx| {
-            let entity = ctx.entity;
-            let loadshare_type = world.get_mut::<Self>(entity).unwrap().0;
-
-            if loadshare_type == ObserverLoadshareType::Auto {
-                let mut provider = world.resource_mut::<LoadshareProvider>();
-                let loadshare_id = provider.create_loadshare();
-
-                // Need to get the entity again here because we can't hold 2 mutable references to the world at the same time.
-                world.get_mut::<Self>(entity).unwrap().0 =
-                    ObserverLoadshareType::Observer(loadshare_id);
-            }
-        });
-
-        // TODO: hook for removing an entire loadshare if this component is removed
-    }
-}
-
-/// A loadshare is a group of engine resources (permits, chunks, etc.) managed by some owner.
-/// This owner is often an observer but doesn't have to be. When a chunk is loaded it's loaded under
-/// a loadshare with some given load reasons. More chunks can be loaded under the same loadshare later.
-/// When a chunk is unloaded, its load reasons are removed for a given loadshare. Chunks will be removed
-/// from the loadshare if they have no remaining reasons. If a chunk isn't present in any loadshare, it can be
-/// unloaded from the engine entirely. This same logic applies to permits.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct LoadshareId(u32);
-
-impl nohash::IsEnabled for LoadshareId {}
-
-pub type LoadshareMap<T> = hb::HashMap<LoadshareId, T, nohash::BuildNoHashHasher<LoadshareId>>;
-pub type LoadshareIdHasher = nohash::BuildNoHashHasher<LoadshareId>;
-
-/// Provides unique loadshare IDs. You can leak resources by getting a unique loadshare ID from the
-/// provider, allocating a resource under that loadshare, and forgetting or losing track of the ID.
-/// In this case there's no way to refer to the resources under that loadshare because you don't have
-/// the ID anymore. For this reason always be careful to store your loadshare ID somewhere.
-#[derive(Resource, Default)]
-pub struct LoadshareProvider {
-    loadshares: HashSet<LoadshareId, nohash::BuildNoHashHasher<LoadshareId>>,
-}
-
-const MAX_PROVIDER_RETRIES: usize = 16;
-
-impl LoadshareProvider {
-    /// Create a unique loadshare ID and store it internally so that it won't be provided again.
-    pub fn create_loadshare(&mut self) -> LoadshareId {
-        let mut id = LoadshareId(0);
-        let mut retry = 0;
-
-        while self.loadshares.contains(&id) {
-            if retry >= MAX_PROVIDER_RETRIES {
-                panic!("Couldn't create a unique loadshare within {MAX_PROVIDER_RETRIES} tries");
-            }
-
-            retry += 1;
-            id = LoadshareId(rand::random::<u32>());
-        }
-
-        self.loadshares.insert(id);
-        id
-    }
-
-    /// Check if this loadshare provider contains the given loadshare ID
-    pub fn contains(&self, id: LoadshareId) -> bool {
-        self.loadshares.contains(&id)
-    }
-
-    /// Remove a loadshare ID
-    pub(crate) fn remove_loadshare(&mut self, id: LoadshareId) {
-        self.loadshares.remove(&id);
-    }
-}
+/// A component attached to an actor, listing all the chunk entities the actor has loaded.
+#[derive(Clone, Component, Debug, dm::Deref, dm::DerefMut, Default)]
+pub struct ActorLoadedChunks(EntityHashSet);
 
 #[derive(Bundle, Default)]
 pub struct ObserverBundle {
-    pub settings: ObserverSettings,
-    pub batches: ObserverBatches,
-    pub loadshare: ObserverLoadshare,
+    pub settings: ActorLoadRegion,
 }
 
 impl ObserverBundle {
@@ -233,49 +80,29 @@ impl ObserverBundle {
     }
 }
 
+/// The previous position of an actor. Used for detecting when an actor crosses a chunk border.
+/// When adding this component to an entity, a [`CrossChunkBorder`] event is triggered on that entity.
 #[derive(Clone, Component, Debug)]
-pub struct LastPosition {
+#[component(on_add = PreviousActorPosition::on_add)]
+pub struct PreviousActorPosition {
     pub ws_pos: Vec3,
     pub chunk_pos: ChunkPos,
 }
 
-bitflags! {
-    /// Describes reasons for why a chunk should be kept loaded. If a chunk has no load reason flags
-    /// set it will eventually be automatically unloaded (and its resources freed).
-    /// Removing certain flags can result in some relevant resources being unloaded, but not the chunk
-    /// itself (unless all flags are removed). For example if a chunk doesn't have a RENDER flag, it
-    /// should not have any associated data on the GPU.
-    #[derive(Copy, Clone, Eq, PartialEq, Hash)]
-    pub struct LoadReasons: u16 {
-        /// This chunk is manually loaded, and thus should be manually unloaded (aka. force loaded)
-        /// The engine won't touch this flag, so it's up to the user to manage force loaded chunks
-        const MANUAL = 1 << 0;
-        /// This chunk is loaded because it should be rendered, if it passes out of render distance
-        /// then this flag will be removed
-        const RENDER = 1 << 1;
-        /// This chunk is loaded because it should have collisions, if it passes out of physics distance
-        /// then this flag will be removed
-        const COLLISION = 1 << 2;
-    }
-}
+impl PreviousActorPosition {
+    /// `on_insert` hook, will trigger a [`CrossChunkBorder`] event on the entity it's inserted on if this was the first time it was inserted.
+    #[inline]
+    pub fn on_add(mut world: DeferredWorld, context: HookContext) {
+        let this = world.get::<Self>(context.entity).unwrap();
 
-impl fmt::Debug for LoadReasons {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let permit_flag_names = [
-            (Self::MANUAL, "MANUAL"),
-            (Self::RENDER, "RENDER"),
-            (Self::COLLISION, "COLLISION"),
-        ];
-
-        let mut list = f.debug_list();
-
-        for (flag, name) in permit_flag_names {
-            if self.contains(flag) {
-                list.entry(&name);
-            }
-        }
-
-        list.finish()
+        world.trigger_targets(
+            CrossChunkBorder {
+                new: true,
+                old_chunk: this.chunk_pos,
+                new_chunk: this.chunk_pos,
+            },
+            context.entity,
+        );
     }
 }
 
@@ -283,8 +110,8 @@ impl fmt::Debug for LoadReasons {
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, SystemSet)]
 pub enum WorldControllerSystems {
     CoreEvents,
-    ObserverMovement,
-    ObserverResponses,
+    ActorMovement,
+    ActorResponses,
 }
 
 #[derive(Copy, Clone, Resource, Debug)]
@@ -307,31 +134,14 @@ impl Plugin for WorldController {
 
         app.add_plugins((
             ChunkPopulatorController,
-            AsyncEventPlugin::<LoadChunks>::default(),
-            AsyncEventPlugin::<UnloadChunks>::default(),
+            AsyncEventPlugin::<LoadChunksEvent>::default(),
+            AsyncEventPlugin::<UnloadChunksEvent>::default(),
             EventFunnelPlugin::<LoadedChunkEvent>::for_new(),
             EventFunnelPlugin::<PurgedChunkEvent>::for_new(),
-            EventFunnelPlugin::<LoadReasonsAddedEvent>::for_new(),
-            EventFunnelPlugin::<LoadReasonsRemovedEvent>::for_new(),
         ))
         .insert_resource(self.settings)
-        .init_resource::<LoadshareProvider>()
         .init_resource::<VoxelWorldTick>()
-        .init_resource::<CachedBatchMembership>()
-        .insert_resource(DEFAULT_LOCK_GRANULARITY)
-        .add_event::<AddBatchChunks>()
-        .add_event::<RemoveBatchChunks>()
-        .add_event::<RemovedBatchChunks>();
-
-        // We need to manually register the hooks in this world (the main world) only. Otherwise the hooks will run in the render
-        // world which 1. doesn't make any sense and 2. is impossible because the resources needed for the hooks to run
-        // aren't there.
-        let chunk_batch_hooks = app.world_mut().register_component_hooks::<ChunkBatch>();
-        ChunkBatch::manually_register_hooks(chunk_batch_hooks);
-
-        app.add_observer(update_observer_batches)
-            .add_observer(add_batch_chunks)
-            .add_observer(remove_batch_chunks);
+        .insert_resource(DEFAULT_LOCK_GRANULARITY);
 
         app.add_systems(
             OnEnter(EngineState::Finished),
@@ -348,9 +158,9 @@ impl Plugin for WorldController {
         app.add_systems(
             PostUpdate,
             (
-                dispatch_move_events.in_set(WorldControllerSystems::ObserverMovement),
+                trigger_actor_chunk_border_events.in_set(WorldControllerSystems::ActorMovement),
                 (send_priority_recalculation_events, populate_loaded_chunks)
-                    .in_set(WorldControllerSystems::ObserverResponses),
+                    .in_set(WorldControllerSystems::ActorResponses),
                 (forward_chunk_notifications, unload_purged_chunks)
                     .in_set(WorldControllerSystems::CoreEvents),
             ),
@@ -361,8 +171,8 @@ impl Plugin for WorldController {
         app.configure_sets(
             PostUpdate,
             (
-                WorldControllerSystems::ObserverMovement,
-                WorldControllerSystems::ObserverResponses,
+                WorldControllerSystems::ActorMovement,
+                WorldControllerSystems::ActorResponses,
                 WorldControllerSystems::CoreEvents,
             )
                 .chain()
@@ -386,7 +196,7 @@ pub fn forward_chunk_notifications(
     }
 
     *last_num_notifications = notifications.len();
-    events.send_batch(notifications);
+    events.write_batch(notifications);
 }
 
 /// System for initializing the chunk manager and adding it as a resource.
@@ -472,30 +282,4 @@ pub fn unload_purged_chunks(
             time_since_last_backlog_unload.reset();
         })
         .unwrap();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_observer_ranges() {
-        let settings = ObserverSettings {
-            horizontal_range: 10,
-            view_distance_above: 8,
-            view_distance_below: 5,
-        };
-
-        for x in -10..=10 {
-            for z in -10..=10 {
-                for y in -5..=8 {
-                    let cpos = ChunkPos::new(x, y, z);
-
-                    assert!(settings.within_range(ChunkPos::ZERO, cpos))
-                }
-            }
-        }
-
-        assert!(!settings.within_range(ChunkPos::ZERO, ChunkPos::new(11, 5, -7)));
-    }
 }

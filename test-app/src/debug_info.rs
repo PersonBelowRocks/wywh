@@ -6,7 +6,7 @@ use ve::topo::world::ChunkPos;
 use ve::topo::{CHUNK_FULL_BLOCK_DIMS, fb_worldspace_to_chunkspace};
 use ve::{
     diagnostics::ENGINE_DIAGNOSTICS,
-    topo::{ObserverSettings, controller::LastPosition, world::VoxelRealm},
+    topo::{ActorLoadRegion, controller::PreviousActorPosition, world::VoxelRealm},
     util::sync::LockStrategy,
 };
 use voxel_engine::data::tile::Face;
@@ -122,7 +122,10 @@ pub fn get_cardinal_direction(dir: Dir3) -> Face {
     }
 }
 
-pub fn chunk_borders(mut giz: Gizmos, observers: Query<&LastPosition, With<ObserverSettings>>) {
+pub fn chunk_borders(
+    mut giz: Gizmos,
+    observers: Query<&PreviousActorPosition, With<ActorLoadRegion>>,
+) {
     for last_pos in &observers {
         let pos =
             last_pos.chunk_pos.worldspace_min().as_vec3() + (CHUNK_FULL_BLOCK_DIMS as f32 / 2.0);

@@ -2,7 +2,6 @@ use super::{ChunkDataError, ChunkHandleError};
 use crate::data::registries::Registry;
 use crate::data::registries::block::{BlockVariantId, BlockVariantRegistry};
 use crate::data::voxel::rotations::BlockModelRotation;
-use crate::topo::controller::{LoadReasons, LoadshareMap};
 use crate::topo::world::chunk_manager::ChunkNotification;
 use crate::topo::{CHUNK_FULL_BLOCK_DIMS, CHUNK_MICROBLOCK_DIMS};
 use crate::util::sync::{LockStrategy, StrategicReadLock, StrategySyncError};
@@ -20,7 +19,11 @@ use std::ops::{Deref, DerefMut};
 ///
 /// Used as a component to make an entity into a "chunk entity", representing a chunk and (some of) its associated data.
 /// When inserted into an entity as a component, a component hook will "link" that entity and the inserted chunk position in the [`ChunkEntityLink`](super::ecs::ChunkEntityLink).
-#[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone)]
+#[derive(dm::From, dm::Into, dm::Display, Debug, PartialEq, Eq, Hash, Copy, Clone, Component)]
+// The chunk position is immutable since we don't want chunks moving around after they've been put in place.
+#[component(immutable)]
+#[component(on_insert = ChunkPos::on_insert)]
+#[component(on_remove = ChunkPos::on_remove)]
 pub struct ChunkPos(IVec3);
 
 impl ChunkPos {
@@ -140,27 +143,6 @@ pub struct ChunkEntity;
 pub struct VoxelVariantData {
     pub variant: <BlockVariantRegistry as Registry>::Id,
     pub rotation: Option<BlockModelRotation>,
-}
-
-#[derive(Clone)]
-pub struct ChunkLoadReasons {
-    pub loadshares: LoadshareMap<LoadReasons>,
-    pub cached_reasons: LoadReasons,
-}
-
-impl ChunkLoadReasons {
-    /// Updates the cached load reasons and returns them.
-    /// Should be called whenever a loadshare updates load reasons.
-    pub fn update_cached_reasons(&mut self) -> LoadReasons {
-        let mut cached = LoadReasons::empty();
-
-        for &reasons in self.loadshares.values() {
-            cached |= reasons;
-        }
-
-        self.cached_reasons = cached;
-        cached
-    }
 }
 
 /// The full-block dimensions of a chunk

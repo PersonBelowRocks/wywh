@@ -16,7 +16,7 @@ pub mod world;
 
 pub use transformations::*;
 
-pub use controller::ObserverSettings;
+pub use controller::ActorLoadRegion;
 
 #[inline]
 pub fn ivec_project_to_3d(pos: IVec2, face: Face, mag: i32) -> IVec3 {

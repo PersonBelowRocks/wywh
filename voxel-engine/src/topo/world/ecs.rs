@@ -1,8 +1,9 @@
 use bevy::{
     ecs::{
-        component::{ComponentHook, ComponentHooks, Immutable, StorageType},
+        component::{ComponentHook, ComponentHooks, HookContext, Immutable, StorageType},
         entity::EntityHashMap,
         system::SystemParam,
+        world::DeferredWorld,
     },
     prelude::*,
 };
@@ -99,38 +100,37 @@ impl ChunkEntityLink {
     }
 }
 
-impl Component for ChunkPos {
-    const STORAGE_TYPE: StorageType = StorageType::Table;
-    // The chunk position is immutable since we don't want chunks moving around after they've been put in place.
-    type Mutability = Immutable;
+impl ChunkPos {
+    /// Component hook for when a [`ChunkPos`] is inserted on an entity.
+    /// The hook will update the [`ChunkEntityLink`] resource to add a link between the inserted [`ChunkPos`] and the [`Entity`],
+    /// overwriting the existing link.
+    #[inline]
+    pub(crate) fn on_insert(mut world: DeferredWorld, context: HookContext) {
+        let chunk_pos = *world.get::<Self>(context.entity).unwrap();
+        let mut link = world.resource_mut::<ChunkEntityLink>();
 
-    fn register_component_hooks(hooks: &mut ComponentHooks) {
-        // link the chunk position and entity on insertion
-        hooks.on_insert(|mut world, context| {
+        link.insert_link(chunk_pos, context.entity);
+    }
+
+    /// Component hook for when a [`ChunkPos`] is removed from an entity.
+    /// The hook will remove the link between the [`Entity`] and the [`ChunkPos`].
+    #[inline]
+    pub(crate) fn on_remove(mut world: DeferredWorld, context: HookContext) {
+        let mut link = world.resource_mut::<ChunkEntityLink>();
+
+        let removed_chunk_pos = link
+            .remove_link(Either::Right(context.entity))
+            .unwrap()
+            .unwrap_left();
+
+        // optional sanity checking to ensure linked chunk position matched the chunk position on the entity
+        #[cfg(debug_assertions)]
+        {
             let chunk_pos = *world.get::<Self>(context.entity).unwrap();
-            let mut link = world.resource_mut::<ChunkEntityLink>();
-
-            link.insert_link(chunk_pos, context.entity);
-        });
-
-        // remove the link on removal
-        hooks.on_remove(|mut world, context| {
-            let mut link = world.resource_mut::<ChunkEntityLink>();
-
-            let removed_chunk_pos = link
-                .remove_link(Either::Right(context.entity))
-                .unwrap()
-                .unwrap_left();
-
-            // optional sanity checking to ensure linked chunk position matched the chunk position on the entity
-            #[cfg(debug_assertions)]
-            {
-                let chunk_pos = *world.get::<Self>(context.entity).unwrap();
-                debug_assert_eq!(
-                    chunk_pos, removed_chunk_pos,
-                    "removed chunk position did not match entity's linked chunk position"
-                )
-            }
-        });
+            debug_assert_eq!(
+                chunk_pos, removed_chunk_pos,
+                "removed chunk position did not match entity's linked chunk position"
+            )
+        }
     }
 }
