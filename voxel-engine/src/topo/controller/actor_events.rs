@@ -1,15 +1,17 @@
 use std::time::Duration;
 
+use anyhow::Context;
 use bevy::{
     ecs::entity::{EntityHashMap, EntityHashSet},
     prelude::*,
     time::Stopwatch,
 };
 use itertools::Itertools;
+use octo::Region;
 
 use super::{
-    ActorLoadRegion, CrossChunkBorder, LoadChunksEvent, LoadedChunkEvent, PreviousActorPosition,
-    UnloadChunksEvent,
+    ActorLoadRegion, ActorLoadedChunks, CrossChunkBorderEvent, LoadChunksEvent, LoadedChunkEvent,
+    PreviousActorPosition, UnloadChunksEvent,
 };
 use crate::topo::fb_worldspace_to_chunkspace;
 use crate::{
@@ -57,7 +59,7 @@ pub fn trigger_actor_chunk_border_events(
 
         // chunk border has been crossed, so trigger the event!
         commands.trigger_targets(
-            CrossChunkBorder {
+            CrossChunkBorderEvent {
                 new: false,
                 old_chunk: previous_position.chunk_pos,
                 new_chunk: current_chunk_pos,
@@ -68,6 +70,30 @@ pub fn trigger_actor_chunk_border_events(
         // update the previous chunk position
         previous_position.chunk_pos = current_chunk_pos;
     }
+}
+
+/// Handle event triggered on an actor when it crosses a chunk border.
+/// Loads chunks that are now in range, and unloads chunks that are now out of range.
+/// The components [`ActorLoadedChunks`](super::ActorLoadedChunks) and [`ChunkActors`](super::ChunkActors) are updated
+/// in the event handler(s) for [`LoadChunksEvent`] and [`UnloadChunksEvent`], and not touched in this system.
+pub fn handle_actor_chunk_border_events(
+    trigger: Trigger<CrossChunkBorderEvent>,
+    mut load_events: EventWriter<LoadChunksEvent>,
+    mut unload_events: EventWriter<UnloadChunksEvent>,
+    mut q_actor_load_region: Query<&ActorLoadRegion>,
+) -> Result<(), BevyError> {
+    let event = trigger.event();
+
+    let load_region = q_actor_load_region
+        .get(trigger.target())
+        .with_context(|| "event was triggered on entity without ActorLoadRegion component")?;
+
+    let old_region = load_region.offset(event.old_chunk.into());
+    let new_region = load_region.offset(event.new_chunk.into());
+
+    Region::intersection(old_region, new_region);
+
+    todo!()
 }
 
 /// System for dispatching population events for newly loaded chunks.

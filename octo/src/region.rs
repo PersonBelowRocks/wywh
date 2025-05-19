@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use glam::{IVec3, UVec3, ivec3};
+use glam::{IVec3, UVec3, Vec3Swizzles, ivec3};
 
 /// A region of voxels.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -276,6 +276,17 @@ impl Region {
     #[must_use]
     pub fn overlaps(self, rhs: Self) -> bool {
         self.min().cmplt(rhs.max()).all() && self.max().cmpge(rhs.min()).all()
+    }
+
+    /// Given region A and B, get all subregions of A or B that do not overlap. This is essentially a XOR operation.
+    #[inline]
+    #[must_use]
+    pub fn xor(self, rhs: Self) -> impl Iterator<Item = Self> {
+        if !self.overlaps(rhs) {
+            todo!() // easy case
+        }
+
+        todo!()
     }
 }
 

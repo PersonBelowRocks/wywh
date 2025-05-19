@@ -4,7 +4,7 @@ use crate::topo::world::ChunkPos;
 use crate::topo::world::chunk_manager::ChunkLoadResult;
 
 #[derive(Clone, Event, Debug)]
-pub struct CrossChunkBorder {
+pub struct CrossChunkBorderEvent {
     /// Indicates if this observer entity was just inserted.
     /// i.e. instead of a regular movement where its current chunk was different from its previous chunk,
     /// this movement event was because the entity didn't even have a previous chunk position,

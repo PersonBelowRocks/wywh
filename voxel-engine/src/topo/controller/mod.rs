@@ -96,7 +96,7 @@ impl PreviousActorPosition {
         let this = world.get::<Self>(context.entity).unwrap();
 
         world.trigger_targets(
-            CrossChunkBorder {
+            CrossChunkBorderEvent {
                 new: true,
                 old_chunk: this.chunk_pos,
                 new_chunk: this.chunk_pos,
