@@ -4,6 +4,7 @@ use bitvec::view::BitView;
 use glam::{IVec3, UVec3, ivec3};
 use hashbrown::HashMap;
 use hashbrown::hash_map::Entry;
+use itertools::iproduct;
 use slab::Slab;
 
 use crate::voxelmap::Chunk;
@@ -14,17 +15,33 @@ use crate::{Region, div_2_pow_n, rem_2_pow_n};
 #[inline]
 fn assert_valid_vsc_region(pmin: [u8; 3], pmax: [u8; 3]) {
     for i in 0..3 {
-        assert!(pmin[i] <= 8);
-        assert!(pmax[i] <= 8);
+        assert!(pmin[i] <= VoxelSetChunk::DIMS_U8);
+        assert!(pmax[i] <= VoxelSetChunk::DIMS_U8);
 
         assert!(pmin[i] < pmax[i]);
     }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct VoxelSetChunk([[u8; 8]; 8]);
+pub struct VoxelSetChunk([[u8; Self::DIMS_USIZE]; Self::DIMS_USIZE]);
 
 impl VoxelSetChunk {
+    /// The dimensions of a voxel set chunk along all axes.
+    pub const DIMENSIONS: i32 = u8::BITS as _;
+    /// Same as [`Self::DIMENSIONS`] but as a [`u8`] type.
+    pub const DIMS_U8: u8 = Self::DIMENSIONS as _;
+    /// Same as [`Self::DIMENSIONS`] but as a [`usize`] type.
+    pub const DIMS_USIZE: usize = Self::DIMENSIONS as _;
+
+    /// The minimum allowed position for indexing into a chunk.
+    pub const MIN_POS: [u8; 3] = [0; 3];
+    /// The maximum allowed position for indexing into a chunk.
+    /// If any component in the array is greater than [`Self::DIMENSIONS`],
+    /// then the array is illegal as an index position.
+    pub const MAX_POS: [u8; 3] = [Self::DIMS_U8 - 1; 3];
+    /// Same as [`Self::MAX_POS`], but as an [`IVec3`].
+    pub const MAX_POS_IVEC3: IVec3 = IVec3::from_array([Self::DIMENSIONS - 1; 3]);
+
     /// An empty chunk. Created from [`VoxelSetChunk::empty()`]
     pub const EMPTY: Self = Self::empty();
     /// A filled chunk. Created from [`VoxelSetChunk::filled()`].
@@ -34,14 +51,14 @@ impl VoxelSetChunk {
     #[must_use]
     #[inline]
     pub const fn empty() -> Self {
-        Self([[0; 8]; 8])
+        Self([[0; Self::DIMS_USIZE]; Self::DIMS_USIZE])
     }
 
     /// Create a filled voxel set chunk.
     #[must_use]
     #[inline]
     pub const fn filled() -> Self {
-        Self([[0xFF; 8]; 8])
+        Self([[0xFF; Self::DIMS_USIZE]; Self::DIMS_USIZE])
     }
 
     /// Insert the given position into the chunk.
@@ -49,11 +66,11 @@ impl VoxelSetChunk {
     /// `p` is the position in this chunk that we should insert.
     ///
     /// # Panics
-    /// Will panic if for any element `n` in `p`: `p[n] >= 8`.
+    /// Will panic if for any element `n` in `p`: `p[n] >= VoxelSetChunk::CHUNK_DIMENSIONS`.
     #[inline]
     pub fn insert(&mut self, p: [u8; 3]) {
         let [p0, p1, p2] = p.map(usize::from);
-        assert!((p1 as u8) < 8);
+        assert!((p1 as u8) < Self::DIMS_U8);
         let mask = 0b1u8 << (p1 as u8);
 
         let slot = &mut self.0[p0][p2];
@@ -94,9 +111,9 @@ impl VoxelSetChunk {
         let num_bits = p1max - p1min;
         let offset = p1min;
 
-        let mask = (0xff >> (8 - num_bits)) << offset;
+        let mask = (0xff >> (Self::DIMS_U8 - num_bits)) << offset;
 
-        for (p0, p2) in itertools::iproduct!(pmin[0]..pmax[0], pmin[2]..pmax[2]) {
+        for (p0, p2) in iproduct!(pmin[0]..pmax[0], pmin[2]..pmax[2]) {
             let column = &mut self.0[p0 as usize][p2 as usize];
             *column = *column | mask;
         }
@@ -111,7 +128,7 @@ impl VoxelSetChunk {
     #[inline]
     pub fn remove(&mut self, p: [u8; 3]) {
         let [p0, p1, p2] = p.map(usize::from);
-        assert!((p1 as u8) < 8);
+        assert!((p1 as u8) < Self::DIMS_U8);
         let mask = !(0b1u8 << (p1 as u8));
 
         let slot = &mut self.0[p0][p2];
@@ -151,9 +168,9 @@ impl VoxelSetChunk {
         let num_bits = p1max - p1min;
         let offset = p1min;
 
-        let mask = !(0xff >> (8 - num_bits)) << offset;
+        let mask = !(0xff >> (Self::DIMS_U8 - num_bits)) << offset;
 
-        for (p0, p2) in itertools::iproduct!(pmin[0]..pmax[0], pmin[2]..pmax[2]) {
+        for (p0, p2) in iproduct!(pmin[0]..pmax[0], pmin[2]..pmax[2]) {
             let column = &mut self.0[p0 as usize][p2 as usize];
             *column = *column & mask;
         }
@@ -181,11 +198,56 @@ impl VoxelSetChunk {
     #[must_use]
     pub fn contains(&self, p: [u8; 3]) -> bool {
         let [p0, p1, p2] = p.map(usize::from);
-        assert!((p1 as u8) < 8);
+        assert!((p1 as u8) < Self::DIMS_U8);
         let mask = 0b1u8 << (p1 as u8);
 
         let slot = self.0[p0][p2];
         (slot & mask) != 0
+    }
+
+    /// Check if this chunk contains the given region in its entirety.
+    ///
+    /// # Panics
+    /// Will panic if any component of `pmin` is greater than or equal to the corresponding component of `pmax`.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use octo::voxelset::VoxelSetChunk;
+    ///
+    /// let mut set = VoxelSetChunk::empty();
+    /// set.insert_region([0, 0, 0], [4, 4, 8]);
+    /// // set contains the region we just inserted
+    /// assert!(set.contains_region([0, 0, 0], [4, 4, 8]));
+    /// // set also contains subregions of that region
+    /// assert!(set.contains_region([0, 0, 0], [2, 2, 2]));
+    /// assert!(set.contains_region([2, 2, 2], [3, 3, 8]));
+    /// // set does NOT contain regions that only partially overlap,
+    /// // or regions that don't even overlap at all
+    /// assert!(!set.contains_region([0, 0, 0], [4, 5, 8])); // partially overlaps
+    /// assert!(!set.contains_region([0, 6, 0], [4, 8, 4])); // doesn't overlap at all
+    /// ```
+    #[inline(never)]
+    #[must_use]
+    pub fn contains_region(&self, pmin: [u8; 3], pmax: [u8; 3]) -> bool {
+        assert_valid_vsc_region(pmin, pmax);
+
+        let p1min = pmin[1];
+        let p1max = pmax[1];
+
+        let num_bits = p1max - p1min;
+        let offset = p1min;
+
+        let mask = (0xff >> (Self::DIMS_U8 - num_bits)) << offset;
+
+        for (p0, p2) in iproduct!(pmin[0]..pmax[0], pmin[2]..pmax[2]) {
+            let column = self.0[p0 as usize][p2 as usize];
+            // the entire mask must be present in the column
+            if column & mask != mask {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Returns the number of positions present in this chunk.
@@ -221,7 +283,7 @@ impl VoxelSetChunk {
     pub fn count(&self) -> usize {
         let mut count = 0;
 
-        for (p0, p2) in itertools::iproduct!(0..8usize, 0..8usize) {
+        for (p0, p2) in itertools::iproduct!(0..Self::DIMS_USIZE, 0..Self::DIMS_USIZE) {
             count += self.0[p0][p2].count_ones() as usize;
         }
 
@@ -233,6 +295,13 @@ impl VoxelSetChunk {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self == &Self::EMPTY
+    }
+
+    /// Check if this chunk is filled. Equivalent to `VoxelSetChunk::count() == 512`.
+    #[inline]
+    #[must_use]
+    pub fn is_filled(&self) -> bool {
+        self == &Self::FILLED
     }
 
     #[inline]
@@ -266,12 +335,12 @@ impl Iterator for VoxelSetChunkColIter {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.col_y < 8 && !self.bits[self.col_y as usize] {
+        while self.col_y < VoxelSetChunk::DIMS_U8 as _ && !self.bits[self.col_y as usize] {
             self.col_y += 1;
         }
 
         let out = match self.col_y {
-            ..8 => Some(self.col_y),
+            ..VoxelSetChunk::DIMS_U8 => Some(self.col_y),
             _ => None,
         }?;
 
@@ -338,14 +407,48 @@ impl Iterator for VoxelSetChunkIter<'_> {
     }
 }
 
+const DIMS_LOG2: u32 = VoxelSetChunk::DIMENSIONS.ilog2();
+
+/// Get the chunk position containing the given gloal position.
+#[inline]
+fn chunk_pos(p: IVec3) -> IVec3 {
+    p.to_array().map(|k| div_2_pow_n(k, DIMS_LOG2)).into()
+}
+
+/// Get the local position within the chunk of a given global position.
+#[inline]
+fn local_pos(p: IVec3) -> [u8; 3] {
+    p.to_array().map(|k| rem_2_pow_n(k, DIMS_LOG2) as u8)
+}
+
+/// Split position into the position of the [`VoxelSetChunk`] containing it, and the local position within that chunk.
+/// Used to first get a position's chunk, then refer to the position's value inside that chunk.
 #[inline]
 fn chunk_and_local(p: IVec3) -> (IVec3, [u8; 3]) {
-    const DIMS_LOG2: u32 = 8u32.ilog2();
-
     let chunk: IVec3 = p.to_array().map(|k| div_2_pow_n(k, DIMS_LOG2)).into();
     let local = p.to_array().map(|k| rem_2_pow_n(k, DIMS_LOG2) as u8);
 
     (chunk, local)
+}
+
+/// Calculate the global position of a chunk and a local offset within that chunk.
+/// Be careful that the local position not exceed [`VoxelSetChunk::DIMENSIONS`], you may get weird results if it does.
+#[inline]
+fn global_from_chunk_and_local(chunk_pos: IVec3, local: [u8; 3]) -> IVec3 {
+    let base: IVec3 = chunk_pos.to_array().map(|k| k << (DIMS_LOG2 as i32)).into();
+    let local: IVec3 = local.map(i32::from).into();
+
+    base + local
+}
+
+/// Get a region which entirely contains the chunk at the given position.
+#[inline]
+fn chunk_region(chunk_pos: IVec3) -> Region {
+    let min = global_from_chunk_and_local(chunk_pos, VoxelSetChunk::MIN_POS);
+    let max = global_from_chunk_and_local(chunk_pos, VoxelSetChunk::MAX_POS);
+
+    // must be inclusive since we want to contain MAX_POS as it's valid
+    Region::new_inclusive(min, max)
 }
 
 /// A set of voxel positions. Like a hashset but supports more specialized operations.
@@ -383,12 +486,73 @@ impl VoxelSet {
         }
     }
 
-    /// Add a region of voxels to the set.
+    /// Add a region of voxels to the set. This operation is a no-op if the provided region is degenerate (since degenerate regions have no volume).
     ///
     /// This is significantly faster than looping over the region and adding its positions individually.
     #[inline]
     pub fn insert_region(&mut self, region: Region) {
-        todo!()
+        if region.is_degenerate() {
+            // region has zero volume, so there's nothing for us to do
+            return;
+        }
+
+        let min_chunk = chunk_pos(region.min());
+        let max_chunk = chunk_pos(region.max_contained());
+
+        for chunk_pos in iproduct!(
+            min_chunk.x..=max_chunk.x,
+            min_chunk.y..=max_chunk.y,
+            min_chunk.z..=max_chunk.z
+        )
+        .map(IVec3::from)
+        {
+            let chunk_entry = self.chunks.entry(chunk_pos);
+
+            // this is the region of space that this chunk contains
+            let chunk_region = chunk_region(chunk_pos);
+            // this region is the part of the current chunk which overlaps with the provided region.
+            // if the entire chunk's region overlaps with the provided region, this will be equal to the chunk's region.
+            let overlapping_chunk_region = Region::intersection(chunk_region, region)
+                .expect("should always intersect since this is derived from the parameter");
+
+            debug_assert!(
+                !overlapping_chunk_region.is_degenerate(),
+                "this intersection should not be degenerate; we have the ability to ensure it never is"
+            );
+
+            if overlapping_chunk_region == chunk_region {
+                // the entire chunk is contained in the provided region, just set the chunk all at once
+                match chunk_entry {
+                    // replace existing chunk with a filled one
+                    Entry::Occupied(chunk_index) => {
+                        self.slab[*chunk_index.get()] = VoxelSetChunk::filled()
+                    }
+                    // insert new filled chunk
+                    Entry::Vacant(entry) => {
+                        entry.insert(self.slab.insert(VoxelSetChunk::filled()));
+                    }
+                }
+
+                continue;
+            }
+
+            // in this case, we need to be a bit more precise when working inside a chunk and only insert a specific region in a chunk
+            let local_min = local_pos(overlapping_chunk_region.min());
+            let local_max = local_pos(overlapping_chunk_region.max_contained());
+
+            match chunk_entry {
+                Entry::Occupied(chunk_index) => {
+                    // work on the existing region
+                    self.slab[*chunk_index.get()].insert_region(local_min, local_max);
+                }
+                Entry::Vacant(entry) => {
+                    // create new empty chunk, insert the appropriate region, add the chunk to the slab, and insert the index into the vacant entry
+                    let mut chunk = VoxelSetChunk::empty();
+                    chunk.insert_region(local_min, local_max);
+                    entry.insert(self.slab.insert(chunk));
+                }
+            }
+        }
     }
 
     /// Remove a position from the set.
@@ -410,10 +574,66 @@ impl VoxelSet {
         }
     }
 
-    /// Remove a region of voxels from the set.
+    /// Remove a region of voxels from the set. This operation is a no-op if the provided region is degenerate (since degenerate regions have no volume).
+    ///
+    /// This is significantly faster than looping over the region and removing its positions individually.
     #[inline]
     pub fn remove_region(&mut self, region: Region) {
-        todo!()
+        if region.is_degenerate() {
+            // region has zero volume, so there's nothing for us to do
+            return;
+        }
+
+        let min_chunk = chunk_pos(region.min());
+        let max_chunk = chunk_pos(region.max_contained());
+
+        for chunk_pos in iproduct!(
+            min_chunk.x..=max_chunk.x,
+            min_chunk.y..=max_chunk.y,
+            min_chunk.z..=max_chunk.z
+        )
+        .map(IVec3::from)
+        {
+            let Entry::Occupied(chunk_index_entry) = self.chunks.entry(chunk_pos) else {
+                // since we're removing we can skip chunks that don't exist in the set
+                continue;
+            };
+
+            let chunk_index = *chunk_index_entry.get();
+
+            // this is the region of space that this chunk contains
+            let chunk_region = chunk_region(chunk_pos);
+            // this region is the part of the current chunk which overlaps with the provided region.
+            // if the entire chunk's region overlaps with the provided region, this will be equal to the chunk's region.
+            let overlapping_chunk_region = Region::intersection(chunk_region, region)
+                .expect("should always intersect since this is derived from the parameter");
+
+            debug_assert!(
+                !overlapping_chunk_region.is_degenerate(),
+                "this intersection should not be degenerate; we have the ability to ensure it never is"
+            );
+
+            if overlapping_chunk_region == chunk_region {
+                // the entire chunk is contained in the provided region, so just remove the whole thing
+                self.slab.remove(chunk_index);
+                chunk_index_entry.remove();
+
+                continue;
+            }
+
+            // in this case, we need to be a bit more precise when working inside a chunk and only remove a specific region in a chunk
+            let local_min = local_pos(overlapping_chunk_region.min());
+            let local_max = local_pos(overlapping_chunk_region.max_contained());
+
+            // work on existing region
+            self.slab[chunk_index].remove_region(local_min, local_max);
+
+            // if the chunk is empty after this, remove it
+            if self.slab[chunk_index].is_empty() {
+                self.slab.remove(chunk_index);
+                chunk_index_entry.remove();
+            }
+        }
     }
 
     /// Check if the position is present in this set.
@@ -430,10 +650,63 @@ impl VoxelSet {
 
     /// Check if the entire region is fully contained within this set.
     /// That means that all the positions in the region are present in this set.
+    ///
+    /// # Warning
+    /// If the region is degenerate, this will return [`false`].
+    /// Degenerate regions contain no positions, therefore we have nothing in the region to check for.
     #[inline]
     #[must_use]
     pub fn contains_region(&self, region: Region) -> bool {
-        todo!()
+        if region.is_degenerate() {
+            return false;
+        }
+
+        let min_chunk = chunk_pos(region.min());
+        let max_chunk = chunk_pos(region.max_contained());
+
+        for chunk_pos in iproduct!(
+            min_chunk.x..=max_chunk.x,
+            min_chunk.y..=max_chunk.y,
+            min_chunk.z..=max_chunk.z
+        )
+        .map(IVec3::from)
+        {
+            let Some(chunk_index) = self.chunks.get(&chunk_pos).copied() else {
+                // this chunk didn't exist in the set, so the region was not contained
+                return false;
+            };
+
+            // this is the region of space that this chunk contains
+            let chunk_region = chunk_region(chunk_pos);
+            // this region is the part of the current chunk which overlaps with the provided region.
+            // if the entire chunk's region overlaps with the provided region, this will be equal to the chunk's region.
+            let overlapping_chunk_region = Region::intersection(chunk_region, region)
+                .expect("should always intersect since this is derived from the parameter");
+
+            debug_assert!(
+                !overlapping_chunk_region.is_degenerate(),
+                "this intersection should not be degenerate; we have the ability to ensure it never is"
+            );
+
+            if overlapping_chunk_region == chunk_region {
+                // this entire chunk is present in the region, therefore the entire chunk must be filled in order for the region to be contained
+                if !self.slab[chunk_index].is_filled() {
+                    return false;
+                } else {
+                    continue;
+                }
+            }
+
+            // in this case, we need to be a bit more precise and check the actual contents of a chunk
+            let local_min = local_pos(overlapping_chunk_region.min());
+            let local_max = local_pos(overlapping_chunk_region.max_contained());
+
+            if !self.slab[chunk_index].contains_region(local_min, local_max) {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Iterate over all voxels present in this set in a random order.
@@ -579,5 +852,22 @@ mod tests {
         assert!(set.contains_region(Region::new([0, 0, 0], [4, 4, 8])));
 
         set.remove_region(Region::new([0, 0, 0], [5, 5, 5]));
+    }
+
+    #[test]
+    fn test_chunk_region() {
+        let mut set = VoxelSetChunk::empty();
+        set.insert_region([0, 0, 0], [4, 4, 8]);
+        // the set contains the region we just inserted
+        assert!(set.contains_region([0, 0, 0], [4, 4, 8]));
+
+        // the set also contains subregions of that region
+        assert!(set.contains_region([0, 0, 0], [2, 2, 2]));
+        assert!(set.contains_region([2, 2, 2], [3, 3, 8]));
+
+        // the set does NOT contain regions that only partially overlap,
+        // or regions that don't even overlap at all
+        assert!(!set.contains_region([0, 0, 0], [4, 5, 8])); // partially overlaps
+        assert!(!set.contains_region([0, 6, 0], [4, 8, 4])); // doesn't overlap at all
     }
 }

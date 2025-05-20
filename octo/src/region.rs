@@ -82,6 +82,9 @@ impl Region {
     }
 
     /// The minimum position of the region.
+    ///
+    /// # Warning
+    /// If the region is degenerate, this position is not present in the region.
     #[inline]
     #[must_use]
     pub fn min(self) -> IVec3 {
@@ -93,6 +96,21 @@ impl Region {
     #[must_use]
     pub fn max(self) -> IVec3 {
         self.max
+    }
+
+    /// Get the maximum contained position of this region. This is equal to [`Region::max()`] - [`IVec3::ONE`].
+    ///
+    /// # Panics
+    /// This will panic if the region is degenerate, since degenerate regions don't contain anything.
+    #[inline]
+    #[must_use]
+    pub fn max_contained(self) -> IVec3 {
+        assert!(
+            !self.is_degenerate(),
+            "cannot get maximum contained position of degenerate region; the region doesn't contain any positions"
+        );
+
+        self.max - IVec3::ONE
     }
 
     /// The dimensions of this region.
@@ -278,16 +296,7 @@ impl Region {
         self.min().cmplt(rhs.max()).all() && self.max().cmpge(rhs.min()).all()
     }
 
-    /// Given region A and B, get all subregions of A or B that do not overlap. This is essentially a XOR operation.
-    #[inline]
-    #[must_use]
-    pub fn xor(self, rhs: Self) -> impl Iterator<Item = Self> {
-        if !self.overlaps(rhs) {
-            todo!() // easy case
-        }
-
-        todo!()
-    }
+    // TODO: a XOR like operation for two regions?
 }
 
 impl From<Range<IVec3>> for Region {
