@@ -1,13 +1,10 @@
 use bitvec::array::BitArray;
-use bitvec::order::Lsb0;
-use bitvec::view::BitView;
-use glam::{IVec3, UVec3, ivec3};
+use glam::IVec3;
 use hashbrown::HashMap;
 use hashbrown::hash_map::Entry;
 use itertools::iproduct;
 use slab::Slab;
 
-use crate::voxelmap::Chunk;
 use crate::{Region, div_2_pow_n, rem_2_pow_n};
 
 /// Assert that a region bounded by a min and max position is valid to use in operations on a voxel set chunk.
@@ -76,7 +73,7 @@ impl VoxelSetChunk {
         let mask = 0b1u8 << (p1 as u8);
 
         let slot = &mut self.0[p0][p2];
-        *slot = *slot | mask;
+        *slot |= mask;
     }
 
     /// Set a region of positions at once.
@@ -118,7 +115,7 @@ impl VoxelSetChunk {
 
         for (p0, p2) in iproduct!(pmin[0]..pmax[0], pmin[2]..pmax[2]) {
             let column = &mut self.0[p0 as usize][p2 as usize];
-            *column = *column | mask;
+            *column |= mask;
         }
     }
 
@@ -135,7 +132,7 @@ impl VoxelSetChunk {
         let mask = !(0b1u8 << (p1 as u8));
 
         let slot = &mut self.0[p0][p2];
-        *slot = *slot & mask;
+        *slot &= mask;
     }
 
     /// Remove a region of positions at once.
@@ -176,7 +173,7 @@ impl VoxelSetChunk {
 
         for (p0, p2) in iproduct!(pmin[0]..pmax[0], pmin[2]..pmax[2]) {
             let column = &mut self.0[p0 as usize][p2 as usize];
-            *column = *column & mask;
+            *column &= mask;
         }
     }
 
@@ -220,12 +217,12 @@ impl VoxelSetChunk {
     ///
     /// let mut set = VoxelSetChunk::empty();
     /// set.insert_region([0, 0, 0], [4, 4, 8]);
-    /// // set contains the region we just inserted
+    /// // the set contains the region we just inserted
     /// assert!(set.contains_region([0, 0, 0], [4, 4, 8]));
-    /// // set also contains subregions of that region
+    /// // the set also contains subregions of that region
     /// assert!(set.contains_region([0, 0, 0], [2, 2, 2]));
     /// assert!(set.contains_region([2, 2, 2], [3, 3, 8]));
-    /// // set does NOT contain regions that only partially overlap,
+    /// // the set does NOT contain regions that only partially overlap,
     /// // or regions that don't even overlap at all
     /// assert!(!set.contains_region([0, 0, 0], [4, 5, 8])); // partially overlaps
     /// assert!(!set.contains_region([0, 6, 0], [4, 8, 4])); // doesn't overlap at all
@@ -256,7 +253,7 @@ impl VoxelSetChunk {
     }
 
     /// Returns the number of positions present in this chunk.
-    /// This operation may be slightly costly so the result should be cached where possible.
+    /// This operation may be slightly costly, so the result should be cached where possible.
     ///
     /// # Examples
     /// An empty chunk:
@@ -288,7 +285,7 @@ impl VoxelSetChunk {
     pub fn count(&self) -> usize {
         let mut count = 0;
 
-        for (p0, p2) in itertools::iproduct!(0..Self::DIMS_USIZE, 0..Self::DIMS_USIZE) {
+        for (p0, p2) in iproduct!(0..Self::DIMS_USIZE, 0..Self::DIMS_USIZE) {
             count += self.0[p0][p2].count_ones() as usize;
         }
 
@@ -349,7 +346,7 @@ impl Iterator for VoxelSetChunkColIter {
             _ => None,
         }?;
 
-        // this column Y was present, so next iteration we need to check the Y after this one
+        // this column Y was present, so in the next iteration we need to check the Y after this one
         self.col_y += 1;
 
         Some(out)
@@ -414,7 +411,7 @@ impl Iterator for VoxelSetChunkIter<'_> {
 
 const DIMS_LOG2: u32 = VoxelSetChunk::DIMENSIONS.ilog2();
 
-/// Get the chunk position containing the given gloal position.
+/// Get the chunk position containing the given global position.
 #[inline]
 fn chunk_pos(p: IVec3) -> IVec3 {
     p.to_array().map(|k| div_2_pow_n(k, DIMS_LOG2)).into()
@@ -437,7 +434,7 @@ fn chunk_and_local(p: IVec3) -> (IVec3, [u8; 3]) {
 }
 
 /// Calculate the global position of a chunk and a local offset within that chunk.
-/// Be careful that the local position not exceed [`VoxelSetChunk::DIMENSIONS`], you may get weird results if it does.
+/// Be careful that the local position does not exceed [`VoxelSetChunk::DIMENSIONS`]; you may get unexpected results if it does.
 #[inline]
 fn global_from_chunk_and_local(chunk_pos: IVec3, local: [u8; 3]) -> IVec3 {
     let base: IVec3 = chunk_pos.to_array().map(|k| k << (DIMS_LOG2 as i32)).into();
@@ -456,6 +453,21 @@ fn chunk_region(chunk_pos: IVec3) -> Region {
     Region::new_inclusive(min, max)
 }
 
+/// Returns [`false`] if any component in the given vector is equal to [`i32::MAX`] or [`i32::MIN`].
+#[inline]
+fn is_valid_voxelset_pos(pos: IVec3) -> bool {
+    pos.cmpne(IVec3::MAX).all() && pos.cmpne(IVec3::MIN).all()
+}
+
+macro_rules! assert_valid_voxelset_pos {
+    ($pos:expr) => {
+        assert!(
+            is_valid_voxelset_pos($pos),
+            "$pos is not a valid voxelset position"
+        );
+    };
+}
+
 /// Given a region (with the size of a chunk), get the min and max positions (respectively) of the region
 /// inside the chunk in localspace.
 ///
@@ -465,7 +477,7 @@ fn chunk_region(chunk_pos: IVec3) -> Region {
 #[inline]
 pub(crate) fn localpos_region_bounds(region: Region) -> ([u8; 3], [u8; 3]) {
     let min_local = local_pos(region.min());
-    // the VoxelSetChunk operations exclude the max position, and getting the localpos from the max (uncontained) position would cause it to wrap around, so we need to compensate by adding 1 here
+    // the VoxelSetChunk operations exclude the max position and getting the localpos from the max (uncontained) position would cause it to wrap around, so we need to compensate by adding 1 here
     let max_local = local_pos(region.max_contained()).map(|v| v + 1);
     (min_local, max_local)
 }
@@ -488,6 +500,7 @@ impl VoxelSet {
     /// Add a position to the set.
     #[inline]
     pub fn insert(&mut self, pos: IVec3) {
+        assert_valid_voxelset_pos!(pos);
         let (chunk_pos, local_pos) = chunk_and_local(pos);
 
         match self.chunks.entry(chunk_pos) {
@@ -512,7 +525,7 @@ impl VoxelSet {
     #[cfg_attr(not(debug_assertions), inline)]
     pub fn insert_region(&mut self, region: Region) {
         if region.is_degenerate() {
-            // region has no volume, so there's nothing for us to do
+            // the region has no volume, so there's nothing for us to do
             return;
         }
 
@@ -576,6 +589,7 @@ impl VoxelSet {
     /// Remove a position from the set.
     #[inline]
     pub fn remove(&mut self, pos: IVec3) {
+        assert_valid_voxelset_pos!(pos);
         let (chunk_pos, local_pos) = chunk_and_local(pos);
 
         let Entry::Occupied(entry) = self.chunks.entry(chunk_pos) else {
@@ -599,7 +613,7 @@ impl VoxelSet {
     #[cfg_attr(not(debug_assertions), inline)]
     pub fn remove_region(&mut self, region: Region) {
         if region.is_degenerate() {
-            // region has no volume, so there's nothing for us to do
+            // the region has no volume, so there's nothing for us to do
             return;
         }
 
@@ -633,7 +647,7 @@ impl VoxelSet {
             );
 
             if overlapping_chunk_region == chunk_region {
-                // the entire chunk is contained in the provided region, so just remove the whole thing
+                // the entire chunk is contained in the provided region, so we can remove the entire chunk!
                 self.slab.remove(chunk_index);
                 chunk_index_entry.remove();
 
@@ -657,6 +671,7 @@ impl VoxelSet {
     #[inline]
     #[must_use]
     pub fn contains(&self, pos: IVec3) -> bool {
+        assert_valid_voxelset_pos!(pos);
         let (chunk_pos, local_pos) = chunk_and_local(pos);
 
         self.chunks
@@ -767,7 +782,7 @@ impl Iterator for VoxelSetIter<'_> {
             };
 
             let Some(local_pos) = chunk_iter.next() else {
-                // nothing left in the current chunk so we advance to the next one.
+                // nothing left in the current chunk, so we advance to the next one.
                 self.advance_chunk()?;
                 continue;
             };
@@ -842,6 +857,13 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn test_insert_min() {
+        let mut set = VoxelSet::new();
+        set.insert(ivec3(i32::MIN, 0, 0));
+    }
+
+    #[test]
     #[inline(never)]
     fn test_region() {
         let mut set = VoxelSet::new();
@@ -868,6 +890,16 @@ mod tests {
         assert!(set.contains_region(Region::new([0, 0, 0], [4, 4, 8])));
 
         set.remove_region(Region::new([0, 0, 0], [5, 5, 5]));
+
+        assert!(!set.contains_region(Region::new_inclusive([0, 0, 0], [5, 5, 5])));
+        assert!(!set.contains_region(Region::new([0, 0, 0], [4, 4, 4])));
+        assert!(!set.contains_region(Region::new([1, 1, 2], [3, 2, 3])));
+
+        assert!(!set.contains(ivec3(0, 0, 0)));
+        assert!(!set.contains(ivec3(5, 5, 5)));
+        assert!(!set.contains(ivec3(4, 5, 4)));
+        assert!(!set.contains(ivec3(4, 4, 4)));
+        assert!(!set.contains(ivec3(2, -4, 2)));
     }
 
     #[test]
